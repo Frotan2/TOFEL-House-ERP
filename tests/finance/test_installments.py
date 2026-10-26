@@ -245,7 +245,7 @@ class ComponentSplitTests(unittest.TestCase):
         plan = self.module.build_installment_components(rows, 2)
         self.assertEqual([[line["amount"] for line in part] for part in plan],
                          [[50.0, 16.66], [50.0, 16.67]])
-        self.assertEqual(sum(self.module._plan_total(part) for part in plan),
+        self.assertEqual(round(sum(self.module._plan_total(part) for part in plan), 2),
                          133.33)
 
     def test_a_discount_row_survives_the_split(self):
