@@ -195,6 +195,14 @@ class S2CompensationTests(unittest.TestCase):
             key, "2026-09-01", "2026-09-30", "SYN Teaching House",
             "SYN Teaching Pay", "SYN Contract Deduction")
 
+    def test_scoped_finance_officer_cannot_post_another_companys_payroll(self):
+        self.company_permissions = ["Other School"]
+        with self.assertRaisesRegex(
+                _PermissionError, "no finance authority for the selected company"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+        self.assertEqual(self.lock_order, [])
+
     def test_covering_contracts_locked_before_posting(self):
         self.assignments = [_assignment("A-2", "INS-B", "C-ZEBRA"),
                             _assignment("A-1", "INS-A", "C-ALPHA")]
