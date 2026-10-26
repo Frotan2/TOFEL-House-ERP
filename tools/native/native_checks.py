@@ -3399,12 +3399,22 @@ def main():
                 'owner_fee_type_foreign_001','SYN-Unauthorized-Fee','')))
             denied(lambda:as_user('course_owner',lambda:owner_catalog.create_fee_type(
                 'owner_fee_type_collision_1','SYN-PLACEMENT-FEE','')))
-            level=frappe.get_all('TH Program Level',filters={'status':'Active'},
-                fields=['code','native_program'],order_by='name asc',limit=1)[0]
-            assert not frappe.db.exists('Fee Structure',{'program':level.native_program,
+            # This qualification runs on a wizard-less native site. Earlier
+            # admission/teaching fixtures create an unanchored native Program,
+            # not a TH Program Level. Create the Owner's own active level via
+            # the real guarded commands rather than indexing an empty table.
+            owner_program=as_user('course_owner',lambda:owner_catalog.create_program(
+                'owner_fee_program_native_0001','SYN-FEE-OWNED',
+                'Synthetic Owner Fee Program','Native accounting acceptance'))
+            assert owner_program['code']=='SYN-FEE-OWNED',owner_program
+            level=as_user('course_owner',lambda:owner_catalog.create_level(
+                'owner_fee_level_native_0001','SYN-FEE-OWNED','SYN-FEE-LVL',
+                'Synthetic Fee Level',1,2,'Month','2026-09-01'))
+            assert level['native_program'] and frappe.db.exists('Program',level['native_program']),level
+            assert not frappe.db.exists('Fee Structure',{'program':level['native_program'],
                 'academic_year':cat['academic_year'],'docstatus':0})
             plan=as_user('course_owner',lambda:owner_catalog.set_level_fee_component(
-                'owner_fee_plan_native_0001',level.code,cat['academic_year'],label,5000,fin['company']))
+                'owner_fee_plan_native_0001',level['code'],cat['academic_year'],label,5000,fin['company']))
             saved=frappe.get_doc('Fee Structure',plan['fee_structure'])
             assert len(saved.components)==1 and float(saved.total_amount)==5000,plan
             return {'fee_category':result['name'],'native_item':result['item'],
