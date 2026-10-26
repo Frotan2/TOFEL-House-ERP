@@ -1191,14 +1191,18 @@ class BootstrapLogicContract(unittest.TestCase):
 
     def test_readiness_waits_require_a_successful_page(self):
         # Readiness must never accept an HTTP error page. Install uses a
-        # fail-closed curl probe; the daily/recovery launchers use the Docker
-        # web healthcheck, whose probe is itself curl --fail.
+        # fail-closed curl probe; all launchers also use one structured,
+        # exact-state probe that accepts Docker's real LF-only output.
         install = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text()
         self.assertIn("curl --fail --silent http://127.0.0.1:8000/ ", install)
         for name in ("Start", "Repair"):
             text = (PRODUCT / "windows" / f"{name} TOEFL House ERP.cmd").read_text()
-            self.assertIn("State.Health.Status", text, name)
-            self.assertIn('findstr /x /c:"healthy"', text, name)
+            self.assertIn('Test Existing Installation.ps1" -CheckServices', text, name)
+            self.assertNotIn('findstr /x /c:"healthy"', text, name)
+        probe = (PRODUCT / "windows" / "Test Existing Installation.ps1").read_text()
+        self.assertIn('"{{json .State}}"', probe)
+        self.assertIn('$state.Health.Status -cne "healthy"', probe)
+        self.assertIn('[int]$response.StatusCode -ne 200', probe)
 
     def test_web_server_pins_the_product_site(self):
         # Regression (product-image run 36758667184): frappe resolves the site
@@ -1555,8 +1559,8 @@ class DesktopRuntimeReliabilityContract(unittest.TestCase):
     def test_start_and_repair_require_healthy_web(self):
         for name in ("Start", "Repair"):
             text = (PRODUCT / "windows" / f"{name} TOEFL House ERP.cmd").read_text()
-            self.assertIn("State.Health.Status", text)
-            self.assertIn('findstr /x /c:"healthy"', text)
+            self.assertIn('Test Existing Installation.ps1" -CheckServices', text)
+            self.assertNotIn('findstr /x /c:"healthy"', text)
 
     def test_start_does_not_rebuild_on_every_daily_launch(self):
         text = (PRODUCT / "windows" / "Start TOEFL House ERP.cmd").read_text()

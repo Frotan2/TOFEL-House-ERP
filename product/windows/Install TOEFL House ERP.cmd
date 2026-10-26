@@ -115,13 +115,8 @@ set READY_TRIES=300
 :waitready
 powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 10" >nul 2>nul
 curl --fail --silent http://127.0.0.1:8000/ >nul 2>nul || goto :preparing
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-web 2>nul | findstr /x /c:"healthy" >nul || goto :preparing
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-db 2>nul | findstr /x /c:"healthy" >nul || goto :preparing
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-redis-queue 2>nul | findstr /x /c:"healthy" >nul || goto :preparing
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-redis-cache 2>nul | findstr /x /c:"healthy" >nul || goto :preparing
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-socketio 2>nul | findstr /x /c:"healthy" >nul || goto :preparing
-docker inspect --format "{{.State.Status}}" toefl-house-erp-worker 2>nul | findstr /x /c:"running" >nul || goto :preparing
-docker inspect --format "{{.State.Status}}" toefl-house-erp-scheduler 2>nul | findstr /x /c:"running" >nul || goto :preparing
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Test Existing Installation.ps1" -CheckServices >nul 2>nul
+if errorlevel 1 goto :preparing
 goto :ready
 :preparing
 echo  Still preparing... site setup can take 15-40 minutes on first run.

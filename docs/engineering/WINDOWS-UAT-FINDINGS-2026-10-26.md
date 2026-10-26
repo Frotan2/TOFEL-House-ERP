@@ -14,8 +14,10 @@ Production remains **NO-GO**.
 - Windows 10 Pro build 19045; Docker Engine 29.9.2. Docker initially contained
   no containers or named volumes. Installation uses a new workspace folder
   and synthetic acceptance storage; no existing customer database is used.
-- Image import completed. First installation is still downloading the pinned
-  database/cache dependencies; no role/business workflow is certified yet.
+- Image import and pinned database/cache dependency downloads completed.
+  Native initialization subsequently completed;
+  all seven services are ready and the actual browser shows Sign In. No
+  role/business workflow is certified yet.
 
 ## QA-001: Fresh storage falsely reported as indeterminate
 
@@ -52,7 +54,49 @@ foreign student denial, scheduled-group resolution, refused-site denial and
 native hook wiring. Native runtime tests and independent security approval
 are still required on the corrected revision.
 
-## Acceptance boundaries
+## QA-003: CMD readiness never completes with real Docker output
+
+The actual Windows installation reached HTTP 200, five healthy services and
+running worker/scheduler processes, but its installer kept waiting. The
+exact shipped `findstr /x` pipe returned 1. On this Windows host,
+`healthy\n` returns 1 whereas `healthy\r\n` returns 0; the real Docker CLI
+emits LF-only output. Install, Start and Repair all used the affected checks.
+
+All three paths now invoke one read-only structured PowerShell probe. It
+requires seven exact running states, five exact healthy states, successful
+Docker inspection and HTTP 200. It does not accept an `unhealthy` substring
+or a partial service list. Nineteen synthetic service/HTTP cases and 91
+targeted packaging tests passed. The corrected probe also returned success
+against the actual healthy Windows ERP. Windows CI now emits LF-only mock
+Docker state output, so its package lifecycle exercise covers the real
+framing that the earlier CRLF-emitting mock missed.
+
+The corrected official package and graphical lifecycle still require retest;
+this live probe result is not a completed installation/role acceptance claim.
+
+## QA-004: Native setup first-user roles prevent successful login
+
+The actual browser wizard created the company and set `setup_complete=1`,
+then reported failure. Its trace reaches the Guardian scope guard during
+`login_as_first_user`: native Frappe defaults grant the initial account every
+non-automatic role, including Student and Guardian without canonical identities.
+The guard correctly refuses this combination; it must not be bypassed.
+
+An owned `setup_wizard_success` hook now narrows the separate initial account
+before native login to System Manager only. It grants no business role and
+refuses portal-linked identities, existing role profiles, disabled users,
+reserved accounts and calls outside Administrator's native wizard. No native
+core file or student/guardian permission guard changes. Ten hook regressions
+and the existing guard suites passed (37 tests). Applying the same qualification
+to the failed synthetic setup account allowed an actual browser login; a fresh
+wizard and official rebuilt package still require acceptance on the new SHA.
+
+Independent synthetic role accounts were created using native User records.
+The company's unused incorrect initial fiscal year was disabled; the setup
+account then created and saved company-scoped SYN-1405 through the browser,
+with verified dates 2026-03-21 through 2027-03-20. This is setup evidence only,
+not tuition, payroll or monthly-close acceptance.
+## Remaining acceptance boundaries
 
 Windows screen capture failed during the launcher attempt; a launched process
 is not proof of successful graphical installation. The package's own installer

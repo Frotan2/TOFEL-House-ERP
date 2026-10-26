@@ -19,6 +19,7 @@ on:
       - "docs/engineering/SAFE-UPDATES.md"
       - "tests/foundation/test_customer_install_package.py"
       - "tests/foundation/test_windows_pc_inventory.py"
+      - "tests/foundation/test_windows_service_readiness.ps1"
       - ".github/workflows/windows-customer-package.yml"
   workflow_dispatch:
 
@@ -77,6 +78,11 @@ jobs:
         run: |
           python -m unittest tests.foundation.test_windows_pc_inventory -v
           if ($LASTEXITCODE -ne 0) { throw "PC storage inventory regression failed." }
+      - name: Verify exact service and HTTP readiness decisions
+        shell: powershell
+        run: |
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'tests/foundation/test_windows_service_readiness.ps1'
+          if ($LASTEXITCODE -ne 0) { throw "Service readiness regression failed." }
       - name: Exercise clean offline package with a synthetic image
         shell: powershell
         run: |
@@ -114,6 +120,12 @@ jobs:
                       return 0;
                   }
                   if (args[0] == "inspect") {
+                      if (args.Length >= 3 && args[2] == "{{json .State}}") {
+                          // Match the LF-only stream emitted by the real Docker CLI.
+                          for (int index = 3; index < args.Length; index++)
+                              Console.Write("{\"Status\":\"running\",\"Health\":{\"Status\":\"healthy\"}}\n");
+                          return 0;
+                      }
                       Console.WriteLine(args.Length >= 3 && args[2].Contains("State.Status")
                           ? "running" : "healthy");
                       return 0;
@@ -222,7 +234,40 @@ jobs:
           # Exercise the customer-facing CMD paths without real Docker or databases.
           $fakeCurl = 'public class FakeCurl { public static int Main(string[] args) { return 0; } }'
           Add-Type -TypeDefinition $fakeCurl -OutputAssembly (Join-Path $fakeDir 'curl.exe') -OutputType ConsoleApplication
+          # The structured PowerShell readiness probe performs a real loopback
+          # HTTP request. Supply an explicit disposable HTTP fixture rather
+          # than bypassing that part of the production probe.
+          $fakeHttp = @'
+          using System;
+          using System.Net;
+          using System.Net.Sockets;
+          using System.Text;
+          public class ReadyHttp {
+              public static void Main() {
+                  var listener = new TcpListener(IPAddress.Loopback, 8000);
+                  listener.Start();
+                  while (true) {
+                      using (var client = listener.AcceptTcpClient()) {
+                          var stream = client.GetStream();
+                          stream.ReadTimeout = 5000;
+                          var buffer = new byte[8192];
+                          try {
+                              stream.Read(buffer, 0, buffer.Length);
+                              var response = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK");
+                              stream.Write(response, 0, response.Length);
+                          } catch (System.IO.IOException) { }
+                      }
+                  }
+              }
+          }
+          '@
+          $fakeHttpPath = Join-Path $fakeDir 'ready-http.exe'
+          Add-Type -TypeDefinition $fakeHttp -OutputAssembly $fakeHttpPath -OutputType ConsoleApplication
+          $fakeHttpProcess = Start-Process -FilePath $fakeHttpPath -PassThru -WindowStyle Hidden
+          Start-Sleep -Milliseconds 250
+          if ($fakeHttpProcess.HasExited) { throw 'Synthetic loopback HTTP listener could not start.' }
           $env:TH_GUI_MODE = '1'
+          try {
           foreach ($task in @('Install', 'Start', 'Stop', 'Repair')) {
             if ($task -eq 'Start') {
               # Fake Docker cannot create Frappe data. Model the successful
@@ -247,6 +292,9 @@ jobs:
             if (($output | Out-String) -match 'Username: Administrator|Password: ') {
               throw "Headless execution leaked the initial Administrator credentials."
             }
+          }
+          } finally {
+            if (-not $fakeHttpProcess.HasExited) { Stop-Process -Id $fakeHttpProcess.Id -ErrorAction Stop }
           }
           if (-not (Test-Path -LiteralPath (Join-Path $kit 'product/data/secrets/db.env') -PathType Leaf)) {
             $productData = Join-Path $kit 'product/data'
