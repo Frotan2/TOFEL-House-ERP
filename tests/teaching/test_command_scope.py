@@ -108,6 +108,30 @@ class CommandScopeTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.scope.authorize_command_scope("reconcile_cashier_day", {}, "actor", result={"company": "Company A"})
 
+    def test_cached_placement_invoice_is_rescoped_after_company_change(self):
+        # The placement fee payload has case/customer but no explicit Company;
+        # its stored result uses sales_invoice (not the generic invoice key).
+        self.branches = []
+        self.companies = ["Company B"]
+        self.values[("Sales Invoice", "past-placement", "company")] = "Company A"
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "issue_placement_fee", {"case": "case", "customer": "customer"},
+                "actor", result={"sales_invoice": "past-placement"})
+
+    def test_cached_placement_invoice_remains_accessible_with_current_company_permission(self):
+        self.branches = []
+        self.companies = ["Company A"]
+        self.values[("Sales Invoice", "own-placement", "company")] = "Company A"
+        self.scope.authorize_command_scope(
+            "issue_placement_fee", {"case": "case", "customer": "customer"},
+            "actor", result={"sales_invoice": "own-placement"})
+        # HQ has no restrictive native Company User Permission.
+        self.companies = []
+        self.scope.authorize_command_scope(
+            "issue_placement_fee", {"case": "case", "customer": "customer"},
+            "actor", result={"sales_invoice": "own-placement"})
+
     def test_fee_structure_company_is_resolved_before_receipt_replay(self):
         self.branches = []
         self.companies = ["Company A"]

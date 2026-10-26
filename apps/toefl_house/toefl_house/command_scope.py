@@ -24,6 +24,7 @@ RESULT_NAMES = {
 }
 COMPANY_REFERENCES = {
     "fee_structure": "Fee Structure", "fees": "Fees", "invoice": "Sales Invoice",
+    "sales_invoice": "Sales Invoice",
     "employee": "Employee", "salary_slip": "Salary Slip", "payroll_entry": "Payroll Entry",
 }
 
