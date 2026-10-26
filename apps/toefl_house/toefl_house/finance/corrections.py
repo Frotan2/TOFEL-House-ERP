@@ -23,7 +23,7 @@ the decision trail; the native money artifact (credit note or fee
 cancellation) is the only posting.
 """
 from datetime import date, timedelta
-import math
+from decimal import Decimal, InvalidOperation
 import frappe
 from toefl_house.api import _execute
 from toefl_house.configuration import rules as configuration_rules
@@ -54,6 +54,27 @@ def _require_target_company(doctype, name):
     from toefl_house.finance.company_scope import require_finance_company
     company = frappe.db.get_value(doctype, name, "company")
     return require_finance_company(company)
+
+
+def _validate_correction_amount(value):
+    """A full-credit request is exact native money, never rounded into approval.
+
+    The v1 policy permits only full-amount native reversals. Rounding a
+    caller-supplied value with extra decimal places could make a different
+    requested amount compare equal to an invoice total.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise frappe.ValidationError("Requested amount must be a positive number")
+    try:
+        money = Decimal(str(value))
+        if not money.is_finite() or money <= 0:
+            raise frappe.ValidationError("Requested amount must be a positive finite number")
+        if money != money.quantize(Decimal("0.01")):
+            raise frappe.ValidationError(
+                "Requested amount must have at most two decimal places")
+    except (ValueError, InvalidOperation, OverflowError) as exc:
+        raise frappe.ValidationError("Requested amount must be a valid currency amount") from exc
+    return float(money)
 
 POLICY_FIELDS = ["name", "approver_role", "correction_window_days",
                  "effective_from", "reason", "set_by", "set_on",
@@ -319,11 +340,7 @@ def request_invoice_correction(request_key, sales_invoice, reason, requested_amo
         si_name = _name(sales_invoice, "Sales invoice")
         if not isinstance(reason, str) or not reason or len(reason) > 300:
             raise frappe.ValidationError("Reason required")
-        if (isinstance(requested_amount, bool)
-                or not isinstance(requested_amount, (int, float))
-                or not math.isfinite(float(requested_amount))
-                or float(requested_amount) <= 0):
-            raise frappe.ValidationError("Requested amount must be a positive number")
+        _validate_correction_amount(requested_amount)
         if not frappe.db.exists(INVOICE, si_name):
             raise frappe.ValidationError("Unknown sales invoice")
         frappe.db.sql("select name from `tabSales Invoice` where name=%s for update",
@@ -489,11 +506,7 @@ def request_fees_correction(request_key, fees, reason, requested_amount):
         fee_name = _name(fees, "Fees")
         if not isinstance(reason, str) or not reason or len(reason) > 300:
             raise frappe.ValidationError("Reason required")
-        if (isinstance(requested_amount, bool)
-                or not isinstance(requested_amount, (int, float))
-                or not math.isfinite(float(requested_amount))
-                or float(requested_amount) <= 0):
-            raise frappe.ValidationError("Requested amount must be a positive number")
+        _validate_correction_amount(requested_amount)
         if not frappe.db.exists(FEES, fee_name):
             raise frappe.ValidationError("Unknown fee")
         frappe.db.sql("select name from `tabFees` where name=%s for update", (fee_name,))
