@@ -656,7 +656,56 @@ def _branch_allowed_names(doctype, branches):
                 names |= {row["name"] for row in frappe.get_all(
                     doctype, filters={field: ("in", values)},
                     fields=["name"], limit_page_length=_CHAIN_LIMIT)}
-        return sorted(names)
+        if not names:
+            return []
+        candidate_rows = frappe.get_all(
+            doctype, filters={"name": ("in", sorted(names))},
+            fields=["name", "student_applicant", "existing_student", "native_student"],
+            limit_page_length=_CHAIN_LIMIT)
+        # All linked student memberships matter, not merely the branch whose
+        # roster caused this admission to appear in the candidate set.
+        linked_students = sorted({
+            row.get(field) for row in candidate_rows
+            for field in ("existing_student", "native_student") if row.get(field)
+        })
+        roster_rows = frappe.get_all(
+            "Student Group Student",
+            filters={"student": ("in", linked_students), "active": 1},
+            fields=["student", "parent"], limit_page_length=_CHAIN_LIMIT
+        ) if linked_students else []
+        if len(roster_rows) >= _CHAIN_LIMIT:
+            return []  # Truncation must never hide a foreign membership.
+        parent_names = sorted({row["parent"] for row in roster_rows if row.get("parent")})
+        parent_rows = frappe.get_all(
+            "Student Group", filters={"name": ("in", parent_names)},
+            fields=["name", "th_branch"], limit_page_length=_CHAIN_LIMIT
+        ) if parent_names else []
+        if len(parent_rows) >= _CHAIN_LIMIT:
+            return []
+        parent_branch = {row["name"]: row.get("th_branch") for row in parent_rows}
+        student_branches = {}
+        for row in roster_rows:
+            student_branches.setdefault(row["student"], set()).add(
+                parent_branch.get(row.get("parent")))
+        allowed_applicants = set(applicants)
+        allowed_branches = set(branches)
+        eligible = []
+        for row in candidate_rows:
+            applicant = row.get("student_applicant")
+            if applicant and applicant not in allowed_applicants:
+                continue
+            related = set()
+            for field in ("existing_student", "native_student"):
+                student = row.get(field)
+                if student:
+                    related.update(student_branches.get(student, set()))
+            if related - allowed_branches:
+                continue
+            # A valid intake branch can authorize a first enrollment before
+            # any class exists, but no branch-less candidate is exposed.
+            if applicant in allowed_applicants or related:
+                eligible.append(row["name"])
+        return sorted(eligible)
     return []
 
 

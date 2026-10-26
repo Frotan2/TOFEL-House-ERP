@@ -2403,6 +2403,49 @@ class TeacherDeskWorldTests(unittest.TestCase):
         self.assertNotIn("TA-2", items)
 
 
+class AdmissionMultiBranchProjectionTests(unittest.TestCase):
+    """Elevated reception views must apply ALL linked branch facts."""
+
+    def test_mixed_intake_and_multiple_rosters_are_not_exposed(self):
+        world = {
+            "Student Group": [
+                {"name": "GA", "th_branch": "A"},
+                {"name": "GB", "th_branch": "B"},
+            ],
+            "Student Group Student": [
+                {"name": "RA", "parent": "GA", "student": "ST-A", "active": 1},
+                {"name": "RB", "parent": "GB", "student": "ST-B", "active": 1},
+                {"name": "RM-A", "parent": "GA", "student": "ST-MIX", "active": 1},
+                {"name": "RM-B", "parent": "GB", "student": "ST-MIX", "active": 1},
+            ],
+            "Student Applicant": [
+                {"name": "AP-A", "th_branch": "A"},
+                {"name": "AP-B", "th_branch": "B"},
+            ],
+            "TH Admission Decision": [
+                {"name": "D-A", "student_applicant": "AP-A",
+                 "existing_student": "ST-A", "native_student": None},
+                {"name": "D-first", "student_applicant": "AP-A",
+                 "existing_student": None, "native_student": None},
+                {"name": "D-B", "student_applicant": "AP-B",
+                 "existing_student": "ST-B", "native_student": None},
+                {"name": "D-cross-intake", "student_applicant": "AP-B",
+                 "existing_student": "ST-A", "native_student": None},
+                {"name": "D-cross-roster", "student_applicant": "AP-A",
+                 "existing_student": "ST-B", "native_student": None},
+                {"name": "D-mixed", "student_applicant": "AP-A",
+                 "existing_student": "ST-MIX", "native_student": None},
+            ],
+        }
+        desk = _import_desk("__init__", roles={"Admission Officer"})
+        desk.frappe.get_all = desk_world_get_all("admission isolation", world)
+        self.assertEqual(desk._branch_allowed_names("TH Admission Decision", ["A"]),
+                         ["D-A", "D-first"])
+        self.assertEqual(
+            desk._branch_allowed_names("TH Admission Decision", ["A", "B"]),
+            sorted(row["name"] for row in world["TH Admission Decision"]))
+
+
 class FinanceOutstandingWorldTests(unittest.TestCase):
     """The finance desk's outstanding queue, from native facts only.
 
