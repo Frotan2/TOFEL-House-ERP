@@ -513,7 +513,6 @@ def work():
 
     if (installment_terms.get("installment_cadence") == "Solar Hijri Month"
             and int(installment_terms.get("installments_allowed") or 0)):
-        from toefl_house.finance import shamsi as solar_calendar
         grace = int(installment_terms.get("payment_grace_days") or 0)
         first_solar_due = solar_calendar.monthly_due_dates(
             solar_calendar.month_key(day), 1, grace)[0].isoformat()
