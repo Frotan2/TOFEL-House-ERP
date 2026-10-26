@@ -103,12 +103,17 @@ $dbVolumePresent = $false
 $dbVolumeVerified = $false
 if ($dockerReady) {
     try {
-        # Existence only. Never inspect volume contents or print a data path.
-        & $dockerExe volume inspect "toefl-house-erp_db-data" *> $null
-        $dbVolumePresent = ($LASTEXITCODE -eq 0)
-        # An inspect failure may mean "not found" OR an API/permission error.
-        # Without verified absence, never report this computer as fresh.
-        $dbVolumeVerified = $dbVolumePresent
+        # A successful name inventory distinguishes a genuinely absent volume
+        # from an inaccessible Docker API. A failed single-volume inspect
+        # cannot distinguish those states on a fresh customer installation.
+        # Never read volume contents or print unrelated names/data paths.
+        $volumeNames = @(& $dockerExe volume ls --format "{{.Name}}" 2>$null)
+        if ($LASTEXITCODE -eq 0) {
+            $dbVolumePresent = @($volumeNames | Where-Object {
+                $_.Trim() -ceq "toefl-house-erp_db-data"
+            }).Count -gt 0
+            $dbVolumeVerified = $true
+        }
     } catch {
         $dbVolumeVerified = $false
     }
@@ -122,7 +127,7 @@ if (-not $secretPresent -and ($sitePresent -or $dbVolumePresent)) {
     Result "Database credential safety" "BLOCKED: existing site/database but credential file missing. Do NOT reinstall, repair, delete or regenerate credentials."
 } elseif ($secretPresent -and -not $siteConfigPresent) {
     Result "Database credential safety" "BLOCKED: credentials exist but site configuration is missing. Do NOT install, start or repair."
-} elseif ($secretPresent -and -not $dbVolumeVerified) {
+} elseif ($secretPresent -and (-not $dbVolumeVerified -or -not $dbVolumePresent)) {
     # A stopped Docker engine, missing volume and Docker API denial all need
     # the same safe response: no Start/Repair or credentials reset until checked.
     Result "Database credential safety" "NOT VERIFIED: credentials exist but the database volume could not be confirmed. Start Docker Desktop and check again; do NOT reinstall."

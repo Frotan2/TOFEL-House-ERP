@@ -5,6 +5,13 @@ app_description = "TOEFL House institute operations on the native ERP stack: pla
 app_email = "toeflhouse@toeflhouse.localhost"
 app_license = "MIT"
 required_apps = ["erpnext", "education", "foundation_security"]
+
+# The native controller keeps all date, duplication and holiday validation.
+# Only roster membership inside a guarded teaching command uses the owned
+# request-local seam; Education's module-global accessor is never replaced.
+override_doctype_class = {
+    "Student Attendance": "toefl_house.teaching.native_attendance.THStudentAttendance",
+}
 after_install = "toefl_house.install.after_install"
 after_migrate = "toefl_house.install.after_migrate"
 # Release navigation is deliberately split by the native framework boundary.

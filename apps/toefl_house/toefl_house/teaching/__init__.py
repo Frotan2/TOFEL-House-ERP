@@ -203,27 +203,14 @@ def guard_student_attendance(doc, method=None):
 
 @contextmanager
 def _roster_read():
-    """StudentAttendance.validate_student calls get_student_group_students.
+    """Legacy lexical scope; no module-global permission accessor is replaced.
 
-    That helper enforces a Desk read permission on Student Group which the
-    Attendance Recorder must not hold (no native CRUD roles are granted).
-    Patch only the module-level reference for this command; never switch the
-    session user or relax frappe.has_permission.
+    The owned Student Attendance subclass validates active membership only
+    inside this actor's request-local teaching command. Native permission
+    checks remain unchanged for every other request, including concurrent
+    requests. Existing attendance/correction callers retain this no-op scope.
     """
-    from education.education.doctype.student_attendance import student_attendance as native
-
-    original = native.get_student_group_students
-
-    def roster(student_group, include_inactive=0):
-        return frappe.db.sql(
-            "select student, student_name from `tabStudent Group Student` where parent=%s and active=1",
-            (student_group,), as_dict=True)
-
-    native.get_student_group_students = roster
-    try:
-        yield
-    finally:
-        native.get_student_group_students = original
+    yield
 
 
 def _bounded_name(value, label):

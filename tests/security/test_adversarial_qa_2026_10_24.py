@@ -595,9 +595,10 @@ class BaselineSecurityRegressionTests(unittest.TestCase):
         self.assertIn("raise frappe.ValidationError", guard_seg)
 
     def test_adv_main_02_attendance_restricts_active_members_and_open_groups(self):
-        for fn in ("_roster_read", "_record_attendance"):
-            seg = self._source("toefl_house/teaching/__init__.py", fn)
-            self.assertIn("active=1", seg)
+        seg = self._source("toefl_house/teaching/__init__.py", "_record_attendance")
+        self.assertIn("active=1", seg)
+        scope = self._source("toefl_house/teaching/__init__.py", "_roster_read")
+        self.assertNotIn("native.get_student_group_students =", scope)
         record = self._source("toefl_house/teaching/__init__.py", "_record_attendance")
         self.assertIn("_TERMINAL_CLASS_STATUSES", record)
         for endpoint in ("record_attendance", "record_instructor_attendance"):

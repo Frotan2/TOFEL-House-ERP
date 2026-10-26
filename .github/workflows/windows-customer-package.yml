@@ -18,6 +18,7 @@ on:
       - "docs/CUSTOMER-UPDATES.md"
       - "docs/engineering/SAFE-UPDATES.md"
       - "tests/foundation/test_customer_install_package.py"
+      - "tests/foundation/test_windows_pc_inventory.py"
       - ".github/workflows/windows-customer-package.yml"
   workflow_dispatch:
 
@@ -71,6 +72,11 @@ jobs:
         run: |
           & powershell.exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File 'product/windows/TOEFL House ERP.ps1' -SmokeTest
           if ($LASTEXITCODE -ne 0) { throw "Windows GUI initialization failed." }
+      - name: Verify real PowerShell storage-inventory decisions
+        shell: powershell
+        run: |
+          python -m unittest tests.foundation.test_windows_pc_inventory -v
+          if ($LASTEXITCODE -ne 0) { throw "PC storage inventory regression failed." }
       - name: Exercise clean offline package with a synthetic image
         shell: powershell
         run: |

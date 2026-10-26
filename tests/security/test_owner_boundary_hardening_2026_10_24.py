@@ -29,7 +29,8 @@ class SecurityHardeningContracts(unittest.TestCase):
             f(("not in", ["s1"]), ["s1"])
 
     def test_attendance_uses_active_roster_and_open_class(self):
-        self.assertIn("active=1", source("teaching/__init__.py", "_roster_read"))
+        self.assertIn("active=1", (ROOT / "teaching/native_attendance.py").read_text())
+        self.assertNotIn("native.get_student_group_students =", source("teaching/__init__.py", "_roster_read"))
         attendance = source("teaching/__init__.py", "_record_attendance")
         self.assertIn("active=1", attendance)
         self.assertIn("_TERMINAL_CLASS_STATUSES", attendance)
