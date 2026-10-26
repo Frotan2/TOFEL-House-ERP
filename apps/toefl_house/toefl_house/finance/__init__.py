@@ -302,6 +302,8 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
             resolved_billable_components(pe, fs_name)
 
         company = fs.company or COMPANY
+        from toefl_house.finance.company_scope import require_finance_company
+        require_finance_company(company)
         # The framework prefills an empty `currency` field from the system
         # default; set the company's currency explicitly so the receivable is
         # never denominated in the wrong currency.
@@ -386,6 +388,8 @@ def issue_placement_fee(request_key, case, customer, posting_date, due_date):
             raise frappe.ValidationError("Unknown placement case")
         if not frappe.db.exists(CUSTOMER, customer_name):
             raise frappe.ValidationError("Unknown customer")
+        from toefl_house.finance.company_scope import require_finance_company
+        require_finance_company(COMPANY)
         item_code = _placement_fee_item()
         rate = frappe.db.get_value("Item Price",
                                    {"item_code": item_code,

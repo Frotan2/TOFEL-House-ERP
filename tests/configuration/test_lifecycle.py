@@ -828,7 +828,15 @@ class D3LifecycleTests(unittest.TestCase):
             fake.store.setdefault("Role", {})[role] = {"name": role}
 
     def _fee(self, fake, name, total, posting):
+        # Native Education Fees always belongs to a Company. The owner-gated
+        # correction tests must carry that accounting identity so the added
+        # Company User Permission guard can verify the real document instead
+        # of falling over an incomplete in-memory fixture.
+        fake.store.setdefault("Company", {})["TOEFL House"] = {
+            "name": "TOEFL House",
+        }
         fee = _Doc(fake, "Fees", {"name": name, "grand_total": total,
+                                  "company": "TOEFL House",
                                   "posting_date": posting})
         fee.insert()
         fee.submit()

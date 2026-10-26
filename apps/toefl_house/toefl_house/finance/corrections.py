@@ -23,6 +23,7 @@ the decision trail; the native money artifact (credit note or fee
 cancellation) is the only posting.
 """
 from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 import frappe
 from toefl_house.api import _execute
 from toefl_house.configuration import rules as configuration_rules
@@ -41,6 +42,40 @@ AUDIT = "TH Placement Audit Event"
 # text), so the per-target hash chain spans versions instead of ending
 # at each version row. Request events keep targeting their request row.
 POLICY_STREAM = "TH Correction Policy"
+
+
+def _require_target_company(doctype, name):
+    """Bind corrected native document to the actor's Company scope.
+
+    Corrections create/modify native money records under internal audited
+    write permission; the Finance Officer role alone does not bypass an
+    explicitly restricted native Company User Permission.
+    """
+    from toefl_house.finance.company_scope import require_finance_company
+    company = frappe.db.get_value(doctype, name, "company")
+    return require_finance_company(company)
+
+
+def _validate_correction_amount(value):
+    """A full-credit request is exact native money, never rounded into approval.
+
+    The v1 policy permits only full-amount native reversals. Rounding a
+    caller-supplied value with extra decimal places could make a different
+    requested amount compare equal to an invoice total.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise frappe.ValidationError("Requested amount must be a positive number")
+    try:
+        money = Decimal(str(value))
+        if not money.is_finite() or money <= 0:
+            raise frappe.ValidationError("Requested amount must be a positive finite number")
+        if money != money.quantize(Decimal("0.01")):
+            raise frappe.ValidationError(
+                "Requested amount must have at most two decimal places")
+    except (ValueError, InvalidOperation, OverflowError) as exc:
+        raise frappe.ValidationError("Requested amount must be a valid currency amount") from exc
+    return float(money)
+
 POLICY_FIELDS = ["name", "approver_role", "correction_window_days",
                  "effective_from", "reason", "set_by", "set_on",
                  "superseded_on", "status", "synthetic"]
@@ -305,10 +340,7 @@ def request_invoice_correction(request_key, sales_invoice, reason, requested_amo
         si_name = _name(sales_invoice, "Sales invoice")
         if not isinstance(reason, str) or not reason or len(reason) > 300:
             raise frappe.ValidationError("Reason required")
-        if (isinstance(requested_amount, bool)
-                or not isinstance(requested_amount, (int, float))
-                or float(requested_amount) <= 0):
-            raise frappe.ValidationError("Requested amount must be a positive number")
+        _validate_correction_amount(requested_amount)
         if not frappe.db.exists(INVOICE, si_name):
             raise frappe.ValidationError("Unknown sales invoice")
         frappe.db.sql("select name from `tabSales Invoice` where name=%s for update",
@@ -316,6 +348,7 @@ def request_invoice_correction(request_key, sales_invoice, reason, requested_amo
         si = frappe.db.get_value(INVOICE, si_name,
                                  ["docstatus", "is_return", "th_placement_case",
                                   "grand_total", "posting_date"], as_dict=True)
+        _require_target_company(INVOICE, si_name)
         if int(si.docstatus or 0) != 1 or int(si.is_return or 0) == 1:
             raise frappe.ValidationError("Corrections require a submitted original invoice")
         if not si.th_placement_case:
@@ -380,6 +413,7 @@ def approve_invoice_correction(request_key, request):
             raise frappe.PermissionError("A requester cannot approve their own financial correction")
         if not req.sales_invoice:
             raise frappe.ValidationError("Correction request is not for an invoice")
+        _require_target_company(INVOICE, req.sales_invoice)
         frappe.db.sql("select name from `tabSales Invoice` where name=%s for update",
                       (req.sales_invoice,))
         si = frappe.db.get_value(INVOICE, req.sales_invoice,
@@ -441,6 +475,9 @@ def deny_invoice_correction(request_key, request):
     """
     def work(actor):
         req = _pending_request(_name(request, "Correction request"))
+        if not req.sales_invoice:
+            raise frappe.ValidationError("Correction request is not for an invoice")
+        _require_target_company(INVOICE, req.sales_invoice)
         terms = _pinned_policy(req)
         _require_approver(terms, actor)
         req.flags.ignore_permissions = True
@@ -469,16 +506,14 @@ def request_fees_correction(request_key, fees, reason, requested_amount):
         fee_name = _name(fees, "Fees")
         if not isinstance(reason, str) or not reason or len(reason) > 300:
             raise frappe.ValidationError("Reason required")
-        if (isinstance(requested_amount, bool)
-                or not isinstance(requested_amount, (int, float))
-                or float(requested_amount) <= 0):
-            raise frappe.ValidationError("Requested amount must be a positive number")
+        _validate_correction_amount(requested_amount)
         if not frappe.db.exists(FEES, fee_name):
             raise frappe.ValidationError("Unknown fee")
         frappe.db.sql("select name from `tabFees` where name=%s for update", (fee_name,))
         fee_row = frappe.db.get_value(FEES, fee_name,
                                       ["docstatus", "grand_total", "posting_date"],
                                       as_dict=True)
+        _require_target_company(FEES, fee_name)
         if int(fee_row.docstatus or 0) != 1:
             raise frappe.ValidationError("Corrections require a submitted fee")
         if round(float(fee_row.grand_total), 2) != round(float(requested_amount), 2):
@@ -531,6 +566,7 @@ def approve_fees_correction(request_key, request):
             raise frappe.PermissionError("A requester cannot approve their own financial correction")
         if not req.fees:
             raise frappe.ValidationError("Correction request is not for a Fees record")
+        _require_target_company(FEES, req.fees)
         # Re-validate the fee at approval time, under the same row lock the
         # request used. Request and approval are separate commands that can be
         # separated by any interval, so the invariants proven at request time
@@ -582,6 +618,9 @@ def deny_fees_correction(request_key, request):
     """
     def work(actor):
         req = _pending_request(_name(request, "Correction request"))
+        if not req.fees:
+            raise frappe.ValidationError("Correction request is not for a Fees record")
+        _require_target_company(FEES, req.fees)
         terms = _pinned_policy(req)
         _require_approver(terms, actor)
         req.flags.ignore_permissions = True

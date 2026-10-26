@@ -203,6 +203,8 @@ def create_teaching_contract(request_key, instructor, employee, compensation_mod
                 "Employee does not match the instructor's HRMS employee record")
         if frappe.db.get_value(EMPLOYEE, employee_name, "status") != "Active":
             raise frappe.ValidationError("Only active employees can hold teaching contracts")
+        from toefl_house.finance.company_scope import require_finance_company
+        require_finance_company(frappe.db.get_value(EMPLOYEE, employee_name, "company"))
         if model == "Fixed Salary" and terms:
             raise frappe.ValidationError("Fixed-salary contracts carry no skill terms; native salary structure applies")
         if model in ("Skill-Based", "Hybrid") and not terms:
@@ -262,6 +264,8 @@ def revise_teaching_contract(request_key, contract, compensation_model, assignme
         cadence = _earning_basis(earning_basis or getattr(old, "earning_basis", None) or "One-off")
         if old.status != "Active":
             raise frappe.ValidationError("Only an active contract can be superseded")
+        from toefl_house.finance.company_scope import require_finance_company
+        require_finance_company(frappe.db.get_value(EMPLOYEE, old.employee, "company"))
         if model == "Fixed Salary" and terms:
             raise frappe.ValidationError("Fixed-salary contracts carry no skill terms; native salary structure applies")
         if model in ("Skill-Based", "Hybrid") and not terms:
@@ -528,6 +532,8 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
         deduction = _bounded(deduction_component, "Deduction Component") if deduction_component else ""
         if not frappe.db.exists("Company", company_name):
             raise frappe.ValidationError("Unknown company")
+        from toefl_house.finance.company_scope import require_finance_company
+        require_finance_company(company_name)
         if not frappe.db.exists("Salary Component", component):
             raise frappe.ValidationError("Unknown salary component")
         if deduction and not frappe.db.exists("Salary Component", deduction):

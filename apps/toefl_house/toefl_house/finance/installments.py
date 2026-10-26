@@ -264,6 +264,8 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
                 "The discount was not applied to the plan; refuse rather than bill the gross price")
 
         company = fs.company or COMPANY
+        from toefl_house.finance.company_scope import require_finance_company
+        require_finance_company(company)
         company_currency = frappe.get_cached_value(
             "Company", company, "default_currency")
         student_name = frappe.db.get_value("Student", pe.student, "student_name")
