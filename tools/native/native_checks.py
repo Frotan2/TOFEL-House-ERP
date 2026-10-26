@@ -5402,7 +5402,7 @@ def main():
         def discount_single_winner():
             frappe.set_user('Administrator')
             fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
-                'odcp-fee-discounted-0001',second['program_enrollment'],fsx['fs2'],
+                'odcp-fee-discounted-0001',odcp_learners['discount']['program_enrollment'],fsx['fs2'],
                 pf_post,pf_due))
             applied={d['fee_category']:d for d in fees['discounts_applied']}
             assert set(applied)=={'SYN-Tuition','SYN-Books'},applied
@@ -5424,7 +5424,7 @@ def main():
             assert float(gl)==26000.0,(gl,)
             count=frappe.db.count(api.AUDIT);fees_count=frappe.db.count('Fees')
             again=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
-                'odcp-fee-discounted-0001',second['program_enrollment'],fsx['fs2'],
+                'odcp-fee-discounted-0001',odcp_learners['discount']['program_enrollment'],fsx['fs2'],
                 pf_post,pf_due))
             assert again==fees and frappe.db.count(api.AUDIT)==count and frappe.db.count('Fees')==fees_count
             return {'fees':fees['fees'],'grand_total':26000.0,
@@ -5440,7 +5440,7 @@ def main():
                 'odcp-rule-gen-00000001','SYN-DISC-GEN','SYN general fifty',50,50,
                 '','SYN-PROGRAM-GENERAL'))
             fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
-                'odcp-fee-scoped-live-01',enrolled['program_enrollment'],fsx['fs2'],
+                'odcp-fee-scoped-live-01',odcp_learners['scope']['program_enrollment'],fsx['fs2'],
                 '2026-09-06','2026-10-06'))
             assert fees['grand_total']==15000.0,fees
             applied={d['fee_category']:d['rule_code'] for d in fees['discounts_applied']}
@@ -5471,7 +5471,7 @@ def main():
             fs3.append('components',{'fees_category':'SYN-Tuition','amount':25000})
             fs3.insert()
             fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
-                'odcp-fee-post-retire-01',second['program_enrollment'],fs3.name,
+                'odcp-fee-post-retire-01',odcp_learners['retirement']['program_enrollment'],fs3.name,
                 '2026-09-07','2026-10-07'))
             assert 'discounts_applied' not in fees,fees
             assert fees['grand_total']==25000.0,fees
@@ -5530,16 +5530,62 @@ def main():
             assert fdisc['fees'] in (op['result_json'] or ''),op['result_json']
             n_before=frappe.db.count('TH Placement Audit Event',{'operation':opname})
             as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
-                'odcp-fee-discounted-0001',second['program_enrollment'],fsx['fs2'],
+                'odcp-fee-discounted-0001',odcp_learners['discount']['program_enrollment'],fsx['fs2'],
                 pf_post,pf_due))
             assert frappe.db.count('TH Placement Audit Event',{'operation':opname})==n_before
             # the discounted fee belongs to the admission->enrollment journey:
-            pe_student=frappe.db.get_value('Program Enrollment',second['program_enrollment'],'student')
-            assert pe_student==second['student'],(pe_student,second['student'])
+            pe_student=frappe.db.get_value('Program Enrollment',odcp_learners['discount']['program_enrollment'],'student')
+            assert pe_student==odcp_learners['discount']['student'],(pe_student,odcp_learners['discount']['student'])
             return {'operation_receipt_complete':True,'single_audit_event':True,
                     'audit_target_is_the_fee':True,'replay_adds_no_event':True,
                     'pe_matches_journey_student':True}
         fsx=check('odcp-fee-catalog-fixture',traced(odcp_fixtures))
+        def odcp_unbilled_intake(tag):
+            """Create a distinct, approved, fully enrolled synthetic student.
+
+            Native tuition is UNIQUE per Program Enrollment, not per chosen
+            Fee Structure. The older discount fixture mistakenly rebilled
+            two previously invoiced students. Never weaken the production
+            uniqueness guard just to make a discount test pass.
+            """
+            frappe.set_user('Administrator')
+            subject=f'synthetic-odcp-{tag}@example.test'
+            assert not frappe.db.exists('User',subject),subject
+            frappe.get_doc(dict(
+                doctype='User',email=subject,first_name=f'Synthetic ODCP {tag}',
+                enabled=1,send_welcome_email=0,
+                new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
+                roles=[])).insert()
+            prefix=f'odcp_{tag}_'
+            case=as_user('publisher',lambda:api.create_case(
+                prefix+'create_case_0001',subject))
+            alloc=digital_finalize(case['name'],prefix+'pipe')
+            rel=as_user('releaser',lambda:api.release_decision(
+                prefix+'release_000001',alloc['attempt'],7))
+            app=as_user('officer',lambda:adm.record_applicant(
+                prefix+'record_000001',rel['decision'],
+                f'SYNTHETIC ODCP learner {tag}',cat['program'],cat['academic_year']))
+            dec=as_user('officer',lambda:adm.create_admission(
+                prefix+'admit_0000001',app['name'],rel['decision']))
+            as_user('admissions_reviewer',lambda:adm.review_admission(
+                prefix+'review_000001',dec['name'],1))
+            as_user('approver',lambda:adm.decide_admission(
+                prefix+'approve_00001',dec['name'],2,'Approved',REASON))
+            as_user('officer',lambda:adm.accept_offer(
+                prefix+'accept_000001',dec['name'],3))
+            conv=as_user('approver',lambda:adm.convert_applicant(
+                prefix+'convert_00001',dec['name'],4))
+            enrolled_new=as_user('enrollment_officer',
+                lambda:enr.enroll_in_program(prefix+'enroll_000001',dec['name']))
+            name=enrolled_new['program_enrollment']
+            assert enrolled_new['docstatus']==1
+            assert enrolled_new['student']==conv['native_student']
+            assert not frappe.db.exists('Fees',
+                {'program_enrollment':name,'docstatus':('!=',2)})
+            return {'student':conv['native_student'],'program_enrollment':name}
+        odcp_learners=check('odcp-three-independent-approved-intakes',
+            traced(lambda:{tag:odcp_unbilled_intake(tag)
+                for tag in ('discount','scope','retirement')}))
         check('odcp-discount-rules-seeded',traced(odcp_seed_rules))
         check('odcp-discount-rule-command-guard',traced(odcp_command_guard))
         fdisc=check('odcp-discount-single-winner-tuition',traced(discount_single_winner))
