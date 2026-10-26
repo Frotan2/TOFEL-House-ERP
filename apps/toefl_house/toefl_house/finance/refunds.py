@@ -34,7 +34,8 @@ import frappe
 
 INVOICE = "Sales Invoice"
 PAYMENT = "Payment Entry"
-TOLERANCE = 0.005
+TOLERANCE = 0.005  # native currency rounding, not stock quantity
+QUANTITY_TOLERANCE = 0.0000005  # _flt rounds stock quantities to six decimals
 CASH_ACCOUNT_TYPES = ("Cash", "Bank")
 
 
@@ -54,19 +55,31 @@ def return_quantities_ok(original_items, prior_returns, current_items):
     cumulative total per item must stay within ``original_items``.
     """
     original = {code: _flt(qty) for code, qty in (original_items or {}).items()}
+    if not original or not current_items or any(
+            not math.isfinite(qty) or qty <= 0 for qty in original.values()):
+        return False
     already = {}
     for rows in (prior_returns or []):
         for code, qty in rows.items():
-            already[code] = already.get(code, 0.0) + _flt(qty)
+            if code not in original:
+                return False
+            amount = _flt(qty)
+            if not math.isfinite(amount) or amount < 0:
+                return False
+            already[code] = already.get(code, 0.0) + amount
+            if not math.isfinite(already[code]):
+                return False
     running = dict(already)
     for code, qty in (current_items or {}).items():
         if code not in original:
             return False
         amount = _flt(qty)
-        if amount <= 0:
+        if not math.isfinite(amount) or amount <= 0:
             return False
         running[code] = running.get(code, 0.0) + amount
-        if running[code] - original[code] > TOLERANCE:
+        if not math.isfinite(running[code]):
+            return False
+        if running[code] - original[code] > QUANTITY_TOLERANCE:
             return False
     return True
 
@@ -76,7 +89,10 @@ def return_value_ok(original_grand_total, prior_credited, current_grand_total):
     original = abs(_flt(original_grand_total))
     already = abs(_flt(prior_credited))
     current = abs(_flt(current_grand_total))
-    if current <= 0:
+    # NaN makes all comparisons false; infinity can make a difference NaN.
+    # Neither may authorize the issue of a native credit note.
+    if (not all(math.isfinite(value) for value in (original, already, current))
+            or original <= 0 or current <= 0):
         return False
     return already + current - original <= TOLERANCE
 

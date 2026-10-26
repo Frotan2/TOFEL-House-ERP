@@ -26,6 +26,7 @@ below, so every domain resolves history by one implementation.
 import json
 import math
 import re
+from decimal import Decimal, InvalidOperation
 
 from toefl_house.configuration import rules as foundation
 
@@ -156,27 +157,28 @@ def check_version_appends(rows, new_effective_from):
 
 
 def validate_fee_amount(value):
-    """A fee component amount: positive number, bounded by a typo guard.
+    """A positive fee in exact, two-decimal native currency units.
 
-    The ceiling is not business policy — it exists so a slipped keystroke
-    cannot silently define a nine-figure charge. The Owner's real amounts
-    are data; this only refuses implausible input.
+    Fee Structure amounts are policy inputs for *posted* Fees and GL. They
+    must not silently introduce fractional minor units that differ after
+    downstream rounding. The Owner supplies the amount; this is solely
+    numeric and native-accounting input validation.
     """
-    if isinstance(value, str):
-        try:
-            value = float(value.strip())
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Fee amount must be a number") from exc
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, (str, int, float, Decimal)):
         raise ValueError("Fee amount must be a number")
-    value = float(value)
-    if not math.isfinite(value):
+    try:
+        money = Decimal(str(value).strip())
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise ValueError("Fee amount must be a number") from exc
+    if not money.is_finite():
         raise ValueError("Fee amount must be finite")
-    if value <= 0:
+    if money <= 0:
         raise ValueError("Fee amount must be greater than zero")
-    if value > 100_000_000:
+    if money > Decimal("100000000"):
         raise ValueError("Fee amount looks like a typo; the maximum accepted is 100000000")
-    return value
+    if money != money.quantize(Decimal("0.01")):
+        raise ValueError("Fee amount must have at most two decimal places")
+    return float(money)
 
 
 def validate_component_rows(rows):

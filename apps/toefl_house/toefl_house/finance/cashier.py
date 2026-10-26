@@ -31,6 +31,7 @@ rather than a second invented limit. No active policy means no closes.
 # name ``date`` is the argument, and ``date.fromisoformat`` would be an
 # AttributeError on the string (caught only by the native run, 2026-10-24).
 from datetime import date as _date
+from decimal import Decimal, InvalidOperation
 from math import isfinite
 import frappe
 
@@ -63,9 +64,19 @@ def assert_command_context():
 
 
 def _counted(value, what):
-    """Cashier-entered amount with a business-language refusal."""
+    """Require physical drawer counts in exact native minor units.
+
+    Never round an entered fractional cent into or out of a variance. Native
+    ledger balances can still be rounded for display by _stored_money.
+    """
     try:
-        return _money(value, what)
+        amount = _money(value, what)
+        precise = Decimal(str(value).strip())
+        if precise != precise.quantize(Decimal("0.01")):
+            raise ValueError(f"{what} must have at most two decimal places")
+        return amount
+    except InvalidOperation as exc:
+        raise frappe.ValidationError(f"{what} must have at most two decimal places") from exc
     except ValueError as exc:
         raise frappe.ValidationError(str(exc)) from exc
 
