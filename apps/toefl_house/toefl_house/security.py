@@ -52,6 +52,7 @@ KIND_ROLES = {
     "transition_class": "Teaching Scheduler",
     "schedule_session": "Teaching Scheduler",
     "record_attendance": "Attendance Recorder",
+    "record_instructor_attendance": "Instructor",
     "add_class_member": "Teaching Scheduler",
     "move_class_member": "Teaching Scheduler",
     "remove_class_member": "Teaching Scheduler",
@@ -281,6 +282,7 @@ TEACHING_COMMANDS = {
     "transition_class": "Student Group",
     "schedule_session": "Course Schedule",
     "record_attendance": "Student Attendance",
+    "record_instructor_attendance": "Student Attendance",
     # a roster addition may also consume an approved capacity override
     "add_class_member": ("Student Group", "TH Capacity Approval"),
     "move_class_member": "Student Group",
