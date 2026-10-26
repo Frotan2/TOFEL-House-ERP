@@ -101,6 +101,14 @@ class SplitArithmeticTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.module.split_amounts(total, parts)
 
+    def test_exact_currency_rejects_partial_cent_or_nonfinite_amounts(self):
+        for bad in (0.005, "12.345", "NaN", "Infinity", "-Infinity",
+                    None, 0, -10):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                self.module.split_amounts(bad, 2)
+        self.assertEqual(self.module.split_amounts("0.30", 2), [0.15, 0.15])
+        self.assertEqual(self.module.split_amounts("0.05", 2), [0.02, 0.03])
+
     def test_bad_count_is_refused(self):
         for parts in (0, -1, True, "3", 2.5):
             with self.subTest(parts=parts):
