@@ -548,7 +548,20 @@ def _managed_fee_structure(native_program, academic_year, company=""):
             f"More than one editable fee structure exists for {native_program} "
             f"in {academic_year}; keep exactly one so billing is unambiguous")
     if found:
-        return frappe.get_doc(FEE_STRUCTURE, found[0]["name"], for_update=True)
+        structure = frappe.get_doc(FEE_STRUCTURE, found[0]["name"], for_update=True)
+        # An explicit company must never silently edit another company's
+        # already-created fee plan. A plan is keyed by program/year and its
+        # company is immutable here; changing it requires a separate reviewed
+        # Finance migration rather than retargeting existing tuition policy.
+        # Resolve the company even for an existing plan. With two companies,
+        # an omitted Company is ambiguous and must not silently target one.
+        requested_company = _resolve_company(company)
+        if structure.company != requested_company:
+            raise frappe.ValidationError(
+                f"Fee plan {structure.name} belongs to company "
+                f"{structure.company}; it cannot be edited as company "
+                f"{requested_company}")
+        return structure
     company_name = _resolve_company(company)
     receivable = frappe.db.get_value(
         "Company", company_name, "default_receivable_account")

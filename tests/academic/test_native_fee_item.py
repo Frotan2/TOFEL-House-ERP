@@ -21,7 +21,8 @@ class NativeFeeItemTests(unittest.TestCase):
         self.rules = load(APP / "configuration/rules.py", "fee_item_rules_test")
         self.actor = "owner@example.test"
         self.authority = Mock(return_value=self.actor)
-        modules = {"frappe": O(session=O(user=self.actor)),
+        modules = {"frappe": O(session=O(user=self.actor), db=O(exists=Mock(return_value=True)),
+                                 ValidationError=ValueError),
                    "toefl_house.configuration": O(rules=self.rules),
                    "toefl_house.configuration.audit": O(require_authority=self.authority)}
         self.patches = patch.dict(sys.modules, modules)
@@ -30,6 +31,9 @@ class NativeFeeItemTests(unittest.TestCase):
         module = load(APP / "academic/native_fee_item.py", "native_fee_item_test")
 
         class NativeItem:
+            def validate(self):
+                self.native_validated = True
+
             def has_permission(self, permtype="read", *, debug=False, user=None):
                 return False
 
@@ -42,6 +46,7 @@ class NativeFeeItemTests(unittest.TestCase):
         self.item.item_group = "Fee Component"
         self.item.is_stock_item = 0
         self.item.is_sales_item = 1
+        self.item.stock_uom = None
 
     def scope(self):
         return self.rules.fee_item_context(self.actor, "SYN Fee")
@@ -92,6 +97,44 @@ class NativeFeeItemTests(unittest.TestCase):
                 self.assertFalse(Context().run(self.item.has_permission, "create"))
                 raise RuntimeError("Rollback")
         self.assertIsNone(self.rules.active_fee_item())
+
+    def test_scoped_fee_item_receives_native_mandatory_service_uom(self):
+        with self.rules.command_context("create_fee_type"), self.scope():
+            self.item.validate()
+        self.assertEqual(self.item.stock_uom, "Nos")
+        self.assertTrue(self.item.native_validated)
+
+    def test_foreign_item_and_outside_command_keep_native_validation(self):
+        self.item.validate()
+        self.assertIsNone(self.item.stock_uom)
+        with self.rules.command_context("create_fee_type"), self.scope():
+            self.item.item_code = "Unrelated Product"
+            self.item.validate()
+            self.assertIsNone(self.item.stock_uom)
+            self.item.item_code = "SYN Fee"
+            self.item.item_group = "Products"
+            self.item.validate()
+            self.assertIsNone(self.item.stock_uom)
+            self.item.item_group = "Fee Component"
+            self.item.stock_uom = "Box"
+            self.item.validate()
+            self.assertEqual(self.item.stock_uom, "Box")
+
+    def test_missing_native_standard_uom_refuses_without_creating_master(self):
+        import frappe
+        frappe.db.exists.return_value = False
+        with self.rules.command_context("create_fee_type"), self.scope():
+            with self.assertRaisesRegex(ValueError, "standard Nos unit of measure"):
+                self.item.validate()
+        self.assertIsNone(self.item.stock_uom)
+        frappe.db.exists.assert_called_once_with("UOM", "Nos")
+
+    def test_revoked_owner_cannot_default_item_uom(self):
+        self.authority.side_effect = PermissionError("Disabled or revoked")
+        with self.rules.command_context("create_fee_type"), self.scope():
+            with self.assertRaises(PermissionError):
+                self.item.validate()
+        self.assertIsNone(self.item.stock_uom)
 
     def test_native_controller_extension_is_wired(self):
         self.assertIn('"Item": ["toefl_house.academic.native_fee_item.FeeItemPermissionMixin"]',
