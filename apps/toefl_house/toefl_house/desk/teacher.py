@@ -134,11 +134,13 @@ def work():
     if group_names:
         sessions_today = project_rows(
             "teacher", SCHEDULE, SCHEDULE_FIELDS,
-            filters={"student_group": ("in", group_names), "schedule_date": day},
+            filters={"student_group": ("in", group_names),
+                     "instructor": instructor["name"], "schedule_date": day},
             order_by="from_time asc", limit=LIMIT_QUEUES)
         recent_sessions = project_rows(
             "teacher", SCHEDULE, SCHEDULE_FIELDS,
-            filters={"student_group": ("in", group_names)},
+            filters={"student_group": ("in", group_names),
+                     "instructor": instructor["name"]},
             order_by="schedule_date desc", limit=LIMIT_QUEUES)
 
     roster = []
