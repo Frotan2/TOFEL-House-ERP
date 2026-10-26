@@ -155,7 +155,7 @@ def work():
     for row in roster:
         roster_by_group.setdefault(row.get("parent"), []).append(row)
 
-    session_names = [row["name"] for row in recent_sessions]
+    session_names = sorted({row["name"] for row in recent_sessions + sessions_today})
     attendance_by_session = {}
     if session_names:
         for row in project_rows("teacher", ATTENDANCE,
@@ -222,6 +222,14 @@ def work():
         group = groups_by_name.get(row.get("student_group")) or {}
         marked = attendance_by_session.get(row["name"], [])
         absent = sum(1 for entry in marked if entry.get("status") == "Absent")
+        marked_students = {entry.get("student") for entry in marked}
+        pending_roster = [
+            {"student": member["student"],
+             "name": member.get("student_name") or member["student"]}
+            for member in roster_by_group.get(row.get("student_group"), [])
+            if int(member.get("active") or 0) == 1
+            and member["student"] not in marked_students
+        ]
         item = {
             "id": row["name"],
             "person": group.get("student_group_name") or row.get("student_group") or "",
@@ -233,21 +241,16 @@ def work():
             "next": ("Attendance is recorded "
                      f"({len(marked)} marked, {absent} absent)."
                      if marked else "Record attendance after the session."),
-            "next_role": "Instructor" if not marked else None,
+            "next_role": "Instructor" if pending_roster else None,
             "waiting_since": None,
         }
-        if not marked:
+        if pending_roster:
+            item["next"] = f"{len(marked)} marked; {len(pending_roster)} still need attendance."
             action = guided_action("Instructor",
                                    "toefl_house.teaching.record_instructor_attendance",
                                    "Record attendance",
                                    {"course_schedule": row["name"],
-                                    "roster": [
-                                        {"student": member["student"],
-                                         "name": member.get("student_name") or member["student"]}
-                                        for member in roster
-                                        if member.get("parent") == row.get("student_group")
-                                        and int(member.get("active") or 0) == 1
-                                    ]})
+                                    "roster": pending_roster})
             if action:
                 item["action"] = action
         today_items.append(item)
@@ -257,6 +260,14 @@ def work():
         group = groups_by_name.get(row.get("student_group")) or {}
         marked = attendance_by_session.get(row["name"], [])
         absent = sum(1 for entry in marked if entry.get("status") == "Absent")
+        marked_students = {entry.get("student") for entry in marked}
+        pending_roster = [
+            {"student": member["student"],
+             "name": member.get("student_name") or member["student"]}
+            for member in roster_by_group.get(row.get("student_group"), [])
+            if int(member.get("active") or 0) == 1
+            and member["student"] not in marked_students
+        ]
         item = {
             "id": row["name"],
             "person": group.get("student_group_name") or row.get("student_group") or "",
@@ -268,21 +279,16 @@ def work():
             "stage_definition": ("A scheduled session with its recorded attendance. "
                                "Only submitted attendance rows count."),
             "next": ("No action." if marked else "Record attendance for this session."),
-            "next_role": None if marked else "Instructor",
+            "next_role": "Instructor" if pending_roster else None,
             "waiting_since": str(row.get("schedule_date") or "") or None,
         }
-        if not marked:
+        if pending_roster:
+            item["next"] = f"{len(marked)} marked; {len(pending_roster)} still need attendance."
             action = guided_action("Instructor",
                                    "toefl_house.teaching.record_instructor_attendance",
                                    "Record attendance",
                                    {"course_schedule": row["name"],
-                                    "roster": [
-                                        {"student": member["student"],
-                                         "name": member.get("student_name") or member["student"]}
-                                        for member in roster
-                                        if member.get("parent") == row.get("student_group")
-                                        and int(member.get("active") or 0) == 1
-                                    ]})
+                                    "roster": pending_roster})
             if action:
                 item["action"] = action
         session_items.append(item)

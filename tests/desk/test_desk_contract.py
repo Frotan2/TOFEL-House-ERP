@@ -2290,6 +2290,34 @@ class TeacherDeskWorldTests(unittest.TestCase):
         self.assertNotIn("SES-2", items)
         self.assertIn("1 marked, 0 absent", items["SES-1"]["next"])
 
+    def test_partial_attendance_keeps_only_unmarked_active_students_actionable(self):
+        world = self._world()
+        world["Student Group Student"].extend([
+            {"name": "R-3", "parent": "CLASS-A", "student": "STU-3",
+             "student_name": "Pending Student", "group_roll_number": 2, "active": 1},
+            {"name": "R-4", "parent": "CLASS-A", "student": "STU-4",
+             "student_name": "Exited Student", "group_roll_number": 3, "active": 0},
+        ])
+        payload = self._payload(world=world)
+        for section_id in ("today", "sessions"):
+            item = next(row for row in self._section(payload, section_id)["items"]
+                        if row["id"] == "SES-1")
+            self.assertEqual(item["next_role"], "Instructor")
+            self.assertIn("1 still need attendance", item["next"])
+            self.assertEqual(item["action"]["args"]["roster"], [
+                {"student": "STU-3", "name": "Pending Student"}])
+
+    def test_today_attendance_survives_a_full_recent_session_window(self):
+        world = self._world()
+        template = world["Course Schedule"][0]
+        world["Course Schedule"].extend(
+            dict(template, name=f"FUTURE-{i}", schedule_date="2026-10-01")
+            for i in range(30))
+        payload = self._payload(world=world)
+        item = self._section(payload, "today")["items"][0]
+        self.assertIn("1 marked, 0 absent", item["next"])
+        self.assertNotIn("action", item)
+
     def test_students_and_work_stay_within_my_classes(self):
         payload = self._payload()
         students = self._section(payload, "students")["items"]

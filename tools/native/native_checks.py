@@ -6385,6 +6385,14 @@ def main():
             mark=frappe.db.get_value('Student Attendance',result['records'][stu_b],
                 ['student','status','docstatus','course_schedule'],as_dict=True)
             assert mark.student==stu_b and mark.status=='Present' and int(mark.docstatus)==1
+            from toefl_house.desk.teacher import work as teacher_work
+            partial=as_user('teacher_two',teacher_work)
+            session_item=next(i for section in partial['sections']
+                if section['id']=='sessions' for i in section['items']
+                if i['id']==schedB['name'])
+            pending={i['student'] for i in session_item['action']['args']['roster']}
+            assert pending==set(groupB['roster'])-{stu_b},sorted(pending)
+            assert session_item['next_role']=='Instructor'
             old=frappe.db.count('Student Attendance')
             repeated=as_user('teacher_two',lambda:
                 tea.record_instructor_attendance('own_att_positive_b_01',
@@ -6401,7 +6409,8 @@ def main():
             assert op.kind=='record_instructor_attendance'
             return {'own_session_native_mark':True,'another_teacher_denied':True,
                     'unlinked_denied':True,'generic_role_not_granted':True,
-                    'idempotent_receipt':True,'native_audit':True}
+                    'idempotent_receipt':True,'native_audit':True,
+                    'partial_roster_remains_actionable':True}
         check('teacher-instructor-own-attendance-and-cross-class-denials',
               traced(instructor_attendance_own_vs_cross))
         def five_role_business_walkthrough():
