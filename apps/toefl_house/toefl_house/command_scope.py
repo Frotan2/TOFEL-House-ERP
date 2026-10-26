@@ -69,10 +69,11 @@ def _authorize_company_scope(kind, payload, actor, result):
             name = source.get(field)
             if isinstance(name, str) and name:
                 company = _reference_company(doctype, name)
-                if company:
-                    companies.add(company)
-                elif doctype in ("TH Instructor Contract", "TH Teaching Assignment"):
-                    raise frappe.PermissionError("The teaching record Company cannot be resolved")
+                if not company:
+                    # A dangling or Company-less native document must never
+                    # make a cached financial receipt accessible by default.
+                    raise frappe.PermissionError("The referenced document Company cannot be resolved")
+                companies.add(company)
     if kind in CORRECTION_COMMANDS:
         request = payload.get("request")
         if not isinstance(request, str) or not request or len(request) > 140:

@@ -88,6 +88,30 @@ class CommandScopeTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.scope.authorize_command_scope("enroll", {"student": "new"}, "actor")
 
+    def test_missing_invoice_company_denies_cached_receipt(self):
+        self.branches = []
+        self.companies = ["Company A"]
+        # If a saved result still refers to a deleted/Company-less invoice,
+        # never return its historical monetary/customer values to a scoped user.
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "issue_placement_fee", {"case": "case", "customer": "customer"},
+                "actor", result={"sales_invoice": "missing", "grand_total": 500.0})
+        self.companies = []
+        self.scope.authorize_command_scope(
+            "issue_placement_fee", {"case": "case", "customer": "customer"},
+            "actor", result={"sales_invoice": "missing", "grand_total": 500.0})
+
+    def test_companyless_native_fee_and_employee_are_denied(self):
+        self.branches = []
+        self.companies = ["Company A"]
+        for kind, payload in (
+            ("request_fees_correction", {"fees": "orphan"}),
+            ("create_teaching_contract", {"employee": "orphan"}),
+        ):
+            with self.subTest(kind=kind), self.assertRaises(PermissionError):
+                self.scope.authorize_command_scope(kind, payload, "actor")
+
     def test_company_receipt_denied_even_without_branch_restriction(self):
         self.branches = []
         self.companies = ["Company B"]
