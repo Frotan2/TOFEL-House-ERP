@@ -66,7 +66,7 @@ class ProtectedRecord(Document):
         if not (before.status == "Active" and self.status == "Superseded"):
             raise frappe.PermissionError("Illegal contract status transition")
         for field in ("instructor", "employee", "compensation_model", "assignment_basis",
-                      "payment_frequency", "effective_start",
+                      "payment_frequency", "earning_basis", "effective_start",
                       "conditions", "supersedes"):
             if before.get(field) != self.get(field):
                 raise frappe.PermissionError("Only the contract status may change on supersession")

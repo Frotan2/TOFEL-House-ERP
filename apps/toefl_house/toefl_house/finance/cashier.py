@@ -31,6 +31,7 @@ rather than a second invented limit. No active policy means no closes.
 # name ``date`` is the argument, and ``date.fromisoformat`` would be an
 # AttributeError on the string (caught only by the native run, 2026-10-24).
 from datetime import date as _date
+from math import isfinite
 import frappe
 
 from toefl_house.api import _execute
@@ -69,16 +70,31 @@ def _counted(value, what):
         raise frappe.ValidationError(str(exc)) from exc
 
 
-def _money(value, what):
+def _finite_money(value, what):
     if isinstance(value, bool):
         raise ValueError(f"{what} must be an amount")
     try:
         amount = round(float(value), 2)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{what} must be an amount") from exc
+    if not isfinite(amount):
+        raise ValueError(f"{what} must be a finite amount")
+    return amount
+
+
+def _money(value, what):
+    amount = _finite_money(value, what)
     if amount < 0:
         raise ValueError(f"{what} cannot be negative")
     return amount
+
+
+def _stored_money(value, what):
+    """Signed ledger balances and variances must also be finite."""
+    try:
+        return _finite_money(value, what)
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
 
 
 def _company_permitted(company, user=None):
@@ -184,9 +200,9 @@ def validate_close(doc):
         if account in seen:
             raise frappe.ValidationError(f"{account} is counted twice in one close")
         seen.add(account)
-        expected = round(float(row.get("expected_amount") or 0), 2)
+        expected = _stored_money(row.get("expected_amount"), f"Expected amount for {account}")
         counted = _counted(row.get("counted_amount"), f"Counted amount for {account}")
-        stored_variance = round(float(row.get("variance") or 0), 2)
+        stored_variance = _stored_money(row.get("variance"), f"Variance for {account}")
         variance = round(counted - expected, 2)
         if abs(variance - stored_variance) > TOLERANCE:
             raise frappe.ValidationError(
@@ -198,11 +214,11 @@ def validate_close(doc):
         total_counted += counted
     if seen != set(drawers):
         raise frappe.ValidationError("Cashier close must include every enabled Cash/Bank drawer")
-    if abs(round(float(doc.get("total_expected") or 0), 2) - round(total_expected, 2)) > TOLERANCE:
+    if abs(_stored_money(doc.get("total_expected"), "Close total expected") - round(total_expected, 2)) > TOLERANCE:
         raise frappe.ValidationError("The close total expected does not match its drawers")
-    if abs(round(float(doc.get("total_counted") or 0), 2) - round(total_counted, 2)) > TOLERANCE:
+    if abs(_stored_money(doc.get("total_counted"), "Close total counted") - round(total_counted, 2)) > TOLERANCE:
         raise frappe.ValidationError("The close total counted does not match its drawers")
-    if abs(round(float(doc.get("total_variance") or 0), 2)
+    if abs(_stored_money(doc.get("total_variance"), "Close total variance")
            - round(total_counted - total_expected, 2)) > TOLERANCE:
         raise frappe.ValidationError("The close total variance does not match its drawers")
 

@@ -3917,6 +3917,12 @@ def main():
             balances={row['account']:row for row in fin_cash.drawer_balances(company,names,day)}
             account=sorted(balances)[0]
             expected=balances[account]['closing']
+            for index,invalid in enumerate(('NaN','Infinity','-Infinity','1e9999')):
+                assert unavailable(
+                    lambda value=invalid, idx=index:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
+                        f'fin_cashier_nonfinite_{idx:04d}',company,day,
+                        [dict(account=account,counted_amount=value,note='SYN invalid count')])),
+                    'finite amount')
             # Independent ledger read: the close must equal the native GL sum
             # with cancelled entries excluded.
             gl=frappe.db.sql("""select coalesce(sum(debit-credit),0) from `tabGL Entry`
@@ -7495,6 +7501,46 @@ def main():
             return {'salary_slip':slip.name,'linked_teaching_inputs':len(expected),
                     'native_submitted':True,'statutory_policy_asserted':False}
         check('teaching-native-payroll-slip-bridge',traced(native_payroll_bridge))
+        def native_monthly_contract():
+            # Owner 2026-10-26: recurrence belongs to each contract. Exercise
+            # genuine revision, native draft inputs, two Afghan months and
+            # different-request-key replay. This does not disburse wages.
+            frappe.set_user('Administrator')
+            current=frappe.db.get_value(CON,{'instructor':cfx['ins']['One'],'status':'Active'},'name')
+            assert current,('no active synthetic contract',cfx['ins']['One'])
+            revision=as_user('finance_officer',lambda:tcomp.revise_teaching_contract(
+                'tc_monthly_revision_0001',current,'Skill-Based','SYN full-month assignment',
+                'Following Solar Hijri month','2027-03-21',skill_terms=[
+                    dict(skill=SK1,unit_of_payment='SYN worked month',rate=500,payable_quantity=1)],
+                earning_basis='Solar Hijri Monthly'))
+            assert revision['earning_basis']=='Solar Hijri Monthly',revision
+            assert frappe.db.get_value(CON,revision['name'],'earning_basis')=='Solar Hijri Monthly'
+            assert (frappe.db.get_value(CON,current,'earning_basis') or 'One-off')=='One-off'
+            reference=afacts['assignments']['a1']
+            observed=[]
+            for index,(start,end) in enumerate((('2027-03-21','2027-04-20'),('2027-04-21','2027-05-21'))):
+                result=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                    f'tc_monthly_calculate_{index:04d}',start,end,cfx['company'],cfx['earning'],cfx['deduction']))
+                own=[row for row in result['posted'].get(cfx['ins']['One'],[]) if row.get('assignment')==reference]
+                assert len(own)==1 and own[0]['amount']==500,('monthly earning missing',result)
+                row=frappe.db.get_value(ADS,own[0]['name'],
+                    ['docstatus','payroll_date','ref_docname','amount','is_recurring'],as_dict=True)
+                assert row.docstatus==0 and str(row.payroll_date)==end and row.ref_docname==reference,row
+                assert float(row.amount)==500 and not row.is_recurring,row
+                count=frappe.db.count(ADS)
+                replay=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                    f'tc_monthly_replay_{index:04d}',start,end,cfx['company'],cfx['earning'],cfx['deduction']))
+                assert not replay['posted'] and frappe.db.count(ADS)==count,replay
+                observed.append(own[0]['name'])
+            assert len(set(observed))==2,observed
+            assert unavailable(lambda:as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_monthly_gregorian_01','2027-04-01','2027-04-30',cfx['company'],cfx['earning'],cfx['deduction'])),
+                'full Solar Hijri month')
+            frappe.db.commit()
+            return {'contract':revision['name'],'monthly_draft_inputs':observed,
+                    'different_key_deduplicated':True,'legacy_contract_preserved':True,
+                    'wages_disbursed':False}
+        check('teaching-native-per-contract-monthly-earning',traced(native_monthly_contract))
         report['status']='pass'
 
     except Exception as exc:

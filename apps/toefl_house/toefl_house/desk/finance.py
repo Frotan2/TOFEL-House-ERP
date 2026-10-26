@@ -511,7 +511,7 @@ def work():
     from toefl_house.finance import policies as billing_policy
     installment_terms = billing_policy.governing_billing_terms()
 
-    if (installment_terms.get("installment_cadence") == "Solar Hijri Month"
+    if ((installment_terms or {}).get("installment_cadence") == "Solar Hijri Month"
             and int(installment_terms.get("installments_allowed") or 0)):
         grace = int(installment_terms.get("payment_grace_days") or 0)
         first_solar_due = solar_calendar.monthly_due_dates(
@@ -557,7 +557,7 @@ def work():
          "value": installment_message,
          "owner": "Course Owner"},
         {"label": "Teaching assignments on file",
-         "definition": "Instructor skill assignments. Pay is native payroll, one-off per assignment; this desk does not calculate pay.",
+         "definition": "Instructor skill assignments. The contract determines one-off or monthly earnings in native payroll; this desk does not calculate pay.",
          "value": len(assignments), "owner": "Finance Officer"},
     ]
 
@@ -718,8 +718,8 @@ def work():
         "detail": " · ".join(part for part in (row.get("student_group"), row.get("skill")) if part),
         "status": row.get("effective_end") or "open",
         "stage": "Teaching assignment",
-        "stage_definition": ("An instructor skill assignment. Pay is one-off in the first "
-                             "covering payroll period, through native payroll."),
+        "stage_definition": ("An instructor skill assignment. The contract determines "
+                             "one-off or Solar Hijri monthly earnings through native payroll."),
         "next": "Run native payroll for the covering period. This desk does not calculate pay.",
         "next_role": "Finance Officer",
         "waiting_since": row.get("effective_start"),

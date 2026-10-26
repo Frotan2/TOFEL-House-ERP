@@ -1039,6 +1039,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "conditions", label: "Conditions", fieldtype: "Small Text" },
 			{ fieldname: "skill_terms", label: "Skill terms (JSON list: skill, unit_of_payment, rate, payable_quantity, optional minimum_amount/maximum_amount; required for Skill-Based and Hybrid, empty list for Fixed Salary)", fieldtype: "Small Text", default: "[]" },
 			{ fieldname: "adjustments", label: "Adjustments (JSON list: adjustment_type Bonus or Deduction, amount, effective_date, approver, reason)", fieldtype: "Small Text", default: "[]" },
+			{ fieldname: "earning_basis", label: "Skill earning basis", fieldtype: "Select", options: "One-off\nSolar Hijri Monthly", default: "One-off", reqd: 1 },
 		],
 		"toefl_house.teaching.compensation.revise_teaching_contract": [
 			{ fieldname: "contract", label: "Instructor contract", fieldtype: "Data", reqd: 1 },
@@ -1050,6 +1051,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "conditions", label: "Conditions", fieldtype: "Small Text" },
 			{ fieldname: "skill_terms", label: "Skill terms (JSON list: skill, unit_of_payment, rate, payable_quantity, optional minimum_amount/maximum_amount; required for Skill-Based and Hybrid, empty list for Fixed Salary)", fieldtype: "Small Text", default: "[]" },
 			{ fieldname: "adjustments", label: "Adjustments (JSON list: adjustment_type Bonus or Deduction, amount, effective_date, approver, reason)", fieldtype: "Small Text", default: "[]" },
+			{ fieldname: "earning_basis", label: "Skill earning basis (blank keeps the existing basis)", fieldtype: "Select", options: "\nOne-off\nSolar Hijri Monthly" },
 		],
 		"toefl_house.teaching.compensation.calculate_teaching_compensation": [
 			{ fieldname: "period_start", label: "Period start", fieldtype: "Date", reqd: 1 },

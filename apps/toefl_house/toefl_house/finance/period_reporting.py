@@ -6,7 +6,7 @@ from submitted ERPNext Payment Entry References. Unallocated Payment Entries
 (advances), bank movements, refunds and GL revenue have separate native
 sources and must not be silently inferred from cash applied to Fees.
 """
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from toefl_house.finance.shamsi import month_bounds, month_key
@@ -22,7 +22,10 @@ def amount(value):
         raise ValueError("Invalid monetary amount") from exc
     if not money.is_finite():
         raise ValueError("Monetary amount must be finite")
-    return money.quantize(_CENT, rounding=ROUND_HALF_UP)
+    try:
+        return money.quantize(_CENT, rounding=ROUND_HALF_UP)
+    except ArithmeticError as exc:
+        raise ValueError("Monetary amount is outside the supported range") from exc
 
 
 def _iso(value, label):
@@ -70,6 +73,8 @@ def invoice_balances(fees, allocations, as_of):
         if ref not in bills:
             raise ValueError("Payment references an unknown or not-yet-posted Fees invoice")
         paid = amount(raw["allocated_amount"])
+        if _iso(raw["posting_date"], "Payment date") < bills[ref]["posting_date"]:
+            raise ValueError("Payment allocation precedes its Fees invoice; reconcile the native advance separately")
         if paid < 0:
             raise ValueError("Refunds and negative allocations require a separate native correction")
         bills[ref]["paid"] += paid
@@ -92,12 +97,16 @@ def solar_month_receivables(fees, allocations, period):
     NOT all receipts (advances require their own native Payment Entry query).
     """
     start, end = month_bounds(period)
+    fees, allocations = tuple(fees), tuple(allocations)
     rows = invoice_balances(fees, allocations, end)
+    opening = invoice_balances(fees, allocations, start - timedelta(days=1))
     zero = Decimal("0.00")
     result = {
         "period": period, "from_date": str(start), "to_date": str(end),
         "posted_in_month": zero, "due_in_month": zero,
+        "opening_outstanding": sum((r["outstanding"] for r in opening.values()), zero),
         "collections_in_month": zero, "overdue_as_of_month_end": zero,
+        "due_on_month_end_outstanding": zero,
         "future_due_outstanding": zero, "total_outstanding": zero,
         "unallocated_advances_included": False,
         "currency_source": "native_company_currency",
@@ -108,9 +117,11 @@ def solar_month_receivables(fees, allocations, period):
         result["posted_in_month"] += row["total"] if start <= row["posting_date"] <= end else zero
         result["due_in_month"] += row["total"] if start <= due <= end else zero
         result["collections_in_month"] += row["collections"].get(period, zero)
-        if due <= end:
+        if due < end:
             result["overdue_as_of_month_end"] += row["outstanding"]
-        else:
+        elif due == end:
+            result["due_on_month_end_outstanding"] += row["outstanding"]
+        elif due > end:
             result["future_due_outstanding"] += row["outstanding"]
         result["total_outstanding"] += row["outstanding"]
         result["invoices"].append({
@@ -118,6 +129,11 @@ def solar_month_receivables(fees, allocations, period):
             "due_date": str(due), "total": row["total"],
             "allocated": row["paid"], "outstanding": row["outstanding"],
         })
+    # Native invoice/allocation movement, not revenue or all cash receipts.
+    result["closing_outstanding"] = result["total_outstanding"]
+    result["receivables_reconciliation_difference"] = (
+        result["opening_outstanding"] + result["posted_in_month"]
+        - result["collections_in_month"] - result["closing_outstanding"])
     return result
 
 

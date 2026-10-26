@@ -60,6 +60,9 @@ class CrossMonthReceivables(unittest.TestCase):
         self.assertEqual(p["total_outstanding"],Decimal("1400.00"))
         self.assertFalse(p["unallocated_advances_included"])
         a=self.r.solar_month_receivables(self.fees,self.allocations,"1405-08")
+        self.assertEqual(a["opening_outstanding"],Decimal("1400.00"))
+        self.assertEqual(a["closing_outstanding"],Decimal("200.00"))
+        self.assertEqual(a["receivables_reconciliation_difference"],Decimal("0.00"))
         self.assertEqual(a["posted_in_month"],Decimal("0.00"))
         self.assertEqual(a["due_in_month"],Decimal("1000.00"))
         self.assertEqual(a["collections_in_month"],Decimal("1200.00"))
@@ -76,6 +79,37 @@ class CrossMonthReceivables(unittest.TestCase):
             {"fees":"F-MIZAN","allocated_amount":Decimal("400.00")},
             {"fees":"F-AQRAB","allocated_amount":Decimal("800.00")}])
         self.assertEqual(suggestion["unapplied_proposed_advance"],Decimal("0.00"))
+
+    def test_month_movement_includes_old_debt_new_invoices_and_partial_receipts(self):
+        bills = [self.fees[0], dict(self.fees[1], posting_date="2026-10-23")]
+        report = self.r.solar_month_receivables(bills, self.allocations, "1405-08")
+        self.assertEqual(report["opening_outstanding"], Decimal("400.00"))
+        self.assertEqual(report["posted_in_month"], Decimal("1000.00"))
+        self.assertEqual(report["collections_in_month"], Decimal("1200.00"))
+        self.assertEqual(report["closing_outstanding"], Decimal("200.00"))
+        self.assertEqual(report["receivables_reconciliation_difference"], Decimal("0.00"))
+
+    def test_due_on_month_end_is_outstanding_but_not_yet_overdue(self):
+        bill = dict(self.fees[0], due_date="2026-10-22")
+        report = self.r.solar_month_receivables([bill], [], "1405-07")
+        self.assertEqual(report["total_outstanding"], Decimal("1000.00"))
+        self.assertEqual(report["overdue_as_of_month_end"], Decimal("0.00"))
+        self.assertEqual(report["due_on_month_end_outstanding"], Decimal("1000.00"))
+        self.assertEqual(report["future_due_outstanding"], Decimal("0.00"))
+
+    def test_streamed_rows_keep_the_same_opening_and_closing_balances(self):
+        streamed = self.r.solar_month_receivables(iter(self.fees), iter(self.allocations), "1405-08")
+        listed = self.r.solar_month_receivables(self.fees, self.allocations, "1405-08")
+        self.assertEqual(streamed, listed)
+
+    def test_advance_is_not_disguised_as_allocation_before_invoice_posting(self):
+        receipt = dict(self.allocations[0], posting_date="2026-09-22")
+        with self.assertRaisesRegex(ValueError, "native advance separately"):
+            self.r.solar_month_receivables(self.fees, [receipt], "1405-07")
+
+    def test_unrepresentable_currency_has_a_validation_error(self):
+        with self.assertRaisesRegex(ValueError, "supported range"):
+            self.r.amount("1e999999")
 
     def test_excess_never_becomes_a_ghost_receipt(self):
         suggestion=self.r.suggest_oldest_debt_allocation([

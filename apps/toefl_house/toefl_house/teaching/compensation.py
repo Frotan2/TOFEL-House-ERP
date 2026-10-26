@@ -33,6 +33,35 @@ EMPLOYEE = "Employee"
 GROUP = "Student Group"
 SCHEDULE = "Course Schedule"
 MAX_ROWS = 10
+EARNING_BASES = ("One-off", "Solar Hijri Monthly")
+
+
+def _earning_basis(value):
+    if value not in EARNING_BASES:
+        raise frappe.ValidationError("Earning basis must be One-off or Solar Hijri Monthly")
+    return value
+
+
+def _assignment_payment_state(contract, assignment, start, end, paid_dates):
+    """Judge the contract's earning cadence under the existing contract lock.
+
+    Partial monthly work requires an explicit contract decision, never an
+    invented proration or a full month's pay for a partial assignment.
+    """
+    basis = _earning_basis(getattr(contract, "earning_basis", None) or "One-off")
+    if basis == "One-off":
+        return "existing" if end in paid_dates else "prior" if paid_dates else "new"
+    from toefl_house.finance.shamsi import month_bounds, month_key
+    period = month_key(start)
+    first, last = month_bounds(period)
+    if (start, end) != (str(first), str(last)):
+        raise frappe.ValidationError("Monthly teaching compensation requires one full Solar Hijri month")
+    for label, record in (("Contract", contract), ("Assignment", assignment)):
+        if (str(record.effective_start) > start
+                or (record.effective_end and str(record.effective_end) < end)):
+            raise frappe.ValidationError(
+                f"{label} does not cover the full Solar Hijri month; Finance must resolve partial-month terms")
+    return "existing" if any(month_key(day) == period for day in paid_dates) else "new"
 
 
 def _bounded(value, label, limit=140):
@@ -128,10 +157,10 @@ def _reject_overlapping_contract(instructor, start, end, exclude=None):
 
 
 def _contract_payload(actor, instructor, employee, model, basis, frequency,
-                      start, end, conditions, terms, adjustments, supersedes=""):
+                      start, end, conditions, terms, adjustments, supersedes="", earning_basis="One-off"):
     return dict(doctype=CONTRACT, instructor=instructor, employee=employee,
                 compensation_model=model, assignment_basis=basis,
-                payment_frequency=frequency, effective_start=start, effective_end=end,
+                payment_frequency=frequency, earning_basis=earning_basis, effective_start=start, effective_end=end,
                 conditions=conditions, supersedes=supersedes, status="Active",
                 skill_terms=terms, adjustments=adjustments, synthetic=record_synthetic_flag())
 
@@ -140,7 +169,7 @@ def _contract_payload(actor, instructor, employee, model, basis, frequency,
 def create_teaching_contract(request_key, instructor, employee, compensation_model,
                              assignment_basis, payment_frequency, effective_start,
                              effective_end="", conditions="", skill_terms="[]",
-                             adjustments="[]"):
+                             adjustments="[]", earning_basis="One-off"):
     """Record an explicit instructor compensation contract (contract authority).
 
     Fixed-salary contracts carry no skill terms (their payroll runs through
@@ -155,6 +184,7 @@ def create_teaching_contract(request_key, instructor, employee, compensation_mod
         model = _policy(validate_compensation_model, compensation_model)
         basis = _bounded(assignment_basis, "Assignment basis", 300)
         frequency = _bounded(payment_frequency, "Payment frequency", 60)
+        cadence = _earning_basis(earning_basis)
         start, end = _policy(validate_effective_window, effective_start, effective_end or "")
         if isinstance(conditions, str) and len(conditions) > 2000:
             raise frappe.ValidationError("Conditions exceed request limit")
@@ -180,18 +210,19 @@ def create_teaching_contract(request_key, instructor, employee, compensation_mod
         _reject_overlapping_contract(instructor_name, start, end)
         contract = frappe.get_doc(_contract_payload(
             actor, instructor_name, employee_name, model, basis, frequency,
-            start, end, conditions, terms, adjustment_rows))
+            start, end, conditions, terms, adjustment_rows, earning_basis=cadence))
         contract.flags.ignore_permissions = True
         contract.flags.ignore_links = True
         contract.insert(ignore_permissions=True)
         result = {"name": contract.name, "instructor": instructor_name,
                   "employee": employee_name, "compensation_model": model,
+                  "earning_basis": cadence,
                   "effective_start": start, "effective_end": end or "",
                   "status": "Active", "skill_terms": len(terms),
                   "adjustments": len(adjustment_rows)}
         return result, dict(target=contract.name,
                             after_hash=digest([contract.name, instructor_name, model,
-                                               start, end or "", terms, adjustment_rows]))
+                                               start, end or "", terms, adjustment_rows, cadence]))
 
     return _execute("create_teaching_contract", request_key,
                     {"instructor": instructor, "employee": employee,
@@ -200,13 +231,13 @@ def create_teaching_contract(request_key, instructor, employee, compensation_mod
                      "payment_frequency": payment_frequency,
                      "effective_start": effective_start, "effective_end": effective_end or "",
                      "conditions": conditions, "skill_terms": skill_terms,
-                     "adjustments": adjustments}, work)
+                     "adjustments": adjustments, "earning_basis": earning_basis}, work)
 
 
 @frappe.whitelist(methods=["POST"])
 def revise_teaching_contract(request_key, contract, compensation_model, assignment_basis,
                              payment_frequency, effective_start, effective_end="",
-                             conditions="", skill_terms="[]", adjustments="[]"):
+                             conditions="", skill_terms="[]", adjustments="[]", earning_basis=""):
     """Supersede an active contract with a new effective-dated revision.
 
     The old contract is never rewritten (historical reproducibility): it
@@ -228,6 +259,7 @@ def revise_teaching_contract(request_key, contract, compensation_model, assignme
         frappe.db.sql("select name from `tabTH Instructor Contract` where name=%s for update",
                       (contract_name,))
         old = frappe.get_doc(CONTRACT, contract_name)
+        cadence = _earning_basis(earning_basis or getattr(old, "earning_basis", None) or "One-off")
         if old.status != "Active":
             raise frappe.ValidationError("Only an active contract can be superseded")
         if model == "Fixed Salary" and terms:
@@ -237,7 +269,7 @@ def revise_teaching_contract(request_key, contract, compensation_model, assignme
         _reject_overlapping_contract(old.instructor, start, end, exclude=contract_name)
         successor = frappe.get_doc(_contract_payload(
             actor, old.instructor, old.employee, model, basis, frequency,
-            start, end, conditions, terms, adjustment_rows, supersedes=contract_name))
+            start, end, conditions, terms, adjustment_rows, supersedes=contract_name, earning_basis=cadence))
         successor.flags.ignore_permissions = True
         successor.flags.ignore_links = True
         successor.insert(ignore_permissions=True)
@@ -266,12 +298,13 @@ def revise_teaching_contract(request_key, contract, compensation_model, assignme
         old.save(ignore_permissions=True)
         result = {"name": successor.name, "supersedes": contract_name,
                   "instructor": old.instructor, "compensation_model": model,
+                  "earning_basis": cadence,
                   "effective_start": start, "effective_end": end or "",
                   "status": "Active", "skill_terms": len(terms),
                   "adjustments": len(adjustment_rows)}
         return result, dict(target=contract_name,
                             after_hash=digest([successor.name, contract_name, model,
-                                               start, end or "", terms, adjustment_rows]))
+                                               start, end or "", terms, adjustment_rows, cadence]))
 
     return _execute("revise_teaching_contract", request_key,
                     {"contract": contract, "compensation_model": compensation_model,
@@ -279,7 +312,7 @@ def revise_teaching_contract(request_key, contract, compensation_model, assignme
                      "payment_frequency": payment_frequency,
                      "effective_start": effective_start, "effective_end": effective_end or "",
                      "conditions": conditions, "skill_terms": skill_terms,
-                     "adjustments": adjustments}, work)
+                     "adjustments": adjustments, "earning_basis": earning_basis}, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -389,7 +422,7 @@ def _paid_dates(ref_doctype, ref_docname):
     """
     return sorted({str(payroll_date) for (payroll_date,) in frappe.db.sql(
         "select payroll_date from `tabAdditional Salary` where ref_doctype=%s "
-        "and ref_docname=%s and disabled=0 for update", (ref_doctype, ref_docname))})
+        "and ref_docname=%s and disabled=0 and docstatus<2 for update", (ref_doctype, ref_docname))})
 
 
 def _covering_contract_name(instructor, start, end):
@@ -465,7 +498,7 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
     tax or slip math happens here (native Salary Slip owns it); fixed-salary
     instructors are skipped (native Salary Structure path).
 
-    **One-off payable (owner decision D12, 2026-09-19).** The payable is a flat
+    **Legacy one-off payable (owner decision D12, 2026-09-19).** The payable is a flat
     contract amount, not a per-period or pro-rated figure, and
     `assign_teaching_skill` creates open-ended assignments that overlap every
     later period. The owner selected the one-off basis: an assignment is
@@ -473,6 +506,11 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
     overlapping period therefore posts nothing for it and reports it under
     `already_compensated_prior_period`, so the reason is visible in the audit
     trail instead of being a silent skip or a second payment.
+
+    Owner decision 2026-10-26 adds a per-contract Solar Hijri Monthly basis.
+    It prepares a separate draft for each fully covered worked month, once
+    per assignment/month. Existing contracts remain One-off. Partial months
+    require explicit Finance terms; no automatic proration is invented.
 
     Native preconditions (enforced by HRMS, not re-implemented here): the
     employee is Active and holds a submitted Salary Structure Assignment
@@ -548,10 +586,11 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                     skipped_fixed.append(contract.name)
                 continue
             already_paid = _paid_dates(ASSIGNMENT, row.name)
-            if end in already_paid:
+            payment_state = _assignment_payment_state(contract, row, start, end, already_paid)
+            if payment_state == "existing":
                 skipped_existing += 1
                 continue
-            if already_paid:
+            if payment_state == "prior":
                 # Owner decision D12 (2026-09-19): the flat contract amount is a
                 # ONE-OFF payable. An assignment is compensated once, in the
                 # first payroll period that covers it; a later period that also

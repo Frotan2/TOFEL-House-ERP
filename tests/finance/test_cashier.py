@@ -132,6 +132,27 @@ class CloseShapeTests(unittest.TestCase):
     def test_balanced_close_is_accepted(self):
         self.assertIsNone(self.module.validate_close(close()))
 
+    def test_nonfinite_values_cannot_bypass_drawer_or_total_checks(self):
+        for value in (float("nan"), float("inf"), float("-inf"), "NaN", "Infinity", True):
+            for field in ("expected_amount", "counted_amount", "variance"):
+                doc = close()
+                doc.get("accounts")[0]._fields[field] = value
+                with self.subTest(field=field, value=value), self.assertRaises(_ValidationError):
+                    self.module.validate_close(doc)
+            for field in ("total_expected", "total_counted", "total_variance"):
+                with self.subTest(field=field, value=value), self.assertRaises(_ValidationError):
+                    self.module.validate_close(close(**{field: value}))
+
+    def test_nonfinite_count_is_refused_before_close_creation(self):
+        for value in ("NaN", "Infinity", "-Infinity", "1e9999", True):
+            with self.subTest(value=value), self.assertRaises(_ValidationError):
+                self.module._counted(value, "Counted amount")
+
+    def test_signed_ledger_overdraft_and_explained_variance_are_valid(self):
+        row = _Row(account="Cash - TH", account_type="Cash", expected_amount=-20,
+                   counted_amount=0, variance=20, note="Overdraft requires Finance review")
+        self.assertIsNone(self.module.validate_close(close(accounts=[row])))
+
     def test_expected_money_is_never_negative_becomes_variance(self):
         row = _Row(account="Cash - TH", account_type="Cash", expected_amount=1000.0,
                    counted_amount=980.0, variance=-20.0, note="paid a courier")

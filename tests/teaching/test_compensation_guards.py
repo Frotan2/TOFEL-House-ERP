@@ -176,6 +176,10 @@ class S2CompensationTests(unittest.TestCase):
             "effective_from": "2026-01-01", "orphan_posting": "skip"}
         posting.collect_orphan_contracts = lambda start, end, assigned: {}
         sys.modules["toefl_house.teaching.adjustment_posting"] = posting
+        finance_pkg = types.ModuleType("toefl_house.finance")
+        finance_pkg.__path__ = [str(APP / "finance")]
+        sys.modules["toefl_house.finance"] = finance_pkg
+        _load_real("toefl_house.finance.shamsi", APP / "finance/shamsi.py")
         self.comp = _load_real("toefl_house.teaching.compensation",
                                APP / "teaching/compensation.py")
 
@@ -336,3 +340,55 @@ class S2CompensationTests(unittest.TestCase):
             self._calc()
         self.assertEqual(self.posted, [])
         self.assertEqual(self.lock_order, [])
+
+    def _monthly_calc(self, start, end, paid=()):
+        self.contract_doc.earning_basis = "Solar Hijri Monthly"
+        self.contract_doc.adjustments = []
+        self.contract_lists = [self.contract_lists[0][:], self.contract_lists[0][:]]
+        self.paid = {(ASSIGNMENT, "A-1"): list(paid)}
+        return self.comp.calculate_teaching_compensation(
+            "monthly-native-input", start, end, "SYN Teaching House", "SYN Teaching Pay")
+
+    def test_monthly_contract_pays_next_shamsi_month_after_previous_payment(self):
+        result = self._monthly_calc("2026-10-23", "2026-11-21", ["2026-10-22"])
+        self.assertEqual(len(self.posted), 1)
+        self.assertEqual(self.posted[0]["amount"], 200)
+        self.assertEqual(self.posted[0]["payroll_date"], "2026-11-21")
+        self.assertEqual(self.posted[0]["is_recurring"], 0)
+        self.assertEqual(result["already_compensated_prior_period"], {})
+
+    def test_monthly_contract_never_duplicates_payment_in_same_shamsi_month(self):
+        result = self._monthly_calc("2026-10-23", "2026-11-21", ["2026-11-05"])
+        self.assertEqual(self.posted, [])
+        self.assertEqual(result["skipped_existing"], 1)
+
+    def test_monthly_contract_refuses_gregorian_and_partial_month_windows(self):
+        with self.assertRaisesRegex(_ValidationError, "full Solar Hijri month"):
+            self._monthly_calc("2026-10-01", "2026-10-31")
+        self.assertEqual(self.posted, [])
+
+    def test_monthly_contract_refuses_unapproved_partial_assignment_proration(self):
+        self.assignments[0].effective_start = "2026-10-25"
+        with self.assertRaisesRegex(_ValidationError, "partial-month terms"):
+            self._monthly_calc("2026-10-23", "2026-11-21")
+        self.assertEqual(self.posted, [])
+
+    def test_monthly_contract_must_cover_full_month_after_revision(self):
+        self.contract_doc.effective_end = "2026-11-10"
+        with self.assertRaisesRegex(_ValidationError, "partial-month terms"):
+            self._monthly_calc("2026-10-23", "2026-11-21")
+        self.assertEqual(self.posted, [])
+
+    def test_legacy_contract_still_pays_assignment_only_once(self):
+        self.contract_lists.append(self.contract_lists[0][:])
+        self.paid = {(ASSIGNMENT, "A-1"): ["2026-08-31"]}
+        result = self._calc()
+        self.assertEqual(result["already_compensated_prior_period"], {"A-1": ["2026-08-31"]})
+        self.assertFalse(any(row["ref_doctype"] == ASSIGNMENT for row in self.posted))
+
+    def test_unknown_earning_basis_is_refused(self):
+        self.contract_doc.earning_basis = "Every day"
+        self.contract_lists.append(self.contract_lists[0][:])
+        with self.assertRaisesRegex(_ValidationError, "Earning basis"):
+            self._calc()
+        self.assertEqual(self.posted, [])

@@ -54,6 +54,13 @@ supported contractual payroll and financial recognition method.
 
 ## Teacher and staff payroll
 
+- **Owner clarification, 2026-10-26:** variable skill earnings are selectable
+  **per contract**: one-off per assignment or recurring per Solar Hijri worked
+  month. Existing contracts retain one-off behavior; cadence changes require
+  a new effective-dated revision. This does not approve partial-month proration
+  or automatic payroll submission/payment. See
+  [implementation and remaining acceptance](engineering/FINANCE-COMPLETION-2026-10-26.md).
+
 - Contract rules may be **fixed pay** or **class/session/skill** based;
   calculation belongs to existing native HRMS Salary Structure,
   Additional Salary and Salary Slip authorities, not a parallel ledger.
