@@ -269,6 +269,8 @@ for (const forbidden of [/frappe\.db\b/, /frappe\.client\b/, /frappe\.get_doc\b/
 }
 assert(source.includes("frappe.call({"), "desk client must talk to the server over guarded RPC");
 const allowedCalls = new Set([...Object.values(EXPECTED).map((shape) => shape.endpoint),
+	"toefl_house.desk.academic.attendance_records",
+	"toefl_house.desk.academic.enrollment_records",
 	"toefl_house.finance.collections.get_collection_receipt",
 	client.toefl_house.role_desks.registry,
 	...Object.keys(actionFields)]);
@@ -435,7 +437,7 @@ function payloadWith(queueItems, factValue) {
 	};
 }
 
-function runScenario({ workPayload, failFirstWork = false, failLookup = false, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false }) {
+function runScenario({ workPayload, failFirstWork = false, failLookup = false, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null }) {
 	const calls = [];
 	const dialogs = [];
 	const routed = [];
@@ -460,6 +462,10 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, c
 		},
 		call(opts) {
 			calls.push(opts);
+			if (opts.method === "toefl_house.desk.academic.attendance_records") {
+				opts.callback({ message: attendanceReply });
+				return;
+			}
 			if (opts.method === "toefl_house.finance.collections.get_collection_receipt" && cashReply) {
 				if (cashReadFails) { opts.error(); return; }
 				opts.callback({ message: cashCurrentReceipt || cashReply.receipt || cashReply });
@@ -754,5 +760,21 @@ assert(narrow && narrow[0].includes(".th-queue"), "queue tables must reflow on n
 assert(narrow && /display: block/.test(narrow[0]), "the narrow layout must stack, not squish");
 assert(stylesheet.includes(":focus-visible"), "keyboard focus must stay visible");
 
+{
+	const payload = payloadWith([], "2");
+	payload.sections[0].comparison = { title: "Attendance", rows: [{ label: "CLASS-A", value: 2, bar: false, drill: { attendance_group: "CLASS-A" } }] };
+	const scenario = runScenario({ workPayload: payload, attendanceReply: { rows: [{ name: "ATT-A", student: HOSTILE, student_group: "CLASS-A", status: "Present" }], truncated: false } });
+	const link = findAll(scenario.body, "th-drill-link")[0];
+	assert(link, "class attendance must offer its scoped source read");
+	link.click();
+	const read = scenario.calls.find((call) => call.method === "toefl_house.desk.academic.attendance_records");
+	assert.strictEqual(read.args.student_group, "CLASS-A");
+	assert.deepStrictEqual(scenario.routed, [], "attendance must not route to an unavailable native list");
+	const markup = scenario.dialogs[0].opts.fields[0].options;
+	assert(markup.includes("ATT-A") && markup.includes("&lt;img"));
+	assert(!markup.includes("<img"), "source record values must be escaped");
+}
+
 console.log(`Role desk contract OK (${Object.keys(EXPECTED).length} desks, ` +
 	`${Object.keys(actionFields).length} guided actions)`);
+

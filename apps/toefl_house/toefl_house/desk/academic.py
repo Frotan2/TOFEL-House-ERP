@@ -36,6 +36,51 @@ ASSIGNMENT = "TH Teaching Assignment"
 ATTENDANCE = "Student Attendance"
 ENROLLMENT = "Program Enrollment"
 
+
+@frappe.whitelist(methods=["GET", "POST"])
+def attendance_records(student_group=None):
+    """Bounded source rows under the same audience and Branch scope as the desk."""
+    require_desk_audience(SLUG)
+    if student_group is not None and (
+            not isinstance(student_group, str) or not student_group.strip()
+            or len(student_group) > 140):
+        raise frappe.ValidationError("Choose a valid class")
+    filters = {"docstatus": 1}
+    if student_group:
+        filters["student_group"] = student_group
+    fields = ["name", "student", "student_group", "course_schedule", "date", "status"]
+    rows = project_rows("academic", ATTENDANCE, fields, filters=filters,
+                        order_by="date desc, name asc", limit=LIMIT_QUEUES + 1)
+    return {"rows": rows[:LIMIT_QUEUES], "truncated": len(rows) > LIMIT_QUEUES}
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def enrollment_records(waiting_only=0):
+    """Native enrollment source, optionally restricted to the desk's waiting list."""
+    require_desk_audience(SLUG)
+    if waiting_only not in (0, 1, "0", "1"):
+        raise frappe.ValidationError("Choose a valid enrollment view")
+    waiting = waiting_only in (1, "1")
+    rows = project_rows("academic", ENROLLMENT,
+                        ["name", "student", "student_name", "program", "academic_year",
+                         "academic_term", "enrollment_date", "docstatus"],
+                        filters={"docstatus": 1}, order_by="enrollment_date desc, name asc",
+                        limit=BOUNCE_WINDOW if waiting else LIMIT_QUEUES + 1)
+    if waiting:
+        groups = project_rows("academic", GROUP,
+                              ["name", "program", "academic_year", "academic_term",
+                               "disabled", "th_class_status"],
+                              filters={"disabled": 0}, order_by="name asc", limit=BOUNCE_WINDOW)
+        names = [row["name"] for row in groups if cohort_state(row) in ("Planned", "Active")]
+        roster = project_rows("academic", "Student Group Student",
+                              ["name", "parent", "student", "active"],
+                              filters={"parent": ("in", names), "active": 1},
+                              order_by="name asc", limit=BOUNCE_WINDOW) if names else []
+        if any(len(batch) >= BOUNCE_WINDOW for batch in (rows, groups, roster)):
+            raise frappe.ValidationError("Waiting list exceeds the complete scoped read; narrow the branch scope")
+        rows = _enrollments_without_roster(rows, groups, roster)
+    return {"rows": rows[:LIMIT_QUEUES], "truncated": len(rows) > LIMIT_QUEUES}
+
 ADMISSION_FIELDS = ["name", "student_applicant", "program", "academic_year",
                     "status", "accepted", "native_student", "version", "modified",
                     "drafted_by"]
@@ -353,18 +398,18 @@ def work():
                 section("academic-attendance", "Attendance analytics (auditable)", "facts",
                         facts=[
                             {"label": "Attendance records", "value": att_metrics["total"],
-                             "definition": att_metrics["definition"], "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "owner": "Attendance Recorder"},
+                             "definition": att_metrics["definition"], "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "attendance_source": True, "owner": "Attendance Recorder"},
                             {"label": "Attendance rate", "value": att_metrics["rate"],
-                             "definition": "Deferred until an owner-approved denominator and disclosure policy exists.", "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "owner": "Attendance Recorder"},
+                             "definition": "Deferred until an owner-approved denominator and disclosure policy exists.", "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "attendance_source": True, "owner": "Attendance Recorder"},
                             {"label": "Absent marks", "value": att_metrics["absent"],
-                             "definition": "Submitted attendance with absent mark.", "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "owner": "Attendance Recorder"},
+                             "definition": "Submitted attendance with absent mark.", "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "attendance_source": True, "owner": "Attendance Recorder"},
                         ],
                         empty_title="No attendance yet", empty_body="Attendance appears when sessions are scheduled and marks recorded."))
             if att_metrics.get("by_group"):
                 academic_analytics[-1]["comparison"] = {
                     "title": "Attendance by class (recent window)",
                     "columns": ["Class", "Records"],
-                    "rows": [{"label": k or "Unassigned", "value": v, "drill": {"slug": "List/Student Attendance"}} for k, v in sorted(att_metrics["by_group"].items(), key=lambda x: -x[1])[:10]],
+                    "rows": [{"label": k or "Unassigned", "value": v, "drill": {"attendance_group": k}} for k, v in sorted(att_metrics["by_group"].items(), key=lambda x: -x[1])[:10]],
                 }
                 academic_analytics[-1]["provenance"] = [
                     {"label": "Source records", "value": att_metrics["source"]},
@@ -379,9 +424,9 @@ def work():
                 section("academic-enrollments", "Enrollments & waiting list", "facts",
                         facts=[
                             {"label": "Active enrollments", "value": enroll_metrics["total"],
-                             "definition": enroll_metrics["definition"], "source": enroll_metrics["source"], "scope": enroll_metrics["scope"], "drill_path": enroll_metrics["drill"], "owner": "Enrollment Officer"},
+                             "definition": enroll_metrics["definition"], "source": enroll_metrics["source"], "scope": enroll_metrics["scope"], "drill_path": enroll_metrics["drill"], "enrollment_source": "all", "owner": "Enrollment Officer"},
                             {"label": "Enrollments awaiting a class", "value": unclassed_total,
-                             "definition": "Submitted enrollments without an active roster in a matching open class; unavailable if the scoped read is incomplete.", "source": "enrollments + class roster", "scope": "Permitted branch", "drill_path": "enrollment list", "owner": "Teaching Scheduler"},
+                             "definition": "Submitted enrollments without an active roster in a matching open class; unavailable if the scoped read is incomplete.", "source": "enrollments + class roster", "scope": "Permitted branch", "drill_path": "enrollment list", "enrollment_source": "waiting", "owner": "Teaching Scheduler"},
                         ],
                         empty_title="No enrollments", empty_body="Enrollments appear after admission conversion."))
             if enroll_metrics.get("by_program"):
@@ -454,3 +499,5 @@ def _attendance_window(groups):
             "owner": "Attendance Recorder",
         })
     return facts
+
+

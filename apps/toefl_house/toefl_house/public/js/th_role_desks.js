@@ -282,7 +282,11 @@ frappe.provide("toefl_house.role_desks");
 			}
 			if (fact.drill_path) {
 				const drill2 = $("<button type='button' class='btn btn-secondary btn-xs' style='margin-top:0.5rem'></button>").text(text("View source records"));
-				drill2.on("click", () => frappe.set_route(fact.drill_path));
+				drill2.on("click", () => {
+					if (fact.attendance_source === true) openAttendanceRecords({});
+					else if (fact.enrollment_source) openEnrollmentRecords(fact.enrollment_source === "waiting");
+					else frappe.set_route(fact.drill_path);
+				});
 				drill2.appendTo(tile);
 			}
 		});
@@ -414,11 +418,40 @@ frappe.provide("toefl_house.role_desks");
 			valCell.text(text(String(row.value)));
 			if (row.drill) {
 				const link = $("<button type='button' class='th-drill-link' style='margin-left:0.5rem'></button>").text(text("View"));
-				link.on("click", () => frappe.set_route(row.drill.route || row.drill.slug));
+				link.on("click", () => {
+					if (Object.prototype.hasOwnProperty.call(row.drill, "attendance_group")) openAttendanceRecords({ student_group: row.drill.attendance_group });
+					else frappe.set_route(row.drill.route || row.drill.slug);
+				});
 				link.appendTo(valCell);
 			}
 		});
 		return table;
+	}
+
+	function openAttendanceRecords(args) {
+		frappe.call({ method: "toefl_house.desk.academic.attendance_records", args,
+			callback(response) {
+				const columns = ["name", "student", "student_group", "date", "status", "course_schedule"];
+				showAcademicSourceRecords(response, columns, "Attendance source records");
+			},
+			error() { frappe.msgprint({ title: text("Attendance unavailable"), message: text("Attendance records could not be loaded. Your permissions still apply; try again."), indicator: "red" }); },
+		});
+	}
+
+	function openEnrollmentRecords(waiting) {
+		frappe.call({ method: "toefl_house.desk.academic.enrollment_records", args: { waiting_only: waiting ? 1 : 0 },
+			callback(response) { showAcademicSourceRecords(response, ["name", "student", "student_name", "program", "academic_year", "enrollment_date"], waiting ? "Enrollments awaiting a class" : "Enrollment source records"); },
+			error() { frappe.msgprint({ title: text("Enrollments unavailable"), message: text("Enrollment records could not be loaded. Your permissions still apply; try again."), indicator: "red" }); },
+		});
+	}
+
+	function showAcademicSourceRecords(response, columns, title) {
+				const result = response.message || {};
+				const heading = columns.map((key) => "<th>" + escapeText(key.replace(/_/g, " ")) + "</th>").join("");
+				const rows = (result.rows || []).map((row) => "<tr>" + columns.map((key) => "<td>" + escapeText(String(row[key] || "")) + "</td>").join("") + "</tr>").join("");
+				const note = result.truncated ? text("This bounded preview has more records; use the class or branch scope to narrow the result.") : text("Submitted source records within your permitted branch scope.");
+				const markup = "<p>" + escapeText(note) + "</p>" + (rows ? "<div class='table-responsive'><table class='table'><thead><tr>" + heading + "</tr></thead><tbody>" + rows + "</tbody></table></div>" : "<p>" + escapeText(text("No source records in this scope.")) + "</p>");
+				new frappe.ui.Dialog({ title: text(title), fields: [{ fieldname: "records", fieldtype: "HTML", options: markup }] }).show();
 	}
 
 	function barChartMarkup(chart) {
@@ -1436,3 +1469,4 @@ frappe.provide("toefl_house.role_desks");
 	toefl_house.role_desks.escapeText = escapeText;
 	toefl_house.role_desks.statusTone = statusTone;
 })();
+
