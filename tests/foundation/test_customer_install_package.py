@@ -298,9 +298,11 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertNotIn("docker volume rm", PACKAGER)
         self.assertNotIn("docker system prune", PACKAGER)
         self.assertNotIn("Remove-Item", PACKAGER)
-        # No backup/activation scripts are included in the deliverable.
+        # Deliver the guarded backup tools, never customer data or activation.
         section = PACKAGER.split("$files = @(", 1)[1].split("\n    )", 1)[0]
-        for forbidden in ("Backup TOEFL House ERP", "Activate TOEFL House ERP",
+        for required in ("Backup TOEFL House ERP.cmd", "Backup TOEFL House ERP.ps1"):
+            self.assertIn(required, section)
+        for forbidden in ("Activate TOEFL House ERP",
                           "Deactivate TOEFL House ERP", "data/secrets", "site_config.json"):
             self.assertNotIn(forbidden, section)
 

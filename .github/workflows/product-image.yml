@@ -26,6 +26,13 @@ on:
       - .gitattributes
       - .dockerignore
       - tests/foundation/test_product_packaging.py
+      # Package contents and their delivery contracts must qualify the image
+      # on the same revision, even when application code is unchanged.
+      - tools/release/create_customer_package.py
+      - tests/foundation/test_customer_package_manifest.py
+      - tests/foundation/test_customer_install_package.py
+      - tests/foundation/test_windows_delivery_finalization.py
+      - tests/security/test_setuptools_windows_boundary_2026_10_24.py
       - tests/foundation/test_native_restore_rehearsal.py
       # The native restore rehearsal must also keep the actual desktop image
       # build green; changes to the disposable runner cannot silently skip it.

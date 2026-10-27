@@ -69,12 +69,14 @@ class OwnerHandbookDeliveryTests(unittest.TestCase):
         self.assertIn('$handbookButton.Text -ne "Owner Handbook"', GUI)
         self.assertIn("-not (Test-Path -LiteralPath $handbookFile -PathType Leaf)", GUI)
 
-    def test_both_packagers_ship_the_handbook_and_exclude_data_controls(self):
+    def test_both_packagers_ship_handbook_and_guarded_backup_without_activation(self):
         ps1_section = PS1_PACKAGER.split("$files = @(", 1)[1].split("\n    )", 1)[0]
         self.assertIn('"product/windows/OWNER HANDBOOK.txt"', ps1_section)
         self.assertIn('"product/windows/OWNER HANDBOOK.txt"', PY_PACKAGER)
         for name, section in (("PS1 packager", ps1_section), ("Python packager", PY_PACKAGER)):
-            for forbidden in ("Backup TOEFL House ERP", "Activate TOEFL House ERP",
+            for required in ("Backup TOEFL House ERP.cmd", "Backup TOEFL House ERP.ps1"):
+                self.assertIn(required, section, name)
+            for forbidden in ("Activate TOEFL House ERP",
                               "Deactivate TOEFL House ERP"):
                 self.assertNotIn(forbidden, section, name)
 
