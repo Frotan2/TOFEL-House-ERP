@@ -47,17 +47,36 @@ class PrebuiltImagePathTests(unittest.TestCase):
             self.assertTrue(target.is_file())
             self.assertTrue(linked_image.is_symlink())
 
-    def test_original_symlink_path_not_masked_by_resolve(self):
+    def test_regular_image_remains_eligible_for_ci_evidence_validation(self):
+        class ReachedGateCheck(Exception):
+            pass
+
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            target = root / "image.tar"
-            target.write_bytes(b"opaque image bytes")
-            path = root / "alias.tar"
-            path.symlink_to(target)
-            self.assertTrue(path.is_symlink())
-            self.assertFalse(path.resolve().is_symlink())
-            # A path-based input guard must run BEFORE Path.resolve().
-            self.assertNotEqual(path, path.resolve())
+            source = root / "source"
+            source.mkdir()
+            image = root / "image.tar"
+            image.write_bytes(b"ordinary image input")
+            with patch.object(
+                packager, "load_gate_evidence",
+                side_effect=ReachedGateCheck,
+            ):
+                with self.assertRaises(ReachedGateCheck):
+                    packager.create_package(
+                        source=source,
+                        output=root / "out",
+                        image_archive=image,
+                        image_labels={
+                            "org.toefl-house.source-eol": "lf-v1",
+                            "org.toefl-house.source-revision": "a" * 40,
+                            "org.toefl-house.release-version": "test-1",
+                        },
+                        version="test-1",
+                        source_revision="a" * 40,
+                        gate_evidence=root / "not-read.json",
+                        provider_attestation="TEST ONLY",
+                    )
+            self.assertFalse((root / "out").exists())
 
 
 if __name__ == "__main__":
