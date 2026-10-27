@@ -460,7 +460,8 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, c
 		call(opts) {
 			calls.push(opts);
 			if (opts.method.startsWith("toefl_house.finance.collections.") && cashError) {
-				opts.error({ responseJSON: cashError });
+				// Native request.js's 417 handler passes parsed JSON directly.
+				opts.error(cashError);
 				return;
 			}
 			if (opts.method.startsWith("toefl_house.finance.collections.") && cashReply) {

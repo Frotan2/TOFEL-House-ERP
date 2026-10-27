@@ -1231,7 +1231,9 @@ frappe.provide("toefl_house.role_desks");
 					error(response) {
 						// Direct ValidationError responses need not carry native
 						// _server_messages. Retain the entered form and retry key.
-						const body = response && response.responseJSON || {};
+						// Pinned Frappe passes parsed JSON directly for HTTP 417;
+						// accept an XHR wrapper as well for compatible callers.
+						const body = response && (response.responseJSON || response) || {};
 						let detail = text("The action could not be saved. Check the entered values and your permissions, then retry.");
 						if (body.exc_type === "ValidationError" && typeof body.exception === "string") {
 							const separator = body.exception.indexOf(": ");
