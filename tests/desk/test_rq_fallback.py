@@ -125,6 +125,18 @@ def _health_module(testcase, rq_rows):
 
 
 class RQRegistryFallbackTests(unittest.TestCase):
+    def test_denied_virtual_read_never_enters_throwing_controller(self):
+        module = _health_module(self, [])
+        module.frappe.has_permission = lambda *args, **kwargs: False
+        previous = module.project_rows
+
+        def no_virtual_controller(desk, doctype, *args, **kwargs):
+            self.assertNotEqual(doctype, "RQ Job")
+            return previous(desk, doctype, *args, **kwargs)
+
+        module.project_rows = no_virtual_controller
+        module._system_health()
+
     def test_rows_are_confined_to_the_allow_listed_projection(self):
         module = _import_desk("operations", roles={"General Manager"})
         _install_rq_fakes(self, [_FakeJob(

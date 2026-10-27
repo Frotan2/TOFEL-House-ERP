@@ -478,6 +478,12 @@ def _system_health():
                               filters={"seen": 0},
                               order_by="creation desc", limit=LIMIT_QUEUES)
     try:
+        # The virtual controller calls frappe.throw on an expected role
+        # denial. Catching that exception still leaves _server_messages in
+        # the successful desk response, opening a blocking browser modal.
+        # Choose the bounded registry projection before entering that path.
+        if not frappe.has_permission(RQ_JOB, "read"):
+            raise frappe.PermissionError("Use the bounded failed-job projection")
         failed_jobs = project_rows("management", RQ_JOB,
                                    RQ_JOB_FAILED_FIELDS,
                                    filters={"status": "failed"},
