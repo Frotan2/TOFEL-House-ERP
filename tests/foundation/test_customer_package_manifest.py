@@ -11,6 +11,7 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 from tools.release.create_customer_package import ALLOWED_FILES, MATRIX_FILE, create_package
@@ -145,6 +146,18 @@ class CustomerPackageManifestTests(unittest.TestCase):
         self.assertEqual(saved["qualification"]["real_owner_windows"], "NOT_VERIFIED")
         self.assertFalse((package / "product" / "data").exists())
         self.assertFalse((package / "apps").exists())
+
+    def test_delivered_zip_contains_the_working_backup_launcher_and_script(self):
+        package, archive, _manifest = self.create()
+        with zipfile.ZipFile(archive) as bundle:
+            for filename in ("Backup TOEFL House ERP.cmd", "Backup TOEFL House ERP.ps1"):
+                relative = "product/windows/" + filename
+                self.assertEqual(bundle.read(package.name + "/" + relative),
+                                 (self.source / relative).read_bytes())
+                preparer = (ROOT / "product/windows/Prepare Customer Package.ps1").read_text()
+                self.assertIn('"' + relative + '"', preparer)
+            launcher = bundle.read(package.name + "/product/windows/Backup TOEFL House ERP.cmd")
+            self.assertIn(b"Backup TOEFL House ERP.ps1", launcher)
 
     def test_image_identity_mismatch_fails_before_package_creation(self):
         with self.assertRaisesRegex(ValueError, "source revision"):

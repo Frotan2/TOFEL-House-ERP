@@ -73,6 +73,8 @@ try {
         "product/windows/Install TOEFL House ERP.cmd",
         "product/windows/Start TOEFL House ERP.cmd",
         "product/windows/Stop TOEFL House ERP.cmd",
+        "product/windows/Backup TOEFL House ERP.cmd",
+        "product/windows/Backup TOEFL House ERP.ps1",
         "product/windows/Repair TOEFL House ERP.cmd",
         "product/windows/Test Fresh Installation.ps1",
         "product/windows/Test Existing Installation.ps1",
