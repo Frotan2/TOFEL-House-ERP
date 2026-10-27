@@ -262,11 +262,14 @@ def user_value_permitted(user, allow, value):
 
 def configured_selling_price(item_code, price_list, currency, customer,
                              qty, on_date):
+    # Field list is pinned-schema exact (erpnext 4048fb70 Item Price has
+    # no min_qty column; quantity slabs are a later-version concept, so
+    # choose_item_price simply sees no slab dimension on this stack).
     rows = frappe.db.get_all(
         "Item Price",
         filters={"item_code": item_code, "price_list": price_list,
                  "selling": 1, "currency": currency},
-        fields=["price_list_rate", "min_qty", "customer", "uom",
+        fields=["price_list_rate", "customer", "uom",
                 "valid_from", "valid_upto"],
         limit_page_length=200,
     ) or []
