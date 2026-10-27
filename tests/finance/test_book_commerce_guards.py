@@ -189,6 +189,50 @@ class PurePriceTests(unittest.TestCase):
         self.assertFalse(reconcile(wrong, ledger)["ok"])
 
 
+
+class InvoiceDiscountBoundaryTests(unittest.TestCase):
+    """A line Pricing Rule is never permission for a header-level discount."""
+
+    def setUp(self):
+        db = FakeDB()
+        db.add("Item", name="SYN-BOOK", stock_uom="Nos")
+        db.add("Item Price", item_code="SYN-BOOK",
+               price_list="Standard Selling", selling=1, currency="AFN",
+               price_list_rate=300.0, customer=None, uom="Nos")
+        db.add("Bin", item_code="SYN-BOOK", warehouse="SYN-WH",
+               actual_qty=20.0)
+        self.books, _, _ = load_modules(db)
+
+    def invoice(self, *, line_rate=270.0, pricing_rules='["SYN-PRICE-RULE"]',
+                discount_amount=0.0, additional_discount_percentage=0.0):
+        return Doc(
+            selling_price_list="Standard Selling", currency="AFN",
+            customer="SYN-STUDENT",
+            discount_amount=discount_amount,
+            additional_discount_percentage=additional_discount_percentage,
+            posting_date="2026-10-27",
+            items=[Doc(item_code="SYN-BOOK", warehouse="SYN-WH",
+                       qty=2.0, rate=line_rate,
+                       pricing_rules=pricing_rules, conversion_factor=1.0)],
+        )
+
+    def test_native_line_rule_can_discount_line_but_not_invoice_header(self):
+        self.assertTrue(self.books.book_sale_terms_ok(self.invoice()))
+        # Existing per-line rule does not authenticate a separate manual
+        # header discount on the same or another book.
+        self.assertFalse(self.books.book_sale_terms_ok(
+            self.invoice(discount_amount=50.0)))
+        self.assertFalse(self.books.book_sale_terms_ok(
+            self.invoice(additional_discount_percentage=10.0)))
+
+    def test_normal_book_sale_without_invoice_header_discount_is_allowed(self):
+        self.assertTrue(self.books.book_sale_terms_ok(
+            self.invoice(line_rate=300.0, pricing_rules="[]")))
+        self.assertFalse(self.books.book_sale_terms_ok(
+            self.invoice(line_rate=300.0, pricing_rules="[]",
+                         discount_amount=20.0)))
+
+
 def invoice_db():
     """SYN-SALE: 2 books @300 from WH-A, 1 book @300 from WH-B (=900)."""
     db = FakeDB()
@@ -353,6 +397,64 @@ class StockDocumentGuardTests(unittest.TestCase):
         self.assertIsNone(self._guard(
             [{"item_code": "SYN-SERVICE", "qty": 1, "s_warehouse": "WH-A"}],
             roles=()))
+
+
+
+class BookWarehouseBoundaryTests(unittest.TestCase):
+    """Warehouse-scoped stock managers cannot move other branches' books."""
+
+    def setUp(self):
+        self.db = FakeDB()
+        self.db.add("Item", name="SYN-BOOK", item_group="Books",
+                    is_stock_item=1)
+        self.db.add("Item Group", name="Books", lft=1, rgt=10)
+        self.db.add("User Permission", user="stock@example.test",
+                    allow="Warehouse", for_value="WH-OWN")
+        self.books, _, _ = load_modules(
+            self.db, user="stock@example.test", roles=("Stock Manager",))
+
+    def stock_entry(self, source=None, destination=None):
+        return Doc(company="TOEFL House", remarks="Counted book transfer",
+                   items=[Doc(item_code="SYN-BOOK", qty=2,
+                              s_warehouse=source, t_warehouse=destination,
+                              basic_rate=175.0)])
+
+    def reconciliation(self, warehouse):
+        return Doc(company="TOEFL House",
+                   purpose="Physical stock count 2026-10-27",
+                   items=[Doc(item_code="SYN-BOOK", warehouse=warehouse)])
+
+    def test_book_receipt_denies_out_of_scope_destination(self):
+        self.assertIsNone(self.books.guard_stock_entry(
+            self.stock_entry(destination="WH-OWN")))
+        with self.assertRaisesRegex(_ValidationError, "warehouse"):
+            self.books.guard_stock_entry(
+                self.stock_entry(destination="WH-FOREIGN"))
+
+    def test_book_issue_denies_out_of_scope_source(self):
+        self.assertIsNone(self.books.guard_stock_entry(
+            self.stock_entry(source="WH-OWN")))
+        with self.assertRaisesRegex(_ValidationError, "warehouse"):
+            self.books.guard_stock_entry(
+                self.stock_entry(source="WH-FOREIGN"))
+
+    def test_book_transfer_checks_both_warehouses(self):
+        with self.assertRaisesRegex(_ValidationError, "warehouse"):
+            self.books.guard_stock_entry(
+                self.stock_entry(source="WH-OWN",
+                                 destination="WH-FOREIGN"))
+        self.db.add("User Permission", user="stock@example.test",
+                    allow="Warehouse", for_value="WH-FOREIGN")
+        self.assertIsNone(self.books.guard_stock_entry(
+            self.stock_entry(source="WH-OWN",
+                             destination="WH-FOREIGN")))
+
+    def test_physical_stock_correction_is_warehouse_scoped(self):
+        self.assertIsNone(self.books.guard_stock_reconciliation(
+            self.reconciliation("WH-OWN")))
+        with self.assertRaisesRegex(_ValidationError, "warehouse"):
+            self.books.guard_stock_reconciliation(
+                self.reconciliation("WH-FOREIGN"))
 
 
 class WiringTests(unittest.TestCase):

@@ -302,12 +302,16 @@ def book_sale_terms_ok(doc):
     items = getattr(doc, "items", None) or []
     if not price_list or not currency or not customer or not items:
         return False
-    # A hand-typed document-level discount reprices every line away from
-    # the configured prices; discounts belong to native Pricing Rules.
-    manual_discount = (
+    # A Pricing Rule applied to one book line does not authorize a separate
+    # invoice-header discount. Such a discount changes the sale total even
+    # when every line's configured rate has been independently validated.
+    # For book sales, native line Pricing Rules may lower the line rate;
+    # unlinked header discounts are always refused, including when some
+    # other line carries a Pricing Rule.
+    invoice_discount = (
         abs(_flt(getattr(doc, "discount_amount", 0))) > 0.005
         or abs(_flt(getattr(doc, "additional_discount_percentage", 0))) > 1e-9)
-    if manual_discount and not any(_has_pricing_rule(row) for row in items):
+    if invoice_discount:
         return False
     on_date = getattr(doc, "posting_date", None)
     lines, prices, requested, available = [], {}, {}, {}
@@ -398,6 +402,16 @@ def guard_stock_entry(doc, method=None):
     for row in rows:
         source = getattr(row, "s_warehouse", None)
         target = getattr(row, "t_warehouse", None)
+        if not source and not target:
+            raise frappe.ValidationError(
+                "Book stock movement requires a source or destination warehouse")
+        # Native Stock Entry's parent permission is not proof that its
+        # child-row source/destination warehouses are in the user's scope.
+        for warehouse in (source, target):
+            if warehouse and not user_value_permitted(
+                    user, "Warehouse", warehouse):
+                raise frappe.ValidationError(
+                    "This login has no book-stock authority for that warehouse")
         if target and not source:
             rate = _flt(getattr(row, "basic_rate", None))
             if not math.isfinite(rate) or rate <= 0:
@@ -415,8 +429,17 @@ def guard_stock_reconciliation(doc, method=None):
     """A physical-count correction of books is an approved adjustment."""
     from toefl_house.security import require_operational
     require_operational()
-    if not _book_stock_rows(doc):
+    rows = _book_stock_rows(doc)
+    if not rows:
         return
+    # Each Stock Reconciliation Item has its own warehouse. Parent DocType
+    # permission and Company scope do not authorize a different warehouse.
+    for row in rows:
+        warehouse = getattr(row, "warehouse", None)
+        if not warehouse or not user_value_permitted(
+                frappe.session.user, "Warehouse", warehouse):
+            raise frappe.ValidationError(
+                "This login has no book-stock authority for that warehouse")
     # Stock Reconciliation has no Remarks field in the pinned schema; its
     # native Purpose is the stated reason there.
     _require_adjustment_authority(
