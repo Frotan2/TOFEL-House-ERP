@@ -1,26 +1,57 @@
 """Independent regression tests for native receivable views and Afghan months.
 
-These are PURE source tests, not ERPNext posting, GL, or Windows acceptance.
-No live site or customer data is accessed.
+PURE source tests: do not require Frappe or touch customer data.
 """
 from datetime import timedelta
 from decimal import Decimal
+import importlib.util
 from pathlib import Path
 import sys
+import types
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "apps" / "toefl_house"))
+FINANCE = ROOT / "apps" / "toefl_house" / "toefl_house" / "finance"
 
-from toefl_house.finance.shamsi import (  # noqa: E402
-    add_months, days_in_month, fiscal_year_bounds, following_month,
-    gregorian_to_shamsi, month_bounds, month_key, monthly_due_dates,
-    parse_shamsi_month, shamsi_to_gregorian, solar_month_label,
-)
-from toefl_house.finance.period_reporting import (  # noqa: E402
-    amount, invoice_balances, solar_month_receivables,
-    suggest_oldest_debt_allocation,
-)
+
+def load_pure_module(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# Frappe-aware finance/__init__.py must not run during pure source tests.
+_shamsi = load_pure_module("toefl_house.finance.shamsi", FINANCE / "shamsi.py")
+_package = types.ModuleType("toefl_house")
+_package.__path__ = []
+_finance = types.ModuleType("toefl_house.finance")
+_finance.__path__ = []
+with patch.dict(sys.modules, {
+    "toefl_house": _package,
+    "toefl_house.finance": _finance,
+    "toefl_house.finance.shamsi": _shamsi,
+}):
+    _reporting = load_pure_module(
+        "independent_period_reporting_under_test", FINANCE / "period_reporting.py"
+    )
+
+add_months = _shamsi.add_months
+days_in_month = _shamsi.days_in_month
+fiscal_year_bounds = _shamsi.fiscal_year_bounds
+following_month = _shamsi.following_month
+gregorian_to_shamsi = _shamsi.gregorian_to_shamsi
+month_bounds = _shamsi.month_bounds
+month_key = _shamsi.month_key
+monthly_due_dates = _shamsi.monthly_due_dates
+parse_shamsi_month = _shamsi.parse_shamsi_month
+shamsi_to_gregorian = _shamsi.shamsi_to_gregorian
+solar_month_label = _shamsi.solar_month_label
+amount = _reporting.amount
+invoice_balances = _reporting.invoice_balances
+solar_month_receivables = _reporting.solar_month_receivables
+suggest_oldest_debt_allocation = _reporting.suggest_oldest_debt_allocation
 
 
 def fee(name, posting, due, total):
