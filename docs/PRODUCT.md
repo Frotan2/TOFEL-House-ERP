@@ -152,14 +152,16 @@ settings the same way (the site stays ACTIVE rather than half-deactivated).
 
 ### Native stock-book sales (engineering candidate)
 
-The native ERPNext book shop uses **Item Group** (the owner creates `Books`),
+The native ERPNext book shop uses **Item Group** (the owner creates `Books`,
+with optional program sub-groups such as GE or TOEFL Preparation below it),
 stock-enabled and sales-enabled **Item**, **Warehouse**, **Stock Entry**,
 **Sales Invoice**, **Payment Entry** and the native stock/general ledgers.
 Only Finance Officer users who also hold native Accounts User invoice creation
 permission can use normal stock-updating book invoices. A Finance Manager who
 also has Finance Officer and Accounts User receives **Book sales and stock**
 shortcuts in the Finance desk to native Item, Item Price, Bin, Stock Entry,
-Sales Invoice and Payment Entry screens *only when native rights for that
+Purchase Receipt, Sales Invoice, Payment Entry, Stock Ledger Entry and Stock
+Reconciliation screens *only when native rights for that
 DocType actually exist*. For example, native ERPNext requires Stock User to
 manage stock and Sales Master Manager to configure Item Price. A Finance
 Officer with Accounts User alone does not automatically get those rights;
@@ -169,10 +171,23 @@ A student/customer who has been admitted may buy a textbook without creating
 a tuition charge. The owner configures the items, prices, stock and warehouse
 in native ERPNext screens; no artificial product price or TH book ledger exists.
 
+Book sales bill only the configured native selling **Item Price**: a
+hand-typed rate or discount is refused (a lower rate requires a native
+Pricing Rule), and a sale cannot exceed the warehouse bin. Returns restock
+only the warehouse that sold the book, never credit above the sold rate, and
+a submitted return stays cancellable by an authorized user. Book stock
+receipts require a positive purchase cost; write-offs and count corrections
+require a Stock Manager or Finance Manager with a stated reason. Company and
+Warehouse User Permissions bind book sales, returns, refunds and stock
+documents. The full rule set, evidence and owner setup checklist are in
+[engineering/BOOK-INVENTORY-FINALIZATION-2026-10-26.md](engineering/BOOK-INVENTORY-FINALIZATION-2026-10-26.md).
+
 Synthetic native integration tests book-stock receipt, posted book invoice,
 receivable settlement by native Payment Entry, book return/credit and
 restocking, stock/GL posting, wrong-role and mixed-item denials, stock-update
-enforcement, and a converted-student purchase. Passing hosted tests cannot
+enforcement, a converted-student purchase, unconfigured-price and oversell
+denials, return warehouse/rate-abuse denials, return cancellation, program
+sub-group sales, and Bin-vs-stock-ledger reconciliation. Passing hosted tests cannot
 qualify actual users, stock warehouse setup, cashier UX, physical-device
 recovery or Owner Windows; issue #35 stays open until those gates pass.
 

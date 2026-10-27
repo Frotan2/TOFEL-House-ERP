@@ -35,7 +35,9 @@ if errorlevel 1 goto :failed
 echo [TH_STAGE] Loading the verified application image for repair...
 docker load -i "release\toefl-house-erp-app.tar"
 if errorlevel 1 goto :failed
-docker image inspect toefl-house-erp-app:local >nul 2>nul
+rem A bare tag-existence check cannot prove exact-version identity: bind
+rem the loaded image to the verified manifest labels before any restart.
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1" -VerifyLoadedImage
 if errorlevel 1 goto :failed
 goto :sourcesready
 :sourcesready

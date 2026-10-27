@@ -17,9 +17,11 @@ tests with an injected stub.
 """
 import frappe
 
+from toefl_house.operations.portal_dates import with_solar_date
+
 # Allow-listed fields per doctype for student portal (no PII leakage)
 PORTAL_FIELDS = {
-    "Course Schedule": ["name", "student_group", "course", "room", "schedule_date", "from_time", "to_time", "instructor"],
+    "Course Schedule": ["name", "student_group", "course", "room", "schedule_date", "from_time", "to_time", "instructor", "th_session_status"],
     "Student Attendance": ["name", "student", "student_group", "course_schedule", "date", "status", "docstatus"],
     "Assessment Result": ["name", "student", "assessment_plan", "grade", "docstatus", "posting_date"],
     "Fees": ["name", "student", "program", "academic_year", "grand_total", "outstanding_amount", "due_date", "docstatus"],
@@ -189,10 +191,9 @@ def get_my_schedule():
             order_by="schedule_date asc, from_time asc",
             limit_page_length=200,
         )
-        # Project only safe fields
-        return schedules
     except Exception:
         return []
+    return with_solar_date(schedules, "schedule_date", "schedule_date_shamsi")
 
 
 @frappe.whitelist()
@@ -203,7 +204,7 @@ def get_my_attendance(limit=100):
         raise frappe.PermissionError("Authentication required")
     student = _assert_my_student(user)
     limit = min(max(int(limit or 100), 1), 200)
-    return _project("Student Attendance", student, limit=limit)
+    return with_solar_date(_project("Student Attendance", student, limit=limit), "date", "date_shamsi")
 
 
 @frappe.whitelist()

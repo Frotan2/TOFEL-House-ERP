@@ -2362,6 +2362,17 @@ def main():
                 student_email_id=users['outsider'])).insert().name
         outsider_stu=check('teaching-outsider-student-fixture',outsider_student)
         stu1,stu2=groupA['roster']
+        def future_attendance_refused():
+            # Synthetic clock only: the native schedule and enrolled roster
+            # are real rows, but this probe treats the session as tomorrow.
+            before=frappe.db.count('Student Attendance')
+            with patch.object(frappe.utils,'today',return_value='2026-09-20'):
+                unavailable(lambda:as_user('attendance_recorder',lambda:
+                    tea.record_attendance('tea_future_mark_00001',schedA['name'],{stu1:'Present'})),
+                    'future session')
+            assert frappe.db.count('Student Attendance')==before
+            return {'future_date_refused':True,'no_native_mark':True,'clock':'synthetic'}
+        check('teaching-future-attendance-refused',traced(future_attendance_refused))
         check('teaching-attendance-scheduler-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.record_attendance('tea_sch_att_000000001',schedA['name'],{stu1:'Present'}))))
         check('teaching-attendance-invalid-status-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_badstatus_0000001',schedA['name'],{stu1:'Late'}))))
         check('teaching-attendance-empty-batch-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_empty_att_0000001',schedA['name'],{}))))
@@ -3722,6 +3733,15 @@ def main():
                     item_name='SYN Textbook',item_group='Books',
                     stock_uom='Nos',is_stock_item=1,is_sales_item=1,
                     is_purchase_item=1)).insert()
+            # The cashier never types a book price: the configured native
+            # selling Item Price is the only rate a book sale may bill.
+            if not frappe.db.exists('Item Price',{'item_code':code,
+                    'price_list':fin['price_list']}):
+                frappe.get_doc(dict(doctype='Item Price',item_code=code,
+                    price_list=fin['price_list'],selling=1,
+                    currency=frappe.db.get_value('Price List',
+                        fin['price_list'],'currency'),
+                    price_list_rate=300)).insert()
             wh=frappe.db.get_value('Warehouse',{'warehouse_name':'SYN Book Shop',
                 'company':fin['company']},'name')
             if not wh:
@@ -3788,6 +3808,41 @@ def main():
             return denied(lambda:as_user('book_seller',
                 lambda:doc.insert(ignore_permissions=True)))
         check('book-native-no-stock-update-denied',book_without_stock)
+        def book_price_abuse():
+            # A hand-typed document discount on a priced book, and a
+            # hand-typed rate on a book with no configured selling price:
+            # both reprice away from native Item Price authority.
+            frappe.set_user('Administrator')
+            unpriced='SYN-BOOK-NOPRICE'
+            if not frappe.db.exists('Item',unpriced):
+                frappe.get_doc(dict(doctype='Item',item_code=unpriced,
+                    item_name='SYN Unpriced Textbook',item_group='Books',
+                    stock_uom='Nos',is_stock_item=1,is_sales_item=1,
+                    is_purchase_item=1)).insert()
+            if not frappe.db.exists('Bin',{'item_code':unpriced,
+                    'warehouse':books['warehouse']}):
+                entry=frappe.get_doc(dict(doctype='Stock Entry',
+                    stock_entry_type='Material Receipt',
+                    purpose='Material Receipt',company=fin['company'],
+                    items=[dict(item_code=unpriced,qty=3,
+                        t_warehouse=books['warehouse'],basic_rate=175)]))
+                entry.insert();entry.submit()
+            discount_doc=book_doc()
+            discount_doc.apply_discount_on='Grand Total'
+            discount_doc.discount_amount=60
+            unpriced_doc=book_doc(item_code=unpriced,qty=1)
+            return {
+                'manual_discount':denied(lambda:as_user('book_seller',
+                    lambda:discount_doc.insert(ignore_permissions=True))),
+                'unconfigured_price':denied(lambda:as_user('book_seller',
+                    lambda:unpriced_doc.insert(ignore_permissions=True))),
+            }
+        check('book-native-unconfigured-price-denied',book_price_abuse)
+        def book_oversell():
+            doc=book_doc(qty=999)
+            return denied(lambda:as_user('book_seller',
+                lambda:doc.insert(ignore_permissions=True)))
+        check('book-native-oversell-beyond-bin-denied',book_oversell)
         def book_sale_positive():
             book_stages['baseline'] = native_book_state(frappe, book_context)
             doc=book_doc()
@@ -3931,6 +3986,130 @@ def main():
                 role_page_identity(unrelated, base, users['outsider'])
                 return native_book_http_cycle(frappe, cashier, unrelated, base, book_context, book_doc().as_dict())
         check('book-http-cashier-sale-payment-return-refund', traced(book_http_commerce))
+        def book_return_abuse():
+            # Restocking into a warehouse that never sold the book diverts
+            # branch stock; crediting one returned book at the two-book
+            # rate extracts the whole sale value for half the books.
+            from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
+            frappe.set_user('Administrator')
+            annex=frappe.db.get_value('Warehouse',
+                {'warehouse_name':'SYN Book Annex','company':fin['company']},'name')
+            if not annex:
+                annex=frappe.get_doc(dict(doctype='Warehouse',
+                    warehouse_name='SYN Book Annex',
+                    company=fin['company'])).insert().name
+            sale=book_doc()
+            as_user('book_seller',lambda:sale.insert())
+            as_user('book_seller',lambda:sale.submit())
+            frappe.set_user('Administrator')
+            diverted=make_sales_return(sale.name)
+            diverted.items[0].warehouse=annex
+            inflated=make_sales_return(sale.name)
+            inflated.items[0].qty=-1
+            inflated.items[0].rate=600
+            return {
+                'sale':sale.name,
+                'diverted_warehouse':denied(lambda:as_user('book_seller',
+                    lambda:diverted.insert(ignore_permissions=True))),
+                'inflated_rate':denied(lambda:as_user('book_seller',
+                    lambda:inflated.insert(ignore_permissions=True))),
+            }
+        check('book-native-return-warehouse-and-rate-abuse-denied',traced(book_return_abuse))
+        def book_return_cancel():
+            # The authorized reversal of a submitted full return must not
+            # be read as a second return stacked on top of itself.
+            from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
+            frappe.set_user('Administrator')
+            seller=frappe.get_doc('User',users['book_seller'])
+            seller.add_roles('Accounts Manager')
+            frappe.db.commit();frappe.clear_cache(user=seller.name)
+            sale=book_doc()
+            as_user('book_seller',lambda:sale.insert())
+            as_user('book_seller',lambda:sale.submit())
+            after_sale=frappe.db.get_value('Bin',
+                {'item_code':books['item'],'warehouse':books['warehouse']},
+                'actual_qty')
+            def post():
+                doc=make_sales_return(sale.name)
+                doc.insert();doc.submit()
+                return doc
+            credit=as_user('book_seller',post)
+            as_user('book_seller',lambda:credit.cancel())
+            frappe.set_user('Administrator')
+            assert int(frappe.db.get_value(
+                'Sales Invoice',credit.name,'docstatus'))==2
+            after_cancel=frappe.db.get_value('Bin',
+                {'item_code':books['item'],'warehouse':books['warehouse']},
+                'actual_qty')
+            assert abs(float(after_cancel)-float(after_sale))<0.001,\
+                (after_sale,after_cancel)
+            return {'credit_note_cancelled':credit.name,
+                    'stock_restored_to_sale_qty':True}
+        check('book-native-return-cancel-reverses-stock',traced(book_return_cancel))
+        def book_program_subgroup():
+            # GE/EAP-style program shelves are Item Groups below Books;
+            # their books sell through the same guarded native path.
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Item Group','Books','is_group',1)
+            if not frappe.db.exists('Item Group','SYN GE Books'):
+                frappe.get_doc(dict(doctype='Item Group',
+                    item_group_name='SYN GE Books',
+                    parent_item_group='Books')).insert()
+            code='SYN-BOOK-GE'
+            if not frappe.db.exists('Item',code):
+                frappe.get_doc(dict(doctype='Item',item_code=code,
+                    item_name='SYN GE Textbook',item_group='SYN GE Books',
+                    stock_uom='Nos',is_stock_item=1,is_sales_item=1,
+                    is_purchase_item=1)).insert()
+            if not frappe.db.exists('Item Price',{'item_code':code,
+                    'price_list':fin['price_list']}):
+                frappe.get_doc(dict(doctype='Item Price',item_code=code,
+                    price_list=fin['price_list'],selling=1,
+                    currency=frappe.db.get_value('Price List',
+                        fin['price_list'],'currency'),
+                    price_list_rate=300)).insert()
+            entry=frappe.get_doc(dict(doctype='Stock Entry',
+                stock_entry_type='Material Receipt',
+                purpose='Material Receipt',company=fin['company'],
+                items=[dict(item_code=code,qty=3,
+                    t_warehouse=books['warehouse'],basic_rate=175)]))
+            entry.insert();entry.submit()
+            doc=book_doc(item_code=code,qty=1)
+            as_user('book_seller',lambda:doc.insert())
+            as_user('book_seller',lambda:doc.submit())
+            assert int(doc.docstatus)==1
+            return {'invoice':doc.name,'item_group':'SYN GE Books'}
+        check('book-native-program-subgroup-sale',traced(book_program_subgroup))
+        def book_ledger_reconciliation():
+            # Bin is a projection; the Stock Ledger is truth. After the
+            # whole sale/return/refund/cancel cycle they must still agree
+            # in quantity and in value for every book item. A cancelled
+            # return leaves a queued Repost Item Valuation whose whole
+            # job is to re-settle Bin from the ledger; drain it first so
+            # the comparison judges the settled state, not the queue.
+            from toefl_house.finance import books as book_rules
+            from erpnext.stock.doctype.repost_item_valuation.repost_item_valuation import execute_reposting_entry
+            frappe.set_user('Administrator')
+            for row in frappe.db.get_all('Repost Item Valuation',
+                    filters={'docstatus':1,
+                             'status':['in',('Queued','In Progress')]},
+                    fields=['name'],limit_page_length=100):
+                execute_reposting_entry(row.name)
+            codes=[books['item'],'SYN-BOOK-GE','SYN-BOOK-NOPRICE']
+            bins=frappe.db.get_all('Bin',
+                filters={'item_code':['in',codes]},
+                fields=['item_code','warehouse','actual_qty','stock_value',
+                        'valuation_rate'])
+            ledger=frappe.db.get_all('Stock Ledger Entry',
+                filters={'item_code':['in',codes],'is_cancelled':0},
+                fields=['item_code','warehouse','actual_qty',
+                        'stock_value_difference'],limit_page_length=1000)
+            report=book_rules.reconcile_book_stock(
+                [dict(r) for r in bins],[dict(r) for r in ledger])
+            assert report['checked_bins']>=1,report
+            assert report['ok'],report
+            return report
+        check('book-native-stock-ledger-reconciliation',traced(book_ledger_reconciliation))
 
         def tax_configuration_state():
             # The owner has supplied no tax policy, so the only truthful
@@ -4960,9 +5139,14 @@ def main():
             assert hist.skill=='RV' and hist.student_group=='SYN-GRP-MAIN-2',(afacts['assignments']['a3'],hist)
             term=frappe.db.get_all('TH Contract Skill Term',filters={'parent':cauth['contracts']['two'],'parenttype':CON,'skill':'RV'},fields=['name','rate'])
             assert term and float(term[0].rate)==15,(cauth['contracts']['two'],term)
+            # Keep this coverage effective through the qualification day:
+            # the teacher desk/command now correctly revoke ended assignments.
+            # The end remains an audited, immutable command fact; it is not a
+            # claim that former assignments allow historical access forever.
+            assignment_end=max('2026-09-30',frappe.utils.today())
             ended3=as_user('teaching_scheduler',lambda:tcomp.end_teaching_assignment(
-                'tc_end_three_hist_01',afacts['assignments']['a3'],'2026-09-30'))
-            assert ended3['effective_end']=='2026-09-30'
+                'tc_end_three_hist_01',afacts['assignments']['a3'],assignment_end))
+            assert ended3['effective_end']==assignment_end
             # Retirement is one-way
             assert denied(lambda:(lambda x:(x.__setattr__('status','Active'),x.save(ignore_permissions=True)))(
                 frappe.get_doc('TH Skill','RV'))),('retired skill was reactivated')
@@ -5837,6 +6021,8 @@ def main():
             assert routes<={
                 'List/Item','List/Item Price','List/Bin','List/Stock Entry',
                 'List/Sales Invoice','List/Payment Entry',
+                'List/Purchase Receipt','List/Stock Ledger Entry',
+                'List/Stock Reconciliation',
             },routes
             assert not routes.intersection({
                 'List/Bin','List/Stock Entry','List/Item Price',
@@ -6374,8 +6560,9 @@ def main():
             assert "'SYN-BR-A'" in qd and "'SYN-BR-B'" not in qd
             names=[r[0] for r in frappe.db.sql("select name from `tabTH Admission Decision` where "+qd,as_list=True)]
             assert dec['A'] in names and dec['B'] not in names,(names)
-            return {'branches':2,'scoped_staff':2,'hq_controls':2,'surfaces_proved':3}
-        check('branch-isolation-multi-branch-operating-rule',traced(branch_isolation))
+            return {'branches':2,'scoped_staff':2,'hq_controls':2,'surfaces_proved':3,
+                    'fixture_students':stu,'fixture_years':{'A':'SYN-AY-2031','B':'SYN-AY-2032'}}
+        branch_fixture=check('branch-isolation-multi-branch-operating-rule',traced(branch_isolation))
         # --- S6 obs-engineering-layer: the health surface, in process ---
         # The GM desk and owner cockpit project native scheduler facts. This
         # pins the audience gate (including the Administrator refusal), the
@@ -6445,6 +6632,24 @@ def main():
                     'rosters_assigned_only':True,'off_roster_excluded':outsider_stu,
                     'compensation_rows':len(pay),'unlinked_empty_state':True}
         check('role-desk-teacher-hosted',traced(desk_teacher))
+        def ended_assignment_revokes_desk_and_command():
+            # Real native rows, synthetic read clock: the assignment ended on
+            # its recorded inclusive date and must no longer authorize tomorrow.
+            import toefl_house.desk.teacher as teacher_desk
+            frappe.set_user('Administrator')
+            end=str(frappe.db.get_value('TH Teaching Assignment',afacts['assignments']['a3'],'effective_end'))
+            later=frappe.utils.add_days(end,1)
+            with patch.object(teacher_desk,'today',return_value=later):
+                payload=as_user('teacher_two',teacher_desk.work)
+            visible={i['person'] for s in payload['sections'] if s['id']=='classes' for i in s['items']}
+            assert GRP_B not in visible,('expired class remained visible',visible)
+            frappe.set_user('Administrator')
+            session=frappe.db.get_value('Course Schedule',schedB['name'],
+                ['student_group','instructor','schedule_date'],as_dict=True)
+            with patch.object(frappe.utils,'today',return_value=later):
+                denied(lambda:tea._require_own_instructor_session(users['teacher_two'],session,schedB['name']))
+            return {'expired_class_hidden':True,'expired_command_denied':True,'clock':'synthetic'}
+        check('teacher-ended-assignment-revokes-access',traced(ended_assignment_revokes_desk_and_command))
         def instructor_attendance_own_vs_cross():
             # Two native Employee->Instructor links, two real Course Schedule
             # rows, two separate class assignments, one Instructor-only role.
@@ -6583,41 +6788,37 @@ def main():
         # the exact-scoping cell runs between two populated branches.
         def desk_isolation_matrix():
             frappe.set_user('Administrator')
-            for br in ('SYN-ISOL-A','SYN-ISOL-B'):
-                if not frappe.db.exists('Branch',br):
-                    frappe.get_doc(dict(doctype='Branch',branch=br)).insert()
+            # Reuse the two separately admitted/enrolled branch journeys.
+            # Never put the same learners into both branches just to populate
+            # the matrix: the roster command now refuses that unsafe fixture.
             IA,IB='SYN-GRP-ISOL-A','SYN-GRP-ISOL-B'
-            roster_n=frappe.db.count('Program Enrollment',{'program':cat['program'],
-                'academic_year':cat['academic_year'],'docstatus':1})
-            assert roster_n>=2,('two enrolled learners are needed for the matrix',roster_n)
-            if not frappe.db.exists('Student Group',IA):
+            branch_students=branch_fixture['fixture_students']
+            branch_years=branch_fixture['fixture_years']
+            start=frappe.utils.today();end=frappe.utils.add_days(start,14)
+            for tail,group in (('A',IA),('B',IB)):
                 as_user('teaching_scheduler',lambda:tea.create_student_group(
-                    'isol_group_a_0000001',IA,cat['program'],cat['academic_year'],'',
-                    roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-A'))
-            if not frappe.db.exists('Student Group',IB):
-                as_user('teaching_scheduler',lambda:tea.create_student_group(
-                    'isol_group_b_0000001',IB,cat['program'],cat['academic_year'],'',
-                    roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-B'))
+                    'isol_group_'+tail.lower()+'_0000001',group,cat['program'],branch_years[tail],'',
+                    1,start,end,branch='SYN-BR-'+tail,students=[branch_students[tail]]))
             frappe.set_user('Administrator')
-            assert frappe.db.get_value('Student Group',IA,'th_branch')=='SYN-ISOL-A'
-            assert frappe.db.get_value('Student Group',IB,'th_branch')=='SYN-ISOL-B'
+            assert frappe.db.get_value('Student Group',IA,'th_branch')=='SYN-BR-A'
+            assert frappe.db.get_value('Student Group',IB,'th_branch')=='SYN-BR-B'
             # Writes and cached command receipts must obey the same native
             # Branch User Permission after it is added or changed.
             scheduler_scope=frappe.get_doc(dict(doctype='User Permission',
                 user=users['teaching_scheduler'],allow='Branch',
-                for_value='SYN-ISOL-A')).insert()
+                for_value='SYN-BR-A')).insert()
             frappe.db.commit()
             try:
                 own_replay=as_user('teaching_scheduler',lambda:tea.create_student_group(
-                    'isol_group_a_0000001',IA,cat['program'],cat['academic_year'],'',
-                    roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-A'))
+                    'isol_group_a_0000001',IA,cat['program'],branch_years['A'],'',
+                    1,start,end,branch='SYN-BR-A',students=[branch_students['A']]))
                 assert own_replay['name']==IA
                 for key,group in (('isol_group_b_0000001',IB),
                                   ('isol_foreign_write_0001','SYN-ISOL-DENIED')):
                     try:
                         as_user('teaching_scheduler',lambda:tea.create_student_group(
-                            key,group,cat['program'],cat['academic_year'],'',
-                            roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-B'))
+                            key,group,cat['program'],branch_years['B'],'',
+                            1,start,end,branch='SYN-BR-B',students=[branch_students['B']]))
                     except frappe.PermissionError:
                         pass
                     else:
@@ -6629,7 +6830,7 @@ def main():
                 frappe.delete_doc('User Permission',scheduler_scope.name)
                 frappe.db.commit()
             up=frappe.get_doc(dict(doctype='User Permission',user=users['teacher_two'],
-                allow='Branch',for_value='SYN-ISOL-A')).insert()
+                allow='Branch',for_value='SYN-BR-A')).insert()
             frappe.db.commit()
             try:
                 # LIST shape for a branch-scoped viewer: the native list
@@ -6644,9 +6845,9 @@ def main():
                     'Student Group',fields=['name'],limit_page_length=100))}
                 frappe.set_user('Administrator')
                 own_group={r['name'] for r in frappe.get_all('Student Group',
-                    filters={'th_branch':'SYN-ISOL-A'},fields=['name'],
+                    filters={'th_branch':'SYN-BR-A'},fields=['name'],
                     limit_page_length=100)}
-                assert pre==own_group=={IA}, \
+                assert pre==own_group and IA in pre and IB not in pre, \
                     ('branch-scoped class list is not exactly the own-branch classes',
                      sorted(pre),sorted(own_group))
                 # The native non-strict user-permission shape, pinned at the
@@ -6668,13 +6869,14 @@ def main():
                 # scoping cell below proves exact isolation between two
                 # populated branches on the production-default mode.
                 for g in (GRP_A,GRP_B,GRP_C,GRP_D,GRP_HTTP):
-                    frappe.db.set_value('Student Group',g,'th_branch','SYN-ISOL-B')
+                    frappe.db.set_value('Student Group',g,'th_branch','SYN-BR-B')
                 frappe.db.commit()
                 # LIST: role read + branch user-permission scope the native list.
                 listed={r['name'] for r in as_user('teacher_two',lambda:frappe.get_list(
                     'Student Group',fields=['name'],limit_page_length=100))}
                 frappe.set_user('Administrator')
-                assert listed=={IA},('branch user-permission did not scope the native class list',sorted(listed))
+                assert listed==own_group and IA in listed and IB not in listed, \
+                    ('branch user-permission did not scope the native class list',sorted(listed))
                 # ELEVATED PROJECTION: the desk seam (project_rows) is an
                 # elevated raw read — frappe.get_all ignores the role,
                 # user-permission and hook conditions that scope the native
@@ -6686,7 +6888,8 @@ def main():
                 unscoped={r['name'] for r in as_user('teacher_two',lambda:proj(
                     'teacher','Student Group',['name'],limit=100))}
                 frappe.set_user('Administrator')
-                assert unscoped=={IA},('the desk projection seam escaped the branch rule',sorted(unscoped))
+                assert unscoped==own_group and IA in unscoped and IB not in unscoped, \
+                    ('the desk projection seam escaped the branch rule',sorted(unscoped))
                 # DESK: after the branch reassignment, the teacher's only
                 # standing assignment is the far-branch class — and it must
                 # not reach the desk. The assignment join is branch-scoped

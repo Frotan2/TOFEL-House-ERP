@@ -93,10 +93,12 @@ class S2CompensationTests(unittest.TestCase):
         self.contract_doc = _contract("C-1", [_adjustment("ADJ-1")])
         self.fresh_doc = None
         self.paid = {}
+        self.paid_rows = {}
         self.currency = "USD"
         self.company_permissions = []  # HQ unrestricted unless explicitly scoped
         self.lock_order = []
         self.paid_queries = []
+        self.paid_sql_queries = []
         self.posted = []
         self.get_doc_calls = []
         previous = dict(sys.modules)
@@ -111,8 +113,17 @@ class S2CompensationTests(unittest.TestCase):
                 return []
             if "tabAdditional Salary" in query:
                 assert "for update" in query, "posting re-read must lock"
+                fake.paid_sql_queries.append(query)
                 fake.paid_queries.append((values[0], values[1]))
-                return [(day,) for day in fake.paid.get((values[0], values[1]), [])]
+                ref = (values[0], values[1])
+                if ref in fake.paid_rows:
+                    rows = fake.paid_rows[ref]
+                    if "disabled=0" in query:
+                        rows = [row for row in rows if not row["disabled"]]
+                    if "docstatus<2" in query:
+                        rows = [row for row in rows if row["docstatus"] < 2]
+                    return [(row["payroll_date"],) for row in rows]
+                return [(day,) for day in fake.paid.get(ref, [])]
             raise AssertionError(f"unexpected sql {query[:80]}")
 
         def get_all(doctype, filters=None, fields=None, **kwargs):
@@ -376,6 +387,22 @@ class S2CompensationTests(unittest.TestCase):
         result = self._monthly_calc("2026-10-23", "2026-11-21", ["2026-11-05"])
         self.assertEqual(self.posted, [])
         self.assertEqual(result["skipped_existing"], 1)
+
+    def test_cancelled_or_disabled_inputs_do_not_block_monthly_replacement(self):
+        # Seed an otherwise matching monthly input in each excluded state.
+        # The SQL stub applies the production query's disabled/docstatus
+        # predicates, so neither historical row can suppress replacement.
+        self.paid_rows[(ASSIGNMENT, "A-1")] = [
+            {"payroll_date": "2026-11-21", "disabled": 1, "docstatus": 1},
+            {"payroll_date": "2026-11-21", "disabled": 0, "docstatus": 2},
+        ]
+        result = self._monthly_calc("2026-10-23", "2026-11-21")
+        self.assertEqual(len(self.posted), 1)
+        self.assertEqual(result["posted"]["INS-1"][0]["amount"], 200)
+        self.assertTrue(self.paid_sql_queries)
+        for query in self.paid_sql_queries:
+            self.assertIn("disabled=0", query)
+            self.assertIn("docstatus<2", query)
 
     def test_monthly_contract_refuses_gregorian_and_partial_month_windows(self):
         with self.assertRaisesRegex(_ValidationError, "full Solar Hijri month"):

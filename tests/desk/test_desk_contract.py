@@ -895,7 +895,9 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                         "academic_year", "academic_term",
                                                         "max_strength", "class_start_date",
                                                         "class_end_date", "delivery_mode",
-                                                        "branch"]),
+                                                        "branch", "students"]),
+        "toefl_house.teaching.add_class_member": ("teaching/__init__.py",
+                                                  ["request_key", "student_group", "student", "override"]),
         "toefl_house.teaching.transition_class": ("teaching/__init__.py",
                                                    ["request_key", "student_group", "to_status"]),
         "toefl_house.teaching.schedule_session": ("teaching/__init__.py",
@@ -1645,9 +1647,9 @@ class AcademicClassActionsWorldTests(unittest.TestCase):
             ],
         }
 
-    def _payload(self, roles):
+    def _payload(self, roles, world=None):
         module = _import_desk("academic", roles=roles)
-        world_get_all = desk_world_get_all("class-actions world", self._world())
+        world_get_all = desk_world_get_all("class-actions world", self._world() if world is None else world)
         module.frappe.get_all = world_get_all
         module.frappe.db.get_all = world_get_all
         return module.work()
@@ -1688,10 +1690,47 @@ class AcademicClassActionsWorldTests(unittest.TestCase):
         self.assertNotIn("new-class:GEN-2:2026", items,
                          "a classed intake must not be offered creation")
 
+    def test_late_enrollment_is_visible_even_when_a_class_exists(self):
+        payload = self._payload({"Academic Manager", "Teaching Scheduler"})
+        item = self._classes(payload)["unrostered:ENR-3"]
+        self.assertEqual(item["action"]["endpoint"], "toefl_house.teaching.add_class_member")
+        self.assertEqual(item["action"]["args"], {"student": "STU-3", "student_group": "GROUP-B"})
+        facts = next(section for section in payload["sections"] if section["id"] == "funnel")["facts"]
+        self.assertEqual(next(f["value"] for f in facts if f["label"] == "Enrollments awaiting a class"), 3)
+
+    def test_matching_active_roster_removes_late_join_warning(self):
+        world = self._world()
+        world["Student Group Student"] = [
+            {"name": "R-3", "parent": "GROUP-B", "student": "STU-3", "active": 1}]
+        self.assertNotIn("unrostered:ENR-3", self._classes(
+            self._payload({"Academic Manager", "Teaching Scheduler"}, world)))
+        # An inactive membership or a different term must not hide the learner.
+        world["Student Group Student"][0]["active"] = 0
+        self.assertIn("unrostered:ENR-3", self._classes(
+            self._payload({"Academic Manager", "Teaching Scheduler"}, world)))
+        world["Student Group Student"][0]["active"] = 1
+        world["Student Group"][1]["academic_term"] = "OTHER-TERM"
+        self.assertNotIn("unrostered:ENR-3", self._classes(
+            self._payload({"Academic Manager", "Teaching Scheduler"}, world)))
+        self.assertIn("new-class:GEN-2:2026", self._classes(
+            self._payload({"Academic Manager", "Teaching Scheduler"}, world)))
+
+    def test_capped_roster_does_not_claim_a_complete_waiting_total(self):
+        world = self._world()
+        world["Student Group Student"] = [
+            {"name": f"R-{i}", "parent": "GROUP-B", "student": f"ST-{i}", "active": 1}
+            for i in range(400)]
+        payload = self._payload({"Academic Manager", "Teaching Scheduler"}, world)
+        facts = next(section for section in payload["sections"] if section["id"] == "funnel")["facts"]
+        self.assertEqual(next(f["value"] for f in facts if f["label"] == "Enrollments awaiting a class"), "—")
+        self.assertFalse(any(key.startswith(("new-class:", "unrostered:"))
+                             for key in self._classes(payload)))
+
     def test_actions_are_role_gated(self):
         items = self._classes(self._payload({"Academic Manager"}))
         self.assertIsNone(items["GROUP-A"]["action"])
         self.assertIsNone(items["GROUP-B"]["action"])
+        self.assertIsNone(items["unrostered:ENR-3"]["action"])
         self.assertNotIn("new-class:GEN-4:2026", items,
                          "the creation row is an affordance, not narration")
 
@@ -2116,9 +2155,23 @@ class OperationsHealthWorldTests(unittest.TestCase):
         # controller. Denied-role registry fallback has separate tests.
         module.frappe.has_permission = lambda dt, *args, **kwargs: dt == "RQ Job"
         module.frappe.ping = lambda: ping
+        # This world exercises the *readable* virtual RQ Job projection. The
+        # denied/fallback path has independent tests in test_rq_fallback.
+        module.frappe.has_permission = lambda doctype, *args, **kwargs: doctype == "RQ Job"
         getter = desk_world_get_all(f"{module_name} health world", world or {})
         module.frappe.get_all = getter
         module.frappe.db.get_all = getter
+        # This fixture intentionally models an authorized reader of the
+        # virtual RQ Job doctype. A separate security regression covers
+        # the denied-reader registry fallback. Without this explicit grant,
+        # native RQ read permission is refused and the expected job rows
+        # never enter the desk projection.
+        original_has_permission = module.frappe.has_permission
+        def fixture_permission(doctype, permission=None, **kwargs):
+            if doctype == "RQ Job" and permission == "read":
+                return True
+            return original_has_permission(doctype, permission, **kwargs)
+        module.frappe.has_permission = fixture_permission
         return getattr(module, entry)()
 
     @staticmethod
@@ -2377,6 +2430,48 @@ class TeacherDeskWorldTests(unittest.TestCase):
         payload = self._payload(world=world)
         self.assertEqual(self._section(payload, "classes")["items"], [])
 
+    def test_ambiguous_employee_or_instructor_fails_closed(self):
+        for duplicate in ("Employee", "Instructor"):
+            world = self._world()
+            world[duplicate].append(dict(world[duplicate][0], name="AMBIGUOUS"))
+            with self.subTest(duplicate=duplicate):
+                self.assertEqual(self._section(self._payload(world=world), "classes")["items"], [])
+
+    def test_expired_and_future_assignments_reveal_no_roster_or_grades(self):
+        for updates in ({"effective_end": "2026-09-16"}, {"effective_start": "2026-09-18"}):
+            world = self._world()
+            world["TH Teaching Assignment"][0].update(updates)
+            with self.subTest(updates=updates):
+                payload = self._payload(world=world)
+                for section_id in ("classes", "today", "sessions", "students", "work"):
+                    self.assertEqual(self._section(payload, section_id)["items"], [])
+
+    def test_specific_session_assignment_does_not_authorize_other_sessions_or_grades(self):
+        world = self._world()
+        world["TH Teaching Assignment"][0]["course_schedule"] = "SES-1"
+        world["Course Schedule"].append(dict(world["Course Schedule"][0], name="SES-OTHER"))
+        payload = self._payload(world=world)
+        self.assertEqual([r["id"] for r in self._section(payload, "today")["items"]], ["SES-1"])
+        self.assertEqual(self._section(payload, "work")["items"], [])
+        self.assertEqual([r["id"] for r in self._section(payload, "students")["items"]], ["STU-1"])
+
+    def test_cancelled_postponed_and_future_sessions_cannot_offer_attendance(self):
+        world = self._world()
+        original = world["Course Schedule"][0]
+        world["Course Schedule"].extend([
+            dict(original, name="CANCELLED", th_session_status="Cancelled"),
+            dict(original, name="POSTPONED", th_session_status="Postponed"),
+            dict(original, name="FUTURE", schedule_date="2026-09-18", th_session_status="Scheduled"),
+        ])
+        payload = self._payload(world=world)
+        items = {r["id"]: r for r in self._section(payload, "sessions")["items"]}
+        for name in ("CANCELLED", "POSTPONED", "FUTURE"):
+            with self.subTest(name=name):
+                self.assertNotIn("action", items[name])
+                self.assertIsNone(items[name]["next_role"])
+        self.assertIn("cancelled", items["CANCELLED"]["next"])
+        self.assertIn("session date", items["FUTURE"]["next"])
+
     def test_wrong_role_is_refused_at_runtime(self):
         module = _import_desk("teacher", roles={"Reception"})
         with self.assertRaises(Exception) as ctx:
@@ -2407,7 +2502,53 @@ class TeacherDeskWorldTests(unittest.TestCase):
 
 
 class AdmissionMultiBranchProjectionTests(unittest.TestCase):
-    """Elevated reception views must apply ALL linked branch facts."""
+    """Elevated projections must apply ALL linked branch facts."""
+
+    def test_first_enrollment_scope_uses_exact_admission_intake_not_email_or_program_alone(self):
+        world = {
+            "Student Group": [{"name": "GA", "th_branch": "A"}, {"name": "GB", "th_branch": "B"}],
+            "Student Group Student": [
+                {"name": "RB", "parent": "GB", "student": "ST-MOVED", "active": 1},
+                {"name": "RA-MIX", "parent": "GA", "student": "ST-MIXED", "active": 1},
+                {"name": "RB-MIX", "parent": "GB", "student": "ST-MIXED", "active": 1},
+            ],
+            "Student Applicant": [{"name": "AP-A", "th_branch": "A"}],
+            "TH Admission Decision": [
+                {"name": "DA", "student_applicant": "AP-A", "native_student": "ST-NEW",
+                 "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+                {"name": "DM", "student_applicant": "AP-A", "native_student": "ST-MOVED",
+                 "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+            ],
+            "Program Enrollment": [
+                {"name": "PE-A", "student": "ST-NEW", "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+                {"name": "PE-WRONG", "student": "ST-NEW", "program": "GE", "academic_year": "1405", "academic_term": "T2"},
+                {"name": "PE-MOVED", "student": "ST-MOVED", "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+                {"name": "PE-MIXED", "student": "ST-MIXED", "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+            ],
+        }
+        desk = _import_desk("__init__", roles={"Academic Manager"})
+        desk.frappe.get_all = desk_world_get_all("intake isolation", world)
+        self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["A"]), ["PE-A"])
+        self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["B"]), ["PE-MOVED"])
+
+    def test_truncated_first_enrollment_candidates_do_not_expand_scope(self):
+        world = {
+            "Student Group": [], "Student Group Student": [],
+            "Student Applicant": [{"name": "AP-A", "th_branch": "A"}],
+            "TH Admission Decision": [
+                {"name": "DA", "student_applicant": "AP-A", "native_student": "ST-NEW",
+                 "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+            ],
+            "Program Enrollment": [
+                {"name": "PE-1", "student": "ST-NEW", "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+                {"name": "PE-2", "student": "ST-NEW", "program": "GE", "academic_year": "1405", "academic_term": "T2"},
+            ],
+        }
+        desk = _import_desk("__init__", roles={"Academic Manager"})
+        desk._CHAIN_LIMIT = 2
+        desk.frappe.get_all = desk_world_get_all("truncated intake", world)
+        with self.assertRaisesRegex(desk.frappe.ValidationError, "safe read limit"):
+            desk._branch_allowed_names("Program Enrollment", ["A"])
 
     def test_mixed_intake_and_multiple_rosters_are_not_exposed(self):
         world = {
