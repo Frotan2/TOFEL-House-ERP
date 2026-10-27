@@ -75,6 +75,42 @@ frappe.provide("toefl_house.role_desks");
 
 	const DESK_REGISTRY = "toefl_house.desk.available";
 
+	const SOURCE_DOCTYPES = Object.freeze({
+		"enrollment records list": "Program Enrollment",
+		"enrollment list": "Program Enrollment",
+		"admission decision list": "TH Admission Decision",
+		"attendance list": "Student Attendance",
+		"class schedule list": "Course Schedule",
+		"tuition fees list": "Fees",
+		"enrollment exits list": "TH Enrollment Exit",
+		"correction request list": "TH Correction Request",
+	});
+
+	function routeToSource(reference) {
+		const route = Object.prototype.hasOwnProperty.call(SOURCE_DOCTYPES, reference) ? ["List", SOURCE_DOCTYPES[reference]] :
+			(Array.isArray(reference) ? reference : String(reference || "").split("/"));
+		if (["List", "Form", "Tree"].includes(route[0]) && route[1]) {
+			// Native list routes are registered only for readable doctypes. A
+			// descriptive label is provenance, never a custom Page name. This
+			// check only controls navigation; native row permissions still apply.
+			if (frappe.model && frappe.model.can_read && frappe.model.can_read(route[1])) {
+				frappe.set_route(route);
+				return;
+			}
+			frappe.msgprint({ title: text("Source access required"),
+				message: text("Detailed source records require a staff role with permission for") + " " + escapeText(route[1]) + ".",
+				indicator: "blue" });
+			return;
+		}
+		if (route.length === 1 && /^th-[a-z0-9-]+$/.test(route[0])) {
+			frappe.set_route(route[0]);
+			return;
+		}
+		frappe.msgprint({ title: text("Source reference"),
+			message: text("This metric names its source, but no record preview is available from this desk. Open the relevant work desk with an authorized staff account."),
+			indicator: "blue" });
+	}
+
 	/* Same five tones and the same meaning as the command pages: the tone is
 	 * presentation only and an unmapped status falls back to neutral. */
 	const STATUS_TONES = Object.freeze({
@@ -275,8 +311,8 @@ frappe.provide("toefl_house.role_desks");
 				const drill = $("<a class='th-fact-drill' href='#'></a>").text(text(fact.drill.label || fact.drill.title || "View records"));
 				drill.on("click", (e) => {
 					e.preventDefault();
-					if (fact.drill.route) frappe.set_route(fact.drill.route);
-					else if (fact.drill.slug) frappe.set_route(fact.drill.slug);
+					if (fact.drill.route) routeToSource(fact.drill.route);
+					else if (fact.drill.slug) routeToSource(fact.drill.slug);
 				});
 				drill.appendTo(tile);
 			}
@@ -285,7 +321,7 @@ frappe.provide("toefl_house.role_desks");
 				drill2.on("click", () => {
 					if (fact.attendance_source === true) openAttendanceRecords({});
 					else if (fact.enrollment_source) openEnrollmentRecords(fact.enrollment_source === "waiting");
-					else frappe.set_route(fact.drill_path);
+					else routeToSource(fact.drill_path);
 				});
 				drill2.appendTo(tile);
 			}
@@ -316,7 +352,7 @@ frappe.provide("toefl_house.role_desks");
 				const chip = $("<button type='button' class='th-filter-chip'></button>").text(text(f.label));
 				if (f.active) chip.addClass("th-filter-chip--active");
 				chip.attr("aria-pressed", f.active ? "true" : "false");
-				if (f.route) chip.on("click", () => frappe.set_route(f.route));
+				if (f.route) chip.on("click", () => routeToSource(f.route));
 				chip.appendTo(bar);
 			});
 		}
@@ -328,7 +364,7 @@ frappe.provide("toefl_house.role_desks");
 			if (group.subtitle) $("<p class='th-exec-section-subtitle'></p>").text(text(group.subtitle)).appendTo(headerText);
 			if (group.drill) {
 				$("<button type='button' class='th-drill-link'></button>").text(text(group.drill.label || "View all"))
-					.on("click", () => frappe.set_route(group.drill.route || group.drill.slug))
+					.on("click", () => routeToSource(group.drill.route || group.drill.slug))
 					.appendTo(header);
 			}
 			const body = $("<div class='th-exec-section-body'></div>").appendTo(section);
@@ -380,12 +416,12 @@ frappe.provide("toefl_house.role_desks");
 			if (m.source) $("<span class='th-metric-card-source'></span>").text(text("Source: " + m.source)).appendTo(meta);
 			if (m.drill) {
 				const link = $("<button type='button' class='th-drill-link'></button>").text(text(m.drill.label || "View records"));
-				link.on("click", () => frappe.set_route(m.drill.route || m.drill.slug));
+				link.on("click", () => routeToSource(m.drill.route || m.drill.slug));
 				link.appendTo(meta);
 			}
 			if (m.drill_path) {
 				const link = $("<button type='button' class='th-drill-link'></button>").text(text("View records"));
-				link.on("click", () => frappe.set_route(m.drill_path));
+				link.on("click", () => routeToSource(m.drill_path));
 				link.appendTo(meta);
 			}
 		});
@@ -420,7 +456,7 @@ frappe.provide("toefl_house.role_desks");
 				const link = $("<button type='button' class='th-drill-link' style='margin-left:0.5rem'></button>").text(text("View"));
 				link.on("click", () => {
 					if (Object.prototype.hasOwnProperty.call(row.drill, "attendance_group")) openAttendanceRecords({ student_group: row.drill.attendance_group });
-					else frappe.set_route(row.drill.route || row.drill.slug);
+					else routeToSource(row.drill.route || row.drill.slug);
 				});
 				link.appendTo(valCell);
 			}
@@ -564,13 +600,13 @@ frappe.provide("toefl_house.role_desks");
 			if (item.drill) {
 				const drillBtn = $("<button type='button' class='btn btn-secondary btn-xs th-queue-action'></button>")
 					.text(text(item.drill.label || "View"))
-					.on("click", () => frappe.set_route(item.drill.route || item.drill.slug));
+					.on("click", () => routeToSource(item.drill.route || item.drill.slug));
 				drillBtn.appendTo(action);
 			}
 			if (item.drill_path) {
 				const drillBtn = $("<button type='button' class='btn btn-secondary btn-xs th-queue-action'></button>")
 					.text(text("View record"))
-					.on("click", () => frappe.set_route(item.drill_path));
+					.on("click", () => routeToSource(item.drill_path));
 				drillBtn.appendTo(action);
 			}
 		});
@@ -583,7 +619,7 @@ frappe.provide("toefl_house.role_desks");
 			$("<button type='button' class='btn btn-secondary btn-sm'></button>")
 				.text(text(link.title || link.slug))
 				.attr("aria-label", text("Open " + (link.title || link.slug)))
-				.on("click", () => frappe.set_route(link.slug))
+				.on("click", () => routeToSource(link.slug))
 				.appendTo(group);
 		});
 		return group;

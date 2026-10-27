@@ -437,7 +437,7 @@ function payloadWith(queueItems, factValue) {
 	};
 }
 
-function runScenario({ workPayload, failFirstWork = false, failLookup = false, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null }) {
+function runScenario({ workPayload, failFirstWork = false, failLookup = false, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null, readableSources = [] }) {
 	const calls = [];
 	const dialogs = [];
 	const routed = [];
@@ -449,6 +449,7 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, c
 		provide() {},
 		require() {},
 		set_route(route) { routed.push(route); },
+		model: { can_read(doctype) { return readableSources.includes(doctype); } },
 		msgprint(opts) { printed.push(opts); },
 		ui: {
 			make_app_page() { return { body, main: { addClass() {} } }; },
@@ -775,6 +776,26 @@ assert(stylesheet.includes(":focus-visible"), "keyboard focus must stay visible"
 	assert(!markup.includes("<img"), "source record values must be escaped");
 }
 
+{
+	const payload = payloadWith([], "2");
+	payload.sections[0].facts[0].drill_path = "enrollment records list";
+	const denied = runScenario({ workPayload: payload });
+	findAll(denied.body, "btn-secondary").find((node) => node.texts.includes("View source records")).click();
+	assert.deepStrictEqual(denied.routed, [], "a descriptive source label must never become a Page route");
+	assert(denied.printed.some((message) => message.title === "Source access required"));
+	const allowed = runScenario({ workPayload: payload, readableSources: ["Program Enrollment"] });
+	findAll(allowed.body, "btn-secondary").find((node) => node.texts.includes("View source records")).click();
+	assert.deepStrictEqual(JSON.parse(JSON.stringify(allowed.routed)), [["List", "Program Enrollment"]]);
+	for (const source of ["List/Salary Slip", "List/" + HOSTILE, "__proto__"]) {
+		payload.sections[0].facts[0].drill_path = source;
+		const restricted = runScenario({ workPayload: payload });
+		findAll(restricted.body, "btn-secondary").find((node) => node.texts.includes("View source records")).click();
+		assert.deepStrictEqual(restricted.routed, []);
+		assert(!restricted.printed.some((message) => /<img/i.test(message.message)), "source messages must escape native labels");
+	}
+}
+
 console.log(`Role desk contract OK (${Object.keys(EXPECTED).length} desks, ` +
 	`${Object.keys(actionFields).length} guided actions)`);
+
 
