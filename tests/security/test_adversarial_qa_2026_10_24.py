@@ -600,7 +600,9 @@ class BaselineSecurityRegressionTests(unittest.TestCase):
         scope = self._source("toefl_house/teaching/__init__.py", "_roster_read")
         self.assertNotIn("native.get_student_group_students =", scope)
         record = self._source("toefl_house/teaching/__init__.py", "_record_attendance")
-        self.assertIn("_TERMINAL_CLASS_STATUSES", record)
+        # Stronger than merely excluding terminal states: Planned is not
+        # attendance-eligible either.
+        self.assertIn('group.th_class_status != "Active"', record)
         for endpoint in ("record_attendance", "record_instructor_attendance"):
             wrapper = self._source("toefl_house/teaching/__init__.py", endpoint)
             self.assertIn("_record_attendance(", wrapper)

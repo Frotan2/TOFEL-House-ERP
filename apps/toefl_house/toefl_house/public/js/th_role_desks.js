@@ -1007,6 +1007,13 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "class_end_date", label: "Last day (blank = from the level's duration)", fieldtype: "Date" },
 			{ fieldname: "delivery_mode", label: "Delivery mode", fieldtype: "Select", options: "On-site\nOnline\nHybrid", default: "On-site" },
 			{ fieldname: "branch", label: "Branch (optional)", fieldtype: "Data" },
+			{ fieldname: "students", label: "Student IDs (optional, comma-separated)", fieldtype: "Data",
+			  description: "Use submitted enrollment students only. Blank selects the full intake." },
+		],
+		"toefl_house.teaching.add_class_member": [
+			{ fieldname: "student_group", label: "Class", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "student", label: "Student ID", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "override", label: "Capacity override (only when full)", fieldtype: "Data" },
 		],
 		"toefl_house.teaching.transition_class": [
 			{ fieldname: "student_group", label: "Class", fieldtype: "Data", reqd: 1 },

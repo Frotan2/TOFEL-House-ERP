@@ -351,7 +351,8 @@ def generate_timetable(request_key, student_group, template, start_date,
         blocked = academic_calendar.blocked_dates(plan)
         try:
             candidates = timetables.expand_slots(
-                slots, start, end, terms["teaching_days"], blocked)
+                slots, start, end, terms["teaching_days"], blocked,
+                calendar_plan=plan)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         if not candidates:
@@ -378,11 +379,20 @@ def generate_timetable(request_key, student_group, template, start_date,
                 raise frappe.ValidationError(
                     f"{candidate['schedule_date']} {candidate['from_time']}: {exc}") from exc
             generated.append(_session_result(session))
+        skipped_fridays = []
+        if any(slot["weekday"] == "Fri" for slot in slots):
+            day = date.fromisoformat(start)
+            while day <= date.fromisoformat(end):
+                iso = day.isoformat()
+                if day.weekday() == 4 and plan.get(iso) != "Working Day":
+                    skipped_fridays.append(iso)
+                day += timedelta(days=1)
         result = {
             "student_group": group_name, "template": template_code,
             "generated": len(generated), "sessions": generated,
-            "skipped_calendar_days": sorted(blocked), "policy_effective_from":
-            terms.get("effective_from", ""),
+            "skipped_calendar_days": sorted(blocked),
+            "skipped_fridays": skipped_fridays,
+            "policy_effective_from": terms.get("effective_from", ""),
         }
         return result, dict(target=group_name,
                             after_hash=digest([group_name, template_code,

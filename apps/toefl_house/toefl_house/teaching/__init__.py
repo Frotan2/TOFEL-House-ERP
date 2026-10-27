@@ -56,6 +56,8 @@ is validated in, the seat arithmetic, and what each refusal means) is
 """
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+import json
+
 import frappe
 from toefl_house.api import _execute
 from toefl_house.academic.rules import resolve_duration
@@ -260,20 +262,43 @@ def _suggested_end_date(start_date_str, program_name):
     return (start + timedelta(**kwargs)).isoformat()
 
 
+def _selected_class_students(value):
+    """Optional subset of the native intake, not an alternate roster source."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if isinstance(value, str):
+        if len(value) > 20000:
+            raise frappe.ValidationError("Student selection is too large")
+        text = value.strip()
+        if text.startswith("["):
+            try:
+                value = json.loads(text)
+            except ValueError as exc:
+                raise frappe.ValidationError("Student selection must be a valid JSON list") from exc
+        else:
+            value = text.split(",")
+    if not isinstance(value, list) or not 1 <= len(value) <= 200:
+        raise frappe.ValidationError("Select between 1 and 200 students")
+    if any(not isinstance(name, str) or not name.strip() or len(name.strip()) > 140
+           for name in value):
+        raise frappe.ValidationError("Each selected student must be a valid Student ID")
+    names = [name.strip() for name in value]
+    if len(set(names)) != len(names):
+        raise frappe.ValidationError("A selected student appears more than once")
+    return names
+
+
 @frappe.whitelist(methods=["POST"])
 def create_student_group(request_key, group_name, program, academic_year, academic_term="",
                          max_strength=0, class_start_date=None, class_end_date=None,
-                         delivery_mode="On-site", branch=""):
-    """Roster a class strictly from submitted native Program Enrollments.
+                         delivery_mode="On-site", branch="", students=None):
+    """Create a class from submitted native Program Enrollments.
 
-    The roster is derived from the native enrollment ledger (no manual student
-    lists are accepted), so an unenrolled learner cannot enter a class.
-    Capacity and duplicate students remain native Student Group validations.
-
-    The class is created in Planned status. The governing TH Level Duration is
-    used only to suggest a default class end date when one is not supplied;
-    the actual dates stored are operational facts and will not be rewritten by
-    later policy changes.
+    With no selection, retain the original all-eligible-intake behavior. A
+    scheduler may instead select a subset to split an intake into classes; all
+    selected IDs are checked against the same submitted, branch-scoped native
+    intake. No supplied name or unsubmitted enrollment becomes roster truth.
+    The stored common dates do not change when a learner joins later.
     """
     def work(actor):
         try:
@@ -334,13 +359,32 @@ def create_student_group(request_key, group_name, program, academic_year, academ
                     "No governing duration policy for this level; supply class_end_date explicitly")
         if end < start:
             raise frappe.ValidationError("Class end date cannot precede start date")
+        if term_name:
+            term = frappe.db.get_value(
+                TERM, term_name, ["academic_year", "term_start_date", "term_end_date"],
+                as_dict=True)
+            if not term or term.get("academic_year") != year_name:
+                raise frappe.ValidationError("The academic term must belong to the selected academic year")
+            term_start, term_end = str(term.get("term_start_date") or ""), str(term.get("term_end_date") or "")
+            if not term_start or not term_end or start < term_start or end > term_end:
+                raise frappe.ValidationError(
+                    "The entire class window must fit within its native academic term")
+        selected = _selected_class_students(students)
         frappe.db.sql("select name from `tabProgram` where name=%s for update", (program_name,))
         from education.education.doctype.student_group.student_group import get_program_enrollment
         roster_rows = distinct_roster_rows(
             get_program_enrollment(year_name, term_name or None, program_name))
-        from toefl_house.command_scope import actor_branches, roster_for_branch
-        if actor_branches(actor) is not None:
-            roster_rows = roster_for_branch(roster_rows, branch_name)
+        from toefl_house.command_scope import roster_for_branch
+        # The class branch is a class fact, even for an unrestricted HQ actor.
+        # A selected branch must never silently pull in a different branch.
+        roster_rows = roster_for_branch(roster_rows, branch_name)
+        if selected is not None:
+            selected_names = set(selected)
+            eligible_names = {row["student"] for row in roster_rows}
+            if not selected_names <= eligible_names:
+                raise frappe.ValidationError(
+                    "Every selected student must have a submitted enrollment for this intake and branch")
+            roster_rows = [row for row in roster_rows if row["student"] in selected_names]
         if not roster_rows:
             raise frappe.ValidationError("No submitted program enrollment for this intake and branch")
         if len(roster_rows) > capacity:
@@ -359,7 +403,7 @@ def create_student_group(request_key, group_name, program, academic_year, academ
         group.flags.ignore_permissions = True
         group.flags.ignore_links = True
         group.insert(ignore_permissions=True)
-        students = sorted(row["student"] for row in roster_rows)
+        student_names = sorted(row["student"] for row in roster_rows)
         suggested = _suggested_end_date(start, program_name)
         result = {
             "name": group.name,
@@ -367,8 +411,8 @@ def create_student_group(request_key, group_name, program, academic_year, academ
             "academic_year": year_name,
             "academic_term": term_name,
             "max_strength": capacity,
-            "students": len(students),
-            "roster": students,
+            "students": len(student_names),
+            "roster": student_names,
             "class_start_date": start,
             "class_end_date": end,
             "class_status": "Planned",
@@ -378,16 +422,20 @@ def create_student_group(request_key, group_name, program, academic_year, academ
             "end_date_was_suggested": (end == suggested),
         }
         return result, dict(target=group.name,
-                            after_hash=digest([group.name, program_name, capacity, students,
+                            after_hash=digest([group.name, program_name, capacity, student_names,
                                                start, end, mode, branch_name]))
 
-    return _execute("create_student_group", request_key,
-                    {"group_name": group_name, "program": program,
-                     "academic_year": academic_year, "academic_term": academic_term or "",
-                     "max_strength": max_strength,
-                     "class_start_date": class_start_date or "",
-                     "class_end_date": class_end_date or "",
-                     "delivery_mode": delivery_mode, "branch": branch or ""}, work)
+    payload = {"group_name": group_name, "program": program,
+               "academic_year": academic_year, "academic_term": academic_term or "",
+               "max_strength": max_strength,
+               "class_start_date": class_start_date or "",
+               "class_end_date": class_end_date or "",
+               "delivery_mode": delivery_mode, "branch": branch or ""}
+    # Old receipts were hashed without this optional argument. Omitting it on
+    # legacy calls preserves retry/idempotency across an in-place update.
+    if students is not None and not (isinstance(students, str) and not students.strip()):
+        payload["students"] = students
+    return _execute("create_student_group", request_key, payload, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -517,28 +565,38 @@ def _require_own_instructor_session(actor, session, schedule_name):
         raise frappe.PermissionError("This login needs one active linked employee")
     instructors = frappe.get_all(
         "Instructor", filters={"employee": employees[0]["name"]},
-        fields=["name", "status"], limit_page_length=3)
-    # Multiple Instructor links on one Employee are not automatically a
-    # privilege escalation: authorize only the actual session instructor.
-    owning = [i for i in instructors
-              if i["name"] == session.instructor and i.get("status") != "Left"]
-    if len(owning) != 1:
-        raise frappe.PermissionError("This session belongs to another instructor")
-    day = str(session.schedule_date)
+        fields=["name", "status"], limit_page_length=100)
+    active = [row for row in instructors if row.get("status") != "Left"]
+    if len(instructors) >= 100 or len(active) != 1 or active[0]["name"] != session.instructor:
+        raise frappe.PermissionError("This session belongs to another or ambiguous instructor")
+    # Both the session date and today must be covered. An assignment that
+    # has ended is not perpetual permission to read or change a former class.
+    try:
+        day = validate_schedule_date(str(session.schedule_date or ""))
+        current = validate_schedule_date(str(frappe.utils.today()))
+    except ValueError as exc:
+        raise frappe.PermissionError("The session assignment date is invalid") from exc
     assignments = frappe.get_all(
         "TH Teaching Assignment",
         filters={"student_group": session.student_group,
                  "instructor": session.instructor,
-                 "effective_start": ("<=", day)},
-        fields=["effective_end", "course_schedule"],
+                 "effective_start": ("<=", min(day, current))},
+        fields=["effective_start", "effective_end", "course_schedule"],
         limit_page_length=100)
-    if not any((not row.get("effective_end")
-                or str(row["effective_end"]) >= day)
-               and (not row.get("course_schedule")
-                    or row["course_schedule"] == schedule_name)
-               for row in assignments):
+
+    def covers_both(row):
+        try:
+            start = validate_schedule_date(str(row.get("effective_start") or ""))
+            end = (validate_schedule_date(str(row["effective_end"]))
+                   if row.get("effective_end") else None)
+        except ValueError:
+            return False
+        return (start <= min(day, current) and (not end or end >= max(day, current))
+                and (not row.get("course_schedule") or row["course_schedule"] == schedule_name))
+
+    if not any(covers_both(row) for row in assignments):
         raise frappe.PermissionError(
-            "There is no active teaching assignment for this session")
+            "There is no current teaching assignment covering this session")
 
 
 def _record_attendance(request_key, course_schedule, statuses, *,
@@ -562,18 +620,29 @@ def _record_attendance(request_key, course_schedule, statuses, *,
                       (schedule_name,))
         session = frappe.db.get_value(SCHEDULE, schedule_name,
                                       ["student_group", "instructor", "schedule_date"], as_dict=True)
+        if not session:
+            raise frappe.ValidationError("Unknown course schedule")
+        try:
+            session_day = validate_schedule_date(str(session.schedule_date or ""))
+        except ValueError as exc:
+            raise frappe.ValidationError("The session has no valid date") from exc
         if own_instructor:
             # This runs inside the Instructor-only audit command, BEFORE
             # accessing any roster or creating a native attendance row.
             _require_own_instructor_session(actor, session, schedule_name)
+        # Native Education's future-date validator is not called by its
+        # Student Attendance.validate. A future class cannot already have
+        # occurred; leave applications are a separate native workflow.
+        if session_day > frappe.utils.today():
+            raise frappe.ValidationError("Attendance cannot be recorded for a future session")
         # A submitted mark is valid only for an active class and active
         # roster member; exited students keep their history but cannot be
         # marked anew merely because their old child row remains.
         group = frappe.db.get_value(
             GROUP, session.student_group,
             ["disabled", "th_class_status"], as_dict=True)
-        if not group or group.disabled or group.th_class_status in _TERMINAL_CLASS_STATUSES:
-            raise frappe.ValidationError("Attendance is closed for this student group")
+        if not group or group.disabled or group.th_class_status != "Active":
+            raise frappe.ValidationError("Attendance is closed unless this student group is Active")
         # Mission 3: only a session that will actually meet carries marks, and
         # a bounded suspension window pauses Present marks without hiding the
         # Absent/Leave record.

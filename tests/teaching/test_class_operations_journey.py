@@ -203,6 +203,9 @@ class ClassOperationsJourneyTests(unittest.TestCase):
             "journey-suspend-0001", "GRP-A", "STU-1", "medical leave",
             "2026-09-30", "2026-09-30")
         last = generated["sessions"][-1]["name"]
+        # Advance the synthetic clock to the scheduled session; attendance is
+        # a record of an actual day, not a future planning entry.
+        self.site.today = "2026-09-30"
         with self.assertRaises(ValidationError) as ctx:
             self.ops.teaching.record_attendance(
                 "journey-attend-0001", last, {"STU-1": "Present"})
@@ -242,7 +245,7 @@ class ClassOperationsJourneyTests(unittest.TestCase):
                           return_value=True):
             pending = self.ops.transfers.request_class_transfer(
                 "journey-transfer-0003", "STU-3", "GRP-A", "GRP-B",
-                "second transfer request", "2026-09-26")
+                "second transfer request", "2026-10-01")
             with self.assertRaises(PermissionError_) as ctx:
                 self.ops.transfers.approve_class_transfer(
                     "journey-transfer-0004", pending["name"])

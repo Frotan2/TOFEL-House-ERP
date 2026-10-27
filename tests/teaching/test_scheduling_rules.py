@@ -194,6 +194,31 @@ class TimetableGenerationTests(SchedulingTestBase):
         self.assertEqual(stored["th_session_kind"], "Regular")
         self.assertEqual(stored["th_session_status"], "Scheduled")
 
+    def test_weekly_friday_is_skipped_without_blocking_saturday(self):
+        self.ops.append_policy("2026-09-02", teaching_days=("Fri", "Sat"))
+        template = self._template(slots=[
+            {"weekday": weekday, "from_time": "09:00:00", "to_time": "10:00:00",
+             "course": "ENG-101", "room": "ROOM-1", "instructor": "INS-1"}
+            for weekday in ("Fri", "Sat")])
+        result = self.ops.scheduling.generate_timetable(
+            "generate-friday-0001", "GRP-A", template, "2026-09-25", "2026-10-03")
+        self.assertEqual([r["schedule_date"] for r in result["sessions"]],
+                         ["2026-09-26", "2026-10-03"])
+        self.assertEqual(result["skipped_fridays"], ["2026-09-25", "2026-10-02"])
+
+    def test_only_a_dated_owner_exception_reopens_friday_in_a_timetable(self):
+        self.ops.append_policy("2026-09-02", teaching_days=("Sat",))
+        template = self._template(slots=[
+            {"weekday": weekday, "from_time": "09:00:00", "to_time": "10:00:00",
+             "course": "ENG-101", "room": "ROOM-1", "instructor": "INS-1"}
+            for weekday in ("Fri", "Sat")])
+        self.ops.seed_calendar(days=[{"date": "2026-09-25", "kind": "Working Day"}])
+        result = self.ops.scheduling.generate_timetable(
+            "generate-friday-0002", "GRP-A", template, "2026-09-25", "2026-10-03")
+        self.assertEqual([r["schedule_date"] for r in result["sessions"]],
+                         ["2026-09-25", "2026-09-26", "2026-10-03"])
+        self.assertEqual(result["skipped_fridays"], ["2026-10-02"])
+
     def test_generation_is_bounded_by_the_policy_horizon(self):
         template = self._template()
         with self.assertRaises(ValidationError) as ctx:
