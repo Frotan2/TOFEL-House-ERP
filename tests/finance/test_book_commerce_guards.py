@@ -239,13 +239,18 @@ class ReturnSeamTests(unittest.TestCase):
 
     def test_cancelling_a_submitted_full_return_is_allowed(self):
         self._seed_full_return()
-        doc = return_doc(
-            [{"item_code": "SYN-BOOK", "qty": -2.0, "warehouse": "WH-A",
-              "rate": 300.0, "amount": -600.0, "net_amount": -600.0},
-             {"item_code": "SYN-BOOK", "qty": -1.0, "warehouse": "WH-B",
-              "rate": 300.0, "amount": -300.0, "net_amount": -300.0}],
-            -900.0, name="SYN-RET", docstatus=1)
-        self.assertTrue(self.permitted(doc))
+        rows = [{"item_code": "SYN-BOOK", "qty": -2.0, "warehouse": "WH-A",
+                 "rate": 300.0, "amount": -600.0, "net_amount": -600.0},
+                {"item_code": "SYN-BOOK", "qty": -1.0, "warehouse": "WH-B",
+                 "rate": 300.0, "amount": -300.0, "net_amount": -300.0}]
+        # Post-submit edit keeps docstatus 1; Frappe's cancel flips the
+        # in-memory docstatus to 2 before before_cancel hooks run, while
+        # the database row the prior-return query reads is still 1.
+        for docstatus in (1, 2):
+            with self.subTest(docstatus=docstatus):
+                doc = return_doc(rows, -900.0, name="SYN-RET",
+                                 docstatus=docstatus)
+                self.assertTrue(self.permitted(doc))
 
     def test_a_second_full_return_after_the_first_is_still_refused(self):
         self._seed_full_return()

@@ -385,8 +385,12 @@ def book_return_permitted(doc, original):
             current_rates[key] = current_amounts[key] / qty
     # On cancel/post-submit-edit the return is itself a submitted prior
     # return of the sale; judging it as an additional return on top of
-    # itself would refuse the authorized native reversal.
-    exclude = doc.get("name") if int(doc.get("docstatus") or 0) == 1 else None
+    # itself would refuse the authorized native reversal. Frappe sets
+    # docstatus=2 in memory *before* before_cancel hooks run (the
+    # database still holds 1, which is what prior_returns_for reads), so
+    # both submitted states mark "already a prior return".
+    exclude = doc.get("name") \
+        if int(doc.get("docstatus") or 0) in (1, 2) else None
     prior, credited = prior_returns_for(original.get("name"), exclude=exclude)
     if not return_quantities_ok(original_items, prior, current_items):
         return False
