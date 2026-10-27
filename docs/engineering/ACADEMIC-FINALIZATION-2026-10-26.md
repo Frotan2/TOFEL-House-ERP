@@ -45,7 +45,7 @@ branch and `main` were not changed; the PR is intended to remain unmerged.
 
 | Kind | Exact evidence | Meaning |
 | --- | --- | --- |
-| Local Python | `.venv/bin/python -m unittest discover -s tests -t . -q`: **2,608 run, 13 skipped, 0 failures**, 96.388 s | Offline suite; many Frappe/native/site dependencies are stubbed. |
+| Local Python | `.venv/bin/python -m unittest discover -s tests -t . -q`: **2,609 run, 13 skipped, 0 failures**, 100.051 s | Offline suite; many Frappe/native/site dependencies are stubbed. |
 | Local lint/dependencies | `.venv/bin/ruff check .` (Ruff 0.16.8), `.venv/bin/python -m pip check`, `git diff --check`: passed | Static and environment checks, not operational acceptance. |
 | Local Node | Node 22.22.3: product ingress **6/6**, realtime guard, command pages **14**, design system, role desks **8 / 76 guided actions**, and portal DOM/promise contract: passed | Local HTTP/DOM stubs; not a real Frappe web session. |
 | Real Frappe / hosted | Native qualification was extended with synthetic future-date and expired-assignment checks; the existing two-teacher matrix is adapted for branch-safe roster fixtures. **Not run locally**; inspect exact-head GitHub checks and artifacts on this PR. | Prior PR #87 checks apply only to its earlier revisions and cannot certify this change. |

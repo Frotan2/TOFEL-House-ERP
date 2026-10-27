@@ -818,6 +818,15 @@ class StudentPortalTests(BaseHarness):
         attendance = self.student_portal.get_my_attendance()
         self.assertEqual(attendance[0]["date_shamsi"], "02 عقرب 1405")
 
+    def test_solar_display_preserves_native_date_and_fails_closed_outside_supported_range(self):
+        from datetime import date
+        rows = [{"date": date(2026, 3, 21)}, {"date": "1800-01-01"}]
+        projected = self.student_portal.with_solar_date(rows, "date", "date_shamsi")
+        self.assertEqual(projected[0]["date_shamsi"], "01 حمل 1405")
+        self.assertIsNone(projected[1]["date_shamsi"])
+        self.assertEqual(projected[1]["date"], "1800-01-01")
+        self.assertNotIn("date_shamsi", rows[0])
+
     def test_student_sees_own_attendance_only(self):
         self._set_session("alice@example.com")
         rows = self.student_portal.get_my_attendance()

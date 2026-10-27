@@ -1,4 +1,8 @@
-"""Explicit Afghan Solar Hijri display dates without changing native dates."""
+"""Explicit Afghan Solar Hijri display dates without changing native dates.
+
+These are civil-date labels, not timezone conversions; a site must still be
+configured for Asia/Kabul when choosing the current operating date.
+"""
 
 
 def with_solar_date(rows, source_field, display_field):
