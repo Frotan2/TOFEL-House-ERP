@@ -399,6 +399,64 @@ class StockDocumentGuardTests(unittest.TestCase):
             roles=()))
 
 
+
+class BookWarehouseBoundaryTests(unittest.TestCase):
+    """Warehouse-scoped stock managers cannot move other branches' books."""
+
+    def setUp(self):
+        self.db = FakeDB()
+        self.db.add("Item", name="SYN-BOOK", item_group="Books",
+                    is_stock_item=1)
+        self.db.add("Item Group", name="Books", lft=1, rgt=10)
+        self.db.add("User Permission", user="stock@example.test",
+                    allow="Warehouse", for_value="WH-OWN")
+        self.books, _, _ = load_modules(
+            self.db, user="stock@example.test", roles=("Stock Manager",))
+
+    def stock_entry(self, source=None, destination=None):
+        return Doc(company="TOEFL House", remarks="Counted book transfer",
+                   items=[Doc(item_code="SYN-BOOK", qty=2,
+                              s_warehouse=source, t_warehouse=destination,
+                              basic_rate=175.0)])
+
+    def reconciliation(self, warehouse):
+        return Doc(company="TOEFL House",
+                   purpose="Physical stock count 2026-10-27",
+                   items=[Doc(item_code="SYN-BOOK", warehouse=warehouse)])
+
+    def test_book_receipt_denies_out_of_scope_destination(self):
+        self.assertIsNone(self.books.guard_stock_entry(
+            self.stock_entry(destination="WH-OWN")))
+        with self.assertRaisesRegex(_ValidationError, "warehouse"):
+            self.books.guard_stock_entry(
+                self.stock_entry(destination="WH-FOREIGN"))
+
+    def test_book_issue_denies_out_of_scope_source(self):
+        self.assertIsNone(self.books.guard_stock_entry(
+            self.stock_entry(source="WH-OWN")))
+        with self.assertRaisesRegex(_ValidationError, "warehouse"):
+            self.books.guard_stock_entry(
+                self.stock_entry(source="WH-FOREIGN"))
+
+    def test_book_transfer_checks_both_warehouses(self):
+        with self.assertRaisesRegex(_ValidationError, "warehouse"):
+            self.books.guard_stock_entry(
+                self.stock_entry(source="WH-OWN",
+                                 destination="WH-FOREIGN"))
+        self.db.add("User Permission", user="stock@example.test",
+                    allow="Warehouse", for_value="WH-FOREIGN")
+        self.assertIsNone(self.books.guard_stock_entry(
+            self.stock_entry(source="WH-OWN",
+                             destination="WH-FOREIGN")))
+
+    def test_physical_stock_correction_is_warehouse_scoped(self):
+        self.assertIsNone(self.books.guard_stock_reconciliation(
+            self.reconciliation("WH-OWN")))
+        with self.assertRaisesRegex(_ValidationError, "warehouse"):
+            self.books.guard_stock_reconciliation(
+                self.reconciliation("WH-FOREIGN"))
+
+
 class WiringTests(unittest.TestCase):
     def test_hooks_pin_the_book_stock_guards_on_all_seams(self):
         hooks = (APP / "hooks.py").read_text(encoding="utf-8")
