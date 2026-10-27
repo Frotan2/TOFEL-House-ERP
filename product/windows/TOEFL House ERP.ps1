@@ -11,6 +11,7 @@ $productRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $worker = Join-Path $PSScriptRoot "Run TOEFL House ERP.ps1"
 $credentialFile = Join-Path $productRoot "data\sites\toeflhouse.localhost\private\first-run-credentials.txt"
 $guideFile = Join-Path $PSScriptRoot "OWNER ACCEPTANCE GUIDE.txt"
+$handbookFile = Join-Path $PSScriptRoot "OWNER HANDBOOK.txt"
 $dailyGuideFile = Join-Path $PSScriptRoot "DAILY USE GUIDE.txt"
 $updaterStrings = Join-Path $PSScriptRoot "updater-strings.json"
 $updateResultFile = Join-Path $productRoot "data\updates\last-result.json"
@@ -84,6 +85,7 @@ $checkButton = New-LauncherButton "Check This PC" 30 339 165
 $guideButton = New-LauncherButton "Owner Readiness Guide" 205 339 235
 $dailyGuideButton = New-LauncherButton "How to Use" 450 339 190
 $copyStatusButton = New-LauncherButton "Copy Safe Support Status" 30 395 275
+$handbookButton = New-LauncherButton "Owner Handbook" 315 395 220
 # Updates are deliberately separate from Install and Repair: a customer can
 # check for a signed release without any lifecycle action being reachable.
 $updateButton = New-LauncherButton "Check for Updates" 30 451 269
@@ -187,11 +189,12 @@ function Show-UpdateResult {
 }
 
 function Set-Busy([bool]$busy) {
-    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton, $dailyGuideButton, $copyStatusButton, $updateButton, $installUpdateButton)) {
+    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton, $handbookButton, $dailyGuideButton, $copyStatusButton, $updateButton, $installUpdateButton)) {
         $button.Enabled = -not $busy
     }
     $credentials.Enabled = (-not $busy) -and (Test-Path -LiteralPath $credentialFile -PathType Leaf)
     $guideButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $guideFile -PathType Leaf)
+    $handbookButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $handbookFile -PathType Leaf)
     $dailyGuideButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $dailyGuideFile -PathType Leaf)
     # A finished, read-only status is safe to copy even if the child process
     # is still closing, and even if Docker cannot be reached on this PC.
@@ -292,6 +295,15 @@ $guideButton.Add_Click({
         Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $guideFile + '"')
     } else {
         $status.Text = "Owner readiness guide missing; ask your provider for a complete package."
+    }
+})
+$handbookButton.Add_Click({
+    # Offline no-code Owner operating guide. Reading it changes no student,
+    # payment, account, Docker volume, backup or operational release setting.
+    if (Test-Path -LiteralPath $handbookFile -PathType Leaf) {
+        Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $handbookFile + '"')
+    } else {
+        $status.Text = "Owner handbook is missing. Ask your provider for a complete installer."
     }
 })
 $dailyGuideButton.Add_Click({
@@ -495,9 +507,11 @@ if ($SmokeTest) {
         $updateButton.Text -ne "Check for Updates" -or
         $installUpdateButton.Text -ne "Install Update" -or
         $guideButton.Text -ne "Owner Readiness Guide" -or
+        $handbookButton.Text -ne "Owner Handbook" -or
         $dailyGuideButton.Text -ne "How to Use" -or
         $copyStatusButton.Text -ne "Copy Safe Support Status" -or
         -not (Test-Path -LiteralPath $guideFile -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $handbookFile -PathType Leaf) -or
         -not (Test-Path -LiteralPath $dailyGuideFile -PathType Leaf)) {
         throw "Graphical lifecycle actions were not initialized."
     }

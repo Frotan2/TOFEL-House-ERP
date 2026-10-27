@@ -18,6 +18,7 @@ on:
       - "docs/CUSTOMER-UPDATES.md"
       - "docs/engineering/SAFE-UPDATES.md"
       - "tests/foundation/test_customer_install_package.py"
+      - "tests/foundation/test_windows_delivery_finalization.py"
       - "tests/foundation/test_windows_pc_inventory.py"
       - "tests/foundation/test_windows_service_readiness.ps1"
       - ".github/workflows/windows-customer-package.yml"
@@ -78,6 +79,11 @@ jobs:
         run: |
           python -m unittest tests.foundation.test_windows_pc_inventory -v
           if ($LASTEXITCODE -ne 0) { throw "PC storage inventory regression failed." }
+      - name: Verify Windows delivery finalization contracts
+        shell: powershell
+        run: |
+          python -m unittest tests.foundation.test_windows_delivery_finalization -v
+          if ($LASTEXITCODE -ne 0) { throw "Windows delivery finalization regression failed." }
       - name: Verify exact service and HTTP readiness decisions
         shell: powershell
         run: |
@@ -169,6 +175,7 @@ jobs:
             'product/windows/Check This PC.ps1',
             'product/windows/Test Existing Installation.ps1',
             'product/windows/OWNER ACCEPTANCE GUIDE.txt',
+            'product/windows/OWNER HANDBOOK.txt',
             'product/windows/DAILY USE GUIDE.txt',
             'product/release/toefl-house-erp-app.tar',
             'product/release/toefl-house-erp-app.tar.sha256',
@@ -190,6 +197,10 @@ jobs:
           $ownerGuide = [System.IO.File]::ReadAllText((Join-Path $kit 'product/windows/OWNER ACCEPTANCE GUIDE.txt'))
           if ($ownerGuide -notmatch 'RELEASE DECISION: NO-GO' -or $ownerGuide -notmatch 'PRESERVATION') {
             throw "Customer kit omitted its Owner hold and safe first-check guidance."
+          }
+          $handbook = [System.IO.File]::ReadAllText((Join-Path $kit 'product/windows/OWNER HANDBOOK.txt'))
+          if ($handbook -notmatch 'NO-GO' -or $handbook -notmatch 'Check for Updates' -or $handbook -notmatch 'Install Update') {
+            throw "Customer kit omitted its Owner handbook or its gated-update guidance."
           }
           # A corrupt first-run kit must be rejected before creating local data.
           # Use a separate synthetic copy so the valid package stays unchanged.
