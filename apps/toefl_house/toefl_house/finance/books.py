@@ -302,12 +302,16 @@ def book_sale_terms_ok(doc):
     items = getattr(doc, "items", None) or []
     if not price_list or not currency or not customer or not items:
         return False
-    # A hand-typed document-level discount reprices every line away from
-    # the configured prices; discounts belong to native Pricing Rules.
-    manual_discount = (
+    # A Pricing Rule applied to one book line does not authorize a separate
+    # invoice-header discount. Such a discount changes the sale total even
+    # when every line's configured rate has been independently validated.
+    # For book sales, native line Pricing Rules may lower the line rate;
+    # unlinked header discounts are always refused, including when some
+    # other line carries a Pricing Rule.
+    invoice_discount = (
         abs(_flt(getattr(doc, "discount_amount", 0))) > 0.005
         or abs(_flt(getattr(doc, "additional_discount_percentage", 0))) > 1e-9)
-    if manual_discount and not any(_has_pricing_rule(row) for row in items):
+    if invoice_discount:
         return False
     on_date = getattr(doc, "posting_date", None)
     lines, prices, requested, available = [], {}, {}, {}
