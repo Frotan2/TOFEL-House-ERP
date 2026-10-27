@@ -2116,6 +2116,17 @@ class OperationsHealthWorldTests(unittest.TestCase):
         getter = desk_world_get_all(f"{module_name} health world", world or {})
         module.frappe.get_all = getter
         module.frappe.db.get_all = getter
+        # This fixture intentionally models an authorized reader of the
+        # virtual RQ Job doctype. A separate security regression covers
+        # the denied-reader registry fallback. Without this explicit grant,
+        # native RQ read permission is refused and the expected job rows
+        # never enter the desk projection.
+        original_has_permission = module.frappe.has_permission
+        def fixture_permission(doctype, permission=None, **kwargs):
+            if doctype == "RQ Job" and permission == "read":
+                return True
+            return original_has_permission(doctype, permission, **kwargs)
+        module.frappe.has_permission = fixture_permission
         return getattr(module, entry)()
 
     @staticmethod
