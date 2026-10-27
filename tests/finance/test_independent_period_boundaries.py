@@ -3,7 +3,7 @@
 These are PURE source tests, not ERPNext posting, GL, or Windows acceptance.
 No live site or customer data is accessed.
 """
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 import sys
