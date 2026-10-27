@@ -21,7 +21,12 @@ class PrebuiltImagePathTests(unittest.TestCase):
             target = root / "real-image.tar"
             target.write_bytes(b"not an actual image; this test must reject early")
             linked_image = root / "linked-image.tar"
-            linked_image.symlink_to(target)
+            try:
+                linked_image.symlink_to(target)
+            except OSError as error:
+                if getattr(error, "winerror", None) == 1314:
+                    self.skipTest("Windows symlink privilege unavailable; Linux CI exercises the real link")
+                raise
             output = root / "out"
 
             with patch.object(
