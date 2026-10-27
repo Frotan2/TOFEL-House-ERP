@@ -283,6 +283,10 @@ def create_package(
 ) -> tuple[Path, Path, dict]:
     source = source.resolve()
     output = output.resolve()
+    # Resolve() follows symlinks. Reject the supplied archive path first so
+    # callers cannot bypass the regular-file input boundary with an alias.
+    if image_archive.is_symlink():
+        raise ValueError("a regular prebuilt image archive is required (symlink rejected)")
     image_archive = image_archive.resolve()
     if not HEX40.fullmatch(source_revision):
         raise ValueError("source revision must be a full 40-character commit SHA")
