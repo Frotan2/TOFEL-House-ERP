@@ -80,7 +80,9 @@ class FinanceContainmentWiringTests(unittest.TestCase):
     def test_native_book_sale_is_stock_only_and_role_checked(self):
         source = FINANCE.read_text(encoding="utf-8")
         for clause in ('def _native_book_sale_allowed(doc, method=None):',
-                       'item.item_group != "Books"',
+                       # Books or any program sub-group below it (GE/EAP/…)
+                       # — nested-set subtree, never an exact-name accident.
+                       'books.book_item_group_ok(item.item_group)',
                        'int(item.is_stock_item or 0) != 1',
                        'int(item.is_sales_item or 0) != 1',
                        'getattr(doc, "update_stock", 0)',

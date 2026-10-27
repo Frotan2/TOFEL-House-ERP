@@ -738,8 +738,11 @@ def work():
             ("Configure book prices", "Item Price", "create"),
             ("Warehouse stock", "Bin", "read"),
             ("Receive book stock", "Stock Entry", "create"),
+            ("Book purchases", "Purchase Receipt", "create"),
             ("Sell books / sales invoices", "Sales Invoice", "create"),
             ("Record a customer payment", "Payment Entry", "create"),
+            ("Book stock movements", "Stock Ledger Entry", "read"),
+            ("Count and correct book stock", "Stock Reconciliation", "create"),
         )
         links = [
             {"title": title, "slug": "List/" + doctype}

@@ -21,6 +21,11 @@ GUARDS = {
     # Customer refunds settle credit notes only (2026-10-24 finance mission);
     # the same guard runs on create, cancel and post-submit edits.
     "Payment Entry": "toefl_house.finance.refunds.guard_payment_entry",
+    # Book stock integrity (Agent 2, inventory finalization): the same
+    # guard judges create, cancel and post-submit edits; non-book stock
+    # documents pass through the seam untouched.
+    "Stock Entry": "toefl_house.finance.books.guard_stock_entry",
+    "Stock Reconciliation": "toefl_house.finance.books.guard_stock_reconciliation",
     # The cashier day close is a control record: command-only on every seam.
     "TH Cashier Day": "toefl_house.finance.cashier.guard",
     "Program Enrollment": "toefl_house.enrollment.guard_program_enrollment",
@@ -37,6 +42,7 @@ MODULE_FILES = {
     "toefl_house.finance": ROOT / "apps/toefl_house/toefl_house/finance/__init__.py",
     "toefl_house.finance.cashier": ROOT / "apps/toefl_house/toefl_house/finance/cashier.py",
     "toefl_house.finance.refunds": ROOT / "apps/toefl_house/toefl_house/finance/refunds.py",
+    "toefl_house.finance.books": ROOT / "apps/toefl_house/toefl_house/finance/books.py",
     "toefl_house.teaching": ROOT / "apps/toefl_house/toefl_house/teaching/__init__.py",
 }
 
