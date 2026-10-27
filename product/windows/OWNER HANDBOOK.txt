@@ -215,11 +215,29 @@ real guardian consent in practice records.
 [ ] Use Repair only when trusted support directs it after existing data has
     been assessed. Repair is not a reset button.
 
-There is no approved automatic update path in this candidate. PR #46 remains
-on hold. Do not install an updater, replace Docker volumes, import an unknown
-image, or copy a newer package over an existing installation. Preserve the
-current data and ask the provider for a separately approved migration/update
-procedure.
+Updates use only the launcher's separate "Check for Updates" and
+"Install Update" buttons. "Check for Updates" downloads the provider's
+signed release information, asks the safety engine whether this computer
+may update, and changes nothing. "Install Update" asks for confirmation,
+repeats every check, and only then installs the update. Every message is
+shown in English and Dari with the version number. No terminal, Git,
+Docker command or database command is ever needed.
+  The updater refuses before the first change unless the provider
+signature, exact version and upgrade path, existing site and database,
+free disk space, a verified encrypted backup on a separate drive, a
+signed Owner recovery authorization and the downloaded image identity
+all pass. The channel is currently disabled until the provider
+completes the release and Owner acceptance gates: "Check for Updates"
+explains that the provider has paused updates and changes nothing.
+  If an update stops, read the on-screen recovery steps: do not
+reinstall, do not delete data, do not reset Docker and do not restore
+over the live site. Keep the folder, copy the safe support status and
+contact trusted support. A failed update never restarts services
+automatically; recovery is directed by support from the retained
+previous image and the verified backup. Never replace Docker volumes,
+import an unknown image, or copy a newer package over an existing
+installation. This gated updater does not authorize live student or
+financial data; the release decision below stays NO-GO.
 
 11. BACKUP AND RECOVERY HOLD
 ----------------------------
@@ -300,9 +318,12 @@ Sales Return / Credit Note لازم است؛ این سند به‌تنهایی �
 شود. در این نسخه Payroll واقعی اجرا نکنید.
 
 ۸. Stop و شروع دوباره، حفظ معلومات بعد از Restart و Repair فقط روی کمپیوتر
-تمرینی آزمایش شود. مسیر Update خودکار تأیید نشده است. بکاپ واقعی، کلید
-بازیابی و Restore روی کمپیوتر صاحب کورس هنوز HOLD است؛ هیچ‌کدام را بدون
-پروسیجر جداگانه و اجازهٔ رسمی انجام ندهید.
+تمرینی آزمایش شود. به‌روزرسانی فقط با دکمه‌های Check for Updates و
+Install Update انجام می‌شود؛ فعلاً کانال ارائه‌دهنده غیرفعال است و این
+دکمه‌ها هیچ چیزی را تغییر نمی‌دهند. در صورت توقف به‌روزرسانی، دوباره
+نصب نکنید و معلومات را حذف نکنید؛ با پشتیبانی مطمئن تماس بگیرید.
+بکاپ واقعی، کلید بازیابی و Restore روی کمپیوتر صاحب کورس هنوز HOLD است؛
+هیچ‌کدام را بدون پروسیجر جداگانه و اجازهٔ رسمی انجام ندهید.
 
 ۹. برای پشتیبانی فقط Check This PC و Copy Safe Support Status را شریک کنید.
 رمز Administrator، db.env، کلید خصوصی، بکاپ خام، گزارش خام یا معلومات واقعی

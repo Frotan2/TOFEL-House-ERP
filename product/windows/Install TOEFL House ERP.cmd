@@ -96,7 +96,7 @@ attrib +h data\secrets >nul 2>nul
 echo.
 echo [TH_STAGE] Verifying the supplied application image...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1"
-if errorlevel 1 goto :failed
+if errorlevel 1 goto :packagechanged
 echo [TH_STAGE] Loading the ready-to-run application. This can take several minutes.
 docker load -i "release\toefl-house-erp-app.tar"
 if errorlevel 1 goto :failed
@@ -156,6 +156,16 @@ exit /b 1
 :packageinvalid
 echo  Package integrity verification failed before credential setup.
 echo  Do NOT install from this package. Request a complete trusted copy.
+if not defined TH_GUI_MODE pause
+exit /b 1
+
+:packagechanged
+echo  Package verification failed after local setup started.
+echo  The package changed or became unreadable during installation.
+echo  A partial installation was preserved: do NOT run Install again,
+echo  do not delete data and do not create a replacement password.
+echo  In the Windows launcher choose Check This PC, then share only
+echo  Copy Safe Support Status with trusted support. No raw logs.
 if not defined TH_GUI_MODE pause
 exit /b 1
 

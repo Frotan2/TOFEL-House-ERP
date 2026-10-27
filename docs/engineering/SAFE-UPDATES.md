@@ -119,7 +119,11 @@ A structured apply exit 5 must reach the launcher's failure handler. It is not
 an engine transport error that can be discarded. Any stop/import/apply failure
 leaves `recovery-required`; even `safe-abort` does not automatically restart
 Compose, since the refusal may mean storage vanished or was replaced. A
-best-effort tag restoration is not recovery proof. Only a successful apply can
+best-effort tag restoration is not recovery proof. The journal `rolled-back`
+phase and the catalogue entries `updater.rollback_done` /
+`updater.rollback_blocked` are reserved for a future support-directed recovery
+step; no current code path restarts services automatically or reports an
+automatic rollback. Only a successful apply can
 reach the guarded Start path, which repeats the existing-installation preflight
 before Compose. It starts only the four application services with `--no-deps`,
 so bootstrap and DB/Redis are not recreated after the verified census. The
@@ -139,7 +143,7 @@ Failures:
 
 | Outcome | Meaning | Host action |
 | --- | --- | --- |
-| `safe-abort` | the engine refused before the first migration | retag the previous image, start the previous version, journal `rolled-back` |
+| `safe-abort` | the engine refused before the first migration | best-effort retag of the previous image, **no automatic restart**, journal `recovery-required`, bilingual recovery steps; support directs recovery from the retained image and the verified backup |
 | `recovery-required` | a migration started, or the database changed | do **not** start the stack; journal `recovery-required`; show recovery steps |
 | interrupted | the journal is `prepared`/`applying` on the next run | refuse and show recovery steps |
 | `records_lost` / `apps_missing` / `role_desk_missing` | post-migration verification failed | `recovery-required`, never silently continue |
