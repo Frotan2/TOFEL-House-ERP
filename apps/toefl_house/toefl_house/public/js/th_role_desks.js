@@ -1228,6 +1228,17 @@ frappe.provide("toefl_house.role_desks");
 						if (typeof action.refresh === "function") action.refresh();
 						else if (typeof currentReload === "function") currentReload();
 					},
+					error(response) {
+						// Direct ValidationError responses need not carry native
+						// _server_messages. Retain the entered form and retry key.
+						const body = response && response.responseJSON || {};
+						let detail = text("The action could not be saved. Check the entered values and your permissions, then retry.");
+						if (body.exc_type === "ValidationError" && typeof body.exception === "string") {
+							const separator = body.exception.indexOf(": ");
+							if (separator >= 0) detail = body.exception.slice(separator + 2, separator + 502);
+						}
+						frappe.msgprint({ title: text(action.label), message: escapeText(detail), indicator: "red" });
+					},
 				});
 			},
 		});

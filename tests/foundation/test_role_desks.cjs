@@ -434,7 +434,7 @@ function payloadWith(queueItems, factValue) {
 	};
 }
 
-function runScenario({ workPayload, failFirstWork = false, failLookup = false, cashReply = null }) {
+function runScenario({ workPayload, failFirstWork = false, failLookup = false, cashReply = null, cashError = null }) {
 	const calls = [];
 	const dialogs = [];
 	const routed = [];
@@ -453,12 +453,16 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, c
 				constructor(opts) { this.opts = opts; this.values = {}; dialogs.push(this); }
 				set_value(field, value) { this.values[field] = value; }
 				show() {}
-				hide() {}
+				hide() { this.hidden = true; }
 				submit(values) { this.opts.primary_action(values); }
 			},
 		},
 		call(opts) {
 			calls.push(opts);
+			if (opts.method.startsWith("toefl_house.finance.collections.") && cashError) {
+				opts.error({ responseJSON: cashError });
+				return;
+			}
 			if (opts.method.startsWith("toefl_house.finance.collections.") && cashReply) {
 				opts.callback({ message: cashReply });
 				return;
@@ -688,6 +692,25 @@ const hostileItem = {
 	const markup = numbered.opts.fields[0].options;
 	assert(markup.includes("SYNTHETIC TEST RECEIPT") && markup.includes("PAY-001"));
 	assert(markup.includes("&lt;img") && !/<img\s/i.test(markup), "receipt facts must be escaped");
+}
+
+{
+	const item = { ...hostileItem, action: { endpoint: "toefl_house.finance.collections.record_reception_collection",
+		label: "Issue cash receipt", args: { fees: "FEE-001" } } };
+	delete item.action.secondary;
+	for (const kind of ["ValidationError", "PermissionError", "InternalServerError"]) {
+		const scenario = runScenario({ workPayload: payloadWith([item], "0"),
+			cashError: { exc_type: kind, exception: "frappe.exceptions." + kind + ": " + HOSTILE } });
+		findAll(scenario.body, "th-queue-action")[0].click();
+		const form = scenario.dialogs[0];
+		form.submit({ request_key: "keep-this-retry-reference", fees: "FEE-001", amount: 100 });
+		assert.strictEqual(form.hidden, undefined, "rejected commands must retain their form");
+		assert.strictEqual(scenario.printed.length, 1, "every rejection needs visible feedback");
+		assert(!/<img\s/i.test(scenario.printed[0].message), "error text must be escaped");
+		if (kind === "ValidationError") assert(scenario.printed[0].message.includes("&lt;img"));
+		else assert(!scenario.printed[0].message.includes("onerror"), "non-validation internals must stay private");
+		assert.strictEqual(scenario.workCalls, 1, "a rejected command must not pretend to refresh a successful result");
+	}
 }
 
 /* --------------------------------------------------------------- design */

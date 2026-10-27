@@ -204,6 +204,19 @@ Focused rule, cleanup and immutable-field regressions accompany the native
 HTTP acceptance. The restored-site Reception, Finance and Owner queue APIs
 pass; actual graphical collection/printing and final-source CI remain open.
 
+## QA-013: rejected guided actions need visible feedback
+
+Real Windows in-app-browser acceptance issued male/female receipts against the
+preserved primary test site. An Owner correction targeting an already paid
+bill was refused atomically: both receipts and the AFN 4,850 outstanding balance
+remained intact. The direct ValidationError did not provide a useful visible
+explanation on the guided form. The client now retains the form/retry key and
+shows a bounded escaped validation message; permission/internal errors receive
+a generic explanation without exposing their internals. Client regressions
+exercise all three response types. Hosted final acceptance now also requires
+the executed Reception receipt/correction/handover receipt and validates its
+cash/student deltas and negative controls.
+
 ## Still required
 
 Final-revision CI, official rebuilt package and supported in-place Windows
