@@ -15,6 +15,34 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 
+def check_device_grant_boundary() -> None:
+    """Exercise the real Frappe grant allowlist after successful authentication."""
+    from frappe.oauth import OAuthWebRequestValidator
+    from oauthlib.openid.connect.core.endpoints.pre_configured import Server
+
+    class Validator(OAuthWebRequestValidator):
+        def authenticate_client(self, request, *args, **kwargs):
+            request.client = SimpleNamespace(client_id="synthetic-public-client")
+            return True
+
+        def client_authentication_required(self, request, *args, **kwargs):
+            return True
+
+        def save_bearer_token(self, *args, **kwargs):
+            raise AssertionError("Device grant reached token persistence")
+
+    server = Server(Validator())
+    for suffix in ("", "&device_code=bogus"):
+        _headers, body, status = server.create_token_response(
+            "https://synthetic.invalid/token", http_method="POST",
+            body="grant_type=urn:ietf:params:oauth:grant-type:device_code"
+                 "&client_id=synthetic-public-client" + suffix)
+        response = json.loads(body)
+        assert status == 400 and response["error"] == "unauthorized_client"
+        assert "access_token" not in response and "refresh_token" not in response
+    print("OAuth device-code grant: missing/bogus codes denied before token creation PASS")
+
+
 def main() -> None:
     if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("CI") != "1":
         raise RuntimeError("Hosted synthetic runner only")
@@ -30,6 +58,7 @@ def main() -> None:
     from frappe.utils.weasyprint import PrintFormatGenerator, download_pdf, get_html
     from toefl_house import social_login
 
+    check_device_grant_boundary()
     frappe.init(site="placement-test.localhost", sites_path=str(Path.cwd()))
     frappe.connect()
     try:
