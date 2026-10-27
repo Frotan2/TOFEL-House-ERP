@@ -66,14 +66,17 @@ Frappe stubs and synthetic records, not a live HRMS database.
 
 ## Exact-head CI evidence
 
-For PR #92 head `86d84f50a5ec8e6df3b9226f7aa222d27f0bd95d`, the Owned Suite
-and Native lifecycle integration checks both completed successfully. The
-Native job's real-site lifecycle step passed (run
+At payroll implementation/test commit `86d84f50a5ec8e6df3b9226f7aa222d27f0bd95d`,
+the Owned Suite and Native lifecycle integration checks both completed
+successfully. The Native job's real-site lifecycle step passed (run
 [40423483125](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40423483125));
 its retained artifact is `native-lifecycle-40423483125-1` with published
 SHA-256 `88e56f7759466325663b151ce5ef008a6149ceee42e5582ab60421dba1e2daa5`.
-This qualifies the current CI run only. It does not establish live customer
-payroll acceptance, legal compliance or authorization to disburse wages.
+Subsequent PR commits only refine isolated synthetic regression coverage and
+this evidence document; they do not change payroll production code. The latest
+Owned Suite reruns cover those updates. This evidence does not establish live
+customer payroll acceptance, legal compliance or authorization to disburse
+wages.
 
 ## Remaining blockers / policy dependencies
 
