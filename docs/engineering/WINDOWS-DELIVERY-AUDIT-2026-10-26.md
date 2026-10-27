@@ -149,19 +149,25 @@ disposable directories and this branch was touched):
   PowerShell runtime); parsing is covered by the Windows CI job below, which
   uses the real PowerShell parser on every customer script.
 
-Windows evidence (exact, from CI on this change):
+Windows evidence (exact, from CI on this change, PR #93):
 
-- `Windows customer package smoke` run: _to be recorded after PR CI runs_.
-  It parses all customer scripts, runs the updater `-SmokeTest`, the updater
-  failure/recovery probe, the GUI `-SmokeTest` (now including the handbook
-  wiring), the storage-inventory and service-readiness regressions, the
-  headless Install/Start/Stop/Repair lifecycle with fake Docker (Repair now
-  exercises `-VerifyLoadedImage`), the damaged-kit refusal, the disabled-
-  channel refusal (exit 3, bilingual, no download, safe result file),
-  partial-install and missing-volume preservation blocks, tamper rejection,
-  and the new handbook kit-content check.
-- `Owned suite` run: _to be recorded_ (full Python tree incl. the 14 new
-  contracts, Node suites, privilege probe).
+- `Windows customer package smoke` run **40423943933** — **PASS** (all 8
+  steps success, `windows-2022`): real PowerShell parse of all customer
+  scripts; updater `-SmokeTest`; updater failure/recovery probe; GUI
+  `-SmokeTest` (now including the Owner Handbook wiring); storage-inventory
+  regressions; the new `Verify Windows delivery finalization contracts`
+  step; service-readiness regressions; and the headless Install/Start/Stop/
+  Repair lifecycle with fake Docker (Repair now exercises
+  `-VerifyLoadedImage`), damaged-kit refusal, disabled-channel refusal
+  (exit 3, bilingual, no download, safe result file), repeated/partial-
+  install and missing-volume preservation blocks, tamper rejection, and the
+  new handbook kit-content check.
+  https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40423943933
+- `Owned suite` run **40423963531** — **PASS** (all steps success,
+  `ubuntu-24.04`): pinned-ruff static analysis, full Python test tree
+  (including the 14 new delivery contracts), Node suites, and the update
+  observer privilege probe.
+  https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40423963531
 
 ## Customer instructions corrected
 
