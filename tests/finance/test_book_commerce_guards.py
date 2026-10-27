@@ -189,6 +189,50 @@ class PurePriceTests(unittest.TestCase):
         self.assertFalse(reconcile(wrong, ledger)["ok"])
 
 
+
+class InvoiceDiscountBoundaryTests(unittest.TestCase):
+    """A line Pricing Rule is never permission for a header-level discount."""
+
+    def setUp(self):
+        db = FakeDB()
+        db.add("Item", name="SYN-BOOK", stock_uom="Nos")
+        db.add("Item Price", item_code="SYN-BOOK",
+               price_list="Standard Selling", selling=1, currency="AFN",
+               price_list_rate=300.0, customer=None, uom="Nos")
+        db.add("Bin", item_code="SYN-BOOK", warehouse="SYN-WH",
+               actual_qty=20.0)
+        self.books, _, _ = load_modules(db)
+
+    def invoice(self, *, line_rate=270.0, pricing_rules='["SYN-PRICE-RULE"]',
+                discount_amount=0.0, additional_discount_percentage=0.0):
+        return Doc(
+            selling_price_list="Standard Selling", currency="AFN",
+            customer="SYN-STUDENT",
+            discount_amount=discount_amount,
+            additional_discount_percentage=additional_discount_percentage,
+            posting_date="2026-10-27",
+            items=[Doc(item_code="SYN-BOOK", warehouse="SYN-WH",
+                       qty=2.0, rate=line_rate,
+                       pricing_rules=pricing_rules, conversion_factor=1.0)],
+        )
+
+    def test_native_line_rule_can_discount_line_but_not_invoice_header(self):
+        self.assertTrue(self.books.book_sale_terms_ok(self.invoice()))
+        # Existing per-line rule does not authenticate a separate manual
+        # header discount on the same or another book.
+        self.assertFalse(self.books.book_sale_terms_ok(
+            self.invoice(discount_amount=50.0)))
+        self.assertFalse(self.books.book_sale_terms_ok(
+            self.invoice(additional_discount_percentage=10.0)))
+
+    def test_normal_book_sale_without_invoice_header_discount_is_allowed(self):
+        self.assertTrue(self.books.book_sale_terms_ok(
+            self.invoice(line_rate=300.0, pricing_rules="[]")))
+        self.assertFalse(self.books.book_sale_terms_ok(
+            self.invoice(line_rate=300.0, pricing_rules="[]",
+                         discount_amount=20.0)))
+
+
 def invoice_db():
     """SYN-SALE: 2 books @300 from WH-A, 1 book @300 from WH-B (=900)."""
     db = FakeDB()
