@@ -113,6 +113,12 @@ def _native_book_sale_allowed(doc, method=None):
         return False
     if not getattr(doc, "company", None) or not getattr(doc, "customer", None):
         return False
+    # Company User Permission binds the native book path exactly as it
+    # binds guarded finance commands (PR #90): has_permission's doctype
+    # verdict alone is not the Company boundary.
+    from toefl_house.finance import books
+    if not books.user_value_permitted(user, "Company", doc.company):
+        return False
     is_return = int(getattr(doc, "is_return", 0) or 0) == 1
     original = getattr(doc, "return_against", None)
     if is_return:
@@ -142,16 +148,29 @@ def _native_book_sale_allowed(doc, method=None):
         code = getattr(row, "item_code", None)
         if not code or not getattr(row, "warehouse", None):
             return False
+        # A Warehouse-scoped login sells and restocks only its own
+        # warehouses; child-row warehouses are not part of the parent
+        # document's permission verdict.
+        if not books.user_value_permitted(user, "Warehouse", row.warehouse):
+            return False
         item = frappe.db.get_value(
             "Item", code,
             ["item_group", "is_stock_item", "is_sales_item", "disabled"],
             as_dict=True,
         )
-        if (not item or item.item_group != "Books"
+        if (not item or not books.book_item_group_ok(item.item_group)
                 or int(item.is_stock_item or 0) != 1
                 or int(item.is_sales_item or 0) != 1
                 or int(item.disabled or 0) != 0):
             return False
+    # A *new* sale must be billed at the configured native selling price
+    # and covered by the warehouse bin. Cancellation and post-submit
+    # edits skip both checks so a later price change or empty bin can
+    # never trap a legitimate sale against reversal.
+    creating = int(getattr(doc, "docstatus", 0) or 0) == 0 and method not in (
+        "before_cancel", "before_update_after_submit")
+    if creating and not is_return and not books.book_sale_terms_ok(doc):
+        return False
     # A tax line on a book sale must come from the owner's native tax
     # configuration; a hand-added rate is refused (finance.taxes owns the rule).
     from toefl_house.finance import taxes

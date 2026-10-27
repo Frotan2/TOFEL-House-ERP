@@ -315,6 +315,19 @@ doc_events = {
         "before_cancel": "toefl_house.finance.refunds.guard_payment_entry",
         "before_update_after_submit": "toefl_house.finance.refunds.guard_payment_entry",
     },
+    # Book stock integrity (finance.books): receipts need a positive
+    # purchase cost, issues/corrections are approved adjustments. Stock
+    # documents with no Books lines pass untouched.
+    "Stock Entry": {
+        "validate": "toefl_house.finance.books.guard_stock_entry",
+        "before_cancel": "toefl_house.finance.books.guard_stock_entry",
+        "before_update_after_submit": "toefl_house.finance.books.guard_stock_entry",
+    },
+    "Stock Reconciliation": {
+        "validate": "toefl_house.finance.books.guard_stock_reconciliation",
+        "before_cancel": "toefl_house.finance.books.guard_stock_reconciliation",
+        "before_update_after_submit": "toefl_house.finance.books.guard_stock_reconciliation",
+    },
     # The cashier day close is a control record: command-only on all seams.
     "TH Cashier Day": {
         "validate": "toefl_house.finance.cashier.guard",

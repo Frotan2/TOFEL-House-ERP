@@ -3733,6 +3733,15 @@ def main():
                     item_name='SYN Textbook',item_group='Books',
                     stock_uom='Nos',is_stock_item=1,is_sales_item=1,
                     is_purchase_item=1)).insert()
+            # The cashier never types a book price: the configured native
+            # selling Item Price is the only rate a book sale may bill.
+            if not frappe.db.exists('Item Price',{'item_code':code,
+                    'price_list':fin['price_list']}):
+                frappe.get_doc(dict(doctype='Item Price',item_code=code,
+                    price_list=fin['price_list'],selling=1,
+                    currency=frappe.db.get_value('Price List',
+                        fin['price_list'],'currency'),
+                    price_list_rate=300)).insert()
             wh=frappe.db.get_value('Warehouse',{'warehouse_name':'SYN Book Shop',
                 'company':fin['company']},'name')
             if not wh:
@@ -3799,6 +3808,41 @@ def main():
             return denied(lambda:as_user('book_seller',
                 lambda:doc.insert(ignore_permissions=True)))
         check('book-native-no-stock-update-denied',book_without_stock)
+        def book_price_abuse():
+            # A hand-typed document discount on a priced book, and a
+            # hand-typed rate on a book with no configured selling price:
+            # both reprice away from native Item Price authority.
+            frappe.set_user('Administrator')
+            unpriced='SYN-BOOK-NOPRICE'
+            if not frappe.db.exists('Item',unpriced):
+                frappe.get_doc(dict(doctype='Item',item_code=unpriced,
+                    item_name='SYN Unpriced Textbook',item_group='Books',
+                    stock_uom='Nos',is_stock_item=1,is_sales_item=1,
+                    is_purchase_item=1)).insert()
+            if not frappe.db.exists('Bin',{'item_code':unpriced,
+                    'warehouse':books['warehouse']}):
+                entry=frappe.get_doc(dict(doctype='Stock Entry',
+                    stock_entry_type='Material Receipt',
+                    purpose='Material Receipt',company=fin['company'],
+                    items=[dict(item_code=unpriced,qty=3,
+                        t_warehouse=books['warehouse'],basic_rate=175)]))
+                entry.insert();entry.submit()
+            discount_doc=book_doc()
+            discount_doc.apply_discount_on='Grand Total'
+            discount_doc.discount_amount=60
+            unpriced_doc=book_doc(item_code=unpriced,qty=1)
+            return {
+                'manual_discount':denied(lambda:as_user('book_seller',
+                    lambda:discount_doc.insert(ignore_permissions=True))),
+                'unconfigured_price':denied(lambda:as_user('book_seller',
+                    lambda:unpriced_doc.insert(ignore_permissions=True))),
+            }
+        check('book-native-unconfigured-price-denied',book_price_abuse)
+        def book_oversell():
+            doc=book_doc(qty=999)
+            return denied(lambda:as_user('book_seller',
+                lambda:doc.insert(ignore_permissions=True)))
+        check('book-native-oversell-beyond-bin-denied',book_oversell)
         def book_sale_positive():
             book_stages['baseline'] = native_book_state(frappe, book_context)
             doc=book_doc()
@@ -3942,6 +3986,129 @@ def main():
                 role_page_identity(unrelated, base, users['outsider'])
                 return native_book_http_cycle(frappe, cashier, unrelated, base, book_context, book_doc().as_dict())
         check('book-http-cashier-sale-payment-return-refund', traced(book_http_commerce))
+        def book_return_abuse():
+            # Restocking into a warehouse that never sold the book diverts
+            # branch stock; crediting one returned book at the two-book
+            # rate extracts the whole sale value for half the books.
+            from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
+            frappe.set_user('Administrator')
+            annex=frappe.db.get_value('Warehouse',
+                {'warehouse_name':'SYN Book Annex','company':fin['company']},'name')
+            if not annex:
+                annex=frappe.get_doc(dict(doctype='Warehouse',
+                    warehouse_name='SYN Book Annex',
+                    company=fin['company'])).insert().name
+            sale=book_doc()
+            as_user('book_seller',lambda:sale.insert())
+            as_user('book_seller',lambda:sale.submit())
+            frappe.set_user('Administrator')
+            diverted=make_sales_return(sale.name)
+            diverted.items[0].warehouse=annex
+            inflated=make_sales_return(sale.name)
+            inflated.items[0].qty=-1
+            inflated.items[0].rate=600
+            return {
+                'sale':sale.name,
+                'diverted_warehouse':denied(lambda:as_user('book_seller',
+                    lambda:diverted.insert(ignore_permissions=True))),
+                'inflated_rate':denied(lambda:as_user('book_seller',
+                    lambda:inflated.insert(ignore_permissions=True))),
+            }
+        check('book-native-return-warehouse-and-rate-abuse-denied',traced(book_return_abuse))
+        def book_return_cancel():
+            # The authorized reversal of a submitted full return must not
+            # be read as a second return stacked on top of itself.
+            from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
+            frappe.set_user('Administrator')
+            seller=frappe.get_doc('User',users['book_seller'])
+            seller.add_roles('Accounts Manager')
+            frappe.db.commit();frappe.clear_cache(user=seller.name)
+            sale=book_doc()
+            as_user('book_seller',lambda:sale.insert())
+            as_user('book_seller',lambda:sale.submit())
+            after_sale=frappe.db.get_value('Bin',
+                {'item_code':books['item'],'warehouse':books['warehouse']},
+                'actual_qty')
+            def post():
+                doc=make_sales_return(sale.name)
+                doc.insert();doc.submit()
+                return doc
+            credit=as_user('book_seller',post)
+            as_user('book_seller',lambda:credit.cancel())
+            frappe.set_user('Administrator')
+            assert int(frappe.db.get_value(
+                'Sales Invoice',credit.name,'docstatus'))==2
+            after_cancel=frappe.db.get_value('Bin',
+                {'item_code':books['item'],'warehouse':books['warehouse']},
+                'actual_qty')
+            assert abs(float(after_cancel)-float(after_sale))<0.001,\
+                (after_sale,after_cancel)
+            return {'credit_note_cancelled':credit.name,
+                    'stock_restored_to_sale_qty':True}
+        check('book-native-return-cancel-reverses-stock',traced(book_return_cancel))
+        def book_program_subgroup():
+            # GE/EAP-style program shelves are Item Groups below Books;
+            # their books sell through the same guarded native path.
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Item Group','Books','is_group',1)
+            if not frappe.db.exists('Item Group','SYN GE Books'):
+                frappe.get_doc(dict(doctype='Item Group',
+                    item_group_name='SYN GE Books',
+                    parent_item_group='Books')).insert()
+            code='SYN-BOOK-GE'
+            if not frappe.db.exists('Item',code):
+                frappe.get_doc(dict(doctype='Item',item_code=code,
+                    item_name='SYN GE Textbook',item_group='SYN GE Books',
+                    stock_uom='Nos',is_stock_item=1,is_sales_item=1,
+                    is_purchase_item=1)).insert()
+            if not frappe.db.exists('Item Price',{'item_code':code,
+                    'price_list':fin['price_list']}):
+                frappe.get_doc(dict(doctype='Item Price',item_code=code,
+                    price_list=fin['price_list'],selling=1,
+                    currency=frappe.db.get_value('Price List',
+                        fin['price_list'],'currency'),
+                    price_list_rate=300)).insert()
+            entry=frappe.get_doc(dict(doctype='Stock Entry',
+                stock_entry_type='Material Receipt',
+                purpose='Material Receipt',company=fin['company'],
+                items=[dict(item_code=code,qty=3,
+                    t_warehouse=books['warehouse'],basic_rate=175)]))
+            entry.insert();entry.submit()
+            doc=book_doc(item_code=code,qty=1)
+            as_user('book_seller',lambda:doc.insert())
+            as_user('book_seller',lambda:doc.submit())
+            assert int(doc.docstatus)==1
+            return {'invoice':doc.name,'item_group':'SYN GE Books'}
+        check('book-native-program-subgroup-sale',traced(book_program_subgroup))
+        def book_ledger_reconciliation():
+            # Bin is a projection; the Stock Ledger is truth. After the
+            # whole sale/return/refund/cancel cycle they must still agree
+            # in quantity and in value for every book item. A cancelled
+            # return leaves a queued Repost Item Valuation whose whole
+            # job is to re-settle Bin from the ledger; drain it first so
+            # the comparison judges the settled state, not the queue.
+            from toefl_house.finance import books as book_rules
+            from erpnext.stock.doctype.repost_item_valuation.repost_item_valuation import execute_reposting_entry
+            frappe.set_user('Administrator')
+            for row in frappe.db.get_all('Repost Item Valuation',
+                    filters={'docstatus':1,
+                             'status':['in',('Queued','In Progress')]},
+                    fields=['name'],limit_page_length=100):
+                execute_reposting_entry(row.name)
+            codes=[books['item'],'SYN-BOOK-GE','SYN-BOOK-NOPRICE']
+            bins=frappe.db.get_all('Bin',
+                filters={'item_code':['in',codes]},
+                fields=['item_code','warehouse','actual_qty','stock_value'])
+            ledger=frappe.db.get_all('Stock Ledger Entry',
+                filters={'item_code':['in',codes],'is_cancelled':0},
+                fields=['item_code','warehouse','actual_qty',
+                        'stock_value_difference'],limit_page_length=1000)
+            report=book_rules.reconcile_book_stock(
+                [dict(r) for r in bins],[dict(r) for r in ledger])
+            assert report['checked_bins']>=1,report
+            assert report['ok'],report
+            return report
+        check('book-native-stock-ledger-reconciliation',traced(book_ledger_reconciliation))
 
         def tax_configuration_state():
             # The owner has supplied no tax policy, so the only truthful
@@ -5853,6 +6020,8 @@ def main():
             assert routes<={
                 'List/Item','List/Item Price','List/Bin','List/Stock Entry',
                 'List/Sales Invoice','List/Payment Entry',
+                'List/Purchase Receipt','List/Stock Ledger Entry',
+                'List/Stock Reconciliation',
             },routes
             assert not routes.intersection({
                 'List/Bin','List/Stock Entry','List/Item Price',
