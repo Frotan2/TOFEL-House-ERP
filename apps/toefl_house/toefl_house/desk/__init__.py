@@ -167,7 +167,8 @@ PROJECTION_FIELDS = {
     ("finance", "Payment Entry"): [
         "name", "payment_type", "party_type", "party", "paid_amount",
         "received_amount", "paid_from_account_currency", "company",
-        "posting_date", "docstatus",
+        "posting_date", "docstatus", "paid_to", "paid_to_account_currency",
+        "th_reception_collector", "th_collection_fees", "th_collection_handover",
     ],
     ("finance", "TH Correction Request"): [
         "name", "sales_invoice", "fees", "correction_policy", "reason",
@@ -327,7 +328,12 @@ PROJECTION_FIELDS = {
     ],
     ("reception", "Fees"): [
         "name", "student", "program", "due_date", "grand_total",
-        "outstanding_amount", "currency", "docstatus",
+        "outstanding_amount", "currency", "company", "docstatus",
+    ],
+    ("reception", "Payment Entry"): [
+        "name", "party", "received_amount", "paid_to", "paid_to_account_currency",
+        "company", "posting_date", "docstatus", "th_reception_collector",
+        "th_collection_fees", "th_collection_handover",
     ],
     ("reception", "Sales Invoice"): [
         "name", "customer", "grand_total", "outstanding_amount",
@@ -775,6 +781,12 @@ def _assert_projection(desk, doctype, fields):
     if [field for field in fields if field not in allow]:
         raise frappe.ValidationError(f"Fields outside the {desk}/{doctype} projection allow-list")
     return allow
+
+
+def collection_schema_ready():
+    """Hide cash actions until the supported field migration has completed."""
+    check = getattr(frappe.db, "has_column", None)
+    return callable(check) and check("Payment Entry", "th_collection_handover")
 
 
 def project_rows(desk, doctype, fields, filters=None, order_by=None, limit=LIMIT_QUEUES,

@@ -86,6 +86,9 @@ KIND_ROLES = {
     "issue_placement_fee": "Finance Officer",
     # Cashier day close: records counted cash against the native ledger.
     "reconcile_cashier_day": "Finance Officer",
+    "record_reception_collection": "Reception",
+    "accept_reception_handover": "Finance Officer",
+    "correct_reception_collection": "Course Owner",
     # D2 teaching compensation: contracts and payroll calculation are the
     # finance/payroll side; skill-area assignment facts stay teaching ops.
     "create_teaching_contract": "Finance Officer",

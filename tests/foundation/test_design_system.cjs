@@ -33,7 +33,7 @@ function loadModule(frappeOverrides = {}) {
 	// Pure projection tests must not reach a DOM; fail loudly if one is used.
 	client.$ = () => { throw new Error("DOM must not be touched by pure projection tests"); };
 	client.frappe = {
-		pages: {},
+		pages: { "th-placement-invigilation": { tagName: "DIV" } },
 		provide(dotted) { let target = client; for (const part of dotted.split(".")) target = target[part] ||= {}; },
 		require() {},
 		msgprint() {},
@@ -238,9 +238,9 @@ assert.deepStrictEqual(requests, ["/assets/toefl_house/css/th_design_system.css"
 
 // Every registered surface must load the stylesheet, not just one of them, or
 // most of the desk renders unstyled.
-for (const name of Object.keys(wired.frappe.pages)) {
+for (const name of Object.keys(wired.toefl_house.command_pages.surfaces)) {
 	const perPage = [];
-	const scoped = loadModule({ require(asset) { perPage.push(asset); } });
+	const scoped = loadModule({ pages: { [name]: { tagName: "DIV" } }, require(asset) { perPage.push(asset); } });
 	scoped.$ = chained;
 	scoped.frappe.ui = { make_app_page: () => ({ body: {}, main: chained() }), Dialog: class { show() {} } };
 	scoped.frappe.pages[name].on_page_load({});
@@ -379,7 +379,7 @@ function countByClass(node, token) {
 }
 
 function loadLanding(roles) {
-	const scoped = loadModule({ user: { has_role: (role) => roles.includes(role) } });
+	const scoped = loadModule({ pages: { "th-command-centre": { tagName: "DIV" } }, user: { has_role: (role) => roles.includes(role) } });
 	scoped.$ = recording();
 	const body = scoped.$("<body>");
 	scoped.frappe.ui = {

@@ -23,6 +23,7 @@ try:
 except Exception:
     analytics = None
 from toefl_house.desk import lifecycle
+from toefl_house.desk.collections import reception_sections
 
 SLUG = "th-reception-desk"
 
@@ -221,6 +222,7 @@ def work():
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
         "sections": [
+            *reception_sections(),
             section("funnel", "Applicant funnel", "facts", facts=_funnel(len(handover)),
                     empty_title="The funnel is empty",
                     empty_body="No placement or admission records exist yet. A person enters the funnel when a placement case is created by the Placement Publisher."),
@@ -309,4 +311,5 @@ def lookup(query):
                 "waiting_since": (enrollment or row).get("enrollment_date") or row.get("creation"),
             })
 
-    return {"desk": SLUG, "query": text, "items": items, "students": student_items}
+    return {"desk": SLUG, "query": text, "items": items, "students": student_items,
+            "collection_sections": reception_sections(students=[row["name"] for row in student_rows])}

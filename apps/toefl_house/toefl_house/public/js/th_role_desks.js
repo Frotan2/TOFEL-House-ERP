@@ -636,6 +636,25 @@ frappe.provide("toefl_house.role_desks");
 		{ fieldname: "recovery_quorum", label: "Recovery quorum", fieldtype: "Int", reqd: 1 },
 	];
 	const ACTION_FIELDS = Object.freeze({
+		"toefl_house.finance.collections.record_reception_collection": [
+			{ fieldname: "fees", label: "Tuition bill", fieldtype: "Data", read_only: 1, reqd: 1 },
+			{ fieldname: "amount", label: "Cash received", fieldtype: "Currency", reqd: 1, description: "Issue only after counting the cash. The student's balance falls immediately." },
+		],
+		"toefl_house.finance.collections.accept_reception_handover": [
+			{ fieldname: "payment_entries", label: "Selected receipts", fieldtype: "Small Text", hidden: 1, read_only: 1, reqd: 1 },
+			{ fieldname: "counted_amount", label: "Cash physically counted", fieldtype: "Currency", reqd: 1 },
+		],
+		"toefl_house.finance.collections.configure_reception_counter": [
+			{ fieldname: "user", label: "Receptionist's sign-in email", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "company", label: "Company", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "counter_label", label: "Separate counter name", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "reason", label: "Assignment reason", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.finance.collections.correct_reception_collection": [
+			{ fieldname: "payment_entry", label: "Unhanded receipt number", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "fees", label: "Correct tuition bill", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "reason", label: "Correction reason", fieldtype: "Small Text", reqd: 1 },
+		],
 		// This command is ONLY for a separately authorized Attendance
 		// Recorder, not for any Instructor. The existing server role gate
 		// stays intact until a securely own-session-scoped instructor
@@ -1076,6 +1095,10 @@ frappe.provide("toefl_house.role_desks");
 
 	function resultMessage(label, result) {
 		const payload = result && typeof result === "object" ? result : {};
+		if (payload.receipt) {
+			showCollectionReceipt(payload.receipt);
+			return;
+		}
 		const status = payload.status !== undefined ? payload.status : "Completed";
 		const facts = Object.entries(payload)
 			.filter(([, value]) => value !== undefined && value !== null && value !== "" && !Array.isArray(value))
@@ -1094,7 +1117,33 @@ frappe.provide("toefl_house.role_desks");
 		frappe.msgprint({ title: text(label), message: markup, wide: true });
 	}
 
+	function showCollectionReceipt(receipt) {
+		const keys = ["number", "status", "date", "student_name", "student", "fees", "company", "amount", "currency", "collector", "counter_account", "handover", "replaces"];
+		const facts = keys.filter((key) => receipt[key] !== null && receipt[key] !== undefined && receipt[key] !== "")
+			.map((key) => `<dt>${escapeText(key.replace(/_/g, " "))}</dt><dd>${escapeText(receipt[key])}</dd>`).join("");
+		const markup = `<h2>${escapeText(receipt.synthetic ? "SYNTHETIC TEST RECEIPT" : "TOEFL House cash receipt")}</h2><dl>${facts}</dl>`;
+		const dialog = new frappe.ui.Dialog({ title: text("Numbered cash receipt"),
+			fields: [{ fieldname: "receipt", fieldtype: "HTML", options: markup }],
+			primary_action_label: text("Print receipt"),
+			primary_action() {
+				const paper = window.open("about:blank", "_blank");
+				if (!paper) { frappe.msgprint(text("Allow the print window and try again.")); return; }
+				paper.opener = null;
+				paper.document.write(`<!doctype html><html><head><title>Cash receipt</title><style>body{font:16px sans-serif;margin:32px}dt{font-weight:bold;margin-top:12px}dd{margin-left:0}</style></head><body>${markup}</body></html>`);
+				paper.document.close();
+				paper.focus();
+				paper.print();
+			},
+		});
+		dialog.show();
+	}
+
 	function openGuidedAction(action) {
+		if (action.endpoint === "toefl_house.finance.collections.get_collection_receipt") {
+			frappe.call({ method: action.endpoint, type: "GET", args: { payment_entry: action.args.payment_entry },
+				callback(response) { showCollectionReceipt(response.message); } });
+			return;
+		}
 		const ownAttendance = action.endpoint === "toefl_house.teaching.record_instructor_attendance";
 		let fields = ACTION_FIELDS[action.endpoint];
 		if (ownAttendance) {
@@ -1131,10 +1180,14 @@ frappe.provide("toefl_house.role_desks");
 			});
 			return;
 		}
+		const contextKeys = ["outstanding", "expected_amount", "currency", "receipt_list"];
+		const contextFacts = contextKeys.filter((key) => action.args && action.args[key] !== undefined)
+			.map((key) => `<dt>${escapeText(key.replace(/_/g, " "))}</dt><dd style="white-space:pre-wrap">${escapeText(action.args[key])}</dd>`).join("");
+		const contextFields = contextFacts ? [{ fieldname: "cash_context", fieldtype: "HTML", options: `<dl>${contextFacts}</dl>` }] : [];
 		const dialog = new frappe.ui.Dialog({
 			title: text(action.label),
-			fields: [{ fieldname: "request_key", label: text("Request reference (filled in for you)"), fieldtype: "Data", reqd: 1, read_only: 1, default: newRequestKey(), description: text("Reuse this exact value if you must retry the same request after a connection error.") }, ...fields],
-			primary_action_label: text("Run command"),
+			fields: [{ fieldname: "request_key", label: text("Request reference (filled in for you)"), fieldtype: "Data", reqd: 1, read_only: 1, default: newRequestKey(), description: text("Reuse this exact value if you must retry the same request after a connection error.") }, ...contextFields, ...fields],
+			primary_action_label: text(action.label),
 			primary_action(values) {
 				const guard = ACTION_GUARDS[action.endpoint];
 				if (guard) {
@@ -1309,10 +1362,18 @@ frappe.provide("toefl_house.role_desks");
 			$("<h3 class='th-search-heading'></h3>").text(text("Enrolled students")).appendTo(results);
 			results.append(queueMarkup(students, [text("Record"), text("Status"), text("Next action"), text("Waiting"), text("Act")]));
 		}
+		(payload.collection_sections || []).forEach((part) => {
+			const body = sectionShell(results, part.title, part.kind);
+			if ((part.items || []).length) renderSectionBody(body, part);
+			else emptyState(body, part.empty || {});
+		});
 	}
 
 	Object.entries(SURFACES).forEach(([slug, surface]) => {
-		frappe.pages[slug] = frappe.pages[slug] || {};
+		// Native Page creates its DOM wrapper BEFORE evaluating page_js.
+		// Never create placeholders for unopened pages: pageview.show treats
+		// any truthy entry as already constructed and would show a blank page.
+		if (!frappe.pages[slug] || !frappe.pages[slug].tagName) return;
 		frappe.pages[slug].on_page_load = (wrapper) => {
 			const page = frappe.ui.make_app_page({ parent: wrapper, title: text(surface.title), single_column: true });
 			ensureStyleSheet();

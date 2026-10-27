@@ -29,6 +29,7 @@ from toefl_house.desk import (
 from toefl_house.finance import cashier as cashier_money
 from toefl_house.finance import taxes as tax_configuration
 from toefl_house.finance import shamsi as solar_calendar
+from toefl_house.desk.collections import finance_sections
 
 SLUG = "th-finance-desk"
 
@@ -760,6 +761,7 @@ def work():
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
         "sections": [
+            *finance_sections(),
             section("today", "Today", "queue", items=payment_items,
                     empty_title="No payments recorded today",
                     empty_body="No payment has been received for today. Payments appear here the moment they are posted."),

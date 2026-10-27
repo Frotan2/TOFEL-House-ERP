@@ -104,6 +104,19 @@ function loadClient(frappeOverrides = {}) {
 
 const client = loadClient();
 const surfaces = client.toefl_house.role_desks.surfaces;
+assert.deepStrictEqual(Object.keys(client.frappe.pages), [], "shared script must not pre-create unopened native pages");
+{
+	const first = { tagName: "DIV" };
+	const navigation = loadClient({ pages: { "th-owner-cockpit": first } });
+	assert.strictEqual(Object.keys(navigation.frappe.pages).length, 1);
+	assert.strictEqual(navigation.frappe.pages["th-academic-setup"], undefined);
+	// Mirror pageview: after fetching the next Page, native add_page creates
+	// its wrapper, then the page_js file is evaluated in the same browser.
+	navigation.frappe.pages["th-academic-setup"] = { tagName: "DIV" };
+	vm.runInNewContext(fs.readFileSync(SCRIPT, "utf8"), navigation, { filename: SCRIPT });
+	assert.strictEqual(navigation.frappe.pages["th-owner-cockpit"], first);
+	assert.strictEqual(typeof navigation.frappe.pages["th-academic-setup"].on_page_load, "function");
+}
 // A guided action must either have a real, signature-reviewed dialog or
 // explicitly tell the user that the workflow is unavailable. Never ship a
 // button whose click handler silently returns without explanation.
@@ -205,6 +218,7 @@ const endpointFiles = {
 	"toefl_house.finance.policies": ["finance/policies.py"],
 	"toefl_house.finance.installments": ["finance/installments.py"],
 	"toefl_house.finance.cashier": ["finance/cashier.py"],
+	"toefl_house.finance.collections": ["finance/collections.py"],
 	"toefl_house.teaching": ["teaching/__init__.py"],
 	"toefl_house.teaching.policies": ["teaching/policies.py"],
 	"toefl_house.teaching.attendance_corrections": ["teaching/attendance_corrections.py"],
@@ -420,7 +434,7 @@ function payloadWith(queueItems, factValue) {
 	};
 }
 
-function runScenario({ workPayload, failFirstWork = false, failLookup = false }) {
+function runScenario({ workPayload, failFirstWork = false, failLookup = false, cashReply = null }) {
 	const calls = [];
 	const dialogs = [];
 	const routed = [];
@@ -428,7 +442,7 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false })
 	const body = $("body").appendTo({ children: [] });
 	let workCalls = 0;
 	const frappe = {
-		pages: {},
+		pages: { "th-reception-desk": { tagName: "DIV" } },
 		provide() {},
 		require() {},
 		set_route(route) { routed.push(route); },
@@ -445,6 +459,10 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false })
 		},
 		call(opts) {
 			calls.push(opts);
+			if (opts.method.startsWith("toefl_house.finance.collections.") && cashReply) {
+				opts.callback({ message: cashReply });
+				return;
+			}
 			if (opts.method === "toefl_house.desk.available") {
 				opts.callback({ message: { desks: [{ slug: "th-finance-desk", title: "TOEFL House Finance Desk" }] } });
 				return;
@@ -650,6 +668,26 @@ const hostileItem = {
 	failedInputs[0].attrs.value = "Mercedes";
 	failedButtons[0].click();
 	assert(serialize(failed.body).includes("Search failed"), "a failed lookup says so");
+}
+
+{
+	const receipt = { number: "PAY-001", student_name: HOSTILE, amount: 100, currency: "AFN", synthetic: true };
+	const item = { ...hostileItem, action: { endpoint: "toefl_house.finance.collections.record_reception_collection",
+		label: "Issue cash receipt", args: { fees: "FEE-001", outstanding: 500, currency: "AFN" } } };
+	delete item.action.secondary;
+	const scenario = runScenario({ workPayload: payloadWith([item], "0"), cashReply: { receipt } });
+	findAll(scenario.body, "th-queue-action")[0].click();
+	const form = scenario.dialogs[0];
+	assert.strictEqual(form.values.fees, "FEE-001");
+	assert(form.opts.fields.some((field) => field.fieldname === "cash_context" && field.options.includes("500")));
+	form.submit({ request_key: "native-receipt-request", fees: "FEE-001", amount: 100 });
+	const request = scenario.calls.find((call) => call.method === item.action.endpoint);
+	assert.deepStrictEqual(Object.keys(request.args).sort(), ["amount", "fees", "request_key"]);
+	const numbered = scenario.dialogs[1];
+	assert.strictEqual(numbered.opts.primary_action_label, "Print receipt");
+	const markup = numbered.opts.fields[0].options;
+	assert(markup.includes("SYNTHETIC TEST RECEIPT") && markup.includes("PAY-001"));
+	assert(markup.includes("&lt;img") && !/<img\s/i.test(markup), "receipt facts must be escaped");
 }
 
 /* --------------------------------------------------------------- design */

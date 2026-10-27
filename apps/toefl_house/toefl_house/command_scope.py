@@ -23,6 +23,7 @@ RESULT_NAMES = {
     "assign_teaching_skill": "TH Teaching Assignment",
 }
 COMPANY_REFERENCES = {
+    "payment_entry": "Payment Entry", "counter_account": "Account",
     "fee_structure": "Fee Structure", "fees": "Fees", "invoice": "Sales Invoice",
     "sales_invoice": "Sales Invoice",
     "employee": "Employee", "salary_slip": "Salary Slip", "payroll_entry": "Payroll Entry",
@@ -50,6 +51,13 @@ def _reference_company(doctype, name):
 
 def _authorize_company_scope(kind, payload, actor, result):
     sources = [payload] + ([result] if isinstance(result, dict) else [])
+    if kind == "accept_reception_handover" and payload.get("payment_entries"):
+        from toefl_house.finance.collection_rules import receipt_names
+        try:
+            names = receipt_names(payload["payment_entries"])
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        sources += [{"payment_entry": name} for name in names]
     if not (kind in CORRECTION_COMMANDS and payload.get("request")) and not any(
         any(source.get(field) for field in ("company", *COMPANY_REFERENCES))
         for source in sources
@@ -169,9 +177,21 @@ def authorize_command_scope(kind, payload, actor, *, result=None):
         _require_document("TH Attendance Correction Request", payload["request"], allowed)
     if kind in {"approve_fees_correction", "deny_fees_correction"} and payload.get("request"):
         _require_document("TH Correction Request", payload["request"], allowed)
-    if kind == "request_fees_correction" and payload.get("fees"):
+    if kind in {"request_fees_correction", "record_reception_collection", "correct_reception_collection"} and payload.get("fees"):
         student = frappe.db.get_value("Fees", payload["fees"], "student")
         _require_document("Student", student, allowed)
+    payments = [payload["payment_entry"]] if payload.get("payment_entry") else []
+    if kind == "accept_reception_handover" and payload.get("payment_entries"):
+        from toefl_house.finance.collection_rules import receipt_names
+        try:
+            payments += receipt_names(payload["payment_entries"])
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+    for name in payments:
+        payment = frappe.get_doc("Payment Entry", name)
+        if payment.party_type != "Student" or not payment.party:
+            raise frappe.PermissionError("The receipt student branch cannot be resolved")
+        _require_document("Student", payment.party, allowed)
     # Defaults can resolve differently after a User Permission changes. The
     # stored command result must be scoped again, even for a valid old key.
     if isinstance(result, dict):

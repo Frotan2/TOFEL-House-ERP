@@ -16,6 +16,7 @@
     "finance_scope": "Finance and payroll operations through native ERPNext/HRMS authorities.",
     "reception": "Reception",
     "reception_scope": "Student intake and reception operations.",
+    "reception_cash_posting_2026_10_27": "Owner decision: the student's balance falls immediately when Reception issues the numbered cash receipt. Finance later transfers the counter cash to main Cash through a separate native internal transfer, without a second student receipt. Separate receptionist counters, current Company/Branch scope, independent Finance acceptance and audited Owner corrections are required.",
     "staff_access": "Role-based access only.",
     "auditability": "Important activities require an auditable trail.",
     "offboarding": "Employee offboarding revokes access while preserving historical records.",

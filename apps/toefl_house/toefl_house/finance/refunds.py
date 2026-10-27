@@ -248,6 +248,11 @@ def guard_payment_entry(doc, method=None):
     """
     from toefl_house.security import require_operational
     require_operational()
+    previous = doc.get_doc_before_save() if callable(getattr(doc, "get_doc_before_save", None)) else None
+    protected = ("th_reception_collector", "th_collection_fees", "th_collection_handover", "th_collection_synthetic")
+    if any(getattr(doc, field, None) or (previous and previous.get(field)) for field in protected):
+        from toefl_house.finance.collections import guard_collection_fields
+        guard_collection_fields(doc, method)
     # Cancelling a submitted refund and editing its post-submit fields are
     # native reversal paths, not new money out: the credit note they settled
     # legitimately owes nothing by then, so only the settlement shape is

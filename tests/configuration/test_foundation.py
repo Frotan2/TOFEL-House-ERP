@@ -433,6 +433,7 @@ class ConfigurationAuditContractTests(unittest.TestCase):
                     and getattr(node.targets[0], "id", "") == "KIND_AUTHORITY"):
                 kinds = ast.literal_eval(node.value)
         self.assertEqual(kinds, {
+            "configure_reception_counter": "business_policy",
             "approve_guardian_consent": "business_policy",
             "set_portal_flags": "business_policy",
             "create_owner_operations_policy": "business_policy",

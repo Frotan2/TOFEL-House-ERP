@@ -7651,6 +7651,78 @@ def main():
                     'different_key_deduplicated':True,'legacy_contract_preserved':True,
                     'wages_disbursed':False}
         check('teaching-native-per-contract-monthly-earning',traced(native_monthly_contract))
+        def reception_cash_cycle():
+            # Run after the existing native financial fixtures, preserving
+            # their independently qualified cash-close/outstanding baselines.
+            frappe.set_user('Administrator')
+            fee=frappe.db.get_value('Fees',{'company':fin['company'],'docstatus':1,
+                'outstanding_amount':('>',100)},'name',order_by='name asc')
+            assert fee,'A submitted synthetic tuition balance is required'
+            company=frappe.db.get_value('Fees',fee,'company')
+            prefix='toefl_house.finance.collections.'
+            actors={key:login(key) for key in ('course_owner','receptionist','book_seller','outsider')}
+
+            def rpc(role,method,payload,expected=200,get=False):
+                url=base+'/api/method/'+prefix+method
+                response=(actors[role].get(url,params=payload,timeout=60) if get else
+                          actors[role].post(url,json=payload,timeout=60))
+                assert response.status_code==expected,(method,response.status_code,response.json().get('exc_type'))
+                assert not response.json().get('_server_messages'),(method,'unexpected blocking message')
+                return response.json().get('message')
+
+            rpc('course_owner','configure_reception_counter',dict(
+                request_key='native_counter_assignment_0001',user=users['receptionist'],company=company,
+                counter_label='SYN Reception Cash Counter',reason='SYN native acceptance counter assignment'))
+            frappe.db.rollback()
+            before=float(frappe.db.get_value('Fees',fee,'outstanding_amount'))
+            shares=frappe.db.count('DocShare',{'user':users['receptionist']})
+            payload=dict(request_key='native_counter_receipt_000001',fees=fee,amount='100.00')
+            receipt=rpc('receptionist','record_reception_collection',payload)
+            frappe.db.rollback()
+            assert float(frappe.db.get_value('Fees',fee,'outstanding_amount'))==before-100
+            assert frappe.db.count('DocShare',{'user':users['receptionist']})==shares
+            assert rpc('receptionist','record_reception_collection',payload)==receipt
+            number=receipt['payment_entry']
+            assert rpc('receptionist','get_collection_receipt',dict(payment_entry=number),get=True)['number']==number
+            # Rejections may legitimately carry their explanatory message.
+            rejected=actors['outsider'].get(base+'/api/method/'+prefix+'get_collection_receipt',
+                params=dict(payment_entry=number),timeout=40)
+            assert rejected.status_code==403
+            correction=rpc('course_owner','correct_reception_collection',dict(
+                request_key='native_counter_correction_0001',payment_entry=number,fees=fee,
+                reason='SYN native amended receipt qualification'))
+            frappe.db.rollback()
+            assert frappe.db.get_value('Payment Entry',number,'docstatus')==2
+            amended=correction['payment_entry']
+            assert frappe.db.get_value('Payment Entry',amended,'amended_from')==number
+            assert float(frappe.db.get_value('Fees',fee,'outstanding_amount'))==before-100
+            handover_payload=dict(request_key='native_counter_handover_0001',
+                payment_entries=[amended],counted_amount='100.00')
+            transfer=rpc('book_seller','accept_reception_handover',handover_payload)
+            assert rpc('book_seller','accept_reception_handover',handover_payload)==transfer
+            frappe.db.rollback()
+            assert float(frappe.db.get_value('Fees',fee,'outstanding_amount'))==before-100
+            assert frappe.db.get_value('Payment Entry',amended,'th_collection_handover')==transfer['payment_entry']
+            for source,target,amount in ((receipt['counter_account'],None,0),
+                                         (None,transfer['main_cash_account'],100)):
+                account=source or target
+                gl=frappe.db.sql('''select coalesce(sum(debit-credit),0) from `tabGL Entry`
+                    where account=%s and voucher_type='Payment Entry' and voucher_no in %s
+                    and is_cancelled=0''',(account,(amended,transfer['payment_entry'])))[0][0]
+                assert abs(float(gl)-amount)<0.005,(account,gl,amount)
+            duplicate=actors['book_seller'].post(base+'/api/method/'+prefix+'accept_reception_handover',
+                json=dict(handover_payload,request_key='native_counter_second_handover'),timeout=40)
+            assert duplicate.status_code==417
+            native_read=actors['receptionist'].get(base+'/api/method/frappe.client.get',
+                params=dict(doctype='Fees',name=fee),timeout=40)
+            assert native_read.status_code==403
+            for actor in actors.values():
+                actor.close()
+            return dict(receipt=number,amended_receipt=amended,transfer=transfer['payment_entry'],
+                immediate_student_reduction=100,handover_student_change=0,counter_net=0,
+                main_cash_increase=100,idempotent=True,temporary_shares_removed=True,
+                unauthorized_read_denied=True,second_handover_denied=True)
+        check('reception-native-http-cash-receipt-correction-handover',traced(reception_cash_cycle))
         report['status']='pass'
 
     except Exception as exc:

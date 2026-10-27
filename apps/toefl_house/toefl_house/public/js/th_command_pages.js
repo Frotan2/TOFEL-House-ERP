@@ -816,7 +816,9 @@ frappe.provide("toefl_house.command_pages");
 	toefl_house.command_pages.stylesheet = STYLESHEET;
 	toefl_house.command_pages.factLabels = FACT_LABELS;
 	Object.entries(PAGE_SURFACES).forEach(([name, surface]) => {
-		frappe.pages[name] = frappe.pages[name] || {};
+		// Attach only to a native Page wrapper; unopened-page placeholders
+		// prevent Frappe's router from constructing the destination page.
+		if (!frappe.pages[name] || !frappe.pages[name].tagName) return;
 		frappe.pages[name].on_page_load = (wrapper) => {
 			if (surface.admin) {
 				renderAdminPage(wrapper, surface);

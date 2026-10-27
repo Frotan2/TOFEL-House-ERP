@@ -158,6 +158,52 @@ tested permission boundaries, not collection/handover or all staff workflows.
 The local owned run passed 2,572 tests with 172 platform skips; final routing
 regressions and new-revision CI must also pass before release qualification.
 
+## QA-011: a caught native permission error still blocks the browser
+
+The exact `4948440` image gate passed all five primary desks but failed on
+Owner's Academic Setup page. Its captured screen showed the RQ Job role-denial
+modal. The health helper caught the virtual controller's PermissionError and
+returned its bounded registry fallback, but Frappe retained the controller's
+server message in the otherwise successful response. Native read permission
+is now checked before entering that throwing controller. No RQ Job permission
+is granted. Seven focused fallback tests pass; the browser gate must rerun.
+
+The `02525a6` browser rerun removed that modal and exposed a second cause:
+the shared desk script pre-created `frappe.pages` placeholders for unopened
+surfaces. Native pageview interprets any existing entry as a constructed page,
+so later navigation hid the current page without constructing its destination.
+Both shared Page clients now attach handlers only to DOM wrappers already
+created by native Page. A same-session two-page regression preserves the first
+wrapper, leaves unopened pages absent and binds the next native wrapper.
+Hosted navigation must qualify this repair; no page is forced visible by CSS.
+
+## QA-012: Reception collection and Finance cash handover
+
+The Owner explicitly selected immediate balance reduction at numbered receipt
+issue on 2026-10-27. Reception previously had no collection action. The new
+workflow posts native Student/Fees Payment Entry receipts to separately
+assigned counter Cash accounts. Finance accepts an exact listed batch with a
+native Internal Transfer to main Cash, without charging the student again.
+Owner-only correction cancels and amends an unhanded receipt atomically;
+handed receipts and transfers cannot be rewritten through native CRUD.
+
+Only the restored synthetic Windows site was migrated for initial acceptance.
+Receipt `ACC-PAY-2026-00007` reduced outstanding AFN 4,500 to 4,400; transfer
+`ACC-PAY-2026-00008` left outstanding unchanged. A separate female-counter
+AFN 50 receipt and Owner cancellation/amendment pass. Same-key retries return
+the existing posting; another-key handover and handed-receipt correction are
+denied. Receipt ownership, wrong-role handover and variance refusal pass.
+
+Native reference readers require exact Fees/Student read permission during
+posting. Transaction-private, read-only DocShare rows are deleted before
+commit; a commit guard refuses incomplete cleanup. No role or global
+permission flag changes. A simultaneous native HTTP request using the same
+Reception identity remains denied while these uncommitted rows exist. Native
+commit during the lease is denied, and no share/read right remains afterward.
+Focused rule, cleanup and immutable-field regressions accompany the native
+HTTP acceptance. The restored-site Reception, Finance and Owner queue APIs
+pass; actual graphical collection/printing and final-source CI remain open.
+
 ## Still required
 
 Final-revision CI, official rebuilt package and supported in-place Windows

@@ -34,6 +34,7 @@ AUDIT = "TH Configuration Audit Event"
 # twelve academic catalog commands (S5 idempotency: they validate keys
 # and now keep receipts, so a retried call replays instead of erroring).
 KIND_AUTHORITY = {
+    "configure_reception_counter": "business_policy",
     "approve_guardian_consent": "business_policy",
     "set_portal_flags": "business_policy",
     "create_owner_operations_policy": "business_policy",
