@@ -55,8 +55,12 @@ timetables.set_timetable_slots(request_key, template, slots, reason)            
 ```
 
 A calendar row with no year/branch is global; a branch row beats it; on the same
-date an explicit `Working Day` beats `Closed`, which beats `Holiday`. With no
-calendar at all nothing is blocked here — the policy's teaching days still apply.
+date an explicit `Working Day` beats `Closed`, which beats `Holiday`. Friday is
+the sole recurring weekly holiday even without a calendar; listing Friday in
+a weekly pattern does not reopen it. Only an Owner-recorded, dated `Working
+Day` can reopen that Friday. Saturday is available when the teaching-days
+policy permits it. Other holidays require a recorded closure. Configure the
+Frappe site timezone to **Asia/Kabul**; native dates remain Gregorian ISO.
 
 **Until an active policy version exists**, every policy-gated command refuses
 with `NOT CONFIGURED` language. That is deliberate: there is no built-in default
@@ -70,7 +74,7 @@ teaching.schedule_session(request_key, student_group, schedule_date, from_time, 
 ```
 
 `generate_timetable` materialises the template inside the policy horizon and
-returns the sessions plus `skipped_calendar_days`. Both paths run the same
+returns the sessions plus `skipped_calendar_days` and `skipped_fridays`. Both paths run the same
 server-side gate, in this order, before anything is written:
 
 1. date and window shape (ISO date; `HH:MM`/`HH:MM:SS`; start < end);
@@ -99,9 +103,32 @@ scheduling.cancel_session(request_key, course_schedule, reason)
 The original becomes `Postponed` (or `Cancelled`) with the operator's note; the
 replacement is a new `Replacement` row whose `th_replaces` points back. A
 session that already carries attendance is never postponed or cancelled — the
-session happened; correct the record instead.
+session happened; correct the record instead. **Known native limitation:**
+Education's pinned overlap validator does not consider the custom status, so a
+custom-cancelled/postponed native row can still block insertion into the same
+slot. The owned conflict precheck is not proof that native insertion will accept
+that slot. Do not delete history or globally patch Education to work around it;
+use a non-overlapping slot until a native-safe remedy is qualified.
 
 ## 3. Fill a class, and answer "is there room?"
+
+`create_student_group` accepts an optional list of Student IDs from the submitted
+native enrollment for the selected program, year, term and branch. This permits
+splitting one intake; leaving it blank retains the prior all-eligible-intake
+behavior. A foreign, ambiguous or unresolvable branch is not roster evidence for
+a branch class. A supplied Academic Term must belong to the chosen year and
+contain the entire class window.
+
+Configure each GE and EAP level's effective duration as **2 Solar Hijri
+Month**; the class start and inclusive end are shared by everyone, including
+late entrants. The code enforces a configured Solar-month duration and rejects
+an inconsistent explicit end, but it does **not** reliably identify every
+possible owner-defined GE/EAP family code or force its setting to 2. The Owner
+must verify that configuration before use. Speaking, TOEFL preparation and
+other programs retain their own effective durations; no late-join fee proration
+is implied. The Academic desk's roster-based waiting count is a different
+measure from the analytics "no open cohort" measure; large or incomplete reads
+withhold guidance rather than certify an exact count.
 
 ```python
 teaching.add_class_member(request_key, student_group, student, override=None)
@@ -185,6 +212,24 @@ recordable — the learner is away, and the record must still be truthful. The
 roster row is never touched, capacity keeps counting it, and `resume` ends the
 window while keeping the row for history. Both windows are bounded by the
 policy.
+
+Attendance is accepted only for a Scheduled session on or before the current
+site date, an Active class and an active roster member. The present check is
+**date-level only**: it does not yet prevent an earlier-in-the-day mark before
+the session's start time. An Instructor must also resolve to one active
+employee/instructor identity and hold an assignment covering both today and the
+specific session; once that assignment ends, access to former rosters, grades
+and attendance receipt replays is revoked. A one-session assignment grants that
+session and its roster, not whole-class assessment results. Attendance
+corrections retain their separate reviewed workflow.
+
+Native roster rows have no effective join date in this workflow. Consequently a
+late entrant currently appears on the active roster for a past session and may
+be offered/accepted for that date. Do not backfill their pre-enrollment marks;
+an auditable membership-effective-date policy and migration are still needed.
+The student and consent-gated guardian schedule views display session status
+and labeled Solar Hijri and Gregorian dates; API authorization is rechecked on
+every request.
 
 ## 6. Reporting and audit
 

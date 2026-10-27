@@ -14,6 +14,8 @@ are identity-and-window only (ROLE-DESKS: no rates, no payable amounts, no
 payroll rows); recorded assessment rows are shown as recorded, while
 grading policy itself stays the owner decision D1.
 """
+from datetime import date
+
 import frappe
 from frappe.utils import today
 
@@ -46,7 +48,40 @@ ASSIGNMENT_FIELDS = ["name", "student_group", "skill", "instructor", "contract",
 GROUP_FIELDS = ["name", "student_group_name", "program", "academic_year",
                 "max_strength", "course", "disabled", "th_class_status"]
 SCHEDULE_FIELDS = ["name", "student_group", "instructor", "course", "room",
-                   "from_time", "to_time", "schedule_date"]
+                   "from_time", "to_time", "schedule_date", "th_session_status"]
+
+
+def _assignment_covers_day(assignment, day):
+    try:
+        target = date.fromisoformat(str(day))
+        start = date.fromisoformat(str(assignment.get("effective_start") or ""))
+        end = (date.fromisoformat(str(assignment["effective_end"]))
+               if assignment.get("effective_end") else None)
+    except (TypeError, ValueError):
+        return False
+    return start <= target and (end is None or target <= end)
+
+
+def _assigned_session(row, assignments):
+    return any(assignment.get("student_group") == row.get("student_group")
+               and _assignment_covers_day(assignment, row.get("schedule_date"))
+               and (not assignment.get("course_schedule")
+                    or assignment.get("course_schedule") == row.get("name"))
+               for assignment in assignments)
+
+
+def _attendance_unavailable(row, group, day):
+    status = row.get("th_session_status") or "Scheduled"
+    if status != "Scheduled":
+        return f"No attendance: this session is {status.lower()}."
+    if cohort_state(group) != "Active":
+        return "No attendance: this class is not active."
+    try:
+        if date.fromisoformat(str(row.get("schedule_date") or "")) > date.fromisoformat(str(day)):
+            return "Attendance can be recorded on the session date."
+    except (TypeError, ValueError):
+        return "The session date is unavailable."
+    return ""
 
 
 def _resolve_instructor(user):
@@ -63,25 +98,29 @@ def _resolve_instructor(user):
     employees = project_rows("teacher", EMPLOYEE,
                              ["name", "employee_name", "status", "user_id"],
                              filters={"user_id": user, "status": "Active"},
-                             order_by="name asc", limit=1, scope=False)
-    if not employees:
+                             order_by="name asc", limit=2, scope=False)
+    if len(employees) != 1:
         return None, None
     employee = employees[0]
     instructors = project_rows("teacher", INSTRUCTOR,
                                ["name", "instructor_name", "employee", "status"],
                                filters={"employee": employee["name"]},
-                               order_by="name asc", limit=1, scope=False)
-    if not instructors:
+                               order_by="name asc", limit=100, scope=False)
+    active = [row for row in instructors if row.get("status") != "Left"]
+    # An ambiguous or truncated native identity must not arbitrarily select
+    # another instructor's classes. Attendance has the same unique employee
+    # requirement and independently verifies the scheduled instructor.
+    if len(instructors) >= 100 or len(active) != 1:
         return employee, None
-    return employee, instructors[0]
+    return employee, active[0]
 
 
 def _unlinked_payload():
     """Fail-closed empty state: the role is held, the link is missing."""
     body = ("This login holds the Instructor role but is not linked to an "
-            "instructor record: either no active employee points at this "
-            "login, or no instructor points at that employee. Ask the Course "
-            "Owner to link the employee login and the instructor record; "
+            "instructor record: either the active employee or instructor link "
+            "is missing, departed or ambiguous. Ask the Course "
+            "Owner to verify the employee login and the instructor record; "
             "until then no class is shown.")
     return {
         "desk": SLUG,
@@ -111,6 +150,9 @@ def work():
                                filters={"instructor": instructor["name"]},
                                order_by="effective_start asc",
                                limit=BOUNCE_WINDOW)
+    # Class rosters and grades are sensitive. A future or ended assignment is
+    # not current permission to read the class indefinitely.
+    assignments = [row for row in assignments if _assignment_covers_day(row, day)]
     group_names = sorted({row["student_group"] for row in assignments
                           if row.get("student_group")})
     groups = []
@@ -142,6 +184,10 @@ def work():
             filters={"student_group": ("in", group_names),
                      "instructor": instructor["name"]},
             order_by="schedule_date desc", limit=LIMIT_QUEUES)
+        # A one-session assignment is not authority for every session of the
+        # class. Recheck its date window and specific session on reads too.
+        sessions_today = [row for row in sessions_today if _assigned_session(row, assignments)]
+        recent_sessions = [row for row in recent_sessions if _assigned_session(row, assignments)]
 
     roster = []
     if group_names:
@@ -168,12 +214,16 @@ def work():
             attendance_by_session.setdefault(row.get("course_schedule"), []).append(row)
 
     results = []
-    if group_names:
+    # A session-specific substitute needs the roster for their own session,
+    # not every academic assessment for the whole class.
+    assessment_groups = sorted({row["student_group"] for row in assignments
+                                if row.get("student_group") and not row.get("course_schedule")})
+    if assessment_groups:
         results = project_rows("teacher", RESULT,
                                ["name", "student", "student_name", "student_group",
                                 "course", "total_score", "maximum_score",
                                 "grade", "docstatus"],
-                               filters={"student_group": ("in", group_names)},
+                               filters={"student_group": ("in", assessment_groups)},
                                order_by="creation desc", limit=LIMIT_QUEUES)
 
     contracts = project_rows("teacher", CONTRACT,
@@ -235,16 +285,20 @@ def work():
             "person": group.get("student_group_name") or row.get("student_group") or "",
             "detail": " · ".join(part for part in (row.get("course"),
                                                  row.get("room")) if part),
-            "status": f"{row.get('from_time', '')}–{row.get('to_time', '')}",
+            "status": f"{row.get('th_session_status') or 'Scheduled'} · {row.get('from_time', '')}–{row.get('to_time', '')}",
             "stage": "Session today",
-            "stage_definition": "A scheduled session for one of my classes today.",
+            "stage_definition": "A course session today; postponed and cancelled sessions do not meet.",
             "next": ("Attendance is recorded "
                      f"({len(marked)} marked, {absent} absent)."
                      if marked else "Record attendance after the session."),
             "next_role": "Instructor" if pending_roster else None,
             "waiting_since": None,
         }
-        if pending_roster:
+        unavailable = _attendance_unavailable(row, group, day)
+        if unavailable:
+            item["next"] = unavailable
+            item["next_role"] = None
+        elif pending_roster:
             item["next"] = f"{len(marked)} marked; {len(pending_roster)} still need attendance."
             action = guided_action("Instructor",
                                    "toefl_house.teaching.record_instructor_attendance",
@@ -282,7 +336,11 @@ def work():
             "next_role": "Instructor" if pending_roster else None,
             "waiting_since": str(row.get("schedule_date") or "") or None,
         }
-        if pending_roster:
+        unavailable = _attendance_unavailable(row, group, day)
+        if unavailable:
+            item["next"] = unavailable
+            item["next_role"] = None
+        elif pending_roster:
             item["next"] = f"{len(marked)} marked; {len(pending_roster)} still need attendance."
             action = guided_action("Instructor",
                                    "toefl_house.teaching.record_instructor_attendance",

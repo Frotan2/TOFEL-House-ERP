@@ -130,15 +130,26 @@ def _require_document(doctype, name, allowed):
 
 
 def _effective_student_branches(student):
-    from toefl_house.permissions import _student_branches
-    branches = _student_branches(student)
-    if not branches:
-        # Intake is the explicit authority before first placement. Once
-        # rostered, current class membership remains authoritative.
-        applicant = frappe.db.get_value("Student", student, "student_applicant")
-        intake = frappe.db.get_value("Student Applicant", applicant, "th_branch") if applicant else None
-        branches = {intake} if intake else set()
-    return branches
+    # Preserve missing branch facts instead of dropping NULLs. A branchless or
+    # dangling active roster must not silently fall back to an old intake or
+    # hide an additional unresolved membership.
+    limit = 10000
+    rows = frappe.get_all("Student Group Student", filters={"student": student, "active": 1},
+                          fields=["parent"], limit_page_length=limit)
+    if len(rows) >= limit:
+        return {None}
+    if rows:
+        parents = sorted({row["parent"] for row in rows if row.get("parent")})
+        groups = frappe.get_all("Student Group", filters={"name": ("in", parents)},
+                                fields=["name", "th_branch"], limit_page_length=limit) if parents else []
+        if len(groups) >= limit:
+            return {None}
+        by_name = {row["name"]: row.get("th_branch") for row in groups}
+        return {by_name.get(row.get("parent")) for row in rows}
+    # Intake is the explicit authority only before any active class placement.
+    applicant = frappe.db.get_value("Student", student, "student_applicant")
+    intake = frappe.db.get_value("Student Applicant", applicant, "th_branch") if applicant else None
+    return {intake} if intake else set()
 
 
 def roster_for_branch(rows, branch):
@@ -148,13 +159,29 @@ def roster_for_branch(rows, branch):
     for row in rows:
         student = row["student"]
         branches = _effective_student_branches(student)
-        if branch in branches:
+        # A learner linked to multiple branches is not evidence that this
+        # branch alone may copy their full record into a new roster.
+        if branches == {branch}:
             eligible.append(row)
     return eligible
 
 
 def authorize_command_scope(kind, payload, actor, *, result=None):
     _authorize_company_scope(kind, payload, actor, result)
+    if kind == "record_instructor_attendance" and isinstance(result, dict):
+        # Receipts contain student/attendance identifiers. A role and a
+        # matching idempotency key are not proof that this login is still the
+        # session's linked, assigned instructor after access changes.
+        schedule = payload.get("course_schedule")
+        if not isinstance(schedule, str) or not schedule or len(schedule) > 140:
+            raise frappe.PermissionError("A valid assigned session is required")
+        row = frappe.db.get_value(
+            "Course Schedule", schedule,
+            ["student_group", "instructor", "schedule_date"], as_dict=True)
+        if not row:
+            raise frappe.PermissionError("The assigned session is no longer available")
+        from toefl_house.teaching import _require_own_instructor_session
+        _require_own_instructor_session(actor, row, schedule)
     allowed = actor_branches(actor)
     if allowed is None:
         return
@@ -177,3 +204,9 @@ def authorize_command_scope(kind, payload, actor, *, result=None):
     if isinstance(result, dict):
         if kind in RESULT_NAMES and result.get("name"):
             _require_document(RESULT_NAMES[kind], result["name"], allowed)
+        if kind == "create_student_group":
+            # A previously saved receipt includes every initial Student ID.
+            # If a learner moves out of the actor's scope, the old group
+            # permission alone must not keep that receipt visible.
+            for student in result.get("roster") or []:
+                _require_document("Student", student, allowed)

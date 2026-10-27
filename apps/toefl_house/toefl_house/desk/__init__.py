@@ -133,12 +133,15 @@ PROJECTION_FIELDS = {
     # the pinned native Student Group (education 93bc70757533) has no
     # `active` column — `disabled` is its native archive flag.
     ("academic", "Student Group"): [
-        "name", "student_group_name", "program", "academic_year",
+        "name", "student_group_name", "program", "academic_year", "academic_term",
         "max_strength", "course", "disabled", "th_class_status",
+    ],
+    ("academic", "Student Group Student"): [
+        "name", "parent", "student", "active",
     ],
     ("academic", "Course Schedule"): [
         "name", "student_group", "instructor", "course", "room",
-        "from_time", "to_time", "schedule_date",
+        "from_time", "to_time", "schedule_date", "th_session_status",
     ],
     ("academic", "TH Teaching Assignment"): [
         "name", "student_group", "skill", "instructor", "contract",
@@ -149,7 +152,7 @@ PROJECTION_FIELDS = {
         "status", "docstatus",
     ],
     ("academic", "Program Enrollment"): [
-        "name", "student", "student_name", "program", "academic_year",
+        "name", "student", "student_name", "program", "academic_year", "academic_term",
         "enrollment_date", "docstatus",
     ],
     ("finance", "Fees"): [
@@ -498,7 +501,7 @@ PROJECTION_FIELDS = {
     ],
     ("teacher", "Course Schedule"): [
         "name", "student_group", "instructor", "course", "room",
-        "from_time", "to_time", "schedule_date",
+        "from_time", "to_time", "schedule_date", "th_session_status",
     ],
     ("teacher", "Student Group Student"): [
         "name", "parent", "student", "student_name", "group_roll_number",
@@ -595,12 +598,22 @@ BRANCH_CHAIN_FILTERS = ("Student", "Student Group Student", "Student Attendance"
 _CHAIN_LIMIT = 10000  # bounded scope resolution; truncation is fail-closed
 
 
-def _branch_allowed_names(doctype, branches):
+def _branch_allowed_names(doctype, branches, *, require_complete=False):
     """Document names a branch-scoped viewer may see, resolved through the
     class -> branch and roster -> student chains."""
-    groups = [row["name"] for row in frappe.get_all(
+    # Enrollment queues make numeric/roster claims. A truncated scope chain
+    # must report an error, not masquerade as an exact empty intake.
+    strict = require_complete or doctype == "Program Enrollment"
+
+    def checked(rows):
+        if strict and len(rows) >= _CHAIN_LIMIT:
+            raise frappe.ValidationError(
+                "Branch enrollment scope exceeds the safe read limit; narrow the scope or contact an administrator")
+        return rows
+
+    groups = [row["name"] for row in checked(frappe.get_all(
         "Student Group", filters={"th_branch": ("in", branches)},
-        fields=["name"], limit_page_length=_CHAIN_LIMIT)]
+        fields=["name"], limit_page_length=_CHAIN_LIMIT))]
     if doctype == "Student Group Student":
         if not groups:
             return []
@@ -613,12 +626,54 @@ def _branch_allowed_names(doctype, branches):
         return [row["name"] for row in frappe.get_all(
             doctype, filters={"student_group": ("in", groups)},
             fields=["name"], limit_page_length=_CHAIN_LIMIT)]
-    roster = [row["student"] for row in frappe.get_all(
+    roster = [row["student"] for row in checked(frappe.get_all(
         "Student Group Student", filters={"parent": ("in", groups), "active": 1},
-        fields=["student"], limit_page_length=_CHAIN_LIMIT)] if groups else []
+        fields=["student"], limit_page_length=_CHAIN_LIMIT))] if groups else []
     if doctype == "Student":
         return roster
-    if doctype in ("Program Enrollment", "Fees", "TH Enrollment Exit"):
+    if doctype == "Program Enrollment":
+        # A new/late learner may have a submitted enrollment before any class
+        # roster exists. Authorize that intake only through an already
+        # branch-checked admission for the *same* student, program, year and
+        # term. A student's old applicant branch cannot authorize a different
+        # intake or a student now rostered in a foreign branch.
+        # Finding one in-scope roster is insufficient when the same learner
+        # also has an active foreign or branchless roster. Re-read *all*
+        # memberships before using roster-based enrollment evidence.
+        all_roster = checked(frappe.get_all(
+            "Student Group Student", filters={"student": ("in", roster), "active": 1},
+            fields=["student", "parent"], limit_page_length=_CHAIN_LIMIT)) if roster else []
+        parents = sorted({r["parent"] for r in all_roster if r.get("parent")})
+        parent_rows = checked(frappe.get_all(
+            "Student Group", filters={"name": ("in", parents)},
+            fields=["name", "th_branch"], limit_page_length=_CHAIN_LIMIT)) if parents else []
+        parent_branch = {row["name"]: row.get("th_branch") for row in parent_rows}
+        memberships = {}
+        for row in all_roster:
+            memberships.setdefault(row["student"], set()).add(parent_branch.get(row.get("parent")))
+        confined = {student for student, facts in memberships.items()
+                    if facts and facts <= set(branches)}
+        names = {row["name"] for row in checked(frappe.get_all(
+            doctype, filters={"student": ("in", sorted(confined))},
+            fields=["name"], limit_page_length=_CHAIN_LIMIT))} if confined else set()
+        admissions = _branch_allowed_names("TH Admission Decision", branches, require_complete=True)
+        if admissions:
+            rows = checked(frappe.get_all(
+                "TH Admission Decision", filters={"name": ("in", admissions)},
+                fields=["native_student", "program", "academic_year", "academic_term"],
+                limit_page_length=_CHAIN_LIMIT))
+            intakes = {(r.get("native_student"), r.get("program"), r.get("academic_year"),
+                        r.get("academic_term") or "") for r in rows if r.get("native_student")}
+            students = sorted({r[0] for r in intakes})
+            candidates = checked(frappe.get_all(
+                doctype, filters={"student": ("in", students)},
+                fields=["name", "student", "program", "academic_year", "academic_term"],
+                limit_page_length=_CHAIN_LIMIT)) if students else []
+            names.update(r["name"] for r in candidates
+                         if (r.get("student"), r.get("program"), r.get("academic_year"),
+                             r.get("academic_term") or "") in intakes)
+        return sorted(names)
+    if doctype in ("Fees", "TH Enrollment Exit"):
         if not roster:
             return []
         return [row["name"] for row in frappe.get_all(
@@ -645,41 +700,41 @@ def _branch_allowed_names(doctype, branches):
                     fields=["name"], limit_page_length=_CHAIN_LIMIT)}
         return sorted(names)
     if doctype == "TH Admission Decision":
-        applicants = [row["name"] for row in frappe.get_all(
+        applicants = [row["name"] for row in checked(frappe.get_all(
             "Student Applicant", filters={"th_branch": ("in", branches)},
-            fields=["name"], limit_page_length=_CHAIN_LIMIT)]
+            fields=["name"], limit_page_length=_CHAIN_LIMIT))]
         names = set()
         for field, values in (("student_applicant", applicants),
                               ("existing_student", roster),
                               ("native_student", roster)):
             if values:
-                names |= {row["name"] for row in frappe.get_all(
+                names |= {row["name"] for row in checked(frappe.get_all(
                     doctype, filters={field: ("in", values)},
-                    fields=["name"], limit_page_length=_CHAIN_LIMIT)}
+                    fields=["name"], limit_page_length=_CHAIN_LIMIT))}
         if not names:
             return []
-        candidate_rows = frappe.get_all(
+        candidate_rows = checked(frappe.get_all(
             doctype, filters={"name": ("in", sorted(names))},
             fields=["name", "student_applicant", "existing_student", "native_student"],
-            limit_page_length=_CHAIN_LIMIT)
+            limit_page_length=_CHAIN_LIMIT))
         # All linked student memberships matter, not merely the branch whose
         # roster caused this admission to appear in the candidate set.
         linked_students = sorted({
             row.get(field) for row in candidate_rows
             for field in ("existing_student", "native_student") if row.get(field)
         })
-        roster_rows = frappe.get_all(
+        roster_rows = checked(frappe.get_all(
             "Student Group Student",
             filters={"student": ("in", linked_students), "active": 1},
             fields=["student", "parent"], limit_page_length=_CHAIN_LIMIT
-        ) if linked_students else []
+        )) if linked_students else []
         if len(roster_rows) >= _CHAIN_LIMIT:
             return []  # Truncation must never hide a foreign membership.
         parent_names = sorted({row["parent"] for row in roster_rows if row.get("parent")})
-        parent_rows = frappe.get_all(
+        parent_rows = checked(frappe.get_all(
             "Student Group", filters={"name": ("in", parent_names)},
             fields=["name", "th_branch"], limit_page_length=_CHAIN_LIMIT
-        ) if parent_names else []
+        )) if parent_names else []
         if len(parent_rows) >= _CHAIN_LIMIT:
             return []
         parent_branch = {row["name"]: row.get("th_branch") for row in parent_rows}

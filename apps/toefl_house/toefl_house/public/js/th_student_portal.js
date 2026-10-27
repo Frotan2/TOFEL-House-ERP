@@ -2,8 +2,9 @@
 (() => {
   "use strict";
   const portal = document.getElementById("student-portal");
-  if (!portal) return;
+  if (!portal || !portal.querySelector("[data-pane]")) return;
 
+  let tabRequest = 0;
   const tabs = portal.querySelectorAll("[data-tab]");
   const panes = portal.querySelectorAll("[data-pane]");
 
@@ -19,29 +20,13 @@
     return frappe.call({ method, args }).then(r => r.message);
   }
 
-  function renderList(el, items, empty) {
-    el.replaceChildren();
-    if (!items || !items.length) {
-      const msg = document.createElement("p");
-      msg.className = "text-muted";
-      msg.textContent = empty;
-      el.appendChild(msg);
-      return;
-    }
-    const list = document.createElement("ul");
-    list.className = "list-group";
-    items.forEach(item => {
-      const li = document.createElement("li");
-      li.className = "list-group-item";
-      li.textContent = Object.values(item).slice(0, 4).map(v => String(v ?? "")).join(" — ");
-      list.appendChild(li);
-    });
-    el.appendChild(list);
-  }
-
   function loadTab(tab) {
     const pane = portal.querySelector(`[data-pane="${tab}"]`);
-    if (!pane || pane.dataset.loaded) return;
+    if (!pane) return;
+    const request = ++tabRequest;
+    const loading = document.createElement("em");
+    loading.textContent = "Loading…";
+    pane.replaceChildren(loading);
     let promise;
     if (tab === "schedule") promise = api("toefl_house.operations.student_portal.get_my_schedule");
     else if (tab === "attendance") promise = api("toefl_house.operations.student_portal.get_my_attendance");
@@ -49,9 +34,10 @@
     else if (tab === "fees") promise = api("toefl_house.operations.student_portal.get_my_fees").then(d => (d.fees || []).concat(d.invoices || []));
     else return;
     promise.then(items => {
-      renderList(pane, items, "No records found.");
-      pane.dataset.loaded = "1";
+      if (request !== tabRequest) return;
+      window.TH_PORTAL_VIEW.renderList(pane, items, tab, "No records found.");
     }).catch(() => {
+      if (request !== tabRequest) return;
       const alert = document.createElement("div");
       alert.className = "alert alert-danger";
       alert.textContent = "Access denied or portal disabled.";
@@ -79,6 +65,9 @@
       alert.appendChild(document.createTextNode(String(item.message || "")));
       el.appendChild(alert);
     });
+  }).catch(() => {
+    // Portal reads remain independently authorized; an announcement failure
+    // must not prevent schedule or attendance from loading.
   });
 
   // Load initial tab

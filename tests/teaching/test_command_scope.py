@@ -16,8 +16,16 @@ class CommandScopeTests(unittest.TestCase):
         self.values = {}
         self.frappe = types.ModuleType("frappe")
         self.frappe.PermissionError = PermissionError
-        self.frappe.get_all = Mock(side_effect=lambda *a, **kw:
-            self.branches if kw["filters"]["allow"] == "Branch" else self.companies)
+        def get_all(doctype, **kw):
+            filters = kw["filters"]
+            if doctype == "Student Group Student":
+                return [{"parent": f"group:{branch}"}
+                        for branch in self.student_branches.get(filters["student"], set())]
+            if doctype == "Student Group":
+                return [{"name": parent, "th_branch": None if parent == "group:None" else parent[6:]}
+                        for parent in filters["name"][1]]
+            return self.branches if filters["allow"] == "Branch" else self.companies
+        self.frappe.get_all = Mock(side_effect=get_all)
         self.frappe.get_doc = Mock(side_effect=lambda dt, name: self.documents[(dt, name)])
         self.frappe.db = types.SimpleNamespace(get_value=lambda *key: self.values.get(key))
         permissions = types.ModuleType("toefl_house.permissions")
@@ -67,11 +75,40 @@ class CommandScopeTests(unittest.TestCase):
             self.scope.authorize_command_scope("create_student_group", {}, "actor", result={"name": "target"})
 
     def test_roster_filters_foreign_and_unassigned_students(self):
-        self.student_branches = {"own": {"A"}, "foreign": {"B"}}
-        rows = [{"student": name} for name in ("own", "foreign", "intake", "unknown")]
+        self.student_branches = {"own": {"A"}, "foreign": {"B"}, "mixed": {"A", "B"},
+                                 "missing": {"A", None}, "branchless": {None}}
+        rows = [{"student": name} for name in
+                ("own", "foreign", "intake", "unknown", "mixed", "missing", "branchless")]
         self.values[("Student", "intake", "student_applicant")] = "applicant"
         self.values[("Student Applicant", "applicant", "th_branch")] = "A"
         self.assertEqual(self.scope.roster_for_branch(rows, "A"), [rows[0], rows[2]])
+
+    def test_class_receipt_is_rescoped_when_a_roster_student_moves(self):
+        self.documents[("Student Group", "class-a")] = {"branches": {"A"}}
+        self.documents[("Student", "learner")] = {}
+        self.student_branches = {"learner": {"A"}}
+        result = {"name": "class-a", "roster": ["learner"]}
+        self.scope.authorize_command_scope("create_student_group", {}, "actor", result=result)
+        self.student_branches["learner"] = {"B"}
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope("create_student_group", {}, "actor", result=result)
+
+    def test_instructor_receipt_rechecks_ownership_even_without_branch_restriction(self):
+        self.branches = []
+        row = types.SimpleNamespace(student_group="class-a", instructor="teacher-a", schedule_date="2026-10-01")
+        self.frappe.db.get_value = Mock(return_value=row)
+        teaching = types.ModuleType("toefl_house.teaching")
+        teaching._require_own_instructor_session = Mock()
+        with patch.dict(sys.modules, {"toefl_house.teaching": teaching}):
+            payload = {"course_schedule": "session-a"}
+            self.scope.authorize_command_scope("record_instructor_attendance", payload, "actor", result={"records": {}})
+            teaching._require_own_instructor_session.assert_called_once_with("actor", row, "session-a")
+            teaching._require_own_instructor_session.side_effect = PermissionError("assignment revoked")
+            with self.assertRaises(PermissionError):
+                self.scope.authorize_command_scope("record_instructor_attendance", payload, "actor", result={"records": {}})
+            self.frappe.db.get_value.return_value = None
+            with self.assertRaises(PermissionError):
+                self.scope.authorize_command_scope("record_instructor_attendance", payload, "actor", result={"records": {}})
 
     def test_current_roster_takes_precedence_over_old_intake(self):
         self.student_branches = {"moved": {"B"}}

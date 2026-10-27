@@ -2362,6 +2362,17 @@ def main():
                 student_email_id=users['outsider'])).insert().name
         outsider_stu=check('teaching-outsider-student-fixture',outsider_student)
         stu1,stu2=groupA['roster']
+        def future_attendance_refused():
+            # Synthetic clock only: the native schedule and enrolled roster
+            # are real rows, but this probe treats the session as tomorrow.
+            before=frappe.db.count('Student Attendance')
+            with patch.object(frappe.utils,'today',return_value='2026-09-20'):
+                unavailable(lambda:as_user('attendance_recorder',lambda:
+                    tea.record_attendance('tea_future_mark_00001',schedA['name'],{stu1:'Present'})),
+                    'future session')
+            assert frappe.db.count('Student Attendance')==before
+            return {'future_date_refused':True,'no_native_mark':True,'clock':'synthetic'}
+        check('teaching-future-attendance-refused',traced(future_attendance_refused))
         check('teaching-attendance-scheduler-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.record_attendance('tea_sch_att_000000001',schedA['name'],{stu1:'Present'}))))
         check('teaching-attendance-invalid-status-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_badstatus_0000001',schedA['name'],{stu1:'Late'}))))
         check('teaching-attendance-empty-batch-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_empty_att_0000001',schedA['name'],{}))))
@@ -4960,9 +4971,14 @@ def main():
             assert hist.skill=='RV' and hist.student_group=='SYN-GRP-MAIN-2',(afacts['assignments']['a3'],hist)
             term=frappe.db.get_all('TH Contract Skill Term',filters={'parent':cauth['contracts']['two'],'parenttype':CON,'skill':'RV'},fields=['name','rate'])
             assert term and float(term[0].rate)==15,(cauth['contracts']['two'],term)
+            # Keep this coverage effective through the qualification day:
+            # the teacher desk/command now correctly revoke ended assignments.
+            # The end remains an audited, immutable command fact; it is not a
+            # claim that former assignments allow historical access forever.
+            assignment_end=max('2026-09-30',frappe.utils.today())
             ended3=as_user('teaching_scheduler',lambda:tcomp.end_teaching_assignment(
-                'tc_end_three_hist_01',afacts['assignments']['a3'],'2026-09-30'))
-            assert ended3['effective_end']=='2026-09-30'
+                'tc_end_three_hist_01',afacts['assignments']['a3'],assignment_end))
+            assert ended3['effective_end']==assignment_end
             # Retirement is one-way
             assert denied(lambda:(lambda x:(x.__setattr__('status','Active'),x.save(ignore_permissions=True)))(
                 frappe.get_doc('TH Skill','RV'))),('retired skill was reactivated')
@@ -6374,8 +6390,9 @@ def main():
             assert "'SYN-BR-A'" in qd and "'SYN-BR-B'" not in qd
             names=[r[0] for r in frappe.db.sql("select name from `tabTH Admission Decision` where "+qd,as_list=True)]
             assert dec['A'] in names and dec['B'] not in names,(names)
-            return {'branches':2,'scoped_staff':2,'hq_controls':2,'surfaces_proved':3}
-        check('branch-isolation-multi-branch-operating-rule',traced(branch_isolation))
+            return {'branches':2,'scoped_staff':2,'hq_controls':2,'surfaces_proved':3,
+                    'fixture_students':stu,'fixture_years':{'A':'SYN-AY-2031','B':'SYN-AY-2032'}}
+        branch_fixture=check('branch-isolation-multi-branch-operating-rule',traced(branch_isolation))
         # --- S6 obs-engineering-layer: the health surface, in process ---
         # The GM desk and owner cockpit project native scheduler facts. This
         # pins the audience gate (including the Administrator refusal), the
@@ -6445,6 +6462,24 @@ def main():
                     'rosters_assigned_only':True,'off_roster_excluded':outsider_stu,
                     'compensation_rows':len(pay),'unlinked_empty_state':True}
         check('role-desk-teacher-hosted',traced(desk_teacher))
+        def ended_assignment_revokes_desk_and_command():
+            # Real native rows, synthetic read clock: the assignment ended on
+            # its recorded inclusive date and must no longer authorize tomorrow.
+            import toefl_house.desk.teacher as teacher_desk
+            frappe.set_user('Administrator')
+            end=str(frappe.db.get_value('TH Teaching Assignment',afacts['assignments']['a3'],'effective_end'))
+            later=frappe.utils.add_days(end,1)
+            with patch.object(teacher_desk,'today',return_value=later):
+                payload=as_user('teacher_two',teacher_desk.work)
+            visible={i['person'] for s in payload['sections'] if s['id']=='classes' for i in s['items']}
+            assert GRP_B not in visible,('expired class remained visible',visible)
+            frappe.set_user('Administrator')
+            session=frappe.db.get_value('Course Schedule',schedB['name'],
+                ['student_group','instructor','schedule_date'],as_dict=True)
+            with patch.object(frappe.utils,'today',return_value=later):
+                denied(lambda:tea._require_own_instructor_session(users['teacher_two'],session,schedB['name']))
+            return {'expired_class_hidden':True,'expired_command_denied':True,'clock':'synthetic'}
+        check('teacher-ended-assignment-revokes-access',traced(ended_assignment_revokes_desk_and_command))
         def instructor_attendance_own_vs_cross():
             # Two native Employee->Instructor links, two real Course Schedule
             # rows, two separate class assignments, one Instructor-only role.
@@ -6583,41 +6618,37 @@ def main():
         # the exact-scoping cell runs between two populated branches.
         def desk_isolation_matrix():
             frappe.set_user('Administrator')
-            for br in ('SYN-ISOL-A','SYN-ISOL-B'):
-                if not frappe.db.exists('Branch',br):
-                    frappe.get_doc(dict(doctype='Branch',branch=br)).insert()
+            # Reuse the two separately admitted/enrolled branch journeys.
+            # Never put the same learners into both branches just to populate
+            # the matrix: the roster command now refuses that unsafe fixture.
             IA,IB='SYN-GRP-ISOL-A','SYN-GRP-ISOL-B'
-            roster_n=frappe.db.count('Program Enrollment',{'program':cat['program'],
-                'academic_year':cat['academic_year'],'docstatus':1})
-            assert roster_n>=2,('two enrolled learners are needed for the matrix',roster_n)
-            if not frappe.db.exists('Student Group',IA):
+            branch_students=branch_fixture['fixture_students']
+            branch_years=branch_fixture['fixture_years']
+            start=frappe.utils.today();end=frappe.utils.add_days(start,14)
+            for tail,group in (('A',IA),('B',IB)):
                 as_user('teaching_scheduler',lambda:tea.create_student_group(
-                    'isol_group_a_0000001',IA,cat['program'],cat['academic_year'],'',
-                    roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-A'))
-            if not frappe.db.exists('Student Group',IB):
-                as_user('teaching_scheduler',lambda:tea.create_student_group(
-                    'isol_group_b_0000001',IB,cat['program'],cat['academic_year'],'',
-                    roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-B'))
+                    'isol_group_'+tail.lower()+'_0000001',group,cat['program'],branch_years[tail],'',
+                    1,start,end,branch='SYN-BR-'+tail,students=[branch_students[tail]]))
             frappe.set_user('Administrator')
-            assert frappe.db.get_value('Student Group',IA,'th_branch')=='SYN-ISOL-A'
-            assert frappe.db.get_value('Student Group',IB,'th_branch')=='SYN-ISOL-B'
+            assert frappe.db.get_value('Student Group',IA,'th_branch')=='SYN-BR-A'
+            assert frappe.db.get_value('Student Group',IB,'th_branch')=='SYN-BR-B'
             # Writes and cached command receipts must obey the same native
             # Branch User Permission after it is added or changed.
             scheduler_scope=frappe.get_doc(dict(doctype='User Permission',
                 user=users['teaching_scheduler'],allow='Branch',
-                for_value='SYN-ISOL-A')).insert()
+                for_value='SYN-BR-A')).insert()
             frappe.db.commit()
             try:
                 own_replay=as_user('teaching_scheduler',lambda:tea.create_student_group(
-                    'isol_group_a_0000001',IA,cat['program'],cat['academic_year'],'',
-                    roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-A'))
+                    'isol_group_a_0000001',IA,cat['program'],branch_years['A'],'',
+                    1,start,end,branch='SYN-BR-A',students=[branch_students['A']]))
                 assert own_replay['name']==IA
                 for key,group in (('isol_group_b_0000001',IB),
                                   ('isol_foreign_write_0001','SYN-ISOL-DENIED')):
                     try:
                         as_user('teaching_scheduler',lambda:tea.create_student_group(
-                            key,group,cat['program'],cat['academic_year'],'',
-                            roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-B'))
+                            key,group,cat['program'],branch_years['B'],'',
+                            1,start,end,branch='SYN-BR-B',students=[branch_students['B']]))
                     except frappe.PermissionError:
                         pass
                     else:
@@ -6629,7 +6660,7 @@ def main():
                 frappe.delete_doc('User Permission',scheduler_scope.name)
                 frappe.db.commit()
             up=frappe.get_doc(dict(doctype='User Permission',user=users['teacher_two'],
-                allow='Branch',for_value='SYN-ISOL-A')).insert()
+                allow='Branch',for_value='SYN-BR-A')).insert()
             frappe.db.commit()
             try:
                 # LIST shape for a branch-scoped viewer: the native list
@@ -6644,9 +6675,9 @@ def main():
                     'Student Group',fields=['name'],limit_page_length=100))}
                 frappe.set_user('Administrator')
                 own_group={r['name'] for r in frappe.get_all('Student Group',
-                    filters={'th_branch':'SYN-ISOL-A'},fields=['name'],
+                    filters={'th_branch':'SYN-BR-A'},fields=['name'],
                     limit_page_length=100)}
-                assert pre==own_group=={IA}, \
+                assert pre==own_group and IA in pre and IB not in pre, \
                     ('branch-scoped class list is not exactly the own-branch classes',
                      sorted(pre),sorted(own_group))
                 # The native non-strict user-permission shape, pinned at the
@@ -6668,13 +6699,14 @@ def main():
                 # scoping cell below proves exact isolation between two
                 # populated branches on the production-default mode.
                 for g in (GRP_A,GRP_B,GRP_C,GRP_D,GRP_HTTP):
-                    frappe.db.set_value('Student Group',g,'th_branch','SYN-ISOL-B')
+                    frappe.db.set_value('Student Group',g,'th_branch','SYN-BR-B')
                 frappe.db.commit()
                 # LIST: role read + branch user-permission scope the native list.
                 listed={r['name'] for r in as_user('teacher_two',lambda:frappe.get_list(
                     'Student Group',fields=['name'],limit_page_length=100))}
                 frappe.set_user('Administrator')
-                assert listed=={IA},('branch user-permission did not scope the native class list',sorted(listed))
+                assert listed==own_group and IA in listed and IB not in listed, \
+                    ('branch user-permission did not scope the native class list',sorted(listed))
                 # ELEVATED PROJECTION: the desk seam (project_rows) is an
                 # elevated raw read — frappe.get_all ignores the role,
                 # user-permission and hook conditions that scope the native
@@ -6686,7 +6718,8 @@ def main():
                 unscoped={r['name'] for r in as_user('teacher_two',lambda:proj(
                     'teacher','Student Group',['name'],limit=100))}
                 frappe.set_user('Administrator')
-                assert unscoped=={IA},('the desk projection seam escaped the branch rule',sorted(unscoped))
+                assert unscoped==own_group and IA in unscoped and IB not in unscoped, \
+                    ('the desk projection seam escaped the branch rule',sorted(unscoped))
                 # DESK: after the branch reassignment, the teacher's only
                 # standing assignment is the far-branch class — and it must
                 # not reach the desk. The assignment join is branch-scoped

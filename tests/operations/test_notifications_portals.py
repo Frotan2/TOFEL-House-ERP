@@ -398,6 +398,12 @@ class BaseHarness(unittest.TestCase):
                 m = types.ModuleType(pkg)
                 m.__path__ = [str(APP)] if "toefl_house" in pkg else []
                 sys.modules[pkg] = m
+        # Load the pure approved Afghan calendar without the finance package's
+        # operational dependencies in this isolated portal harness.
+        finance = types.ModuleType("toefl_house.finance")
+        finance.__path__ = [str(APP / "finance")]
+        sys.modules["toefl_house.finance"] = finance
+        _load_real("toefl_house.finance.shamsi", APP / "finance/shamsi.py")
         # The real foundation guardian hook is separately tested against
         # Frappe. This isolated harness provides the same fail-closed
         # membership/customer precondition using its synthetic records.
@@ -444,6 +450,7 @@ class BaseHarness(unittest.TestCase):
         self.portal_policy = _load_real("toefl_house.operations.portal_policy", APP / "operations/portal_policy.py")
         self.provider = _load_real("toefl_house.operations.external_provider", APP / "operations/external_provider.py")
         self.notifications_mod = _load_real("toefl_house.operations.notifications", APP / "operations/notifications.py")
+        _load_real("toefl_house.operations.portal_dates", APP / "operations/portal_dates.py")
         self.student_portal = _load_real("toefl_house.operations.student_portal", APP / "operations/student_portal.py")
         self.guardian_portal = _load_real("toefl_house.operations.guardian_portal", APP / "operations/guardian_portal.py")
         # Reset memory flags/rules
@@ -798,6 +805,19 @@ class StudentPortalTests(BaseHarness):
         self.assertEqual(len(sched), 1)
         self.assertEqual(sched[0]["name"], "CS-1")
 
+    def test_schedule_shows_status_and_afghan_date_only_for_active_roster(self):
+        self._set_session("alice@example.com")
+        self.course_schedules[0]["th_session_status"] = "Postponed"
+        self.roster.append({"parent": "OLD", "student": "STU-ALICE", "active": 0})
+        self.course_schedules.append({"name": "OLD-SESSION", "student_group": "OLD", "schedule_date": "2026-10-24"})
+        schedule = self.student_portal.get_my_schedule()
+        self.assertEqual(len(schedule), 1)
+        self.assertEqual(schedule[0]["th_session_status"], "Postponed")
+        self.assertEqual(schedule[0]["schedule_date_shamsi"], "02 عقرب 1405")
+        self.assertEqual(schedule[0]["schedule_date"], "2026-10-24")
+        attendance = self.student_portal.get_my_attendance()
+        self.assertEqual(attendance[0]["date_shamsi"], "02 عقرب 1405")
+
     def test_student_sees_own_attendance_only(self):
         self._set_session("alice@example.com")
         rows = self.student_portal.get_my_attendance()
@@ -941,6 +961,31 @@ class GuardianPortalTests(BaseHarness):
         rows = self.guardian_portal.get_child_attendance(student="STU-CHILD1")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["name"], "ATT-C1")
+
+    def test_child_endpoint_requires_nonempty_scalar_and_normalizes_scope(self):
+        self._set_session("guardian@example.com")
+        self._approve_independently("STU-CHILD1")
+        methods = (self.guardian_portal.get_child_schedule, self.guardian_portal.get_child_attendance,
+                   self.guardian_portal.get_child_grades, self.guardian_portal.get_child_fees)
+        for method in methods:
+            for student in (None, "", "  ", [], {"name": "STU-CHILD1"}):
+                with self.subTest(method=method.__name__, student=student), self.assertRaises(ValueError):
+                    method(student=student)
+        rows = self.guardian_portal.get_child_attendance(student="  STU-CHILD1  ")
+        self.assertEqual([row["name"] for row in rows], ["ATT-C1"])
+        self.assertEqual(rows[0]["date_shamsi"], "02 عقرب 1405")
+
+    def test_child_schedule_shows_status_and_never_an_inactive_group(self):
+        self._set_session("guardian@example.com")
+        self._approve_independently("STU-CHILD1")
+        self.course_schedules[0]["th_session_status"] = "Cancelled"
+        self.roster.append({"parent": "OLD", "student": "STU-CHILD1", "active": 0})
+        self.course_schedules.append({"name": "OLD-SESSION", "student_group": "OLD", "schedule_date": "2026-10-24"})
+        rows = self.guardian_portal.get_child_schedule(student="STU-CHILD1")
+        self.assertEqual([row["name"] for row in rows], ["CS-G1"])
+        self.assertEqual(rows[0]["th_session_status"], "Cancelled")
+        self.assertEqual(rows[0]["schedule_date_shamsi"], "02 عقرب 1405")
+        self.assertEqual(rows[0]["schedule_date"], "2026-10-24")
 
     def test_revocation_immediately_denies(self):
         self._set_session("guardian@example.com")
