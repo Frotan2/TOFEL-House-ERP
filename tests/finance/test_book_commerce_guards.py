@@ -157,8 +157,8 @@ class PurePriceTests(unittest.TestCase):
 
     def test_reconciliation_compares_bin_to_ledger_truth(self):
         reconcile = self.books.reconcile_book_stock
-        bins = [{"item_code": "B", "warehouse": "WH-A",
-                 "actual_qty": 8.0, "stock_value": 1400.0}]
+        bins = [{"item_code": "B", "warehouse": "WH-A", "actual_qty": 8.0,
+                 "stock_value": 1400.0, "valuation_rate": 175.0}]
         ledger = [
             {"item_code": "B", "warehouse": "WH-A", "actual_qty": 10.0,
              "stock_value_difference": 1750.0},
@@ -173,6 +173,20 @@ class PurePriceTests(unittest.TestCase):
         self.assertEqual(short["discrepancies"][0]["qty_difference"], -1.0)
         orphan = reconcile([], ledger)
         self.assertFalse(orphan["ok"])
+
+    def test_reconciliation_values_bin_by_rate_not_stale_cache(self):
+        # After the latest ledger entry (a return) is cancelled, the
+        # cached Bin.stock_value can lag by that entry's value while
+        # valuation_rate x qty — native reporting's own value — is right.
+        reconcile = self.books.reconcile_book_stock
+        bins = [{"item_code": "B", "warehouse": "WH-A", "actual_qty": 7.0,
+                 "stock_value": 1575.0, "valuation_rate": 175.0}]
+        ledger = [{"item_code": "B", "warehouse": "WH-A", "actual_qty": 7.0,
+                   "stock_value_difference": 1225.0}]
+        self.assertTrue(reconcile(bins, ledger)["ok"])
+        # A wrong valuation rate is a real discrepancy, cache or not.
+        wrong = [{**bins[0], "valuation_rate": 200.0}]
+        self.assertFalse(reconcile(wrong, ledger)["ok"])
 
 
 def invoice_db():

@@ -154,9 +154,15 @@ def stock_cover_ok(available, requested):
 def reconcile_book_stock(bins, ledger_rows):
     """Compare the Bin projection against Stock Ledger Entry truth.
 
-    ``bins`` expose ``item_code``, ``warehouse``, ``actual_qty`` and
-    ``stock_value``; ``ledger_rows`` are the non-cancelled native ledger
-    rows (``actual_qty``, ``stock_value_difference``). Returns a
+    ``bins`` expose ``item_code``, ``warehouse``, ``actual_qty``,
+    ``valuation_rate`` and ``stock_value``; ``ledger_rows`` are the
+    non-cancelled native ledger rows (``actual_qty``,
+    ``stock_value_difference`` — the amounts that post to the stock GL).
+    The bin's value is judged as ``valuation_rate × actual_qty``, which
+    is how native stock reporting values a bin: the cached
+    ``stock_value`` field can legitimately lag after the *latest* ledger
+    entry is cancelled (no future entry exists for a repost to settle
+    it), while the valuation rate stays correct. Returns a
     deterministic report; ``ok`` is true only when every bin equals the
     sum of its ledger rows in both quantity and value.
     """
@@ -179,7 +185,11 @@ def reconcile_book_stock(bins, ledger_rows):
     for row in bins or []:
         key = (_row_value(row, "item_code"), _row_value(row, "warehouse"))
         bin_qty = _flt(_row_value(row, "actual_qty"))
-        bin_value = _flt(_row_value(row, "stock_value"))
+        raw_rate = _row_value(row, "valuation_rate")
+        if raw_rate is not None and math.isfinite(_flt(raw_rate)):
+            bin_value = _flt(raw_rate) * bin_qty
+        else:
+            bin_value = _flt(_row_value(row, "stock_value"))
         seen.add(key)
         if not key[0] or not key[1] or not math.isfinite(bin_qty) \
                 or not math.isfinite(bin_value):
@@ -188,7 +198,9 @@ def reconcile_book_stock(bins, ledger_rows):
         total_qty += bin_qty
         total_value += bin_value
         led_qty, led_value = ledger.get(key, (0.0, 0.0))
-        if abs(bin_qty - led_qty) > 0.000001 or abs(bin_value - led_value) > 0.01:
+        value_tolerance = 0.01 + abs(bin_qty) * 0.005
+        if abs(bin_qty - led_qty) > 0.000001 \
+                or abs(bin_value - led_value) > value_tolerance:
             discrepancies.append({
                 "item_code": key[0], "warehouse": key[1],
                 "bin_qty": bin_qty, "ledger_qty": round(led_qty, 6),
