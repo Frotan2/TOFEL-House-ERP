@@ -57,7 +57,8 @@ can never trap a legitimate sale against authorized cancellation.
 - **Reconciliation:** `finance.books.reconcile_book_stock` compares every
   book Bin against the sum of its Stock Ledger rows (quantity **and** value);
   the native cycle asserts this after sale → payment → return → refund →
-  cancel (`book-native-stock-ledger-reconciliation`), alongside the existing
+  cancel, draining the queued native Repost Item Valuation first so the
+  settled state is what is judged (`book-native-stock-ledger-reconciliation`), alongside the existing
   row-direction GL/SLE evidence validator
   (`book-native-return-cash-refund-reconciliation`, unchanged).
 

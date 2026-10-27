@@ -4072,9 +4072,18 @@ def main():
         def book_ledger_reconciliation():
             # Bin is a projection; the Stock Ledger is truth. After the
             # whole sale/return/refund/cancel cycle they must still agree
-            # in quantity and in value for every book item.
+            # in quantity and in value for every book item. A cancelled
+            # return leaves a queued Repost Item Valuation whose whole
+            # job is to re-settle Bin from the ledger; drain it first so
+            # the comparison judges the settled state, not the queue.
             from toefl_house.finance import books as book_rules
+            from erpnext.stock.doctype.repost_item_valuation.repost_item_valuation import execute_reposting_entry
             frappe.set_user('Administrator')
+            for row in frappe.db.get_all('Repost Item Valuation',
+                    filters={'docstatus':1,
+                             'status':['in',('Queued','In Progress')]},
+                    fields=['name'],limit_page_length=100):
+                execute_reposting_entry(row.name)
             codes=[books['item'],'SYN-BOOK-GE','SYN-BOOK-NOPRICE']
             bins=frappe.db.get_all('Bin',
                 filters={'item_code':['in',codes]},
