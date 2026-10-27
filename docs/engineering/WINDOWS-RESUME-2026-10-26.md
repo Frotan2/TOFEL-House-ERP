@@ -217,6 +217,18 @@ exercise all three response types. Hosted final acceptance now also requires
 the executed Reception receipt/correction/handover receipt and validates its
 cash/student deltas and negative controls.
 
+## QA-014: retrying a receipt must not revive a voided printout
+
+Idempotent command receipts deliberately preserve their original facts. After
+an Owner amendment, the saved original operation still describes its issue-time
+status, while the original native Payment Entry is Void. The previous client
+printed that saved snapshot directly. A failing client regression reproduced
+the stale-status path. Posting results now fetch the current authorized native
+receipt before display/print, and voids carry a prominent VOID RECEIPT heading
+and Print void record action. A failed follow-up read says the posting was saved
+and does not print stale facts or invite a second collection. No operation
+receipt or accounting history is rewritten.
+
 ## Still required
 
 Final-revision CI, official rebuilt package and supported in-place Windows

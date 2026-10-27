@@ -269,6 +269,7 @@ for (const forbidden of [/frappe\.db\b/, /frappe\.client\b/, /frappe\.get_doc\b/
 }
 assert(source.includes("frappe.call({"), "desk client must talk to the server over guarded RPC");
 const allowedCalls = new Set([...Object.values(EXPECTED).map((shape) => shape.endpoint),
+	"toefl_house.finance.collections.get_collection_receipt",
 	client.toefl_house.role_desks.registry,
 	...Object.keys(actionFields)]);
 for (const method of Object.keys(actionFields)) {
@@ -434,7 +435,7 @@ function payloadWith(queueItems, factValue) {
 	};
 }
 
-function runScenario({ workPayload, failFirstWork = false, failLookup = false, cashReply = null, cashError = null }) {
+function runScenario({ workPayload, failFirstWork = false, failLookup = false, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false }) {
 	const calls = [];
 	const dialogs = [];
 	const routed = [];
@@ -459,6 +460,11 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, c
 		},
 		call(opts) {
 			calls.push(opts);
+			if (opts.method === "toefl_house.finance.collections.get_collection_receipt" && cashReply) {
+				if (cashReadFails) { opts.error(); return; }
+				opts.callback({ message: cashCurrentReceipt || cashReply.receipt || cashReply });
+				return;
+			}
 			if (opts.method.startsWith("toefl_house.finance.collections.") && cashError) {
 				// Native request.js's 417 handler passes parsed JSON directly.
 				opts.error(cashError);
@@ -676,7 +682,7 @@ const hostileItem = {
 }
 
 {
-	const receipt = { number: "PAY-001", student_name: HOSTILE, amount: 100, currency: "AFN", synthetic: true };
+	const receipt = { number: "PAY-001", status: "Issued", student_name: HOSTILE, amount: 100, currency: "AFN", synthetic: true };
 	const item = { ...hostileItem, action: { endpoint: "toefl_house.finance.collections.record_reception_collection",
 		label: "Issue cash receipt", args: { fees: "FEE-001", outstanding: 500, currency: "AFN" } } };
 	delete item.action.secondary;
@@ -712,6 +718,28 @@ const hostileItem = {
 		else assert(!scenario.printed[0].message.includes("onerror"), "non-validation internals must stay private");
 		assert.strictEqual(scenario.workCalls, 1, "a rejected command must not pretend to refresh a successful result");
 	}
+}
+
+{
+	// An idempotent command keeps its original receipt, even after an Owner
+	// amendment. Printing must fetch current native status, not revive a void.
+	const item = { ...hostileItem, action: { endpoint: "toefl_house.finance.collections.record_reception_collection",
+		label: "Issue cash receipt", args: { fees: "FEE-001" } } };
+	delete item.action.secondary;
+	const original = { number: "PAY-OLD", status: "Issued", amount: 100, currency: "AFN", synthetic: true };
+	const scenario = runScenario({ workPayload: payloadWith([item], "0"), cashReply: { receipt: original },
+		cashCurrentReceipt: { ...original, status: "Void" } });
+	findAll(scenario.body, "th-queue-action")[0].click();
+	scenario.dialogs[0].submit({ request_key: "same-old-request", fees: "FEE-001", amount: 100 });
+	assert(scenario.calls.some((call) => call.method === "toefl_house.finance.collections.get_collection_receipt"),
+		"printing a saved command must re-read current native receipt status");
+	assert(scenario.dialogs[1].opts.fields[0].options.includes("VOID RECEIPT"), "a void receipt must never print as active");
+	const failedRead = runScenario({ workPayload: payloadWith([item], "0"), cashReply: { receipt: original }, cashReadFails: true });
+	findAll(failedRead.body, "th-queue-action")[0].click();
+	failedRead.dialogs[0].submit({ request_key: "same-old-request", fees: "FEE-001", amount: 100 });
+	assert.strictEqual(failedRead.dialogs[0].hidden, true, "the successful posting remains successful");
+	assert.strictEqual(failedRead.dialogs.length, 1, "never print a stale saved receipt when current status is unavailable");
+	assert(failedRead.printed[0].message.includes("posting was saved"), "do not invite a duplicate posting after a receipt read failure");
 }
 
 /* --------------------------------------------------------------- design */

@@ -1103,7 +1103,9 @@ frappe.provide("toefl_house.role_desks");
 	function resultMessage(label, result) {
 		const payload = result && typeof result === "object" ? result : {};
 		if (payload.receipt) {
-			showCollectionReceipt(payload.receipt);
+			// Command receipts are immutable snapshots. A retry after an
+			// Owner amendment must not print the old saved "Issued" status.
+			loadCollectionReceipt(payload.receipt.number, true);
 			return;
 		}
 		const status = payload.status !== undefined ? payload.status : "Completed";
@@ -1124,14 +1126,30 @@ frappe.provide("toefl_house.role_desks");
 		frappe.msgprint({ title: text(label), message: markup, wide: true });
 	}
 
+	function loadCollectionReceipt(number, postingSaved = false) {
+		const failed = () => frappe.msgprint({ title: text("Numbered cash receipt"), indicator: "red",
+			message: text(postingSaved
+				? "The posting was saved, but the current receipt could not be loaded. Retry with the same request reference or open the receipt from your desk."
+				: "The current receipt could not be loaded. Check your access and try again.") });
+		frappe.call({ method: "toefl_house.finance.collections.get_collection_receipt", type: "GET",
+			args: { payment_entry: number },
+			callback(response) {
+				const receipt = response.message;
+				if (!receipt || receipt.number !== number || !["Issued", "Void"].includes(receipt.status)) { failed(); return; }
+				showCollectionReceipt(receipt);
+			}, error: failed });
+	}
+
 	function showCollectionReceipt(receipt) {
 		const keys = ["number", "status", "date", "student_name", "student", "fees", "company", "amount", "currency", "collector", "counter_account", "handover", "replaces"];
 		const facts = keys.filter((key) => receipt[key] !== null && receipt[key] !== undefined && receipt[key] !== "")
 			.map((key) => `<dt>${escapeText(key.replace(/_/g, " "))}</dt><dd>${escapeText(receipt[key])}</dd>`).join("");
-		const markup = `<h2>${escapeText(receipt.synthetic ? "SYNTHETIC TEST RECEIPT" : "TOEFL House cash receipt")}</h2><dl>${facts}</dl>`;
+		const heading = (receipt.status === "Void" ? "VOID RECEIPT — " : "") +
+			(receipt.synthetic ? "SYNTHETIC TEST RECEIPT" : "TOEFL House cash receipt");
+		const markup = `<h2>${escapeText(heading)}</h2><dl>${facts}</dl>`;
 		const dialog = new frappe.ui.Dialog({ title: text("Numbered cash receipt"),
 			fields: [{ fieldname: "receipt", fieldtype: "HTML", options: markup }],
-			primary_action_label: text("Print receipt"),
+			primary_action_label: text(receipt.status === "Void" ? "Print void record" : "Print receipt"),
 			primary_action() {
 				const paper = window.open("about:blank", "_blank");
 				if (!paper) { frappe.msgprint(text("Allow the print window and try again.")); return; }
@@ -1147,8 +1165,7 @@ frappe.provide("toefl_house.role_desks");
 
 	function openGuidedAction(action) {
 		if (action.endpoint === "toefl_house.finance.collections.get_collection_receipt") {
-			frappe.call({ method: action.endpoint, type: "GET", args: { payment_entry: action.args.payment_entry },
-				callback(response) { showCollectionReceipt(response.message); } });
+			loadCollectionReceipt(action.args.payment_entry);
 			return;
 		}
 		const ownAttendance = action.endpoint === "toefl_house.teaching.record_instructor_attendance";
