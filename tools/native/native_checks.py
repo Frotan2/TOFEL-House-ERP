@@ -4087,7 +4087,8 @@ def main():
             codes=[books['item'],'SYN-BOOK-GE','SYN-BOOK-NOPRICE']
             bins=frappe.db.get_all('Bin',
                 filters={'item_code':['in',codes]},
-                fields=['item_code','warehouse','actual_qty','stock_value'])
+                fields=['item_code','warehouse','actual_qty','stock_value',
+                        'valuation_rate'])
             ledger=frappe.db.get_all('Stock Ledger Entry',
                 filters={'item_code':['in',codes],'is_cancelled':0},
                 fields=['item_code','warehouse','actual_qty',
