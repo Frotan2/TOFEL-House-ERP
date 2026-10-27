@@ -35,12 +35,17 @@ branch and `main` were not changed; the PR is intended to remain unmerged.
   status. Guardian child changes clear old panes immediately and ignore stale
   child and consent responses. The view tests are simulated DOM/promise tests,
   not a physical browser qualification.
+- The parent work branch advanced with an operations-health permission check.
+  Its existing tests failed because their fake login denied that read. This PR
+  adjusts only the test fixture for the explicitly readable case; the separate
+  denied/fallback tests remain. The combined parent/academic synthetic snapshot
+  passed the **14 affected tests** locally. The parent branch itself is untouched.
 
 ## Evidence on this source snapshot
 
 | Kind | Exact evidence | Meaning |
 | --- | --- | --- |
-| Local Python | `.venv/bin/python -m unittest discover -s tests -t . -q`: **2,608 run, 13 skipped, 0 failures**, 101.244 s | Offline suite; many Frappe/native/site dependencies are stubbed. |
+| Local Python | `.venv/bin/python -m unittest discover -s tests -t . -q`: **2,608 run, 13 skipped, 0 failures**, 96.388 s | Offline suite; many Frappe/native/site dependencies are stubbed. |
 | Local lint/dependencies | `.venv/bin/ruff check .` (Ruff 0.16.8), `.venv/bin/python -m pip check`, `git diff --check`: passed | Static and environment checks, not operational acceptance. |
 | Local Node | Node 22.22.3: product ingress **6/6**, realtime guard, command pages **14**, design system, role desks **8 / 76 guided actions**, and portal DOM/promise contract: passed | Local HTTP/DOM stubs; not a real Frappe web session. |
 | Real Frappe / hosted | Native qualification was extended with synthetic future-date and expired-assignment checks; the existing two-teacher matrix is adapted for branch-safe roster fixtures. **Not run locally**; inspect exact-head GitHub checks and artifacts on this PR. | Prior PR #87 checks apply only to its earlier revisions and cannot certify this change. |

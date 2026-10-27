@@ -2152,6 +2152,9 @@ class OperationsHealthWorldTests(unittest.TestCase):
     def _payload(self, module_name, entry, roles, world=None, ping="pong"):
         module = _import_desk(module_name, roles=roles)
         module.frappe.ping = lambda: ping
+        # This world exercises the *readable* virtual RQ Job projection. The
+        # denied/fallback path has independent tests in test_rq_fallback.
+        module.frappe.has_permission = lambda doctype, *args, **kwargs: doctype == "RQ Job"
         getter = desk_world_get_all(f"{module_name} health world", world or {})
         module.frappe.get_all = getter
         module.frappe.db.get_all = getter
