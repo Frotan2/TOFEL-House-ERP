@@ -87,6 +87,16 @@ jobs:
         run: |
           python -m unittest tests.foundation.test_windows_delivery_finalization tests.foundation.test_windows_backup_discovery tests.foundation.test_windows_package_hashing -v
           if ($LASTEXITCODE -ne 0) { throw "Windows delivery finalization regression failed." }
+      - name: Verify the customer package verifier and preparer on real Windows
+        # These contracts are skipUnless(os.name == "nt"): the Linux owned suite
+        # skipped them on every run and no Windows workflow executed the module,
+        # so the verifier, the preparer and the built-in tar selector that protect
+        # the shipped package were never actually exercised. They run here, on a
+        # real PowerShell host, exactly as the customer would use them.
+        shell: powershell
+        run: |
+          python -m unittest tests.foundation.test_customer_package_manifest -v
+          if ($LASTEXITCODE -ne 0) { throw "Windows customer package verifier/preparer regression failed." }
       - name: Verify exact service and HTTP readiness decisions
         shell: powershell
         run: |

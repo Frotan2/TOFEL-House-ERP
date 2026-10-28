@@ -49,6 +49,21 @@ class ReleaseImageTriggerContract(unittest.TestCase):
     def test_native_integration_separately_covers_native_checker_changes(self):
         self.assertIn("tools/native/**", push_paths("native-lifecycle.yml"))
 
+    def test_windows_only_package_suites_really_run_on_a_windows_runner(self):
+        """A Windows-only test that no workflow runs is a permanent skip.
+
+        ``test_customer_package_manifest``'s verifier, preparer and built-in tar
+        selector contracts are ``skipUnless(os.name == "nt")``. The Linux owned
+        suite skipped them on every run, and no Windows workflow executed the
+        module, so the components that protect the shipped customer package were
+        never actually exercised. They must run on a real Windows runner.
+        """
+        workflow = (WORKFLOWS / "windows-customer-package.yml").read_text(encoding="utf-8")
+        self.assertIn("runs-on: windows-2022", workflow)
+        self.assertRegex(
+            workflow,
+            r"python -m unittest tests\.foundation\.test_customer_package_manifest")
+
     def test_advisory_changes_trigger_full_release_qualification(self):
         patterns = ("docs/engineering/evidence/sec-deps-01/**", "tests/security/**")
         names = ("foundation-runtime.yml", "native-lifecycle.yml",
