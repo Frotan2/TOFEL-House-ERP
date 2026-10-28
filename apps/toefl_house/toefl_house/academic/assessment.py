@@ -379,7 +379,7 @@ def _retake_authorization(student_group, level_name, on_date, *,
 
 @frappe.whitelist(methods=["POST"])
 def open_assessment_book(request_key, student_group, policy, effective_from="",
-                         assessment_plan=""):
+                         assessment_plan="", retake_student=""):
     """Open one class's mark book against the governing policy version.
 
     Academic staff open the book; the governing version is pinned (effective
@@ -419,27 +419,33 @@ def open_assessment_book(request_key, student_group, policy, effective_from="",
             plan = _text(assessment_plan, "Native assessment plan")
             if not frappe.db.exists(PLAN, plan):
                 raise frappe.ValidationError("Unknown native assessment plan")
+        retaker = (_text(retake_student, "Retake student")
+                   if retake_student else "")
+        members = set(roster(group_name))
+        if retaker and retaker not in members:
+            raise frappe.ValidationError("The retake student is not on the class roster")
         existing = _attempt_rows(group_name, level.name)
-        next_attempt = (max(int(row["attempt"] or 0) for row in existing) + 1
-                        if existing else 1)
-        # Even unopened/unpublished books reserve an ordinal. Never create
-        # a third mark book before the first two are published: an abandoned
-        # second book must be handled by an explicit authorized lifecycle,
-        # not by silently opening further attempts.
-        if next_attempt > grading.MISSION_MAX_TOTAL_ATTEMPTS:
-            raise frappe.ValidationError(
-                "The class and level already have the maximum two assessment "
-                "book attempts; a third attempt is not authorized")
-        # A further book for a class+level that already has published
-        # results is a retake: it needs a live retake authorization, not
-        # just an academic role. A second book while nothing is published
-        # yet is not a retake (see _retake_authorization), and the publish
-        # gate below closes the pre-opened-book path.
-        if _current_published_by_student(group_name, level.name):
+        published = _current_published_by_student(group_name, level.name)
+        if retaker:
+            if not published:
+                raise frappe.ValidationError(
+                    "A first class assessment must be published before any retake")
+            # A distinct book per authorized student, always attempt two.
+            # Books for different students may share the ordinal without
+            # sharing results, authorization, or a native Assessment Result.
+            next_attempt = 2
             allowed, reason = _retake_authorization(
-                group_name, level.name, today, next_attempt=next_attempt)
+                group_name, level.name, today, next_attempt=next_attempt,
+                student=retaker)
             if not allowed:
                 raise frappe.ValidationError(reason)
+        else:
+            if existing or published:
+                raise frappe.ValidationError(
+                    "An existing class assessment already holds the first attempt; "
+                    "a further assessment needs an explicitly named, approved "
+                    "retake student")
+            next_attempt = 1
         policy_digest = digest({
             "policy": policy_code,
             "effective_from": str(version.get("effective_from")),
@@ -456,6 +462,7 @@ def open_assessment_book(request_key, student_group, policy, effective_from="",
             "grading_scale": version.get("grading_scale") or "",
             "assessment_plan": plan,
             "attempt": next_attempt,
+            "retake_student": retaker,
             "status": "Open",
             "opened_by": actor,
             "opened_on": frappe.utils.now_datetime(),
@@ -472,7 +479,8 @@ def open_assessment_book(request_key, student_group, policy, effective_from="",
     return _execute("open_assessment_book", request_key,
                     {"student_group": student_group, "policy": policy,
                      "effective_from": effective_from,
-                     "assessment_plan": assessment_plan}, work)
+                     "assessment_plan": assessment_plan,
+                     "retake_student": retake_student}, work)
 
 
 @frappe.whitelist(methods=["POST"])
