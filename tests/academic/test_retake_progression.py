@@ -427,68 +427,67 @@ class LegitimateRetakeTests(RetakeCase):
 
 
 class BestAttemptTests(RetakeCase):
-    def _two_attempts(self, first_scores, second_scores):
-        """Book 1, then a book 2 authorized by STU-2's retake decision."""
-        self.publish(first_scores)
-        stu2_first = self.results_for("SYN-STU-2")[1]
+    def test_a_worse_later_attempt_is_not_the_best_result(self):
+        self.publish({"SYN-STU-1": WORSE_FAIL, "SYN-STU-2": PASS,
+                      "SYN-STU-3": PASS})
+        original = self.results_for("SYN-STU-1")[1]
         self.h.today = DAY_7
-        self.retake_decision(stu2_first["name"], reason="STU-2 retakes")
-        self.publish(second_scores)
-        return self.results_for("SYN-STU-1")
-
-    def test_a_worse_later_attempt_cannot_be_promoted(self):
-        results = self._two_attempts(
-            {"SYN-STU-1": PASS, "SYN-STU-2": FAIL, "SYN-STU-3": PASS},
-            {"SYN-STU-1": WORSE_FAIL, "SYN-STU-2": PASS, "SYN-STU-3": PASS})
-        best = results[1]
-        worse = results[2]
-        self.assertEqual(best["outcome"], "Pass")
-        self.assertEqual(worse["outcome"], "Fail")
+        self.retake_decision(original["name"])
+        self.publish({"SYN-STU-1": FAIL}, retake_student="SYN-STU-1")
+        later = self.results_for("SYN-STU-1")[2]
+        self.assertGreater(original["overall_percent"], later["overall_percent"])
         with self.assertRaises(ValidationError) as ctx:
-            self.decide(worse["name"], "Promote", "Promote the worse attempt")
-        self.assertIn(best["name"], str(ctx.exception))
-        self.assertIn("best published attempt", str(ctx.exception))
-        decision = self.decide(best["name"], "Promote", "Promote the best attempt")
-        self.assertEqual(decision["decision"], "Promote")
+            self.decide(later["name"], "Repeat", "Use a worse attempt")
+        self.assertIn(original["name"], str(ctx.exception))
+
+    def test_a_classmates_retake_cannot_invalidate_a_prior_promotion(self):
+        self.publish({"SYN-STU-1": PASS, "SYN-STU-2": FAIL,
+                      "SYN-STU-3": PASS})
+        first_pass = self.results_for("SYN-STU-1")[1]
+        stu2 = self.results_for("SYN-STU-2")[1]
+        self.h.today = DAY_7
+        self.decide(first_pass["name"], "Promote", "First pass")
+        self.assertTrue(self.h.progression.next_level_eligibility(
+            "SYN-STU-1", "SYN-GEN-ENG-2")["eligible"])
+        self.retake_decision(stu2["name"], reason="STU-2 retakes")
+        self.publish({"SYN-STU-2": BETTER}, retake_student="SYN-STU-2")
+        self.assertEqual(len(self.results_for("SYN-STU-1")), 1)
+        self.assertEqual(len(self.results_for("SYN-STU-3")), 1)
+        self.assertEqual(self.results_for("SYN-STU-1")[1]["name"],
+                         first_pass["name"])
         self.assertTrue(self.h.progression.next_level_eligibility(
             "SYN-STU-1", "SYN-GEN-ENG-2")["eligible"])
 
-    def test_eligibility_follows_the_best_attempt_not_the_latest_decision(self):
-        # Promote STU-1 on the first (then best) attempt BEFORE the retake
-        # book for STU-2 is published; only afterwards does a better
-        # attempt appear for STU-1.
-        self.publish({"SYN-STU-1": PASS, "SYN-STU-2": FAIL, "SYN-STU-3": PASS})
-        best_first = self.results_for("SYN-STU-1")[1]
-        stu2_first = self.results_for("SYN-STU-2")[1]
+    def test_two_students_may_independently_complete_one_retake_each(self):
+        self.fail_book()
+        stu1 = self.results_for("SYN-STU-1")[1]
+        stu2 = self.results_for("SYN-STU-2")[1]
         self.h.today = DAY_7
-        decision = self.decide(best_first["name"], "Promote",
-                               "Promote before the retake book")
-        self.assertEqual(decision["decision"], "Promote")
-        self.assertTrue(self.h.progression.next_level_eligibility(
-            "SYN-STU-1", "SYN-GEN-ENG-2")["eligible"])
-        self.retake_decision(stu2_first["name"], reason="STU-2 retakes")
-        self.publish({"SYN-STU-1": BETTER, "SYN-STU-2": PASS, "SYN-STU-3": PASS})
-        # A better attempt is now published with no decision on it: the
-        # earlier Promote no longer admits, because eligibility follows
-        # the best attempt's decision, not the latest decision.
-        state = self.h.progression.next_level_eligibility(
-            "SYN-STU-1", "SYN-GEN-ENG-2")
-        self.assertFalse(state["eligible"])
-        self.assertIn("best published attempt", " ".join(state["reasons"]))
+        self.retake_decision(stu1["name"])
+        self.retake_decision(stu2["name"])
+        first_retake = self.publish({"SYN-STU-1": PASS},
+                                    retake_student="SYN-STU-1")
+        second_retake = self.publish({"SYN-STU-2": PASS},
+                                     retake_student="SYN-STU-2")
+        self.assertEqual(first_retake["attempt"], 2)
+        self.assertEqual(second_retake["attempt"], 2)
+        self.assertEqual(len(self.results_for("SYN-STU-1")), 2)
+        self.assertEqual(len(self.results_for("SYN-STU-2")), 2)
+        self.assertEqual(len(self.results_for("SYN-STU-3")), 1)
+        self.assertEqual(self.results_for("SYN-STU-3")[1]["outcome"], "Fail")
+
+    def test_marks_for_other_students_are_refused_in_retake_book(self):
+        self.fail_book()
+        stu1 = self.results_for("SYN-STU-1")[1]
+        self.h.today = DAY_7
+        self.retake_decision(stu1["name"])
+        book = self.book(key=self.key("open-retake"),
+                         retake_student="SYN-STU-1",
+                         effective_from="2026-10-01")
         with self.assertRaises(ValidationError):
-            self.decide(best_first["name"], "Promote", "Promote the old best")
-        better = self.results_for("SYN-STU-1")[2]
-        self.decide(better["name"], "Promote", "Promote the new best attempt")
-        self.assertTrue(self.h.progression.next_level_eligibility(
-            "SYN-STU-1", "SYN-GEN-ENG-2")["eligible"])
-
-    def test_a_repeat_on_a_worse_attempt_is_refused(self):
-        results = self._two_attempts(
-            {"SYN-STU-1": PASS, "SYN-STU-2": FAIL, "SYN-STU-3": PASS},
-            {"SYN-STU-1": WORSE_FAIL, "SYN-STU-2": PASS, "SYN-STU-3": PASS})
-        with self.assertRaises(ValidationError) as ctx:
-            self.decide(results[2]["name"], "Repeat", "Repeat the worse attempt")
-        self.assertIn("best published attempt", str(ctx.exception))
+            self.h.record(book["name"], marks_for({"SYN-STU-2": PASS}),
+                          key=self.key("foreign-marks"))
+        self.assertEqual(self.results_for("SYN-STU-2")[1]["attempt"], 1)
 
 
 class CorrectionTests(RetakeCase):
