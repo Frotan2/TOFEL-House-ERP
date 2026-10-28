@@ -106,6 +106,23 @@ class TestInitialSetupPreset(unittest.TestCase):
         self.assertEqual(result["counts"]["create"], 28)
         self.assertEqual(result["counts"]["review"], 0)
 
+    def test_existing_fee_category_without_native_item_requires_review(self):
+        snapshot = {"fee_categories": ["Semester Tuition Fee"],
+                    "fee_category_items": {"Semester Tuition Fee": ""}}
+        result = preview_catalog(snapshot, self.preset)
+        status = next(row["status"] for row in result["actions"]
+                      if row["kind"] == "fee_category")
+        self.assertEqual(status, "review")
+        self.assertFalse(result["ready_to_apply"])
+
+    def test_existing_fee_category_with_item_matches(self):
+        snapshot = {"fee_categories": ["Semester Tuition Fee"],
+                    "fee_category_items": {"Semester Tuition Fee": "TUITION-ITEM"}}
+        result = preview_catalog(snapshot, self.preset)
+        status = next(row["status"] for row in result["actions"]
+                      if row["kind"] == "fee_category")
+        self.assertEqual(status, "match")
+
     def test_existing_mismatched_level_requires_review(self):
         state = {"programs": {"GEN-ENG": {"title": "General English"}},
                  "levels": {"PRE-STARTER": {
