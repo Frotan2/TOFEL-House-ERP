@@ -35,6 +35,13 @@ def _iso(value, label):
         raise ValueError(f"{label} must be an ISO date") from exc
 
 
+def _native_identity(value, label):
+    """Require an actual nonempty native document name; never coerce None."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Missing or invalid native {label} identity")
+    return value
+
+
 def invoice_balances(fees, allocations, as_of):
     """Calculate as-of balances by referenced native documents only.
 
@@ -49,9 +56,9 @@ def invoice_balances(fees, allocations, as_of):
     for raw in fees:
         if int(raw["docstatus"]) != 1 or _iso(raw["posting_date"], "Posting date") > cutoff:
             continue
-        key = str(raw["name"])
-        if not key or key in bills:
-            raise ValueError("Duplicate or missing native Fees identity")
+        key = _native_identity(raw.get("name"), "Fees")
+        if key in bills:
+            raise ValueError("Duplicate native Fees identity")
         total = amount(raw["grand_total"])
         if total < 0:
             raise ValueError("Negative Fees require a separate native credit-note view")
@@ -65,11 +72,11 @@ def invoice_balances(fees, allocations, as_of):
     for raw in allocations:
         if int(raw["docstatus"]) != 1 or _iso(raw["posting_date"], "Payment date") > cutoff:
             continue
-        receipt_id = str(raw["name"])
-        if not receipt_id or receipt_id in seen:
-            raise ValueError("Duplicate or missing native payment-allocation identity")
+        receipt_id = _native_identity(raw.get("name"), "payment-allocation")
+        if receipt_id in seen:
+            raise ValueError("Duplicate native payment-allocation identity")
         seen.add(receipt_id)
-        ref = str(raw["reference_name"])
+        ref = _native_identity(raw.get("reference_name"), "Fees reference")
         if ref not in bills:
             raise ValueError("Payment references an unknown or not-yet-posted Fees invoice")
         paid = amount(raw["allocated_amount"])
@@ -150,9 +157,9 @@ def suggest_oldest_debt_allocation(open_invoices, receipt_amount):
     seen = set()
     choices = []
     for row in open_invoices:
-        key = str(row["name"])
-        if not key or key in seen:
-            raise ValueError("Duplicate or missing native Fees identity")
+        key = _native_identity(row.get("name"), "Fees")
+        if key in seen:
+            raise ValueError("Duplicate native Fees identity")
         seen.add(key)
         due = _iso(row["due_date"], "Due date")
         owed = amount(row["outstanding_amount"])
