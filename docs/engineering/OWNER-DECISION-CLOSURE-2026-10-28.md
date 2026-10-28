@@ -1,6 +1,27 @@
 # TOEFL House — decision closure packet (2026-10-28)
 
-**Status: OWNER REVIEW REQUIRED / DRAFT.** This packet is an analysis, not an operative policy. Do not mark decisions in `docs/owner-decisions.json` approved until the Course Owner explicitly answers. Do not disable any existing release or policy guard. All real/synthetic data on the personal test PC remain isolated from the eventual clean course-PC installer.
+## Owner follow-up — decisions received on 2026-10-28 (authoritative addendum)
+
+The current Course Owner supplied and confirmed the following decisions after the original open-question review. They are saved as an immutable-facing `owner_policy_addenda_2026_10_28` in `docs/owner-decisions.json` and as source defaults in `setup_presets/toefl_house_afghanistan_1405.json`.
+
+- GE/EAP: pass >=60%; proposed A >=90, B >=80, C >=70, D >=60, F <60. 40 continuous points (attendance 5, participation 10, assignments 10, quizzes 15) + 60 final.
+- One retake for a student failing the first term result, no earlier than seven days. Engineering proposal: **best** of the two evidenced scores governs; both attempts must remain independently auditable. The native runtime still needs proof of actual best-attempt selection.
+- Special Speaking and TOEFL Preparation are independent specialist courses with competency/progress feedback, **not mandatory automatic pass/fail or progression**. Their template omits pass/progression facets and cannot be silently activated as a formal grading book until a separate progress-report workflow is verified.
+- Placement is not free: AFN 100 **per placement attempt**, Reception registers and charges through a native receipted payment, with paper/written assessment and in-person Speaking evidence reviewed by authorized academic staff.
+- Late joiners owe the **full** course/semester tuition, never automatic time-based proration. Only an authorized discount may reduce it.
+- Optional installment amounts are contractual and variable (e.g. 50%/50% or 60%/40%), must equal full net tuition, with due-date choice of the 25th of the starting Afghan month or first of the following Afghan month (preferred), plus five days' grace. The present native installment engine still needs tested unequal shares and owner-specific due dates; do not imply the current preset enables this.
+- Same-level class transfers are approved in principle, conditional on capacity and authorized Academic Manager approval, with full history. This is a **new scope-limited supersession** of D5; other program/branch transfer and advanced withdrawal decisions stay held.
+- Withdrawal/refund authorization: General Manager approves ordinary claims; Finance Manager makes the independently recorded actual payment. Refund eligibility, timing and amount formula **not yet specified**; no autonomous refund must be issued.
+- Discount choices 5, 10, 15, 20% require General Manager approval, 50 and 100% require Course Owner approval; 100% staff-relative eligibility includes spouse, children and parents, excluding siblings; named beneficiary and evidence are mandatory.
+- Actual class capacity adjustable per class within 15–30, with engineering-proposed default 20 only, never an institution-wide fixed cap without per-class approval.
+- One-to-one online fee is monthly from each student's actual start/renewal anniversary, not automatically at the start of an Afghan calendar month; teacher payroll remains separate.
+- The entity is registered in an **individual natural person's name** as a language teaching center. Owner supplied English text **The Tofel House** and Dari **خانه موفقیت**. Verify exact licensed company name and spelling before generating legal receipts or creating the live ERPNext Company. Tuition tax remains disabled pending current legal classification; not a tax-exemption declaration.
+
+**Outstanding questions now reduced to two consequential policy details:** (1) refund eligibility/amount formula and time window, (2) exact official English spelling as shown on the registered education license. A small additional month-end edge case is engineering configuration and can be set to the last valid date of a shorter month, unless the Owner objects.
+
+**Operational release remains HOLD.** Owner statements permit policy design, not unsafe bypass of D1/D5 runtime gates, historical edits, Company registration or live financial postings. Tests and a Windows-native release remain required.
+
+**Status: PARTIALLY RESOLVED — REVIEW THE 2026-10-28 OWNER ADDENDUM ABOVE.** This packet is an analysis, not an operative policy. Do not mark decisions in `docs/owner-decisions.json` approved until the Course Owner explicitly answers. Do not disable any existing release or policy guard. All real/synthetic data on the personal test PC remain isolated from the eventual clean course-PC installer.
 
 ## Recorded owner facts — do not ask again
 
