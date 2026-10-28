@@ -108,6 +108,15 @@ KIND_ROLES = {
     "request_fees_correction": "Finance Officer",
     "approve_fees_correction": "Finance Officer",
     "deny_fees_correction": "Finance Officer",
+    # Issue #115 tuition refunds: command access is Finance Officer; the
+    # approve/deny commands additionally require General Manager and the
+    # pay command additionally requires Finance Manager (checked in-command,
+    # dual key, exactly like the correction approvals). Payout itself is
+    # blocked until a verified native Fees refund mechanism exists.
+    "request_tuition_refund": "Finance Officer",
+    "approve_tuition_refund": "Finance Officer",
+    "deny_tuition_refund": "Finance Officer",
+    "pay_tuition_refund": "Finance Officer",
     # Assessment commands require authorized academic / teaching roles.
     "open_assessment_book": "Academic Manager",
     "record_assessment_marks": "Instructor",
@@ -133,6 +142,7 @@ DOCTYPES = {
     "TH Enrollment Exit",
     "TH Instructor Contract", "TH Teaching Assignment",
     "TH Correction Policy", "TH Correction Request",
+    "TH Tuition Refund Request",
     "TH Attendance Correction Request",
     # Mission 3 class operations (guarded operational records).
     "TH Class Transfer", "TH Class Waiting List",
@@ -358,6 +368,14 @@ FINANCE_COMMANDS = {
     # with is_return=1) inside the guarded context
     "approve_invoice_correction": "Sales Invoice",
     "approve_fees_correction": "Fees",
+    # Issue #115: only the pay command writes a native money document
+    # (Payment Entry, once a verified native mechanism exists — until
+    # then it refuses before any money movement). The request/approve/
+    # deny commands write the TH Tuition Refund Request control record,
+    # which ProtectedRecord guards via DOCTYPES + KIND_ROLES; as a
+    # draft-only record it has no cancel or post-submit-edit seam, so
+    # it needs no doc_events guard (same as TH Correction Request).
+    "pay_tuition_refund": "Payment Entry",
     # the close records counted cash against the ledger; it posts nothing
     "reconcile_cashier_day": "TH Cashier Day",
 }

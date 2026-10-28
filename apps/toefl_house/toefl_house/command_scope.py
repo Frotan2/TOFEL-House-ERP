@@ -37,6 +37,12 @@ CORRECTION_COMMANDS = frozenset({
     "approve_fees_correction", "deny_fees_correction",
 })
 
+# Issue #115 tuition refunds: approve/deny/pay resolve their Company through
+# the refund request's Fees document, exactly like correction approvals.
+REFUND_COMMANDS = frozenset({
+    "approve_tuition_refund", "deny_tuition_refund", "pay_tuition_refund",
+})
+
 
 def _reference_company(doctype, name):
     """Resolve Company through the native teaching contract and its employee."""
@@ -58,7 +64,8 @@ def _authorize_company_scope(kind, payload, actor, result):
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         sources += [{"payment_entry": name} for name in names]
-    if not (kind in CORRECTION_COMMANDS and payload.get("request")) and not any(
+    if not (kind in CORRECTION_COMMANDS and payload.get("request")) \
+            and not (kind in REFUND_COMMANDS and payload.get("request")) and not any(
         any(source.get(field) for field in ("company", *COMPANY_REFERENCES))
         for source in sources
     ):
@@ -96,6 +103,17 @@ def _authorize_company_scope(kind, payload, actor, result):
                 if not company:
                     raise frappe.PermissionError("The correction Company cannot be resolved")
                 companies.add(company)
+    if kind in REFUND_COMMANDS:
+        request = payload.get("request")
+        if not isinstance(request, str) or not request or len(request) > 140:
+            raise frappe.PermissionError("A scoped tuition refund request is required")
+        fee = frappe.db.get_value("TH Tuition Refund Request", request, "fees")
+        if not fee:
+            raise frappe.PermissionError("The refund Company's source is unavailable")
+        company = _reference_company("Fees", fee)
+        if not company:
+            raise frappe.PermissionError("The refund Company cannot be resolved")
+        companies.add(company)
     if not companies <= set(allowed):
         raise frappe.PermissionError("The command target is outside this login's permitted companies")
 
@@ -204,6 +222,11 @@ def authorize_command_scope(kind, payload, actor, *, result=None):
         _require_document("TH Attendance Correction Request", payload["request"], allowed)
     if kind in {"approve_fees_correction", "deny_fees_correction"} and payload.get("request"):
         _require_document("TH Correction Request", payload["request"], allowed)
+    if kind in REFUND_COMMANDS and payload.get("request"):
+        _require_document("TH Tuition Refund Request", payload["request"], allowed)
+    if kind == "request_tuition_refund" and payload.get("fees"):
+        student = frappe.db.get_value("Fees", payload["fees"], "student")
+        _require_document("Student", student, allowed)
     if kind in {"request_fees_correction", "record_reception_collection", "correct_reception_collection"} and payload.get("fees"):
         student = frappe.db.get_value("Fees", payload["fees"], "student")
         _require_document("Student", student, allowed)

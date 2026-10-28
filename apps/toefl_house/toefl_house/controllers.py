@@ -50,6 +50,8 @@ class ProtectedRecord(Document):
             self._validate_correction_policy(before)
         if before and self.doctype == "TH Correction Request":
             self._validate_correction_request(before)
+        if before and self.doctype == "TH Tuition Refund Request":
+            self._validate_tuition_refund_request(before)
         if before and self.doctype in CONFIG_DOCTYPES:
             self._validate_config(before)
 
@@ -158,6 +160,31 @@ class ProtectedRecord(Document):
             raise frappe.PermissionError("Recorded decision actor is immutable")
         if before.credit_note and self.credit_note != before.credit_note:
             raise frappe.PermissionError("Posted credit note reference is immutable")
+
+    def _validate_tuition_refund_request(self, before):
+        """Refund request facts are immutable; the decision is one-shot.
+
+        Allowed transitions: Requested -> Approved, Requested -> Denied,
+        Approved -> Paid. Paid is set only by a successful native payout;
+        until a verified native Fees refund mechanism exists, pay refuses
+        and the request stays Approved. Identity, amount, reason and
+        evidence never change after insert, and the recorded approver
+        never changes.
+        """
+        for field in ("student", "company", "fees", "requested_amount",
+                      "reason", "evidence"):
+            if before.get(field) != self.get(field):
+                raise frappe.PermissionError("Tuition refund request facts are immutable")
+        if before.status == self.status:
+            raise frappe.PermissionError("Tuition refund decisions are one-shot")
+        if (before.status, self.status) not in (
+                ("Requested", "Approved"), ("Requested", "Denied"),
+                ("Approved", "Paid")):
+            raise frappe.PermissionError("Illegal tuition refund request transition")
+        if before.approved_by and self.approved_by != before.approved_by:
+            raise frappe.PermissionError("Recorded decision actor is immutable")
+        if before.payment_entry and self.payment_entry != before.payment_entry:
+            raise frappe.PermissionError("Posted refund payment reference is immutable")
 
     def _validate_config(self, before):
         if before.code != self.code or before.revision != self.revision or before.owner != self.owner:

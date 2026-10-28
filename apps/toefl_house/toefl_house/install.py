@@ -118,6 +118,7 @@ def after_migrate():
     # D3 correction framework lookups.
     frappe.db.add_index("TH Correction Policy", ["status"], "th_correction_policy_status")
     frappe.db.add_index("TH Correction Request", ["sales_invoice"], "th_correction_request_invoice")
+    frappe.db.add_index("TH Tuition Refund Request", ["fees"], "th_tuition_refund_fees")
     # Cashier day closes: the duplicate-day lock reads (company, date).
     frappe.db.add_index("TH Cashier Day", ["company", "date"], "th_cashier_day_company_date")
     frappe.db.add_index("TH Cashier Day", ["date"], "th_cashier_day_date")

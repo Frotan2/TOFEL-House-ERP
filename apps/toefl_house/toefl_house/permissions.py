@@ -20,6 +20,7 @@ KINDS = {
     "TH Teaching Assignment": "assignment",
     "TH Correction Policy": "correction_policy",
     "TH Correction Request": "correction_request",
+    "TH Tuition Refund Request": "tuition_refund_request",
     "TH Attendance Correction Request": "attendance_correction",
     "TH Class Transfer": "class_transfer",
     "TH Class Waiting List": "class_waiting_list",
@@ -50,6 +51,7 @@ TABLES = {
     "assignment": "`tabTH Teaching Assignment`",
     "correction_policy": "`tabTH Correction Policy`",
     "correction_request": "`tabTH Correction Request`",
+    "tuition_refund_request": "`tabTH Tuition Refund Request`",
     "attendance_correction": "`tabTH Attendance Correction Request`",
     "class_transfer": "`tabTH Class Transfer`",
     "class_waiting_list": "`tabTH Class Waiting List`",
@@ -118,6 +120,7 @@ BRANCH_KINDS = {
     "TH Enrollment Exit": "enrollment_exit",
     "TH Teaching Assignment": "assignment",
     "TH Correction Request": "correction_request",
+    "TH Tuition Refund Request": "tuition_refund_request",
     "TH Attendance Correction Request": "attendance_correction",
     "TH Assessment Book": "assessment_book",
     "TH Academic Result": "academic_result",
@@ -219,6 +222,9 @@ def _branch_condition(kind, branches):
     if kind == "correction_request":
         return (f"`tabTH Correction Request`.fees IN (SELECT name FROM `tabFees` "
                 f"WHERE {_student_branch_condition('`tabFees`.student', branches)})")
+    if kind == "tuition_refund_request":
+        return (f"`tabTH Tuition Refund Request`.fees IN (SELECT name FROM `tabFees` "
+                f"WHERE {_student_branch_condition('`tabFees`.student', branches)})")
     if kind == "attendance_correction":
         return (f"`tabTH Attendance Correction Request`.course_schedule IN "
                 f"(SELECT name FROM `tabCourse Schedule` WHERE student_group IN "
@@ -282,6 +288,10 @@ def _doc_branches_guarded(doc, kind):
         branch = frappe.db.get_value("Student Group", group, "th_branch")
         return {branch} if branch else set()
     if kind == "correction_request":
+        if not doc.get("fees"):
+            return set()
+        return _student_branches(frappe.db.get_value("Fees", doc.fees, "student"))
+    if kind == "tuition_refund_request":
         if not doc.get("fees"):
             return set()
         return _student_branches(frappe.db.get_value("Fees", doc.fees, "student"))
@@ -599,6 +609,7 @@ def query_contract(user=None): return query("contract", user)
 def query_assignment(user=None): return query("assignment", user)
 def query_correction_policy(user=None): return query("correction_policy", user)
 def query_correction_request(user=None): return query("correction_request", user)
+def query_tuition_refund_request(user=None): return query("tuition_refund_request", user)
 def query_attendance_correction(user=None): return query("attendance_correction", user)
 def query_enrollment_exit(user=None): return query("enrollment_exit", user)
 def query_class_transfer(user=None): return query("class_transfer", user)
