@@ -98,6 +98,13 @@ class PureSelectionTests(unittest.TestCase):
                 "overall_percent": percent, "published_on": published,
                 "attempt": attempt}
 
+    def test_a_lower_percent_pass_beats_a_higher_percent_fail(self):
+        passed = self.attempt("PASS", 61, attempt=1)
+        failed = self.attempt("HIGHER-FAIL", 85, attempt=2)
+        failed["outcome"] = "Fail"
+        self.assertEqual(grading.select_best_attempt([failed, passed])["name"],
+                         "PASS")
+
     def test_best_is_the_highest_published_percent(self):
         rows = [self.attempt("R1", 80.0, attempt=1),
                 self.attempt("R2", 90.0, attempt=2),
@@ -261,16 +268,15 @@ class BookGateTests(RetakeCase):
         self.fail_book()
         self.h.today = DAY_7
         with self.assertRaises(ValidationError) as ctx:
-            self.book(key=self.key("open2"))
+            self.book(key=self.key("open2"), retake_student="SYN-STU-1")
         self.assertIn("No approved retake", str(ctx.exception))
-
     def test_a_further_book_after_a_pass_is_refused(self):
-        self.publish({"SYN-STU-1": PASS, "SYN-STU-2": PASS, "SYN-STU-3": PASS})
+        self.publish({"SYN-STU-1": PASS, "SYN-STU-2": PASS,
+                      "SYN-STU-3": PASS})
         self.h.today = DAY_7
         with self.assertRaises(ValidationError) as ctx:
-            self.book(key=self.key("open2"))
-        self.assertIn("No approved retake", str(ctx.exception))
-
+            self.book(key=self.key("open2"), retake_student="SYN-STU-1")
+        self.assertIn("not Fail", str(ctx.exception))
     def test_a_second_book_under_one_retake_decision_is_refused(self):
         self.fail_book()
         result = self.results_for("SYN-STU-1")[1]
@@ -282,42 +288,19 @@ class BookGateTests(RetakeCase):
             self.book(key=self.key("open3"), retake_student="SYN-STU-1")
         self.assertIn("already in progress", str(ctx.exception))
 
-    def test_a_preopened_book_cannot_publish_as_an_unauthorized_retake(self):
+    def test_a_preopened_retake_book_is_refused_before_first_publication(self):
         first = self.book(key=self.key("open1"))
-        second = self.book(key=self.key("open2"), retake_student="SYN-STU-1")
-        # Publish the first book (all fail); the second book was opened
-        # before any result existed, so it opened freely — but publishing
-        # it now would be an unauthorized further attempt.
-        self.h.record(first["name"], self.h.full_marks(listening=12.0, reading=6.0),
-                      key=self.key("marks1"))
-        self.h.acting_as(INSTRUCTOR)
-        self.h.assessment.submit_assessment_book(self.key("submit1"), first["name"])
-        self.h.acting_as(MANAGER)
-        self.h.assessment.review_assessment_book(self.key("review1"), first["name"],
-                                                 "Review")
-        self.h.assessment.approve_assessment_book(self.key("approve1"), first["name"])
-        self.h.assessment.publish_assessment_results(self.key("publish1"),
-                                                     first["name"])
-        self.h.record(second["name"], self.h.full_marks(), key=self.key("marks2"))
-        self.h.acting_as(INSTRUCTOR)
-        self.h.assessment.submit_assessment_book(self.key("submit2"), second["name"])
-        self.h.acting_as(MANAGER)
-        self.h.assessment.review_assessment_book(self.key("review2"), second["name"],
-                                                 "Review")
-        self.h.assessment.approve_assessment_book(self.key("approve2"), second["name"])
+        self.assertEqual(first["attempt"], 1)
         with self.assertRaises(ValidationError) as ctx:
-            self.h.assessment.publish_assessment_results(self.key("publish2"),
-                                                         second["name"])
-        self.assertIn("No approved retake", str(ctx.exception))
-
-    def test_third_unpublished_class_book_is_refused(self):
+            self.book(key=self.key("open2"), retake_student="SYN-STU-1")
+        self.assertIn("first class assessment must be published",
+                      str(ctx.exception))
+    def test_duplicate_initial_book_is_refused_before_publication(self):
         first = self.book(key=self.key("open1"))
-        second = self.book(key=self.key("open2"), retake_student="SYN-STU-1")
-        self.assertEqual((first["attempt"], second["attempt"]), (1, 2))
+        self.assertEqual(first["attempt"], 1)
         with self.assertRaises(ValidationError) as ctx:
-            self.book(key=self.key("open3"), retake_student="SYN-STU-1")
-        self.assertIn("third attempt", str(ctx.exception))
-
+            self.book(key=self.key("open2"))
+        self.assertIn("already holds the first attempt", str(ctx.exception))
     def test_open_and_publish_lock_the_native_class_row(self):
         calls = []
         native_sql = self.h.frappe.db.sql
