@@ -45,7 +45,7 @@ Online 1:1 is a **delivery/contract mode**, not a compulsory EAP successor. The 
 
 ## Native finance and tax safety
 
-Semester prices are authoritative, not amounts to charge twice. Optional installments should be 500x2 (GE), 1,000x2 (EAP and Speaking), 1,750x4 (TOEFL), and 500x1 (Pre-Starter). The current installments API uses a **fixed interval in days**; a correct Afghan month-due scheduler still needs implementation and testing, so this preset never claims it is available. Payment in advance, overdue balances, receipt verification and role separation are mandatory. Books and refunds are separate native stock/GL transactions.
+Semester prices are authoritative, not amounts to charge twice. Optional installments should be 500x2 (GE), 1,000x2 (EAP and Speaking), 1,750x4 (TOEFL), and 500x1 (Pre-Starter). The current PR #87 release candidate already includes a **Solar Hijri Month** cadence in `finance/installments.py`, with month-first plus configured grace days. It is still conditional on an effective Owner billing policy, native Fees integration and final Windows acceptance; the preset must not automatically enable installments or issue bills. Payment in advance, overdue balances, receipt verification and role separation are mandatory. Books and refunds are separate native stock/GL transactions.
 
 Discount choices 5/10/15/20/50/100% must start **inactive**. A 100% waiver is a *student-specific* exceptional approval with documented cause (staff relative, scholarship or Owner-approved free place) and immutable audit; broad active `TH Discount Rule` rows would currently discount all eligible students automatically. Only one discount on a charge; no stacking, unauthorized cashier overrides or zero-cost billing without approval.
 
@@ -60,9 +60,17 @@ Owner requested 17:00 local backup. The current code already defaults independen
 1. Integrate a guided `Owner Initial Setup` page into the launcher/Desk: inspect -> display differences -> owner approve each proposed section -> execute guarded native commands idempotently -> verify exact expected records. Existing test data must not be treated as final course data.
 2. Add a native Grading Scale creation/linking path with precisely authorized access and Frappe integration tests. Do not give broad System Manager rights merely to avoid `Page` permission errors.
 3. Build an effective-dated, editable-as-new-version policy editor for academic, fees, classes and owner operations. An approved snapshot remains immutable. The owner backup policy must remain held until real-machine gates are satisfied.
-4. Implement Solar-Hijri calendar month due dates and payable-by-month contracts; ensure partial payments, reversals, invoice/Fees issuance and GL match one authoritative semester price. Prevent automatic discount grants and cross-family progression.
+4. Qualify the release-candidate Solar-Hijri monthly cadence in actual billed native Fees, including late joins, partial payments, reversals, outstanding invoice reporting and precise GL totals against one authoritative semester price. Prevent automatic discount grants and cross-family progression.
 5. Add capacity, schedules, per-gender shifts and two-instructor GE mapping **from actual site staffing**, never fictional employees. Validate Student Group, Instructor, Payroll/HRMS, permissions and teacher attendance.
 6. Bundle an installable signed/offline Windows product, run fresh customer-PC E2E acceptance with synthetic records, roles (Reception/Finance/Academic/Instructor/Owner), cashier/books/refunds/payroll and isolated backup/restore; deliver only after protected CI and explicit Owner approval.
+
+## 2026-10-28 continued safety fixes
+
+- All setup catalog reads now request explicit bounded page lengths rather than Frappe's implicit 20-row default; an over-limit result fails closed.
+- Duplicate program and level codes refuse; inconsistent or multiple draft Fee Structures yield explicit conflict rather than a false missing tuition.
+- Historical level duration versions remain valid, with the latest version inspected. Missing native program anchors and wrong next-level links are flagged.
+- Offline synthetic snapshot tests cover more than 20 programs, over-limit/duplicate rows, malformed fee plans and superseded duration versions.
+- Course Owner site initialization is still disabled by default and has no live Apply button. This draft is not an authorized installer or finished academic/finance workflow.
 
 **Release decision remains HOLD / NO-GO.** Do not merge this draft PR into main as customer-ready, clear an existing backup hold, turn tax on, or use customer PII as test data.
 
