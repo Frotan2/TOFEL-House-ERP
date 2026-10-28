@@ -16,6 +16,8 @@ _CODE = re.compile(r"[A-Z][A-Z0-9-]{0,11}")
 def normalize_intervals(value):
     """Return validated native Grading Scale Interval rows, descending."""
     if isinstance(value, str):
+        if len(value) > 8192:
+            raise ValueError("Grading interval payload is too large")
         try:
             value = json.loads(value)
         except (ValueError, TypeError) as exc:
