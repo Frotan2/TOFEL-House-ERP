@@ -215,6 +215,7 @@ def _book_result(book, extra=None):
         "policy_effective_from": str(book.policy_effective_from),
         "status": book.status,
         "attempt": book.attempt,
+        "retake_student": book.get("retake_student") or "",
         "mark_count": len(book.get("marks") or []),
     }
     if extra:
@@ -228,6 +229,18 @@ def _attempt_rows(student_group, level_name):
     return frappe.get_all(BOOK, filters={"student_group": student_group,
                                          "level": level_name},
                           fields=["name", "attempt"], order_by="attempt desc")
+
+
+def _book_students(book):
+    """Students this book is authorized to assess, not the entire roster on a retake."""
+    members = roster(book.student_group)
+    retake_student = book.get("retake_student") or ""
+    if retake_student:
+        if retake_student not in members:
+            raise frappe.ValidationError(
+                "The retake student is no longer on this class's active roster")
+        return [retake_student]
+    return members
 
 
 def _lock_assessment_group(student_group):
@@ -265,7 +278,7 @@ def _current_published_by_student(student_group, level_name):
 
 
 def _retake_authorization(student_group, level_name, on_date, *,
-                          next_attempt, exclude_book=None):
+                          next_attempt, student, exclude_book=None):
     """Is a further book for this class+level authorized, and by whom?
 
     Returns (True, student_name) for the first eligible retaker found, or
@@ -291,29 +304,31 @@ def _retake_authorization(student_group, level_name, on_date, *,
         return False, "No published result exists for this class and level"
     books = frappe.get_all(BOOK, filters={"student_group": student_group,
                                           "level": level_name},
-                           fields=["name", "attempt", "status"])
+                           fields=["name", "attempt", "status", "retake_student"])
     blockers = []
     by_student_attempt = {}
     for (student, attempt), row in current.items():
         by_student_attempt.setdefault(student, {})[attempt] = row
-    for student in sorted(by_student_attempt):
-        if student not in members:
+    # Authorization is strictly for the named student; an approval held by
+    # one classmate cannot permit publishing another classmate's result.
+    for candidate in sorted(by_student_attempt):
+        if candidate != student or candidate not in members:
             continue
-        for attempt in sorted(by_student_attempt[student]):
-            row = by_student_attempt[student][attempt]
+        for attempt in sorted(by_student_attempt[candidate]):
+            row = by_student_attempt[candidate][attempt]
             names = [item.get("name") for item in frappe.get_all(
-                RESULT, filters={"student": student, "level": level_name,
+                RESULT, filters={"student": candidate, "level": level_name,
                                  "attempt": attempt}, fields=["name"])]
             decisions = frappe.get_all(
                 DECISION, filters={"academic_result": ["in", names],
                                    "decision": "Retake", "status": "Approved"},
                 fields=["name"]) if names else []
             if not decisions:
-                blockers.append(f"{student} attempt {attempt}: no approved Retake decision")
+                blockers.append(f"{candidate} attempt {attempt}: no approved Retake decision")
                 continue
             if row.get("outcome") != "Fail":
                 blockers.append(
-                    f"{student} attempt {attempt}: outcome is {row.get('outcome')}, "
+                    f"{candidate} attempt {attempt}: outcome is {row.get('outcome')}, "
                     "not Fail")
                 continue
             try:
@@ -325,36 +340,38 @@ def _retake_authorization(student_group, level_name, on_date, *,
                 retakes = None
             if not retakes:
                 blockers.append(
-                    f"{student} attempt {attempt}: no retake rules are configured")
+                    f"{candidate} attempt {attempt}: no retake rules are configured")
                 continue
             effective = grading.effective_retake_rules(retakes)
             if (attempt >= effective["max_attempts"]
                     or int(next_attempt) != attempt + 1):
                 blockers.append(
-                    f"{student} attempt {attempt}: retake ordinal or total-attempt "
+                    f"{candidate} attempt {attempt}: retake ordinal or total-attempt "
                     "limit does not match the next assessment book")
                 continue
             wait_until = grading.wait_until_for_retake(
                 retakes.get("wait_days"), row.get("published_on") or "")
             if str(on_date) < wait_until:
                 blockers.append(
-                    f"{student} attempt {attempt}: the retake wait ends on {wait_until}")
+                    f"{candidate} attempt {attempt}: the retake wait ends on {wait_until}")
                 continue
             if any(int(other.get("attempt") or 0) > attempt
                    for (other_student, _), other in current.items()
-                   if other_student == student):
+                   if other_student == candidate):
                 blockers.append(
-                    f"{student} attempt {attempt}: a retake attempt already exists")
+                    f"{candidate} attempt {attempt}: a retake attempt already exists")
                 continue
             in_progress = [book for book in books
                            if book.get("name") != exclude_book
                            and int(book.get("attempt") or 0) > attempt
+                           and (not book.get("retake_student")
+                                or book.get("retake_student") == candidate)
                            and book.get("status") != "Published"]
             if in_progress:
                 blockers.append(
-                    f"{student} attempt {attempt}: a retake book is already in progress")
+                    f"{candidate} attempt {attempt}: a retake book is already in progress")
                 continue
-            return True, student
+            return True, candidate
     detail = "; ".join(blockers[:3])
     return False, ("No approved retake authorizes a further book for this class"
                    + (f": {detail}" if detail else ""))
