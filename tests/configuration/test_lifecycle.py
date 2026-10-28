@@ -612,13 +612,16 @@ class DiscountConfigurationLifecycleTests(unittest.TestCase):
         for academic, fake in _load_module({"Course Owner"}):
             fake.store.setdefault("Item Group", {})["Fee Component"] = {"name": "Fee Component"}
             academic.create_fee_type("R" * 24, "Tuition Fee", "")
+            fake.store.setdefault("Student", {})["STU-001"] = {
+                "name": "STU-001", "student_name": "Approved beneficiary"}
             rule = academic.create_discount_rule(
                 "R" * 24, "SCHOLARSHIP-10", "10% Merit Scholarship", 10.0,
-                precedence=10, fee_category="Tuition Fee")
+                precedence=10, fee_category="Tuition Fee", student="STU-001",
+                description="Owner-reviewed named student scholarship")
             self.assertEqual(rule["code"], "SCHOLARSHIP-10")
             self.assertEqual(rule["discount_percentage"], 10.0)
             self.assertEqual(rule["precedence"], 10)
-            self.assertEqual(rule["status"], "Active")
+            self.assertEqual(rule["status"], "Retired")
 
             # Duplicate rejected (fresh key: the same key with a different
             # payload is an idempotency conflict, not the business rule)
@@ -631,9 +634,21 @@ class DiscountConfigurationLifecycleTests(unittest.TestCase):
             retired = academic.set_discount_rule_status("E" * 24, "SCHOLARSHIP-10", 0)
             self.assertEqual(retired["status"], "Retired")
 
-            # Reactivate
+            # Reactivate only this named, documented student's award.
             active = academic.set_discount_rule_status("F" * 24, "SCHOLARSHIP-10", 1)
             self.assertEqual(active["status"], "Active")
+
+            # A general-purpose template remains inactive and cannot be
+            # accidentally promoted to a blanket tuition waiver.
+            template = academic.create_discount_rule(
+                "T" * 24, "GLOBAL-10", "General 10% template", 10.0,
+                fee_category="Tuition Fee")
+            self.assertEqual(template["status"], "Retired")
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_discount_rule_status("G" * 24, "GLOBAL-10", 1)
+            self.assertIn("named Student", str(ctx.exception))
+            self.assertEqual(fake.store["TH Discount Rule"]["GLOBAL-10"].status,
+                             "Retired")
 
     def test_discount_commands_refuse_unauthorized_roles(self):
         for roles in (set(), {"Reception"}, {"Finance Officer"}, {"Academic Manager"}):
@@ -699,6 +714,7 @@ class AcceptanceRehearsalTests(unittest.TestCase):
                                                 "10% Scholarship", 10.0,
                                                 precedence=10, fee_category="Tuition Fee")
             self.assertEqual(disc["discount_percentage"], 10.0)
+            self.assertEqual(disc["status"], "Retired")
 
             # 8. Load Finance and Corrections modules
             import importlib.util
@@ -735,14 +751,24 @@ class AcceptanceRehearsalTests(unittest.TestCase):
                 "name": "ENR-001", "student": "STU-001", "program": native_prog,
                 "academic_year": "2026-27", "docstatus": 1, "enrollment_date": "2026-08-01"}
 
+            # Create a named, documented award only after the beneficiary
+            # exists, and explicitly activate it through the Owner command.
+            awarded = academic.create_discount_rule(
+                "S" * 24, "STU-001-TUITION-10", "Named tuition scholarship",
+                10.0, precedence=10, fee_category="Tuition Fee",
+                student="STU-001", description="Approved case-specific 10% tuition scholarship")
+            self.assertEqual(awarded["status"], "Retired")
+            academic.set_discount_rule_status(
+                "A" * 24, "STU-001-TUITION-10", 1)
+
             # Finance issues tuition fees for Student A
-            # (Consumes configured fee plan + discount rule automatically)
+            # (Consumes only the activated named award; not global templates)
             fees_res_1 = finance.issue_tuition_fees("R" * 24, "ENR-001", fee_plan["fee_structure"],
                                                     "2026-08-02", "2026-08-30")
             fees_1 = fake.store["Fees"][fees_res_1["fees"]]
             self.assertEqual(float(fees_1.grand_total), 4500.0)  # 5000 - 10% scholarship = 4500
             self.assertEqual(len(fees_res_1.get("discounts_applied", [])), 1)
-            self.assertEqual(fees_res_1["discounts_applied"][0]["rule_code"], "SCHOLARSHIP-10")
+            self.assertEqual(fees_res_1["discounts_applied"][0]["rule_code"], "STU-001-TUITION-10")
 
             # 9. LATER TUITION CHANGE (§45)
             # Owner changes Tuition Fee from 5000 to 6000
@@ -767,7 +793,7 @@ class AcceptanceRehearsalTests(unittest.TestCase):
             fees_res_2 = finance.issue_tuition_fees("K" * 24, "ENR-002", updated_plan["fee_structure"],
                                                     "2026-09-02", "2026-09-30")
             fees_2 = fake.store["Fees"][fees_res_2["fees"]]
-            self.assertEqual(float(fees_2.grand_total), 5400.0)  # 6000 - 10% scholarship = 5400
+            self.assertEqual(float(fees_2.grand_total), 6000.0)  # Not eligible for Student A award
 
             # 10. REFUND VIA CORRECTION FRAMEWORK (OD-CP-2 Option B)
             policy = corrections.configure_correction_policy(
@@ -775,14 +801,14 @@ class AcceptanceRehearsalTests(unittest.TestCase):
                 "Rehearsal correction terms")
             self.assertEqual(policy["effective_from"], "2026-01-01")
             corr_req = corrections.request_fees_correction(
-                "C" * 24, fees_res_2["fees"], "Student withdrew within window", 5400.0)
+                "C" * 24, fees_res_2["fees"], "Student withdrew within window", 6000.0)
             self.assertEqual(corr_req["status"], "Requested")
             self.assertEqual(corr_req["correction_policy"], policy["name"])
 
             # Approver approves fees correction
             approved = corrections.approve_fees_correction("A" * 24, corr_req["name"])
             self.assertEqual(approved["status"], "Posted")
-            self.assertEqual(approved["refunded_total"], 5400.0)
+            self.assertEqual(approved["refunded_total"], 6000.0)
 
             # Native Fees doc is cancelled (docstatus 2)
             self.assertEqual(int(fees_2.docstatus), 2)
@@ -1124,7 +1150,8 @@ class D1LifecycleTests(unittest.TestCase):
             governing_later = foundation.resolve_governing_strict(
                 rows, "2027-06-01", what="assessment policy version")
             self.assertEqual(governing_then["grading_scale"], "GS-1")
-            self.assertIsNone(governing_later.get("grading_scale"))
+            # A blank version field preserves the previously linked scale.
+            self.assertEqual(governing_later.get("grading_scale"), "GS-1")
             policy_events = [event for event in self._events(fake)
                              if event["target"] == "ASM-GEN"]
             self.assertEqual(foundation.verify_chain(policy_events), 4)
