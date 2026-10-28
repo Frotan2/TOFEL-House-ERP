@@ -705,6 +705,13 @@ frappe.provide("toefl_house.role_desks");
 		{ fieldname: "recovery_quorum", label: "Recovery quorum", fieldtype: "Int", reqd: 1 },
 	];
 	const ACTION_FIELDS = Object.freeze({
+		"toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale": [
+			{ fieldname: "grading_scale_name", label: "New grading scale version name", fieldtype: "Data", reqd: 1,
+				description: "Use a new unique name for a later version. Historical scales are not overwritten." },
+			{ fieldname: "intervals", label: "Grade thresholds (prefilled JSON; grade_code and threshold)", fieldtype: "Small Text", reqd: 1,
+				description: "A grade must exist at threshold 0. Every threshold and grade code must be unique." },
+			{ fieldname: "reason", label: "Reason for this grading scale", fieldtype: "Small Text", reqd: 1 },
+		],
 		"toefl_house.finance.collections.record_reception_collection": [
 			{ fieldname: "fees", label: "Tuition bill", fieldtype: "Data", read_only: 1, reqd: 1 },
 			{ fieldname: "amount", label: "Cash received", fieldtype: "Currency", reqd: 1, description: "Issue only after counting the cash. The student's balance falls immediately." },
@@ -1512,6 +1519,28 @@ frappe.provide("toefl_house.role_desks");
 						text("Already matches") + ": " + Number(data.counts.match || 0) + "  ·  " +
 						text("Needs review") + ": " + Number(data.counts.review || 0)
 					).appendTo(output);
+					const scale = data.grading_scale_suggestion;
+					if (scale && typeof scale.grading_scale_name === "string" &&
+						typeof scale.intervals === "string" && scale.intervals.length < 4096) {
+						const status = scale.exists ? text("Existing scale found") :
+							text("Native grading scale is not yet created");
+						$("<p></p>").text(status + ": " + scale.grading_scale_name).appendTo(output);
+						$("<button type='button' class='btn btn-secondary btn-sm'></button>")
+							.text(text("Create a new native grading scale version"))
+							.on("click", () => openGuidedAction({
+								label: "Create new grading scale",
+								endpoint: "toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale",
+								args: {
+									grading_scale_name: scale.exists ? "" : scale.grading_scale_name,
+									intervals: scale.intervals,
+								},
+							}))
+							.appendTo(output);
+						$("<p></p>").text(text(
+							"Creating a scale submits a new native document with an audit trail. " +
+							"Link it to the assessment policy in a separately reviewed policy version."
+						)).appendTo(output);
+					}
 					if (Number.isInteger(data.planned_actions_count) &&
 						data.planned_actions_count >= 0 && data.counts.review === 0) {
 						$("<p></p>").text(text("First-run actions proposed, not executed") +
