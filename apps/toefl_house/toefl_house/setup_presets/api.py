@@ -82,9 +82,10 @@ def _snapshot():
         }
         if row.native_program:
             structures = _bounded_rows(
-                "Fee Structure", filters={"program": row.native_program, "docstatus": 0},
-                fields=["name", "academic_year"], order_by="name",
-                bound=_MAX_COMPONENT_ROWS)
+                "Fee Structure", filters={"program": row.native_program,
+                                          "docstatus": ("!=", 2)},
+                fields=["name", "academic_year", "docstatus"],
+                order_by="name", bound=_MAX_COMPONENT_ROWS)
             for structure in structures:
                 component_rows = _bounded_rows(
                     "Fee Component", filters={"parent": structure.name,
@@ -95,7 +96,8 @@ def _snapshot():
                 # A draft with zero/multiple tuition components, unexpected
                 # extra components or a bad amount is a conflict, NOT absence.
                 price = None
-                if len(charges) == 1 and len(component_rows) == 1:
+                if (structure.docstatus == 0
+                        and len(charges) == 1 and len(component_rows) == 1):
                     try:
                         price = float(charges[0].amount)
                     except (ValueError, TypeError):
