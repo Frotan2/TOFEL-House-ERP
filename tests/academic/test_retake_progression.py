@@ -10,7 +10,7 @@ resets the retake count and never creates a new attempt ordinal.
 """
 import unittest
 
-from tests.academic._harness import Harness, ValidationError, load_pure_modules
+from tests.academic._harness import ValidationError, load_pure_modules
 from tests.academic.test_assessment_workflow import (
     GENERAL_MANAGER, INSTRUCTOR, MANAGER, OUTSIDER, AcademicCase)
 
@@ -186,7 +186,7 @@ class PureRetakeGateTests(unittest.TestCase):
 
 class DecisionGateTests(RetakeCase):
     def test_a_retake_after_a_pass_is_refused(self):
-        book = self.publish({"SYN-STU-1": PASS, "SYN-STU-2": PASS,
+        self.publish({"SYN-STU-1": PASS, "SYN-STU-2": PASS,
                              "SYN-STU-3": PASS})
         result = self.results_for("SYN-STU-1")[1]
         with self.assertRaises(ValidationError) as ctx:
