@@ -29,7 +29,7 @@ def positional_record_count(expected):
 
 def main():
     import frappe
-    if os.environ.get("GITHUB_ACTIONS") != "true" or sys.argv[1] not in ("restore.localhost", "recovery.localhost", "upgrade.localhost"):
+    if os.environ.get("GITHUB_ACTIONS") != "true" or sys.argv[1] not in ("restore.localhost", "restore-recovery.localhost", "upgrade.localhost"):
         raise SystemExit("Restore verification is restricted to the isolated Actions restore site")
     expected = json.loads(Path(os.environ["FOUNDATION_BUSINESS_REPORT"]).read_text())["records"]
     output = Path(os.environ["FOUNDATION_RESTORE_REPORT"])
@@ -67,7 +67,7 @@ def main():
             actual = hashlib.sha256(Path(doc.get_full_path()).read_bytes()).hexdigest()
             assert actual == expected[label + "_file_sha256"]
             report["checks"].append({"name": label + "-file-restored", "status": "pass", "sha256": actual})
-        if sys.argv[1] == "recovery.localhost":
+        if sys.argv[1] == "restore-recovery.localhost":
             from frappe.sessions import clear_all_sessions
             captured = json.loads(Path(os.environ["FOUNDATION_CAPTURED_SESSION"]).read_text())["sid"]
             # Sessions is a framework SQL table, not a DocType, and has no name
