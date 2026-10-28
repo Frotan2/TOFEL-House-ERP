@@ -1,222 +1,79 @@
-# TOEFL House ERP
+# TOEFL House ERP (React Edition)
 
-> **CURRENT RELEASE HOLD — READ BEFORE SETUP.** Hosted engineering has now qualified and published the isolated synthetic restore mechanism, but that does **not** authorize Owner-machine backup/restore. The Windows validation checklist and launch runbook still prohibit editing/validating the effective Backup & Recovery policy, running Owner backup or restore, or activating the site until the remaining Owner Windows backup-drive, Task Scheduler, key-custody and recovery gates are explicitly completed. Preserve the existing site, `product/data`, credentials and backups. Production authorization remains **REJECTED**.
+Course Management ERP for the **TOEFL House** language institute, rewritten as a modern, high-performance **React + TypeScript + Tailwind CSS** web application.
 
-The Course Management ERP for the **TOEFL House** language institute. The
-GitHub repository name is `TOFEL-House-ERP`.
+## Overview
 
-## What it is
+TOEFL House ERP provides an integrated operating system for the institute's daily management across all eight core administrative roles, multi-branch operations, diagnostic placement testing, admission workflows, class rosters, session attendance, tuition billing, native book store, and policy configuration.
 
-One system for running the institute: applicants and students, placement
-testing, admission, enrollment, courses and levels, classes, teachers,
-timetables, attendance, assessment and progression, tuition and payments,
-teacher compensation, and reporting. Assessment/Progression and the other
-explicitly deferred stages are not enabled by that target lifecycle; see the
-[acceptance matrix](docs/engineering/ACCEPTANCE-MATRIX.md).
+## Key Features & Role Desks
 
-**Who uses it:** the Course Owner, the General Manager, the Academic Manager,
-the Finance Manager, reception staff and instructors. Each role gets its own
-daily-work desk.
+### 1. Reception Desk (`th-reception-desk`)
+- **Front-Desk Person Lookup:** Instant search matching applicant/student name, email, or phone.
+- **Applicant Intake Funnel:** Real-time metrics across Registered, Placement Queued, Tested & Scored, Admitted, and Enrolled stages.
+- **People in the Funnel:** Stage tracking, status badges, and guided next actions (Record Applicant, Schedule Placement, Deliver Test, Convert to Student).
+- **New Applicant Intake:** Guarded modal to register candidate contact info and target program.
 
-**How it is built:** on the standard open-source ERP stack, used as-is:
+### 2. Academic Manager Desk (`th-academic-desk`)
+- **Diagnostic Placement Queue:** Supervised testing attempts, objective scores, and recommended course placements.
+- **Admission Approvals Queue:** Review and decide admission outcomes (Approved, Conditional, Deferred, Rejected) with condition tracking.
+- **Classes & Sessions Today:** Live Course Schedule and Student Group capacity monitoring (enrolled vs max strength).
+- **Session Scheduling:** Timetable session creation and conflict checking.
 
-| Native (authoritative, pinned; reviewed security overlays) | TOEFL House-specific (this repository) |
-| --- | --- |
-| **Frappe** framework: users, roles, permissions, audit | `apps/toefl_house`: placement testing, admission decisions, guarded lifecycle commands, owner-configurable policies, role desks |
-| **ERPNext**: accounting, invoices, payments, pricing | `apps/foundation_security`: deny-by-default security hardening |
-| **Education**: students, programs, courses, student groups, schedules, attendance, fees, assessment | |
-| **HRMS**: employees, salary, payroll | |
+### 3. Finance Manager Desk (`th-finance-desk`)
+- **Daily Collections & Billings:** Collections received today, invoices issued, and net outstanding receivables.
+- **Outstanding Receivables Queue:** Grouped charged, paid, and outstanding amounts with direct "Record Payment" guided action.
+- **Enrollments Awaiting Billing:** Active student enrollments with zero fees issued, with one-click "Issue Tuition Fee".
+- **Cash Register Drawer & Float:** Daily opening float, collected cash, expected balance, and reconciliation with variance logging.
+- **Native Book Shop Inventory:** Stock-enabled inventory (Official TOEFL Guide, Cambridge IELTS, etc.), stock alerts, and point-of-sale invoicing.
+- **Fee Correction Queue:** Guarded review and approval of fee adjustment requests.
 
-Students, courses, classes, invoices, payments, attendance and payroll are
-always the native records. TOEFL House adds only what the native apps lack.
-Business values such as prices, salary rates, discounts, thresholds and
-capacities are entered by the owner as configuration and are never coded in.
+### 4. General Manager / Operations Desk (`th-operations-desk`)
+- **Cross-Role Funnel & Bottlenecks:** Identification of admissions in review > 48h, overdue tuition, unbilled enrollments, and pending attendance corrections.
+- **Staffing Distribution:** Live count of assigned users across shipped operational roles.
+- **Cryptographic Audit Log:** Immutable ledger showing actor, command, target record, and SHA-256 digest receipts.
+- **System Health:** Monitored runtime health, loopback network security, and zero unhandled errors.
 
-**Canonical product and architecture description:** [docs/PRODUCT.md](docs/PRODUCT.md).
+### 5. Course Owner Cockpit (`th-owner-cockpit`)
+- **Executive Analytics:** Active course enrollments, total tuition realized, overdue balances, and verified attendance rates.
+- **Governance Attention:** Enforced Owner Decisions D1–D18 (D1 deferred grading/progression, D5 transfer hard-refused, D13/D15 private deployment, D18 backup hold).
+- **Hash-Chained Audit Chain:** Cryptographic receipt verification across all mutations.
 
-## Release status
+### 6. Teacher Desk (`th-teacher-desk`)
+- **Instructor Switcher:** Easily switch between faculty members (Sarah Jenkins, Ahmad Wardak, Fatima Noori).
+- **Today's Teaching Sessions:** Scheduled class sessions with room, times, and module focus.
+- **Interactive Attendance Sheet:** Roster table with one-click "Mark All Present" or individual Present/Absent/Leave toggles.
+- **Assigned Class Cohorts:** Roster sizes, delivery modes, and session dates.
 
-**NO-GO / production authorization REJECT.** The consolidated native-first
-engineering candidate is defined by the
-[v1.0.0-rc.1 release notes](docs/engineering/RELEASE-CANDIDATE.md),
-[integration contracts](docs/engineering/INTEGRATION-CONTRACTS.md), and
-[four-state acceptance matrix](docs/engineering/ACCEPTANCE-MATRIX.md).
-The source on `main` now includes integrated academic assessment/progression
-mechanisms, scheduling and class-operations commands, notification/portal
-mechanisms, and role-desk analytics. **Having code is not Owner authorization
-to operate it.** D1/D4/D5/D7 remain deferred unless explicitly superseded.
-Class transfer request/approval is hard-refused despite any `allow_transfers`
-business-policy toggle (D5). Retention percentage and inferred
-waiting-for-class KPI remain unavailable (D7); incomplete or denied sources
-must not become false-zero values. Portals, external channels, online payments
-and production release are not automatically enabled.
+### 7. Academic Setup (`th-academic-setup`)
+- **Program Curricula:** TOEFL iBT Prep, General Academic English, IELTS Academic, and Executive Business English.
+- **Ordered Program Levels:** CEFR-benchmarked tiers (Diagnostic Foundations, Skills Mastery, Productive Skills, Full Test Simulation) with contact hour requirements.
+- **Effective-Dated Duration Policies:** Standard 8-week, Intensive 4-week, and Weekend 10-week models.
 
-This README distinguishes today's source integration from the historical
-`v1.0.0-rc.1` candidate evidence. No actual customer release/package has
-been published merely by merging source.
+### 8. Configuration Plane (`th-configuration`)
+- **Policy Domains:** Catalog linkage, guardian lifecycle, class operations, billing & discounts, and backup policies.
+- **Readiness Badges:** Computed readiness indicators for institutional consumers.
+- **Append Policy Version:** Guarded mutation command to append new effective-dated business terms.
 
-Verified snapshot revision `9c9ec48a6ead45dc802117eecb4f423e9b64f99d` has
-exact-SHA hosted successes for Owned, Native, Foundation, Product-image and
-Windows customer-package workflows. Its image-inclusive test package is
-available from the [Product-image run](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40173457925/artifacts/12593015016).
-See the [current delivery checkpoint](docs/engineering/DELIVERY-READINESS-2026-10-25.md)
-for the full source identity, artifact digest, evidence boundaries and remaining
-acceptance gates. This is **TEST PACKAGE - NO REAL DATA**; no GitHub Release
-was published at that checkpoint. Those are engineering results only. The candidate
-package pipeline requires all four canonical gate receipts on its exact full
-SHA, embeds them with checksums in the customer ZIP, attests the prebuilt
-Linux/amd64 image package, and publishes only an existing reviewed `v*` tag.
-See [Releases](https://github.com/Frotan2/TOFEL-House-ERP/releases) for an
-actually published version; this source document does not assert that a tag or
-download exists before the workflow creates it.
+### 9. Command Centre (`th-command-centre`)
+- Role-gated command pages for Placement Authoring, Publication, Invigilation, Admissions, Scheduling, and Attendance.
 
-Real Owner Windows/recovery/staff acceptance, cashier/book-stock acceptance,
-independent download/install, and the held safe updater remain open in
-[issue #12](https://github.com/Frotan2/TOFEL-House-ERP/issues/12),
-[issue #35](https://github.com/Frotan2/TOFEL-House-ERP/issues/35),
-[issue #36](https://github.com/Frotan2/TOFEL-House-ERP/issues/36), and
-[issue #40](https://github.com/Frotan2/TOFEL-House-ERP/issues/40).
-See the [2026-10-24 integration audit](docs/engineering/INTEGRATION-AUDIT-2026-10-24.md),
-[customer delivery guide](docs/CUSTOMER-DELIVERY.md), and the historical
-[2026-10-23 release record](docs/engineering/RELEASE-STATUS-2026-10-23.md).
-The withdrawn first ZIP remains historical and is not a deliverable.
+## Development & Build
 
-## Owner: install and daily use (Windows)
+```bash
+# Install dependencies
+npm install
 
-**Customer-ready distribution path (engineering candidate):** A provider can now
-prepare a clean image-inclusive folder and customers can use the graphical
-`TOEFL House ERP.vbs` launcher instead of Git or terminal commands. The Docker
-Desktop/WSL prerequisite still requires its own Windows installation, and
-neither the GUI nor the package lifts the current production/backup holds.
-Full preparation, acceptance criteria and limitations:
-[Customer delivery](docs/CUSTOMER-DELIVERY.md). No-code operating and safety
-instructions are in the packaged
-[Owner Handbook](product/windows/OWNER%20HANDBOOK.txt), also available from the
-GUI. The disposable acceptance steps below use the prebuilt package;
-a source checkout is maintained for development and diagnosis.
+# Start development server on port 3000
+npm run dev
 
-**For the existing Owner computer:** do not reinstall or test Repair during
-the release/preservation HOLD. In the graphical launcher, **Check This PC**
-is read-only; **Copy Safe Support Status** shares only approved generic
-observations. The new daily Start/Repair preflight refuses to start if a
-previously installed Frappe site or named Docker database volume is missing.
-Install also refuses a completed existing site. These fail-closed protections
-do not restore missing records, approve live operation or replace actual
-backup/recovery acceptance.
-
-### Disposable Windows acceptance (provider supervised)
-
-You need a 64-bit Windows 10/11 PC with internet and
-[Docker Desktop](https://www.docker.com/products/docker-desktop/) installed
-once. Its installer is click-through.
-
-1. Use a **separate, clean, disposable test PC** and invented records only.
-   Obtain the complete prebuilt test package through the trusted provider,
-   who independently verifies its provenance. A repository ZIP is not that
-   package; the installer refuses a missing image archive and never builds it.
-2. Extract the complete package, open **TOEFL House ERP.vbs**, choose
-   **Check This PC**, then follow **Owner Readiness Guide** for Install and
-   first login. Initialization time must be measured on that PC.
-   Use **View Administrator Login** privately; create a separate native
-   **Course Owner** account for routine administration.
-3. Follow the guide's Stop/Start, Windows reboot, synthetic record persistence,
-   role and book-sale checks. Repair is allowed only in that disposable test
-   exercise. On an existing Owner installation the preservation HOLD above
-   still permits only the read-only checks.
-
-**Backup defaults Off (Owner decision D18).** Only the Course Owner can change
-the audited switch. Off preserves existing backup files; On still requires the
-complete approved policy, separate local drive, key custody and authorized
-recovery evidence. D17 allows deletion only of verified older backup sets
-beyond the Owner-entered keep count, once all applicable gates permit it.
-Neither switch position lifts the current hold or authorizes production.
-
-**Other authorized computers:** the ERP always listens only on the central
-PC (nothing is opened on the public internet). Staff PCs in your Tailscale
-network reach it over that private network — Tailscale installed on each PC
-plus the two path-specific `tailscale serve` routes for web and Socket.IO on
-the central PC (docs/engineering/LAUNCH-RUNBOOK.md, "Multi-user access
-(central server + Tailscale)"). Each person logs in with their own user.
-
-Owner handover and per-policy runtime evidence are linked below. The handover is currently NO-GO and subordinate to the active preservation/restore hold.
-
-First run step by step: [product/windows/VALIDATION.md](product/windows/VALIDATION.md).
-Owner handover: [docs/engineering/HANDOVER-2026-10-20.md](docs/engineering/HANDOVER-2026-10-20.md).
-Per-policy runtime evidence: [docs/engineering/POLICY-RUNTIME-MATRIX-2026-10-20.md](docs/engineering/POLICY-RUNTIME-MATRIX-2026-10-20.md).
-
-**Current preservation/restore hold:** engineering qualification of the isolated
-synthetic restore is complete and D17 is reconciled, but that is still not
-permission to configure or execute the Owner backup/recovery path. Until the
-complete Owner backup policy, real separate local backup drive, Task Scheduler,
-key-custody ceremony, Owner recovery rehearsal and explicit authorization are
-completed, only the read-only checks in `product/windows/VALIDATION.md` are
-allowed. **Do not edit or validate policies while this release hold is active.**
-In particular, do not edit or validate the effective Backup & Recovery policy;
-do not run Backup, Restore, Activate, Deactivate, retention cleanup, or any
-command that mutates the existing site or backup sets. Preserve `product/data`,
-runtime credentials, and all existing backups. Do not improvise a restore or
-treat CI as Owner-machine evidence. Production authorization remains
-**REJECTED**.
-
-## Developer
-
-```
-apps/toefl_house          TOEFL House extension app (code map: apps/toefl_house/README.md)
-apps/foundation_security  security hardening app
-product/                  the desktop runtime: Dockerfile, compose, bootstrap, Windows scripts
-tests/                    unit and contract tests (no site needed)
-tools/native/             real-site lifecycle checks run in CI
-tools/foundation/         pinned-stack install, runtime smoke and dependency-advisory audit run in CI
-docs/                     product, decisions, specs, runbook
+# Compile TypeScript and build for production
+npm run build
 ```
 
-Local checks (Python 3.11+ and Node 24):
-
-```
-python3 -m unittest discover -s tests -t .
-ruff check .
-for f in tests/foundation/*.cjs; do node "$f"; done
-```
-
-CI (`.github/workflows/`):
-
-- `owned-suite`: lint, unit tests and Node tests on every push.
-- `native-lifecycle`: installs the pinned stack and runs the real-site lifecycle checks.
-- `foundation-runtime`: hardened install, runtime smoke and the SEC-DEPS-01 advisory audit.
-- `product-image`: builds the desktop image and qualifies first boot, a
-  disposable synthetic Owner recovery-key backup/restore, guarded site-mode
-  activation/rollback, browser login, and the loopback/Tailscale-proxy
-  contract. Its Windows runner also tests fresh and deliberately stale
-  CRLF/BOM worktrees through source normalization; that contract check is not
-  a real Windows install/lifecycle proof. CI does not qualify the Owner's
-  Docker Desktop/Task Scheduler/data, actual private-key custody, or a real
-  Tailscale tailnet/WebSocket path.
-
-Pinned versions live in one place:
-[docs/engineering/foundation-version-matrix.json](docs/engineering/foundation-version-matrix.json).
-The Dockerfile, compose file and CI are tested against it.
-
-## Documentation
-
-| Document | Purpose |
-| --- | --- |
-| [docs/PRODUCT.md](docs/PRODUCT.md) | What the product is, native/custom ownership per lifecycle step, current state |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Architecture decision register (A01–A13) |
-| [docs/owner-decisions.json](docs/owner-decisions.json) | Owner business decisions |
-| [docs/CONFIGURATION-PLANE.md](docs/CONFIGURATION-PLANE.md) | How owner policies are configured, versioned and audited |
-| [docs/engineering/INTEGRATION-CONTRACTS.md](docs/engineering/INTEGRATION-CONTRACTS.md) | Domain/data ownership, APIs, events, migrations, tests and shared-file ownership |
-| [docs/engineering/ACCEPTANCE-MATRIX.md](docs/engineering/ACCEPTANCE-MATRIX.md) | Separate IMPLEMENTED, VERIFIED, DEFERRED and BLOCKED acceptance registers |
-| [docs/engineering/RELEASE-CANDIDATE.md](docs/engineering/RELEASE-CANDIDATE.md) | v1.0.0-rc.1 scope, package provenance, exclusions and release notes |
-| [docs/engineering/INTEGRATION-AUDIT-2026-10-24.md](docs/engineering/INTEGRATION-AUDIT-2026-10-24.md) | Main/PR/security review and integration decisions |
-| [Owner Handbook](product/windows/OWNER%20HANDBOOK.txt) | No-code English/Dari operating, safety and acceptance instructions |
-| [docs/ROLE-DESKS.md](docs/ROLE-DESKS.md) | Role desks: audiences, data sources, permissions |
-| [docs/CLASS-OPERATIONS.md](docs/CLASS-OPERATIONS.md) | Operator runbook: scheduling, capacity, waiting lists, transfers, suspensions |
-| [docs/PLACEMENT-SPEC.md](docs/PLACEMENT-SPEC.md) | Placement technical specification |
-| [docs/FINANCE-POLICY-APPROVAL.md](docs/FINANCE-POLICY-APPROVAL.md) | Owner approval record for the finance framework |
-| [docs/engineering/LAUNCH-RUNBOOK.md](docs/engineering/LAUNCH-RUNBOOK.md) | Guarded site-mode lifecycle, backup, restore, and rollback (not release authorization) |
-
-## Contribution and data policy
-
-Keep customizations in the owned apps and enforce business rules server-side.
-Never commit site configuration, credentials, student or payroll data,
-database dumps or backups. License: MIT (owner decision D11).
+## Tech Stack
+- **Framework:** React 18 with TypeScript
+- **Bundler:** Vite 6
+- **Styling:** Tailwind CSS v4 + TOEFL House Design System tokens
+- **Icons:** Lucide React
+- **Storage:** Reactive state synchronized with LocalStorage for offline persistence and reset capability
