@@ -481,15 +481,13 @@ def _attempt_field(row, field):
 def select_best_attempt(attempts):
     """The best VALID published attempt, as a read-time selection.
 
-    Valid means: status Published (never Superseded, draft or cancelled)
-    with a finite overall percentage. Best means the highest overall
-    percentage; ties go to the earliest published attempt, then the lowest
-    attempt ordinal, then the name, so the choice is deterministic. This
-    never modifies any result row: it only selects among them. The
-    "highest overall percent" rule is the mission's reading of the
-    governing facet's "best"; see the handover for the Owner confirmation
-    still needed (a higher-percent Fail can beat a lower-percent Pass on
-    percent alone, and progression eligibility still requires a Pass).
+    Valid means Published (never Superseded, draft or cancelled) with
+    a finite overall percentage. An existing Pass always outranks a Fail:
+    a student must not lose earned progression eligibility because a later
+    class assessment or an unusual component rubric gives a higher-percent
+    failure. Within Passes, or if no Pass exists, take the highest percentage;
+    tie-break by earliest publication, attempt ordinal and stable name.
+    Selection reads records only and never changes original evidence.
     """
     candidates = []
     for row in attempts or []:
@@ -500,19 +498,21 @@ def select_best_attempt(attempts):
                                "Overall percent")
         except (ValueError, TypeError):
             continue
-        candidates.append((percent, row))
+        outcome = _attempt_field(row, "outcome")
+        candidates.append((outcome == "Pass", percent, row))
     if not candidates:
         return None
     def sort_key(item):
-        percent, row = item
+        passing, percent, row = item
         published = str(_attempt_field(row, "published_on") or "")
         try:
             attempt = int(_attempt_field(row, "attempt") or 0)
         except (ValueError, TypeError):
             attempt = 0
-        return (-percent, published, attempt, str(_attempt_field(row, "name") or ""))
+        return (not passing, -percent, published, attempt,
+                str(_attempt_field(row, "name") or ""))
     candidates.sort(key=sort_key)
-    return candidates[0][1]
+    return candidates[0][2]
 
 
 def snapshot_digest(snapshot):
