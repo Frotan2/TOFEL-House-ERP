@@ -309,6 +309,20 @@ class BookGateTests(RetakeCase):
                                                          second["name"])
         self.assertIn("No approved retake", str(ctx.exception))
 
+    def test_open_and_publish_lock_the_native_class_row(self):
+        calls = []
+        native_sql = self.h.frappe.db.sql
+
+        def recording_sql(query, args=None, **kwargs):
+            if "tabStudent Group" in query and "for update" in query.lower():
+                calls.append((query, args))
+            return native_sql(query, args, **kwargs)
+
+        self.h.frappe.db.sql = recording_sql
+        self.fail_book()
+        self.assertGreaterEqual(len(calls), 2)
+        self.assertTrue(all(args == ("SYN-GRP-1",) for _, args in calls))
+
     def test_policy_change_cannot_reset_attempt_number_or_reuse_retake(self):
         self.fail_book()
         original = self.results_for("SYN-STU-1")[1]
