@@ -361,7 +361,7 @@ class BookGateTests(RetakeCase):
         self.h.assessment.submit_assessment_book(self.key("submit"), second["name"])
         self.h.acting_as(MANAGER)
         self.h.assessment.review_assessment_book(
-            self.key("review"), second["name"], "Reviewed")
+            self.key("review"), second["name"], "Review")
         self.h.assessment.approve_assessment_book(
             self.key("approve"), second["name"])
         with self.assertRaises(ValidationError) as ctx:
