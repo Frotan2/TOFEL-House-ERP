@@ -309,6 +309,47 @@ class BookGateTests(RetakeCase):
                                                          second["name"])
         self.assertIn("No approved retake", str(ctx.exception))
 
+    def test_policy_change_cannot_reset_attempt_number_or_reuse_retake(self):
+        self.fail_book()
+        original = self.results_for("SYN-STU-1")[1]
+        self.h.seed_policy("SYN-ALTERNATE", effective_from="2026-10-01",
+                           retakes={"max_attempts": 2, "wait_days": 7,
+                                    "scope": "full", "governing": "best"})
+        self.h.today = DAY_7
+        with self.assertRaises(ValidationError):
+            self.book(key=self.key("unapproved-alternate"),
+                      policy="SYN-ALTERNATE", effective_from="2026-10-01")
+        self.retake_decision(original["name"])
+        second = self.book(key=self.key("approved-alternate"),
+                           policy="SYN-ALTERNATE", effective_from="2026-10-01")
+        self.assertEqual(second["attempt"], 2)
+        with self.assertRaises(ValidationError):
+            self.book(key=self.key("reused-alternate"),
+                      policy="SYN-GEN-ENG", effective_from="2026-10-01")
+
+    def test_out_of_order_legacy_book_is_never_published_as_a_retake(self):
+        self.fail_book()
+        first = self.results_for("SYN-STU-1")[1]
+        self.h.today = DAY_7
+        self.retake_decision(first["name"])
+        second = self.book(key=self.key("second"))
+        self.assertEqual(second["attempt"], 2)
+        # Simulate a historical migration carrying an old ordinal. A stale
+        # book must never publish into the already-used attempt identity.
+        self.h.store.docs["TH Assessment Book"][second["name"]]["attempt"] = 1
+        self.h.record(second["name"], self.h.full_marks(), key=self.key("marks"))
+        self.h.acting_as(INSTRUCTOR)
+        self.h.assessment.submit_assessment_book(self.key("submit"), second["name"])
+        self.h.acting_as(MANAGER)
+        self.h.assessment.review_assessment_book(
+            self.key("review"), second["name"], "Reviewed")
+        self.h.assessment.approve_assessment_book(
+            self.key("approve"), second["name"])
+        with self.assertRaises(ValidationError) as ctx:
+            self.h.assessment.publish_assessment_results(
+                self.key("publish"), second["name"])
+        self.assertIn("out-of-order attempt", str(ctx.exception))
+
     def test_a_book_gate_wait_is_enforced_from_the_original_publication(self):
         # A separate policy with a 14-day wait governs this book, so the
         # book gate must refuse before 2026-11-07 and allow on it, even
