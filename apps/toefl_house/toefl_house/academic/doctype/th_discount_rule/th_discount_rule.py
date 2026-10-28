@@ -21,6 +21,10 @@ def validate(doc, method=None):
             "configuration actions, not changed directly in the form"))
     except ValueError as exc:
         raise frappe.PermissionError(str(exc)) from exc
+    if configuration_rules.active_command() not in (
+            "create_discount_rule", "set_discount_rule_status"):
+        raise frappe.PermissionError(
+            "Discount changes require the audited discount configuration action")
     rules.validate_code(doc.code or "")
     rules.validate_title(doc.title or "", "Discount rule title")
     rules.validate_discount_award(
