@@ -187,10 +187,21 @@ class ProtectedRecord(Document):
                 and (not self.approved_by or self.approved_amount is None
                      or not self.approval_evidence)):
             raise frappe.PermissionError("Tuition refund approval evidence is required")
-        if (before.status, self.status) not in (
-                ("Requested", "Approved"), ("Requested", "Denied"),
-                ("Approved", "Paid")):
-            raise frappe.PermissionError("Illegal tuition refund request transition")
+        transitions = {
+            ("Requested", "Approved"): "approve_tuition_refund",
+            ("Requested", "Denied"): "deny_tuition_refund",
+        }
+        required_command = transitions.get((before.status, self.status))
+        # The pinned native Education stack has no valid Fees payout. Until
+        # that accounting gap is independently resolved, even a command
+        # context must not mark a tuition refund Paid without real money.
+        if not required_command:
+            raise frappe.PermissionError(
+                "Illegal or unsupported tuition refund request transition")
+        active_kind, actor = require_command(self.doctype)
+        if active_kind != required_command or self.approved_by != actor:
+            raise frappe.PermissionError(
+                "Tuition refund transition requires its exact authorized decision")
         if before.approved_by and self.approved_by != before.approved_by:
             raise frappe.PermissionError("Recorded decision actor is immutable")
         if before.payment_entry and self.payment_entry != before.payment_entry:
