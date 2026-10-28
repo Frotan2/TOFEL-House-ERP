@@ -309,6 +309,14 @@ class BookGateTests(RetakeCase):
                                                          second["name"])
         self.assertIn("No approved retake", str(ctx.exception))
 
+    def test_third_unpublished_class_book_is_refused(self):
+        first = self.book(key=self.key("open1"))
+        second = self.book(key=self.key("open2"))
+        self.assertEqual((first["attempt"], second["attempt"]), (1, 2))
+        with self.assertRaises(ValidationError) as ctx:
+            self.book(key=self.key("open3"))
+        self.assertIn("third attempt", str(ctx.exception))
+
     def test_open_and_publish_lock_the_native_class_row(self):
         calls = []
         native_sql = self.h.frappe.db.sql
