@@ -131,6 +131,35 @@ class TestInitialSetupPreset(unittest.TestCase):
         self.assertIn("PREP-ONE", steps[0]["details"])
         self.assertFalse(result["ready_to_apply"])
 
+    def test_wrong_native_next_level_blocks_automatic_setup(self):
+        state = {"programs": {"GEN-ENG": {"title": "General English",
+                                          "status": "Active"}},
+                 "levels": {"STARTER": {
+                     "title": "Starter", "family": "GEN-ENG",
+                     "duration_months": 2, "native_program": "EDU-PROGRAM",
+                     "status": "Active", "next_level": "PREP-2"}}}
+        result = preview_catalog(state, self.preset)
+        problem = next(row for row in result["actions"]
+                       if row["kind"] == "level" and row["code"] == "STARTER")
+        self.assertEqual(problem["status"], "review")
+
+    def test_missing_native_program_anchor_is_not_match(self):
+        state = {"levels": {"PRE-STARTER": {
+            "title": "Pre-Starter", "family": "GEN-ENG",
+            "duration_months": 1, "native_program": "",
+            "status": "Active", "next_level": "STARTER"}}}
+        result = preview_catalog(state, self.preset)
+        problem = next(row for row in result["actions"]
+                       if row["kind"] == "level" and row["code"] == "PRE-STARTER")
+        self.assertEqual(problem["status"], "review")
+
+    def test_retired_program_cannot_be_treated_as_ready(self):
+        result = preview_catalog({"programs": {"GEN-ENG": {
+            "title": "General English", "status": "Retired"}}}, self.preset)
+        problem = next(row for row in result["actions"]
+                       if row["kind"] == "program" and row["code"] == "GEN-ENG")
+        self.assertEqual(problem["status"], "review")
+
     def test_alias_conflict_is_invalid(self):
         changed = copy.deepcopy(self.preset)
         changed["programs"][0]["levels"][2]["existing_site_aliases"] = ["STARTER"]
