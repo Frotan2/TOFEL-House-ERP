@@ -1512,6 +1512,16 @@ frappe.provide("toefl_house.role_desks");
 						text("Already matches") + ": " + Number(data.counts.match || 0) + "  ·  " +
 						text("Needs review") + ": " + Number(data.counts.review || 0)
 					).appendTo(output);
+					if (Number.isInteger(data.planned_actions_count) &&
+						data.planned_actions_count >= 0 && data.counts.review === 0) {
+						$("<p></p>").text(text("First-run actions proposed, not executed") +
+							": " + data.planned_actions_count).appendTo(output);
+						const operations = data.planned_operation_counts || {};
+						const list = $("<ul></ul>").appendTo(output);
+						Object.entries(operations).slice(0, 20).forEach(([name, count]) => {
+							$("<li></li>").text(String(name) + ": " + Number(count || 0)).appendTo(list);
+						});
+					}
 					const table = $("<table class='table table-bordered table-condensed'></table>").appendTo(output);
 					const head = $("<thead><tr></tr></thead>").appendTo(table).find("tr");
 					[text("Area"), text("Code"), text("Status"), text("Next step")].forEach(
