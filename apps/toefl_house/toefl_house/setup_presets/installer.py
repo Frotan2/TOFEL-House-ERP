@@ -14,7 +14,7 @@ from toefl_house import academic
 from toefl_house.policy import digest
 from toefl_house.setup_presets.api import _owner, _snapshot
 from toefl_house.setup_presets.catalog_plan import action_request_key, prepare_catalog_plan
-from toefl_house.setup_presets.preset import preview_catalog
+from toefl_house.setup_presets.preset import load_preset, preview_catalog
 
 
 _ALLOWED = {
@@ -94,17 +94,12 @@ def initialize_owner_catalog(expected_plan_hash, confirmation):
 
     # Require all accounting prerequisites before creating a single master.
     _finance_preconditions()
-    fee_category = plan["preview"]["preset_id"]
     # Existing categories without their native accounting Item are unsafe.
-    from toefl_house.setup_presets.preset import load_preset
     required_category = load_preset()["fee_policy"]["category"]
     if frappe.db.exists("Fee Category", required_category):
         if not frappe.db.get_value("Fee Category", required_category, "item"):
             raise frappe.ValidationError(
                 "Existing tuition Fee Category has no native accounting Item")
-    if fee_category != plan["preset_id"]:
-        raise frappe.ValidationError("Setup preset identity changed during planning")
-
     # Run the native Owner configuration commands under one Frappe POST
     # transaction. Request-key receipts make each operation independently
     # idempotent if a network retry follows a successful commit.
