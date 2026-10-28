@@ -516,13 +516,22 @@ class LineEndingContract(unittest.TestCase):
                 audited_tracked.append(relative)
 
         if audited_tracked:
-            result = subprocess.run(
-                ["git", "ls-files", "--eol", "--", *sorted(audited_tracked)],
-                cwd=ROOT, capture_output=True, text=True, check=True).stdout
+            # Windows CreateProcess has a finite command-line length. A single
+            # git invocation with every COPY source eventually raises WinError
+            # 206 as the package grows, before checking a single EOL contract.
+            # Audit the full set in bounded batches instead; no file is skipped.
             eol_by_path = {}
-            for line in result.splitlines():
-                prefix, rel = line.split("\t", 1)
-                eol_by_path[rel] = prefix.split()
+            ordered_tracked = sorted(audited_tracked)
+            for start in range(0, len(ordered_tracked), 32):
+                batch = ordered_tracked[start:start + 32]
+                result = subprocess.run(
+                    ["git", "ls-files", "--eol", "--", *batch],
+                    cwd=ROOT, capture_output=True, text=True, check=True).stdout
+                for line in result.splitlines():
+                    prefix, rel = line.split("\t", 1)
+                    self.assertNotIn(rel, eol_by_path,
+                                     f"Git EOL probe returned duplicate path: {rel}")
+                    eol_by_path[rel] = prefix.split()
             for relative in audited_tracked:
                 eol = eol_by_path.get(relative)
                 self.assertIsNotNone(eol, f"git ls-files --eol omitted {relative}")
