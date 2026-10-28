@@ -249,17 +249,11 @@ def _lock_assessment_group(student_group):
                   (student_group,))
 
 
-# --- Retake authorization for further books --------------------------------
-# A book is class-wide, but a retake is per student: a further book for a
-# class that already has published results is authorized only when at least
-# one roster student holds a live, unconsumed retake authorization (see
-# below). The gate runs at open time AND at publish time, so a book opened
-# before the first publication (or under a different policy, whose attempt
-# ordinal restarts) cannot be published as an unauthorized further attempt.
-# An unpublished book is not an attempt: attempt counting in the codebase
-# counts published results, so opening a second book while the first is
-# still unpublished is existing behaviour, not a retake — but publishing it
-# after the first book's results exist is gated.
+# --- Retake authorization for individually scoped books ---------------------
+# One published initial class book is permitted. Every subsequent book must
+# name a single failed student with a separate academic Retake authorization.
+# Book opening and publication recheck the student-specific permission and
+# never grant new results to classmates or reuse an approved retake.
 def _current_published_by_student(student_group, level_name):
     """Current Published result per (student, attempt), highest revision wins."""
     rows = frappe.get_all(RESULT,
@@ -281,8 +275,8 @@ def _retake_authorization(student_group, level_name, on_date, *,
                           next_attempt, student, exclude_book=None):
     """Is a further book for this class+level authorized, and by whom?
 
-    Returns (True, student_name) for the first eligible retaker found, or
-    (False, reason). A student authorizes a further book when ALL hold:
+    Returns (True, student_name) only when this named student is
+    eligible, or (False, reason). Authorization requires ALL of:
       (i) an Approved Retake decision exists for some result (any revision)
           of that student at this level with the same attempt ordinal;
       (ii) the student's current Published result for that attempt is Fail;
@@ -294,9 +288,8 @@ def _retake_authorization(student_group, level_name, on_date, *,
       (v) no other in-progress (unpublished) book exists for this
           class+level with a higher attempt ordinal — a Retake decision is
           consumed exactly once, by the one retake book it authorizes.
-    The check is per student, so one student's authorization never launders
-    a retake for another student; the book itself is class-wide, so the
-    authorized book publishes retake results for the roster as a whole.
+    The book itself is per-student on retakes; the first book stays
+    class-wide. Another student's decision never authorizes this book.
     """
     members = set(roster(student_group))
     current = _current_published_by_student(student_group, level_name)
@@ -307,8 +300,8 @@ def _retake_authorization(student_group, level_name, on_date, *,
                            fields=["name", "attempt", "status", "retake_student"])
     blockers = []
     by_student_attempt = {}
-    for (student, attempt), row in current.items():
-        by_student_attempt.setdefault(student, {})[attempt] = row
+    for (source_student, attempt), row in current.items():
+        by_student_attempt.setdefault(source_student, {})[attempt] = row
     # Authorization is strictly for the named student; an approval held by
     # one classmate cannot permit publishing another classmate's result.
     for candidate in sorted(by_student_attempt):
