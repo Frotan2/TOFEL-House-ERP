@@ -52,6 +52,16 @@ SITE_NAME = os.environ.get("SITE_NAME", "toeflhouse.localhost")
 # without a verified two-approver emergency authorization (see below).
 PRODUCTION_SITE = os.environ.get(
     "TOEFL_HOUSE_PRODUCTION_SITE", "toeflhouse.localhost")
+
+# A disposable restore must be unmistakably a lab target and never the
+# production site. The hosted runtime creates BOTH lab sites: ``restore.localhost``
+# for the first restore cycle and ``recovery.localhost`` for the hardened
+# encrypted-recovery cycle (see the runtime nginx site map). Recognizing only
+# "restore" refused the hardened cycle's payload before any restore ran, which
+# is why the Foundation runtime gate failed at ``hardened-restore-with-files``
+# with exit 2 (RestoreInputError) while the first cycle passed. An ordinary
+# business site name is still refused, and PRODUCTION_SITE is always excluded.
+DISPOSABLE_SITE_MARKERS = ("restore", "recovery")
 MAX_PAYLOAD_BYTES = 128 * 1024
 BACKUP_SUFFIXES = {
     "database": "-database-enc.sql.gz",
@@ -669,9 +679,12 @@ def _validate_payload(payload: dict):
     target = payload.get("target", "production")
     if target not in ("disposable", "production"):
         raise RestoreInputError("restore target is invalid")
-    if target == "disposable" and (site == PRODUCTION_SITE or "restore" not in site):
+    if target == "disposable" and (
+            site == PRODUCTION_SITE
+            or not any(marker in site for marker in DISPOSABLE_SITE_MARKERS)):
         raise RestoreInputError(
-            "a disposable restore must target a restore site, never the production site")
+            "a disposable restore must target a restore or recovery site, "
+            "never the production site")
     pre_restore_backup_set = payload.get("pre_restore_backup_set")
     if pre_restore_backup_set is not None and (
             not isinstance(pre_restore_backup_set, str) or not re.fullmatch(

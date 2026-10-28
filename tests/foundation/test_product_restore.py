@@ -60,6 +60,49 @@ class ProductRestoreInputTests(unittest.TestCase):
         self.assertEqual(stdout.getvalue(), "Native Frappe restore completed.\n")
         self.assertEqual(stderr.getvalue(), "")
 
+    def test_both_hosted_lab_sites_are_accepted_as_disposable_targets(self):
+        """The hardened encrypted-recovery cycle must be able to restore.
+
+        The hosted runtime creates ``restore.localhost`` for the first restore
+        and ``recovery.localhost`` for the hardened recovery; the adapter used
+        to accept only names containing "restore", so that second payload was
+        refused with exit 2 before any restore ran and the Foundation runtime
+        gate failed at ``hardened-restore-with-files``.
+        """
+        restore = load_restore()
+        restore.PRODUCTION_SITE = "toeflhouse.localhost"
+        for site in ("restore.localhost", "recovery.localhost",
+                     "hardened-recovery.localhost"):
+            with self.subTest(site=site):
+                restore.SITE_NAME = site
+                request = payload(site=site)
+                request["target"] = "disposable"
+                stdout, stderr = io.StringIO(), io.StringIO()
+                with patch.object(restore, "_native_restore") as native:
+                    status = restore.main(
+                        io.StringIO(json.dumps(request)), stdout, stderr, argv=[])
+                self.assertEqual(status, 0, stderr.getvalue())
+                native.assert_called_once()
+
+    def test_a_real_business_site_is_never_a_disposable_target(self):
+        restore = load_restore()
+        restore.PRODUCTION_SITE = "toeflhouse.localhost"
+        # Neither the production site itself nor an unrelated business site
+        # name may be declared disposable, even if the env site matches it.
+        for site in ("toeflhouse.localhost", "acme-academy.localhost",
+                     "foundation.localhost", "upstream-tests.localhost"):
+            with self.subTest(site=site):
+                restore.SITE_NAME = site
+                request = payload(site=site)
+                request["target"] = "disposable"
+                stdout, stderr = io.StringIO(), io.StringIO()
+                with patch.object(restore, "_native_restore") as native:
+                    status = restore.main(
+                        io.StringIO(json.dumps(request)), stdout, stderr, argv=[])
+                self.assertEqual(status, 2)
+                native.assert_not_called()
+                self.assertIn("restore or recovery site", stderr.getvalue())
+
     def test_cli_rejects_secret_arguments_without_echoing_them(self):
         restore = load_restore()
         secret = "synthetic-credential-must-not-be-an-argument"
