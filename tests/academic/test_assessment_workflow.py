@@ -79,17 +79,18 @@ class ConfigurationJourneyTests(AcademicCase):
         self.assertEqual(stored["grading_scale"], "SYN-SCALE")
         self.assertEqual(stored["opened_by"], MANAGER)
 
-    def test_the_policy_digest_changes_with_the_configured_facets(self):
+    def test_policy_change_does_not_open_duplicate_first_assessment(self):
         first = self.book(key="key-open-1")
+        original_digest = self.h.store.docs["TH Assessment Book"][first["name"]][
+            "policy_digest"]
         self.h.seed_policy("SYN-GEN-ENG", effective_from="2026-10-01",
                            weights=[{"component": "LISTENING", "weight": 50},
                                     {"component": "READING", "weight": 50}])
-        second = self.book(key="key-open-2", effective_from="2026-10-01")
-        self.assertEqual(first["policy_effective_from"], "2026-09-01")
-        self.assertEqual(second["policy_effective_from"], "2026-10-01")
-        self.assertNotEqual(
+        with self.assertRaises(ValidationError):
+            self.book(key="key-open-2", effective_from="2026-10-01")
+        self.assertEqual(
             self.h.store.docs["TH Assessment Book"][first["name"]]["policy_digest"],
-            self.h.store.docs["TH Assessment Book"][second["name"]]["policy_digest"])
+            original_digest)
 
     def test_unconfigured_weights_are_refused_with_the_owner_step_named(self):
         self.h.seed_policy("SYN-NO-WEIGHTS", effective_from="2026-09-01",
@@ -149,10 +150,11 @@ class ConfigurationJourneyTests(AcademicCase):
                           str(ctx.exception))
         self.assertEqual(self.h.store.docs["TH Assessment Book"], {})
 
-    def test_attempts_are_derived_never_chosen(self):
+    def test_an_unpublished_first_attempt_cannot_be_duplicated(self):
         first = self.book(key="key-open-1")
-        second = self.book(key="key-open-2")
-        self.assertEqual((first["attempt"], second["attempt"]), (1, 2))
+        self.assertEqual(first["attempt"], 1)
+        with self.assertRaises(ValidationError):
+            self.book(key="key-open-2")
 
 
 class MarkEntryTests(AcademicCase):
