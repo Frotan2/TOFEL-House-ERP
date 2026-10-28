@@ -31,6 +31,20 @@ class FoundationRehearsalRestoreTests(unittest.TestCase):
         self.assertIn('create_site("new-restore-site", restored_site, restore_password)', source)
         self.assertIn('product_restore("restore-with-files", restored_site, backup_set', source)
 
+    def test_second_hardened_recovery_uses_a_genuine_restore_named_site(self):
+        # The prior recovery.localhost fixture was not a restore-named site
+        # and correctly failed product/restore.py's disposable safety gate.
+        source = HARNESS.read_text(encoding="utf-8")
+        self.assertIn('recovered_site = "restore-recovery.localhost"', source)
+        self.assertIn('product_restore("hardened-restore-with-files", recovered_site,', source)
+        self.assertNotIn('recovered_site = "recovery.localhost"', source)
+        for relative in ("runtime_recovery_session.py",
+                         "runtime_encryption_key.py", "runtime_restore.py"):
+            helper = (ROOT / "tools" / "foundation" / relative).read_text(
+                encoding="utf-8")
+            self.assertIn("restore-recovery.localhost", helper)
+            self.assertNotIn('"recovery.localhost"', helper)
+
     def test_production_restore_still_requires_two_approvers(self):
         source = RESTORE.read_text(encoding="utf-8")
         self.assertIn('EMERGENCY_RESTORE_KEY_PURPOSE = "emergency-restore"', source)

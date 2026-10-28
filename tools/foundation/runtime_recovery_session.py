@@ -26,7 +26,7 @@ def main():
         print('Authenticated source session captured privately before backup')
     else:
         sid = json.loads(path.read_text())['sid']
-        for site, expected in (('foundation.localhost',200), ('recovery.localhost',403)):
+        for site, expected in (('foundation.localhost',200), ('restore-recovery.localhost',403)):
             r = requests.get(base+'/api/method/frappe.auth.get_logged_user', headers={'Host':site,'Cookie':'sid='+sid}, timeout=30)
             assert r.status_code == expected, f'Captured session on {site}: HTTP {r.status_code}'
             if expected == 200:

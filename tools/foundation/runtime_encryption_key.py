@@ -34,7 +34,7 @@ ALLOWED = {
     ("initialize", "foundation.localhost"),
     ("prepare", "foundation.localhost"),
     ("verify", "restore.localhost"),
-    ("verify", "recovery.localhost"),
+    ("verify", "restore-recovery.localhost"),
 }
 
 SOURCE_SITE = "foundation.localhost"
