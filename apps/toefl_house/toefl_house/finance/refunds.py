@@ -285,14 +285,9 @@ def guard_payment_entry(doc, method=None):
     from toefl_house.finance.student_payout_policy import student_pay_write_allowed
 
     require_operational()
-    # The guard passes the document itself so the narrow Issue #115
-    # exception can match it field-for-field against the live Approved
-    # refund context held by the pay command; without that context (the
-    # normal case, including every UI/API write) every Student Pay stays
-    # denied, exactly as before.
     if not student_pay_write_allowed(
             getattr(doc, "payment_type", None),
-            getattr(doc, "party_type", None), method, payment=doc):
+            getattr(doc, "party_type", None), method):
         raise frappe.ValidationError(
             "Student cash payouts are disabled until a General Manager-approved "
             "tuition refund is independently executed by Finance through a "
