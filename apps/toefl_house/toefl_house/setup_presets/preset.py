@@ -173,12 +173,16 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
         code = family["code"]
         existing = existing_programs.get(code)
         status = ("create" if existing is None else
-                  "match" if existing.get("title") == family["title"]
+                  "match" if (existing.get("title") == family["title"]
+                              and existing.get("status", "Active") == "Active")
                   else "review")
         steps.append(_action("program", code, status,
                              "Retain existing catalog rows; never duplicate"))
-        for level in family["levels"]:
+        for position, level in enumerate(family["levels"]):
             level_code = level["code"]
+            expected_next = (family["levels"][position + 1]["code"]
+                             if family["progression_kind"] == "sequential"
+                             and position + 1 < len(family["levels"]) else "")
             existing = existing_levels.get(level_code)
             aliases_found = [alias for alias in level.get("existing_site_aliases", [])
                              if alias in existing_levels]
@@ -192,7 +196,12 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
                 status = ("create" if existing is None else
                           "match" if (existing.get("family") == code
                                       and existing.get("duration_months") == level["duration_months"]
-                                      and existing.get("title") == level["title"])
+                                      and existing.get("title") == level["title"]
+                                      and existing.get("status", "Active") == "Active"
+                                      and ("native_program" not in existing
+                                           or bool(existing["native_program"]))
+                                      and ("next_level" not in existing
+                                           or (existing["next_level"] or "") == expected_next))
                           else "review")
                 details = "Check family, name and effective-dated duration"
             steps.append(_action("level", level_code, status, details))
