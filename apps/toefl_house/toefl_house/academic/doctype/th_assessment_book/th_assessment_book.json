@@ -3,7 +3,7 @@
  "autoname": "hash",
  "creation": "2026-10-24 00:00:00.000000",
  "doctype": "DocType",
- "documentation": "One class's authorized mark entry against one pinned assessment-policy version.",
+ "documentation": "One class's first assessment, or one student's explicitly approved retake, against a pinned policy version.",
  "engine": "InnoDB",
  "field_order": [
   "student_group",
@@ -15,6 +15,7 @@
   "grading_scale",
   "assessment_plan",
   "attempt",
+  "retake_student",
   "status",
   "section_break_marks",
   "marks",
@@ -101,6 +102,14 @@
    "in_list_view": 1,
    "label": "Attempt",
    "reqd": 1
+  },
+  {
+   "fieldname": "retake_student",
+   "fieldtype": "Link",
+   "options": "Student",
+   "label": "Authorized Retake Student",
+   "read_only": 1,
+   "description": "Set only by the authorized retake command. Blank on ordinary first-attempt class books."
   },
   {
    "fieldname": "status",
