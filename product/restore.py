@@ -837,14 +837,19 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
                                 context_writer=context_writer,
                                 expected_hashes=hashes)
         except Exception:
+            # Native Frappe may have partially overwritten the site before
+            # failing. Keep the in-progress marker until independently
+            # reviewed, even though the request is already spent.
             _append_audit(state_dir, {**audit_base, "outcome": "failed"})
             raise
-        finally:
-            try:
-                marker_path.unlink()
-            except OSError:
-                pass
         _append_audit(state_dir, {**audit_base, "outcome": "completed"})
+        # Only a fully successful and durably audited restore may clear the
+        # hold; if this fails, recovery remains blocked for support review.
+        try:
+            marker_path.unlink()
+        except OSError:
+            raise RestoreInputError(
+                "completed restore needs support review of its state marker") from None
         return
     _append_audit(state_dir, {**audit_base, "outcome": "started"})
     try:
