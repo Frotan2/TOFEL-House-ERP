@@ -5813,7 +5813,7 @@ def main():
                   and any(b in n for b in banned)]
             assert not hits,hits
             meta=frappe.get_meta(allowed_control)
-            assert not int(meta.issubmittable or 0),'Refund request became postable'
+            assert not int(meta.get('is_submittable') or 0),'Refund request became postable'
             for field in ('fees','requested_amount','approved_amount','status',
                           'approved_by','approval_evidence'):
                 assert meta.has_field(field),(allowed_control,field)
