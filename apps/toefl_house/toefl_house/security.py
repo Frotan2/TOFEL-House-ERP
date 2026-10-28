@@ -108,15 +108,14 @@ KIND_ROLES = {
     "request_fees_correction": "Finance Officer",
     "approve_fees_correction": "Finance Officer",
     "deny_fees_correction": "Finance Officer",
-    # Issue #115 tuition refunds: command access is Finance Officer; the
-    # approve/deny commands additionally require General Manager and the
-    # pay command additionally requires Finance Manager (checked in-command,
-    # dual key, exactly like the correction approvals). Payout itself is
-    # blocked until a verified native Fees refund mechanism exists.
+    # Tuition refund authorities are distinct: the requester is Finance
+    # Officer, the approver is General Manager, and any future payer is
+    # Finance Manager. No actor is required to hold another staff role.
+    # All native tuition payouts remain blocked until formally qualified.
     "request_tuition_refund": "Finance Officer",
-    "approve_tuition_refund": "Finance Officer",
-    "deny_tuition_refund": "Finance Officer",
-    "pay_tuition_refund": "Finance Officer",
+    "approve_tuition_refund": "General Manager",
+    "deny_tuition_refund": "General Manager",
+    "pay_tuition_refund": "Finance Manager",
     # Assessment commands require authorized academic / teaching roles.
     "open_assessment_book": "Academic Manager",
     "record_assessment_marks": "Instructor",
