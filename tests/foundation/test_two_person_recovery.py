@@ -12,9 +12,7 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
 import unittest
-from datetime import timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,8 +20,7 @@ sys.path.insert(0, str(ROOT / "product"))
 sys.path.insert(0, str(ROOT / "tests" / "foundation"))
 
 import update_engine as engine  # noqa: E402
-from test_update_engine import (NOW, UpdateEngineBase, UpdateFixture, iso,  # noqa: E402
-                                RsaKey)
+from test_update_engine import UpdateEngineBase  # noqa: E402
 
 
 def codes(response: dict) -> set[str]:
