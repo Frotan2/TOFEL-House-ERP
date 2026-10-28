@@ -502,9 +502,9 @@ def record_assessment_marks(request_key, book, marks):
                 "an academic correction needs its own command")
         _assigned_instructor(actor, doc.student_group)
         rows = _mark_rows(marks)
-        members = set(roster(doc.student_group))
+        members = set(_book_students(doc))
         if not members:
-            raise frappe.ValidationError("The class has no active students on its roster")
+            raise frappe.ValidationError("The assessment book has no eligible student")
         _doc, version = pinned_version(
             frappe.db.get_value(POLICY, doc.policy, "code"), doc.policy_effective_from)
         facets = version_facets(version)
@@ -623,7 +623,7 @@ def submit_assessment_book(request_key, book):
         if doc.status not in ("Open", "Returned"):
             raise frappe.ValidationError(f"A book that is {doc.status} cannot be submitted")
         _assigned_instructor(actor, doc.student_group)
-        members = roster(doc.student_group)
+        members = _book_students(doc)
         _doc, version = pinned_version(
             frappe.db.get_value(POLICY, doc.policy, "code"), doc.policy_effective_from)
         components = [row["code"] for row in version_facets(version).get("components") or []]
@@ -974,9 +974,9 @@ def publish_assessment_results(request_key, book):
         state = grading.policy_state(facets, intervals)
         if not state["configured"]:
             raise frappe.ValidationError("; ".join(state["explanations"]))
-        members = roster(doc.student_group)
+        members = _book_students(doc)
         if not members:
-            raise frappe.ValidationError("The class has no active students on its roster")
+            raise frappe.ValidationError("The book has no eligible students")
         published = frappe.get_all(RESULT,
                                    filters={"book": doc.name, "status": "Published"},
                                    fields=["name", "student"])
@@ -984,25 +984,31 @@ def publish_assessment_results(request_key, book):
             raise frappe.ValidationError(
                 "Results are already published for this book; a change is an "
                 "academic correction, not a second publication")
-        # Publish-time re-check: a book opened before the first results
-        # were published (or under a different policy, whose ordinal
-        # restarts) must not become an unauthorized further attempt. The
-        # book's own in-progress status does not count against itself.
-        others = _current_published_by_student(doc.student_group,
-                                               doc.get("level") or "")
-        if any(row.get("book") != doc.name for row in others.values()):
-            # Historical/policy-migrated books cannot reuse an old ordinal.
-            highest = max(int(row.get("attempt") or 0) for row in others.values())
-            if int(doc.attempt or 0) != highest + 1:
+        # Publication is scoped to the explicitly authorized retake student.
+        # A legacy class-wide second book may never create a new result for
+        # students whose earlier Pass remains valid.
+        retaker = doc.get("retake_student") or ""
+        others = _current_published_by_student(
+            doc.student_group, doc.get("level") or "")
+        if retaker:
+            if int(doc.attempt or 0) != 2 or not others:
                 raise frappe.ValidationError(
-                    "An assessment book uses a repeated or out-of-order attempt "
-                    "number for this class and level")
+                    "An individual retake requires a published first attempt "
+                    "and exactly the second attempt ordinal")
             allowed, reason = _retake_authorization(
                 doc.student_group, doc.get("level") or "",
-                frappe.utils.today(), next_attempt=int(doc.attempt),
+                frappe.utils.today(), next_attempt=2, student=retaker,
                 exclude_book=doc.name)
             if not allowed:
                 raise frappe.ValidationError(reason)
+            if any(candidate.get("student") != retaker
+                   for candidate in doc.get("marks") or []):
+                raise frappe.ValidationError(
+                    "A retake book contains marks for an unauthorized student")
+        elif others or int(doc.attempt or 0) != 1:
+            raise frappe.ValidationError(
+                "A class-wide book is only valid for the first attempt; "
+                "retakes must name one authorized student")
         recorded = {}
         results = []
         outcomes = {"Pass": 0, "Fail": 0, "Incomplete": 0}
