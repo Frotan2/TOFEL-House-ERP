@@ -44,6 +44,7 @@ class FoundationRehearsalRestoreTests(unittest.TestCase):
             "encryption": (ROOT / "tools/foundation/runtime_encryption_key.py").read_text(encoding="utf-8"),
             "secret": (ROOT / "tools/foundation/runtime_recovery_secret.py").read_text(encoding="utf-8"),
             "session": (ROOT / "tools/foundation/runtime_recovery_session.py").read_text(encoding="utf-8"),
+            "isolation": (ROOT / "tools/foundation/runtime_isolation.py").read_text(encoding="utf-8"),
         }
         self.assertIn(f'recovered_site = "{site}"', sources["install"])
         self.assertIn(f'{site} {site};', sources["install"])
@@ -51,6 +52,8 @@ class FoundationRehearsalRestoreTests(unittest.TestCase):
         self.assertIn(f'("verify", "{site}")', sources["encryption"])
         self.assertIn(f'["verify", "{site}"]', sources["secret"])
         self.assertIn(f"('{site}',403)", sources["session"])
+        self.assertIn(site, sources["isolation"])
+        self.assertNotIn("'recovery.localhost'", sources["isolation"])
         self.assertNotIn('recovered_site = "recovery.localhost"', sources["install"])
         self.assertNotIn('["verify", "recovery.localhost"]', sources["secret"])
         # The full native restore policy remains in force for this fixture.
