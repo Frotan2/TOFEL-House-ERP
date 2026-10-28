@@ -113,10 +113,15 @@ def _snapshot():
             raise frappe.ValidationError("Duplicate academic year in setup preview")
         years[year.name] = {"start": str(year.year_start_date),
                             "end": str(year.year_end_date)}
-    categories = [row.name for row in _bounded_rows(
-        "Fee Category", fields=["name"])]
+    category_rows = _bounded_rows(
+        "Fee Category", fields=["name", "item"])
+    categories = [row.name for row in category_rows]
+    category_items = {row.name: row.item or "" for row in category_rows}
+    if len(category_items) != len(categories):
+        raise frappe.ValidationError("Duplicate native Fee Category; setup cannot continue")
     return {"programs": programs, "levels": levels, "years": years,
-            "fee_categories": categories, "tuition": tuition}
+            "fee_categories": categories, "fee_category_items": category_items,
+            "tuition": tuition}
 
 
 @frappe.whitelist(methods=["GET"])
