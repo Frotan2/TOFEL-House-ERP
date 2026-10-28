@@ -19,11 +19,14 @@ def _owner():
 
 
 def _snapshot():
-    families = frappe.db.get_all("TH Academic Program", fields=["name", "code", "title"])
+    families = frappe.db.get_all(
+        "TH Academic Program", fields=["name", "code", "title", "status"])
     program_codes = {row.name: row.code for row in families}
-    programs = {row.code: {"title": row.title} for row in families}
+    programs = {row.code: {"title": row.title, "status": row.status} for row in families}
     level_rows = frappe.db.get_all(
-        "TH Program Level", fields=["name", "code", "title", "family", "native_program"])
+        "TH Program Level",
+        fields=["name", "code", "title", "family", "native_program",
+                "next_level", "status"])
     levels = {}
     tuition = {}
     for row in level_rows:
@@ -41,6 +44,9 @@ def _snapshot():
             "title": row.title,
             "family": program_codes.get(row.family) or "",
             "duration_months": months,
+            "status": row.status,
+            "native_program": row.native_program or "",
+            "next_level": row.next_level or "",
         }
         if row.native_program:
             structures = frappe.db.get_all(
