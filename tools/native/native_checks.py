@@ -5804,11 +5804,23 @@ def main():
             frappe.set_user('Administrator')
             names=frappe.db.get_all('DocType',filters={'name':['like','TH %']},pluck='name')
             banned=('Refund','Override','Partial','Branch','Fee Schedule','Payment Term')
-            hits=[n for n in names if any(b in n for b in banned)]
+            # Issue #115 introduces one protected, non-submittable REQUEST
+            # record. It is not a financial refund authority: payment remains
+            # blocked by the native Student Pay gate. Preserve every other
+            # historical forbidden vocabulary boundary.
+            allowed_control='TH Tuition Refund Request'
+            hits=[n for n in names if n!=allowed_control
+                  and any(b in n for b in banned)]
             assert not hits,hits
+            meta=frappe.get_meta(allowed_control)
+            assert not int(meta.issubmittable or 0),'Refund request became postable'
+            for field in ('fees','requested_amount','approved_amount','status',
+                          'approved_by','approval_evidence'):
+                assert meta.has_field(field),(allowed_control,field)
             for dt in ('TH Fee Override','TH Partial Refund','TH Branch Fee','TH Refund'):
                 assert not frappe.db.exists('DocType',dt),dt
-            return {'th_doctypes_scanned':len(names),'legacy_names_absent':True}
+            return {'th_doctypes_scanned':len(names),'legacy_names_absent':True,
+                    'nonposting_refund_request_only':True}
         def fee_receipt_chain():
             frappe.set_user('Administrator')
             opname=digest(['issue_tuition_fees','odcp-fee-discounted-0001'])
