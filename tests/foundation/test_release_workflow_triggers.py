@@ -40,6 +40,8 @@ class ReleaseImageTriggerContract(unittest.TestCase):
     def test_release_critical_fix_branches_and_observer_probe_are_qualified(self):
         workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
         self.assertIn("- 'fix/**'", workflow)
+        self.assertIn("      - work", workflow)
+        self.assertIn("if: success() && startsWith(github.ref, 'refs/tags/v')", workflow)
         self.assertIn("tools/native/product_update_host_probe.py", push_paths("product-image.yml"))
         self.assertIn("docs/CUSTOMER-UPDATES.md", push_paths("product-image.yml"))
         self.assertIn("docs/engineering/SAFE-UPDATES.md", push_paths("product-image.yml"))
