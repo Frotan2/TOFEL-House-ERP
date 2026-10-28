@@ -340,7 +340,7 @@ class ProgressionEvidenceTests(unittest.TestCase):
 
 class RetakeTests(unittest.TestCase):
     retakes = {"max_attempts": 2, "wait_days": 14, "scope": "full",
-               "governing": "latest"}
+               "governing": "best"}
 
     def test_a_first_attempt_after_the_wait_is_allowed(self):
         state = grading.retake_state(self.retakes, attempts_made=1,
@@ -371,7 +371,7 @@ class RetakeTests(unittest.TestCase):
                                      last_attempt_on="2026-09-01",
                                      on_date="2026-10-01")
         self.assertEqual(state["scope"], "full")
-        self.assertEqual(state["governing"], "latest")
+        self.assertEqual(state["governing"], "best")
 
 
 class SnapshotTests(unittest.TestCase):
