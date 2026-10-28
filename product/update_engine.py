@@ -2425,24 +2425,6 @@ def _consume_transaction(state_dir: Path, transaction: dict) -> None:
     before any migration.  A replay would otherwise need a fresh authorization,
     which needs every piece of evidence again.
     """
-    folder = state_dir / TRANSACTION_CONSUMED_DIR
-    try:
-        folder.mkdir(parents=True, exist_ok=True)
-        marker = folder / (transaction["transaction_id"] + ".json")
-        with marker.open("x", encoding="utf-8", newline="\n") as handle:
-            json.dump({
-                "schema_version": 1,
-                "document_type": "toefl-house-erp-update-transaction-use",
-                "transaction_id": transaction["transaction_id"],
-                "consumed_utc": parse_utc_iso(datetime.now(timezone.utc)),
-                "target_version": transaction["target"].get("version"),
-            }, handle, sort_keys=True)
-            handle.write("\n")
-    except FileExistsError:
-        raise refuse("transaction.replayed", "this update transaction was already used") from None
-    except OSError:
-        raise refuse("transaction.invalid",
-                     "the update transaction could not be recorded; nothing was migrated") from None
     # A recovery approval is single-use for the whole update attempt, not
     # merely for one transaction phase: once apply starts, the request id is
     # spent even if the migration then fails, so a retry needs fresh
@@ -2468,7 +2450,27 @@ def _consume_transaction(state_dir: Path, transaction: dict) -> None:
         except OSError:
             raise refuse("transaction.invalid",
                          "the recovery request could not be recorded; nothing was migrated") from None
-
+    # Consume the recovery approval before the transaction marker. If the
+    # process crashes between writes, the approval must remain spent;
+    # otherwise a new transaction could reuse the same two signatures.
+    folder = state_dir / TRANSACTION_CONSUMED_DIR
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        marker = folder / (transaction["transaction_id"] + ".json")
+        with marker.open("x", encoding="utf-8", newline="\n") as handle:
+            json.dump({
+                "schema_version": 1,
+                "document_type": "toefl-house-erp-update-transaction-use",
+                "transaction_id": transaction["transaction_id"],
+                "consumed_utc": parse_utc_iso(datetime.now(timezone.utc)),
+                "target_version": transaction["target"].get("version"),
+            }, handle, sort_keys=True)
+            handle.write("\n")
+    except FileExistsError:
+        raise refuse("transaction.replayed", "this update transaction was already used") from None
+    except OSError:
+        raise refuse("transaction.invalid",
+                     "the update transaction could not be recorded; nothing was migrated") from None
 
 def _apply_report(status: str, phase: str, *, blockers: list[dict] | None = None,
                   counts_before: dict | None = None, counts_after: dict | None = None,
