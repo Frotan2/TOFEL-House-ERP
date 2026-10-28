@@ -31,9 +31,12 @@ their own key. If only one approver is available, the restore waits.
 
 - Which backup, exactly: its name and a fingerprint (SHA-256) of each of its
   three files, so nobody can silently substitute a different or older backup.
-- A fresh backup of the live system as it is now, taken immediately before
-  the restore, so the current data can be brought back if the restore is
-  wrong. A restore without this fresh backup is refused by the system.
+- A backup of the live system as it is now, taken immediately before the
+  restore, so the current data can be brought back if the restore is wrong.
+  **Important:** the program currently verifies that a distinct complete
+  pre-restore backup set exists, but cannot itself prove that it was just
+  created or faithfully captures the current live database. The Owner and
+  support must independently verify its creation and restoration rehearsal.
 - That the restore was first rehearsed on a disposable test site, where
   possible, using the same backup.
 - That no earlier restore is still unfinished (the system refuses a new
@@ -87,8 +90,8 @@ Fields: `site`, `backup_set`, `encryption_key`, `db_root_password`,
   "restore" and is not the configured production site
   (`TOEFL_HOUSE_PRODUCTION_SITE`, default `toeflhouse.localhost`).
 - Production only: `pre_restore_backup_set` (a distinct, complete backup
-  set already present in the site's backup directory, taken immediately
-  before the restore), `authorization` (the emergency-restore document),
+  set already present in the site's backup directory, independently checked
+  as taken immediately before the restore), `authorization` (the emergency-restore document),
   `authorization_signature_1`, `authorization_signature_2` (base64 RSA
   PKCS#1 v1.5 SHA-256 signatures over the canonical document bytes:
   JSON with sorted keys, compact separators, UTF-8).
@@ -142,13 +145,19 @@ by design.
 State directory: `RESTORE_STATE_DIR/<site>/` if set, otherwise
 `<sites>/<site>/private/restore-requests/` (0700). Contents:
 `audit.jsonl` (hash-chained JSON lines, 0600), one consumed file per
-request_id, and `in-progress.json` while a production restore runs.
+request_id, an interprocess `audit.lock`, and `in-progress.json` while a
+production restore runs. Creation of the in-progress marker is exclusive;
+parallel production restore attempts cannot overwrite each other's marker.
 Audit records contain site, target, backup set, artifact hashes,
 pre-restore set, request_id, approver identities/roles/key_ids and
 outcome — never encryption keys, database passwords or administrator
 passwords, and never signatures. Verify the chain by recomputing each
-line's hash from the previous line; a rewritten or deleted line breaks
-the chain.
+line's hash from the previous line; a rewritten earlier retained line
+breaks the chain. Each append verifies the existing chain and is serialized.
+**This is not tamper-proof:** removing the tail or replacing the whole log
+cannot be detected from that log alone. Independently protect and retain
+host-level copies, and never rely on an application audit after an OS-admin
+restore as proof that no bypass occurred.
 
 ### Interrupted, failed or repeated recovery
 
