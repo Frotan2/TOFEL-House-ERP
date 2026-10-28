@@ -88,7 +88,11 @@ class Approved20261028DecisionsTest(unittest.TestCase):
         self.assertEqual(refunds["approve_refund_role"], "General Manager")
         self.assertEqual(refunds["execute_native_refund_role"], "Finance Manager")
         self.assertEqual(refunds["refund_amount_and_eligibility_formula_status"],
-                         "NEEDS_OWNER_DECISION")
+                         "APPROVED_CASE_BY_CASE_GENERAL_MANAGER")
+        self.assertTrue(refunds["cumulative_refunds_cannot_exceed_actual_collections"])
+        self.assertTrue(refunds["approver_and_payer_must_be_different_people"])
+        self.assertTrue(refunds["no_auto_payout_on_approval"])
+        self.assertTrue(refunds["live_workflow_is_not_enabled_by_this_preset"])
 
     def test_online_tuition_renews_from_individual_start_not_first_of_month(self):
         tuition = self.preset["online_one_to_one"]["tuition"]
@@ -97,6 +101,24 @@ class Approved20261028DecisionsTest(unittest.TestCase):
         self.assertEqual(self.preset["tax"]["legal_entity_type"], "natural_person")
         self.assertFalse(self.preset["tax"]["enabled_for_student_fee_billing"])
         self.assertFalse(self.preset["backup"]["enabled"])
+
+    def test_official_name_matches_owner_confirmed_license_spelling(self):
+        org = self.preset["institution"]
+        self.assertEqual(org["legal_display_name_supplied"], "The TOEFL House")
+        self.assertEqual(org["dari_display_name"], "خانه موفقیت")
+        self.assertTrue(org["official_english_name_owner_confirmed"])
+        self.assertEqual(self.owner["tax_legal_identity"]["english_name_supplied"],
+                         "The TOEFL House")
+        self.assertTrue(org["production_company_must_be_verified_from_license"])
+
+    def test_refunds_remain_separate_from_book_credit_notes(self):
+        refund = self.owner["student_operations"]["refund"]
+        self.assertEqual(refund["approving_role"], "General Manager")
+        self.assertEqual(refund["paying_role"], "Finance Manager")
+        self.assertFalse(refund["owner_approval_ordinary_case"])
+        self.assertEqual(refund["amount_eligibility_and_refund_window"],
+                         "CASE_BY_CASE_GENERAL_MANAGER_APPROVAL_NO_FIXED_AUTO_REFUND_WINDOW")
+        self.assertTrue(refund["approved_refund_cannot_exceed_unreturned_verified_paid_amount"])
 
     def test_specialist_courses_no_mandatory_progression(self):
         for program in self.preset["programs"]:
