@@ -8021,13 +8021,13 @@ def main():
             solar_month=solar.month_key(date.fromisoformat(posting))
             candidate_dates=solar.monthly_due_dates(solar_month,3,0,25)
             first_due=next(d for d in candidate_dates
-                           if date.fromisoformat(d)>=date.fromisoformat(posting))
+                           if d>=date.fromisoformat(posting))
             expected_dates=solar.monthly_due_dates(
-                solar.month_key(date.fromisoformat(first_due)),2,0,25)
+                solar.month_key(first_due),2,0,25)
             count_before=frappe.db.count('GL Entry')
             result=as_user('finance_officer',lambda:fin_inst.issue_tuition_installment_plan(
                 'native_solar_6040_plan_00001',enrollment,fin['fee_structure'],
-                posting,first_due,2,shares=[60,40]))
+                posting,str(first_due),2,shares=[60,40]))
             rows=frappe.db.get_all('Fees',
                 filters={'program_enrollment':enrollment,'docstatus':1},
                 fields=['name','docstatus','grand_total','outstanding_amount',
@@ -8037,7 +8037,7 @@ def main():
             amounts=[round(float(r.grand_total),2) for r in rows]
             assert amounts==[15000.0,10000.0],(amounts,result)
             assert round(sum(amounts),2)==25000.0,amounts
-            assert [str(r.due_date) for r in rows]==expected_dates,(rows,expected_dates)
+            assert [str(r.due_date) for r in rows]==[str(d) for d in expected_dates],(rows,expected_dates)
             assert [int(r.th_installment_sequence) for r in rows]==[1,2],rows
             assert all(int(r.th_installment_count)==2 for r in rows),rows
             assert all(round(float(r.outstanding_amount),2)==amount
@@ -8054,14 +8054,14 @@ def main():
             assert frappe.db.count('GL Entry')>count_before
             replay=as_user('finance_officer',lambda:fin_inst.issue_tuition_installment_plan(
                 'native_solar_6040_plan_00001',enrollment,fin['fee_structure'],
-                posting,first_due,2,shares=[60,40]))
+                posting,str(first_due),2,shares=[60,40]))
             assert replay==result,('Installment replay is not idempotent',replay,result)
             assert frappe.db.count('Fees',{'program_enrollment':enrollment,
                                            'docstatus':('!=',2)})==2
             assert denied(lambda:as_user('finance_officer',
                 lambda:fin_inst.issue_tuition_installment_plan(
                     'native_solar_6040_repeat_001',enrollment,fin['fee_structure'],
-                    posting,first_due,2,shares=[60,40])))
+                    posting,str(first_due),2,shares=[60,40])))
             assert frappe.db.count('Fees',{'program_enrollment':enrollment,
                                            'docstatus':('!=',2)})==2
             return {'native_fees':[r.name for r in rows],'amounts_afn':amounts,
