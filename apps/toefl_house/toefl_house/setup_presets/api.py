@@ -77,4 +77,11 @@ def _snapshot():
 def preview_owner_initial_setup():
     """Inspect data only; NEVER initialize, post, replace, or approve."""
     _owner()
-    return preview_catalog(_snapshot())
+    snapshot = _snapshot()
+    preview = preview_catalog(snapshot)
+    if preview["counts"]["review"] == 0:
+        from toefl_house.setup_presets.installer import preview_digest
+        preview["plan_hash"] = preview_digest(snapshot)
+    else:
+        preview["plan_hash"] = None
+    return preview
