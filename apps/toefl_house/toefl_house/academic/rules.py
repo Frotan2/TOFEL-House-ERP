@@ -441,7 +441,7 @@ PERCENT_MAX = 100.0
 PASS_MINIMUM_KINDS = ("percent", "grade")
 PROGRESSION_EVIDENCE_KINDS = ("assessment_pass", "attendance", "approval")
 RETAKE_SCOPES = ("full", "partial")
-RETAKE_GOVERNING = ("latest", "best", "first")
+RETAKE_GOVERNING = ("best",)
 PROGRESSION_NEXT = "next"
 
 
