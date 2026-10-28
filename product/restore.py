@@ -7,14 +7,32 @@ restore credentials in a JSON document read from stdin. The backup key is
 sent to native GPG over stdin; native MariaDB client passwords use a temporary
 mode-0600 option file instead of child argv. Native Frappe remains the restore
 authority.
+
+Emergency-recovery gate (new): a restore is either explicitly ``disposable``
+— only for a site whose name contains "restore" and is not the production
+site — or ``production`` (the default when ``target`` is omitted). A
+production restore is refused before any mutation unless it names a distinct
+pre-restore backup set preserving the live site, and carries a
+two-approver emergency authorization (one Course Owner + one General Manager
+or recovery authority, distinct keys, bound to the exact backup artifact
+hashes, single-use request_id) verified against the installation-provisioned
+trust store. Every restore, disposable or production, is recorded in a
+hash-chained audit log that never contains secrets. A fully privileged
+operating-system/container administrator can still bypass this adapter with
+a direct Bench/MariaDB restore; that path is outside application control and
+is covered by access control and procedure, not by this code.
 """
 from __future__ import annotations
 
+import base64
 import contextlib
+import fcntl
 import hashlib
+import hmac
 import io
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 import re
 import shutil
@@ -29,12 +47,34 @@ from native_gpg import safe_gpg_diagnostic_category, safe_gpg_transport
 BENCH_DIR = Path(os.environ.get("BENCH_DIR", "/home/frappe/bench"))
 SITES_DIR = BENCH_DIR / "sites"
 SITE_NAME = os.environ.get("SITE_NAME", "toeflhouse.localhost")
+# The production site name is installation-controlled, never caller-supplied:
+# a restore whose site equals this name is a production restore and is refused
+# without a verified two-approver emergency authorization (see below).
+PRODUCTION_SITE = os.environ.get(
+    "TOEFL_HOUSE_PRODUCTION_SITE", "toeflhouse.localhost")
 MAX_PAYLOAD_BYTES = 128 * 1024
 BACKUP_SUFFIXES = {
     "database": "-database-enc.sql.gz",
     "public_files": "-files-enc.tar",
     "private_files": "-private-files-enc.tar",
 }
+# Emergency-restore authorization (production restores only). This is a
+# restore-specific document, distinct from the update engine's recovery
+# authorization: same approver roles and trust-store key format, but a
+# separate document_type, a separate key purpose ("emergency-restore"), and
+# its own single-use request record, so update authority never implicitly
+# grants restore authority.
+EMERGENCY_RESTORE_SCHEMA_VERSION = 1
+EMERGENCY_RESTORE_DOCUMENT_TYPE = "emergency-restore"
+EMERGENCY_RESTORE_TRUST_DOCUMENT_TYPE = "toefl-house-erp-update-trust-store"
+EMERGENCY_RESTORE_KEY_PURPOSE = "emergency-restore"
+EMERGENCY_APPROVER_ROLES = ("course-owner", "general-manager", "recovery-authority")
+EMERGENCY_REQUEST_ID = re.compile(r"[0-9a-f]{32}\Z")
+EMERGENCY_APPROVAL_KEYS = ("key_id", "approver_identity", "approver_role")
+EMERGENCY_DOCUMENT_KEYS = (
+    "schema_version", "document_type", "site", "target", "backup_set",
+    "backup_sha256", "request_id", "issued_utc", "expires_utc", "approvals")
+KEY_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 
 
 class RestoreInputError(ValueError):
@@ -274,6 +314,320 @@ def _native_restore_failure(error: BaseException, captured_output: str,
         failure_parent_location, failure_parent_state)
 
 
+def _canonical_document_bytes(document: dict) -> bytes:
+    """The exact bytes both approvers sign: sorted, compact JSON."""
+    return json.dumps(document, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False).encode("utf-8")
+
+
+def _rsa_pkcs1v15_sha256_verify(modulus: int, exponent: int,
+                                message: bytes, signature: bytes) -> bool:
+    """Pure-stdlib RSA PKCS#1 v1.5 / SHA-256 verification (trust store ships
+    modulus/exponent, so no DER parsing is needed here)."""
+    if not isinstance(modulus, int) or not isinstance(exponent, int):
+        return False
+    if modulus <= 0 or exponent <= 0 or exponent % 2 == 0 or exponent != 65537:
+        return False
+    key_bytes = (modulus.bit_length() + 7) // 8
+    if key_bytes < 256 or len(signature) != key_bytes:
+        return False
+    signature_int = int.from_bytes(signature, "big")
+    if signature_int >= modulus:
+        return False
+    encoded = pow(signature_int, exponent, modulus).to_bytes(key_bytes, "big")
+    digest_info = bytes.fromhex("3031300d060960864801650304020105000420") \
+        + hashlib.sha256(message).digest()
+    padding = key_bytes - len(digest_info) - 3
+    if padding < 8:
+        return False
+    expected = b"\x00\x01" + (b"\xff" * padding) + b"\x00" + digest_info
+    return hmac.compare_digest(encoded, expected)
+
+
+def _parse_utc(value, label: str) -> datetime:
+    if not isinstance(value, str):
+        raise RestoreInputError(f"emergency authorization {label} is invalid")
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        raise RestoreInputError(
+            f"emergency authorization {label} is invalid") from None
+    return parsed.replace(tzinfo=timezone.utc)
+
+
+def _restore_state_dir(site: str) -> Path:
+    """Durable, installation-controlled state for consumed requests, the
+    in-progress marker and the audit log. Never caller-supplied through the
+    payload: the caller controls only the payload, not this location."""
+    configured = os.environ.get("RESTORE_STATE_DIR")
+    if configured:
+        state_dir = Path(configured)
+        if not state_dir.is_absolute():
+            raise RestoreInputError("emergency restore state directory is unsafe")
+        return state_dir / site
+    return SITES_DIR / site / "private" / "restore-requests"
+
+
+def _ensure_state_dir(site: str) -> Path:
+    state_dir = _restore_state_dir(site)
+    # Restore state is security-critical. Never follow a symlink at the
+    # state directory or any ancestor, including a configured parent.
+    for ancestor in (state_dir, *state_dir.parents):
+        if ancestor.is_symlink():
+            raise RestoreInputError("emergency restore state directory is unsafe")
+    try:
+        state_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
+        if state_dir.is_symlink() or not state_dir.is_dir():
+            raise RestoreInputError("emergency restore state directory is unsafe")
+        state_dir.chmod(0o700)
+    except OSError:
+        raise RestoreInputError("emergency restore state directory is unavailable") from None
+    return state_dir
+
+
+def _append_audit(state_dir: Path, record: dict) -> None:
+    """Append one verified hash-chain record under an interprocess file lock.
+
+    Existing log lines are verified before appending. No password, key, or
+    detached signature is recorded. A hash chain detects changes to retained
+    earlier lines, but cannot prove that the complete log was not replaced
+    or its tail removed: independent host-level retention is still needed.
+    """
+    audit_path = state_dir / "audit.jsonl"
+    lock_path = state_dir / "audit.lock"
+    if audit_path.is_symlink() or lock_path.is_symlink():
+        raise RestoreInputError("emergency restore audit path is unsafe")
+    try:
+        flags = os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW
+        with os.fdopen(os.open(lock_path, flags, 0o600), "rb+") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            previous_hash = ""
+            if audit_path.exists():
+                with os.fdopen(os.open(audit_path, os.O_RDONLY | os.O_NOFOLLOW),
+                               "rb") as audit_input:
+                    for line in audit_input:
+                        if not line.endswith(b"\n"):
+                            raise RestoreInputError("emergency restore audit chain is invalid")
+                        item = json.loads(line)
+                        if not isinstance(item, dict):
+                            raise RestoreInputError("emergency restore audit chain is invalid")
+                        stamped = dict(item)
+                        supplied_hash = stamped.pop("hash", None)
+                        if (not isinstance(supplied_hash, str)
+                                or item.get("prev_hash") != previous_hash
+                                or supplied_hash != hashlib.sha256(
+                                    _canonical_document_bytes(stamped)).hexdigest()):
+                            raise RestoreInputError("emergency restore audit chain is invalid")
+                        previous_hash = hashlib.sha256(line.rstrip(b"\n")).hexdigest()
+            entry = {**record, "prev_hash": previous_hash}
+            entry["hash"] = hashlib.sha256(
+                _canonical_document_bytes(entry)).hexdigest()
+            line = _canonical_document_bytes(entry) + b"\n"
+            with os.fdopen(os.open(audit_path,
+                                   os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW,
+                                   0o600), "ab") as audit_output:
+                os.fchmod(audit_output.fileno(), 0o600)
+                audit_output.write(line)
+                audit_output.flush()
+                os.fsync(audit_output.fileno())
+    except (OSError, ValueError, UnicodeError):
+        raise RestoreInputError("emergency restore audit path or chain is unsafe") from None
+
+
+def _load_restore_trust_store(path: Path) -> dict:
+    """Load the installation-provisioned trust store. The path comes from the
+    RESTORE_TRUST_STORE environment variable, never from the restore payload,
+    so a caller cannot substitute their own trust anchor."""
+    try:
+        store = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise RestoreInputError(
+            "emergency restore trust store is missing or invalid") from None
+    if not isinstance(store, dict):
+        raise RestoreInputError("emergency restore trust store is invalid")
+    if (store.get("schema_version") != 1
+            or store.get("document_type") != EMERGENCY_RESTORE_TRUST_DOCUMENT_TYPE
+            or store.get("provisioned") is not True):
+        raise RestoreInputError(
+            "emergency restore trust store is not provisioned")
+    keys = store.get("keys")
+    if not isinstance(keys, list) or not 1 <= len(keys) <= 8:
+        raise RestoreInputError("emergency restore trust store is invalid")
+    parsed = {}
+    for entry in keys:
+        if not isinstance(entry, dict):
+            raise RestoreInputError("emergency restore trust store is invalid")
+        key_id = entry.get("key_id")
+        if (not isinstance(key_id, str) or not KEY_ID_PATTERN.fullmatch(key_id)
+                or key_id in parsed):
+            raise RestoreInputError("emergency restore trust store is invalid")
+        try:
+            modulus = int.from_bytes(
+                base64.b64decode(entry.get("modulus_b64", ""), validate=True), "big")
+            exponent = int.from_bytes(
+                base64.b64decode(entry.get("exponent_b64", ""), validate=True), "big")
+        except (ValueError, TypeError):
+            raise RestoreInputError(
+                "emergency restore trust store is invalid") from None
+        if modulus.bit_length() < 2048 or exponent != 65537:
+            raise RestoreInputError("emergency restore trust store is invalid")
+        purposes = entry.get("purposes")
+        if not isinstance(purposes, list) or not all(
+                isinstance(item, str) for item in purposes):
+            raise RestoreInputError("emergency restore trust store is invalid")
+        parsed[key_id] = {
+            "modulus": modulus, "exponent": exponent, "purposes": purposes,
+            "approver_identity": entry.get("approver_identity"),
+            "approver_role": entry.get("approver_role"),
+            "not_before_utc": entry.get("not_before_utc"),
+            "not_after_utc": entry.get("not_after_utc"),
+        }
+    return parsed
+
+
+def _verified_backup_paths(site: str, backup_set: str) -> dict[str, Path]:
+    """The artifact checks _native_restore already performed, factored out so
+    production authorization can bind to the exact files before any mutation.
+    Error messages are unchanged from the original inline checks."""
+    backup_dir = SITES_DIR / site / "private" / "backups"
+    paths = {
+        role: backup_dir / f"{backup_set}{suffix}"
+        for role, suffix in BACKUP_SUFFIXES.items()
+    }
+    parent_dirs = (SITES_DIR, SITES_DIR / site,
+                   SITES_DIR / site / "private", backup_dir)
+    if any(path.is_symlink() for path in parent_dirs):
+        raise RestoreInputError("restore artifact directory is unsafe")
+    try:
+        resolved_backup_dir = backup_dir.resolve(strict=True)
+    except OSError:
+        raise RestoreInputError(
+            "required restore artifact directory is missing") from None
+    for role, path in paths.items():
+        try:
+            resolved_path = path.resolve(strict=True)
+            valid_path = resolved_path.parent == resolved_backup_dir
+            valid_file = path.is_file() and path.stat().st_size > 0
+        except OSError:
+            valid_path = valid_file = False
+        if path.is_symlink() or not valid_path or not valid_file:
+            raise RestoreInputError(
+                f"required restore artifact is missing or unsafe: {role}")
+    return paths
+
+
+def _artifact_hashes(paths: dict[str, Path]) -> dict[str, str]:
+    hashes = {}
+    for role, path in paths.items():
+        with path.open("rb") as stream:
+            hashes[role] = _sha256_stream(stream)
+    return hashes
+
+def _verify_staged_restore_hashes(staged_paths: dict[str, Path],
+                                  expected_hashes: dict[str, str] | None) -> None:
+    """Compare staged files with the signed pre-restore artifact digests.
+
+    The source may change after authorization but before the copy starts.
+    Rechecking the actual staged bytes before invoking Frappe closes that
+    time-of-check/time-of-use window for production recovery.
+    """
+    if expected_hashes is not None and _artifact_hashes(staged_paths) != expected_hashes:
+        raise RestoreInputError(
+            "restore artifact content changed after emergency authorization")
+
+
+
+def validate_emergency_authorization(document, signature_1_b64, signature_2_b64,
+                                     *, site: str, backup_set: str,
+                                     artifact_hashes: dict, now: datetime,
+                                     trust_store_path: Path,
+                                     state_dir: Path) -> tuple[str, list]:
+    """Verify a production emergency-restore authorization before any data
+    mutation. Returns (request_id, approvals). Raises RestoreInputError on
+    every refusal; no secret or signature value is ever in a message."""
+    if not isinstance(document, dict) or tuple(sorted(document)) != tuple(
+            sorted(EMERGENCY_DOCUMENT_KEYS)):
+        raise RestoreInputError("emergency restore authorization is invalid")
+    if document["schema_version"] != EMERGENCY_RESTORE_SCHEMA_VERSION:
+        raise RestoreInputError("emergency restore authorization is invalid")
+    if document["document_type"] != EMERGENCY_RESTORE_DOCUMENT_TYPE:
+        raise RestoreInputError("emergency restore authorization is invalid")
+    if document["site"] != site or document["target"] != "production":
+        raise RestoreInputError(
+            "emergency restore authorization does not match this restore")
+    if document["backup_set"] != backup_set:
+        raise RestoreInputError(
+            "emergency restore authorization does not match this backup set")
+    if document["backup_sha256"] != artifact_hashes:
+        raise RestoreInputError(
+            "emergency restore authorization does not match the backup artifacts")
+    request_id = document["request_id"]
+    if not isinstance(request_id, str) or not EMERGENCY_REQUEST_ID.fullmatch(request_id):
+        raise RestoreInputError("emergency restore authorization is invalid")
+    issued = _parse_utc(document["issued_utc"], "issued time")
+    expires = _parse_utc(document["expires_utc"], "expiry time")
+    if expires <= issued or not issued <= now <= expires:
+        raise RestoreInputError("emergency restore authorization is expired or not yet valid")
+    approvals = document["approvals"]
+    if not isinstance(approvals, list) or len(approvals) != 2:
+        raise RestoreInputError(
+            "emergency restore requires exactly two distinct approvers")
+    seen_identities, seen_roles, seen_keys = set(), set(), set()
+    for approval in approvals:
+        if not isinstance(approval, dict) or tuple(sorted(approval)) != tuple(
+                sorted(EMERGENCY_APPROVAL_KEYS)):
+            raise RestoreInputError("emergency restore authorization is invalid")
+        identity = approval["approver_identity"]
+        role = approval["approver_role"]
+        key_id = approval["key_id"]
+        if not isinstance(identity, str) or not identity \
+                or not isinstance(role, str) or not isinstance(key_id, str):
+            raise RestoreInputError("emergency restore authorization is invalid")
+        if identity.lower() in seen_identities or role in seen_roles \
+                or key_id in seen_keys:
+            raise RestoreInputError(
+                "emergency restore approvers must be distinct people, roles and keys")
+        seen_identities.add(identity.lower())
+        seen_roles.add(role)
+        seen_keys.add(key_id)
+    if seen_roles != {"course-owner"} | (seen_roles & {"general-manager", "recovery-authority"}) \
+            or "course-owner" not in seen_roles or len(seen_roles) != 2:
+        raise RestoreInputError(
+            "emergency restore requires one Course Owner and one General Manager "
+            "or designated recovery authority")
+    trust_store = _load_restore_trust_store(trust_store_path)
+    raw_document = _canonical_document_bytes(document)
+    for approval, signature_b64 in zip(approvals, (signature_1_b64, signature_2_b64)):
+        key = trust_store.get(approval["key_id"])
+        if key is None:
+            raise RestoreInputError("emergency restore approver key is unknown")
+        if EMERGENCY_RESTORE_KEY_PURPOSE not in key["purposes"]:
+            raise RestoreInputError(
+                "emergency restore approver key is not authorized for restore")
+        if key["approver_identity"] != approval["approver_identity"] \
+                or key["approver_role"] != approval["approver_role"]:
+            raise RestoreInputError(
+                "emergency restore approver does not match its trust-store binding")
+        not_before = _parse_utc(key["not_before_utc"], "key validity start")
+        not_after = _parse_utc(key["not_after_utc"], "key validity end")
+        if not not_before <= now <= not_after:
+            raise RestoreInputError("emergency restore approver key is expired or not yet valid")
+        try:
+            signature = base64.b64decode(signature_b64, validate=True)
+        except (ValueError, TypeError):
+            raise RestoreInputError("emergency restore signature is invalid") from None
+        if not _rsa_pkcs1v15_sha256_verify(
+                key["modulus"], key["exponent"], raw_document, signature):
+            raise RestoreInputError("emergency restore signature is invalid")
+    if (state_dir / f"{request_id}.json").exists():
+        raise RestoreInputError("emergency restore request was already used")
+    if (state_dir / "in-progress.json").exists():
+        raise RestoreInputError(
+            "a previous emergency restore did not complete; resolve it per the "
+            "recovery procedure before starting another production restore")
+    return request_id, approvals
+
+
 def _read_payload(stdin) -> dict:
     raw = stdin.read(MAX_PAYLOAD_BYTES + 1)
     if len(raw.encode("utf-8")) > MAX_PAYLOAD_BYTES:
@@ -287,7 +641,13 @@ def _read_payload(stdin) -> dict:
     return payload
 
 
-def _validate_payload(payload: dict) -> tuple[str, str, str, str, str]:
+def _validate_payload(payload: dict):
+    """Validate the stdin payload. Target classification is fail-closed:
+    omitting ``target`` means production. A disposable target is only a
+    declaration here; _native_restore enforces that a disposable site is
+    genuinely a restore site and never the production site. Authorization
+    fields are passed through untouched (never logged) for production
+    validation inside _native_restore, before any mutation."""
     site = payload.get("site")
     backup_set = payload.get("backup_set")
     encryption_key = payload.get("encryption_key")
@@ -306,7 +666,26 @@ def _validate_payload(payload: dict) -> tuple[str, str, str, str, str]:
     if (not encryption_key.isascii() or len(encryption_key) > 4096
             or any(char in encryption_key for char in "\r\n")):
         raise RestoreInputError("Frappe backup key is missing or invalid")
-    return site, backup_set, encryption_key, db_root_password, admin_password
+    target = payload.get("target", "production")
+    if target not in ("disposable", "production"):
+        raise RestoreInputError("restore target is invalid")
+    if target == "disposable" and (site == PRODUCTION_SITE or "restore" not in site):
+        raise RestoreInputError(
+            "a disposable restore must target a restore site, never the production site")
+    pre_restore_backup_set = payload.get("pre_restore_backup_set")
+    if pre_restore_backup_set is not None and (
+            not isinstance(pre_restore_backup_set, str) or not re.fullmatch(
+                r"[A-Za-z0-9][A-Za-z0-9._-]{0,159}", pre_restore_backup_set)):
+        raise RestoreInputError("pre-restore backup-set name is invalid")
+    authorization = payload.get("authorization")
+    signature_1 = payload.get("authorization_signature_1")
+    signature_2 = payload.get("authorization_signature_2")
+    if target == "production" and (
+            authorization is None or signature_1 is None or signature_2 is None):
+        raise RestoreInputError(
+            "a production restore requires a two-approver emergency authorization")
+    return (site, backup_set, encryption_key, db_root_password, admin_password,
+            target, pre_restore_backup_set, authorization, signature_1, signature_2)
 
 
 def _sha256_stream(stream) -> str:
@@ -392,7 +771,101 @@ def _stage_restore_artifacts(paths: dict[str, Path], temporary_root: Path) -> di
 
 def _native_restore(site: str, backup_set: str, encryption_key: str,
                     db_root_password: str, admin_password: str,
+                    target: str = "production",
+                    pre_restore_backup_set: str | None = None,
+                    authorization=None, signature_1=None, signature_2=None,
                     context_writer=None) -> None:
+    """Gate, then run, a restore. All production checks happen here, before
+    _run_native_restore mutates anything: pre-restore preservation, the
+    two-approver authorization bound to the exact artifact hashes, single-use
+    consumption, and the in-progress marker. Disposable restores skip
+    authorization/consumption but are still audit-logged, without secrets."""
+    paths = _verified_backup_paths(site, backup_set)
+    hashes = _artifact_hashes(paths)
+    state_dir = _ensure_state_dir(site)
+    request_id = None
+    approvals: list = []
+    audit_base = {
+        "site": site, "target": target, "backup_set": backup_set,
+        "backup_sha256": hashes,
+    }
+    if target == "production":
+        if pre_restore_backup_set is None or pre_restore_backup_set == backup_set:
+            raise RestoreInputError(
+                "a production restore requires a distinct pre-restore backup "
+                "set preserving the live site's current data")
+        pre_paths = _verified_backup_paths(site, pre_restore_backup_set)
+        audit_base["pre_restore_backup_set"] = pre_restore_backup_set
+        audit_base["pre_restore_backup_sha256"] = _artifact_hashes(pre_paths)
+        trust_store_value = os.environ.get("RESTORE_TRUST_STORE")
+        if not trust_store_value:
+            raise RestoreInputError(
+                "a production restore requires a provisioned emergency restore "
+                "trust store; no trust store is configured")
+        request_id, approvals = validate_emergency_authorization(
+            authorization, signature_1, signature_2, site=site,
+            backup_set=backup_set, artifact_hashes=hashes,
+            now=datetime.now(timezone.utc),
+            trust_store_path=Path(trust_store_value), state_dir=state_dir)
+        audit_base["request_id"] = request_id
+        audit_base["approvals"] = approvals
+        consumed_path = state_dir / f"{request_id}.json"
+        try:
+            with os.fdopen(os.open(consumed_path, os.O_WRONLY | os.O_CREAT
+                                   | os.O_EXCL, 0o600), "w") as stream:
+                json.dump(audit_base, stream, sort_keys=True)
+        except FileExistsError:
+            raise RestoreInputError(
+                "emergency restore request was already used") from None
+        marker_path = state_dir / "in-progress.json"
+        # Exclusive creation closes the check-then-create race: a second
+        # signed request can never overwrite another active restore marker.
+        try:
+            with os.fdopen(os.open(marker_path, os.O_WRONLY | os.O_CREAT
+                                   | os.O_EXCL, 0o600), "w") as stream:
+                json.dump({"request_id": request_id, "site": site,
+                           "backup_set": backup_set}, stream, sort_keys=True)
+                stream.flush()
+                os.fsync(stream.fileno())
+        except FileExistsError:
+            raise RestoreInputError(
+                "another emergency restore is in progress; resolve it first") from None
+        _append_audit(state_dir, {**audit_base, "outcome": "started"})
+        try:
+            _run_native_restore(site, backup_set, encryption_key,
+                                db_root_password, admin_password,
+                                context_writer=context_writer,
+                                expected_hashes=hashes)
+        except Exception:
+            # Native Frappe may have partially overwritten the site before
+            # failing. Keep the in-progress marker until independently
+            # reviewed, even though the request is already spent.
+            _append_audit(state_dir, {**audit_base, "outcome": "failed"})
+            raise
+        _append_audit(state_dir, {**audit_base, "outcome": "completed"})
+        # Only a fully successful and durably audited restore may clear the
+        # hold; if this fails, recovery remains blocked for support review.
+        try:
+            marker_path.unlink()
+        except OSError:
+            raise RestoreInputError(
+                "completed restore needs support review of its state marker") from None
+        return
+    _append_audit(state_dir, {**audit_base, "outcome": "started"})
+    try:
+        _run_native_restore(site, backup_set, encryption_key,
+                            db_root_password, admin_password,
+                            context_writer=context_writer)
+    except Exception:
+        _append_audit(state_dir, {**audit_base, "outcome": "failed"})
+        raise
+    _append_audit(state_dir, {**audit_base, "outcome": "completed"})
+
+
+def _run_native_restore(site: str, backup_set: str, encryption_key: str,
+                        db_root_password: str, admin_password: str,
+                        context_writer=None,
+                        expected_hashes: dict[str, str] | None = None) -> None:
     backup_dir = SITES_DIR / site / "private" / "backups"
     paths = {
         role: backup_dir / f"{backup_set}{suffix}"
@@ -442,6 +915,7 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
                 prefix="toefl-house-native-restore-", dir="/tmp") as working_name:
             working_dir = Path(working_name)
             staged_paths = _stage_restore_artifacts(paths, working_dir)
+            _verify_staged_restore_hashes(staged_paths, expected_hashes)
             with safe_mariadb_credential_transport(frappe, working_dir):
                 with safe_gpg_transport(frappe, encryption_key):
                     if context_writer is not None:
@@ -501,10 +975,14 @@ def main(stdin=None, stdout=None, stderr=None, argv=None) -> int:
         return 2
     try:
         payload = _read_payload(stdin)
-        site, backup_set, encryption_key, db_root_password, admin_password = (
-            _validate_payload(payload))
+        (site, backup_set, encryption_key, db_root_password, admin_password,
+         target, pre_restore_backup_set, authorization, signature_1,
+         signature_2) = _validate_payload(payload)
         _native_restore(site, backup_set, encryption_key,
-                        db_root_password, admin_password, context_writer=stdout)
+                        db_root_password, admin_password, target=target,
+                        pre_restore_backup_set=pre_restore_backup_set,
+                        authorization=authorization, signature_1=signature_1,
+                        signature_2=signature_2, context_writer=stdout)
     except RestoreInputError as exc:
         stderr.write(f"Restore refused: {exc}\n")
         return 2

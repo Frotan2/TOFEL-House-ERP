@@ -498,6 +498,10 @@ def main() -> int:
             "encryption_key": encryption_key,
             "db_root_password": root_password,
             "admin_password": admin_password,
+            # This helper is used only for a newly created restore-named
+            # isolated CI target. Production remains fail-closed with
+            # two independent signatures and a pre-restore backup.
+            "target": "disposable",
         })
         return run(
             name, [bench_dir / "env/bin/python", ROOT / "product/restore.py"],

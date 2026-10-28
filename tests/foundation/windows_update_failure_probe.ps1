@@ -121,6 +121,7 @@ try {
     # These paths are read-only existence checks and deliberately absent here.
     $recoveryAuthorizationPath = Join-Path $script:WorkDir 'missing-authorization'
     $recoverySignaturePath = Join-Path $script:WorkDir 'missing-signature'
+    $recoverySignature2Path = Join-Path $script:WorkDir 'missing-signature-2'
     foreach ($scenario in @('stop-failed', 'load-failed', 'safe-abort', 'migration-failed')) {
         $script:Calls = New-Object System.Collections.ArrayList
         $script:StartCount = 0

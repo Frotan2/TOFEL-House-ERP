@@ -321,57 +321,97 @@ class RecoveryAuthorizationTests(UpdateBundleCase):
     def authorization(self, **overrides):
         issued = NOW - timedelta(minutes=5)
         document = {
-            "schema_version": 1,
+            "schema_version": 2,
             "document_type": engine.DOCUMENT_RECOVERY,
             "site": engine.SITE_NAME,
             "scope": "site-update",
+            "operation": "site-update",
+            "request_id": "b" * 32,
             "issued_utc": issued.isoformat().replace("+00:00", "Z"),
             "expires_utc": (issued + timedelta(hours=24)).isoformat().replace("+00:00", "Z"),
             "owner_key_custody_verified": True,
             "rehearsal_restore_verified": True,
             "backup_receipt_sha256": "c" * 64,
-            "authorized_by": "owner",
-            "attested_by": "toefl-house-support",
+            "approvals": [
+                {"approver_identity": "course-owner", "approver_role": "course-owner",
+                 "key_id": "provider-2026"},
+                {"approver_identity": "general-manager", "approver_role": "general-manager",
+                 "key_id": "manager-2026"},
+            ],
         }
         document.update(overrides)
         path = self.tmp / "recovery-authorization.json"
         path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return path
 
-    def test_the_provider_can_sign_a_bound_recovery_authorization(self):
-        self.assertEqual(self.run_tool(
-            "trust-store", "--private-key", str(self.private_key),
-            "--key-id", "provider-2026", "--out", str(self.trust_store)).returncode, 0)
-        document = self.authorization()
-        signature = self.tmp / "recovery-authorization.sig"
+    def two_person_trust_store(self) -> Path:
+        """Trust store binding each test key to its approver identity/role."""
+        import base64
+
+        def entry(private_key: Path, key_id: str, identity: str, role: str) -> dict:
+            der = openssl("pkey", "-in", str(private_key), "-pubout", "-outform", "DER")
+            modulus, exponent = engine.parse_rsa_public_key(der)
+            modulus_bytes = modulus.to_bytes((modulus.bit_length() + 7) // 8, "big")
+            return {
+                "key_id": key_id,
+                "algorithm": "rsa-pkcs1v15-sha256",
+                "purposes": ["recovery-authorization"],
+                "modulus_b64": base64.b64encode(modulus_bytes).decode("ascii"),
+                "exponent_b64": base64.b64encode(exponent.to_bytes(3, "big")).decode("ascii"),
+                "not_before_utc": (NOW - timedelta(days=1)).isoformat().replace("+00:00", "Z"),
+                "not_after_utc": (NOW + timedelta(days=365)).isoformat().replace("+00:00", "Z"),
+                "approver_identity": identity,
+                "approver_role": role,
+            }
+
+        store_path = self.tmp / "two-person-trust-store.json"
+        store_path.write_text(json.dumps({
+            "schema_version": 1,
+            "document_type": "toefl-house-erp-update-trust-store",
+            "product": "TOEFL House ERP",
+            "provisioned": True,
+            "keys": [
+                entry(self.private_key, "provider-2026", "course-owner", "course-owner"),
+                entry(self.other_key, "manager-2026", "general-manager", "general-manager"),
+            ],
+        }, indent=2), encoding="utf-8")
+        return store_path
+
+    def sign_two_person(self, document: Path) -> tuple[Path, Path]:
+        first = self.tmp / "recovery-authorization.sig"
+        second = self.tmp / "recovery-authorization-2.sig"
         completed = self.run_tool("sign", "--document", str(document),
                                   "--private-key", str(self.private_key),
                                   "--key-id", "provider-2026",
                                   "--document-type", "recovery-authorization",
-                                  "--out", str(signature))
+                                  "--out", str(first))
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        store = engine.load_trust_store(self.trust_store, now=NOW)
+        completed = self.run_tool("sign", "--document", str(document),
+                                  "--private-key", str(self.other_key),
+                                  "--key-id", "manager-2026",
+                                  "--document-type", "recovery-authorization",
+                                  "--out", str(second))
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        return first, second
+
+    def test_the_provider_can_sign_a_bound_recovery_authorization(self):
+        document = self.authorization()
+        first, second = self.sign_two_person(document)
+        store = engine.load_trust_store(self.two_person_trust_store(), now=NOW)
         result = engine.validate_recovery_authorization(
-            document, signature, store, site=engine.SITE_NAME,
-            receipt_sha256="c" * 64, now=NOW, max_age_hours=72)
+            document, first, store, site=engine.SITE_NAME,
+            receipt_sha256="c" * 64, now=NOW, max_age_hours=72, signature_path_2=second)
         self.assertEqual(result["sha256"], engine.sha256_file(document))
+        self.assertEqual(result["request_id"], "b" * 32)
 
     def test_an_authorization_for_another_backup_is_refused(self):
-        self.assertEqual(self.run_tool(
-            "trust-store", "--private-key", str(self.private_key),
-            "--key-id", "provider-2026", "--out", str(self.trust_store)).returncode, 0)
         document = self.authorization()
-        signature = self.tmp / "recovery-authorization.sig"
-        self.assertEqual(self.run_tool("sign", "--document", str(document),
-                                       "--private-key", str(self.private_key),
-                                       "--key-id", "provider-2026",
-                                       "--document-type", "recovery-authorization",
-                                       "--out", str(signature)).returncode, 0)
-        store = engine.load_trust_store(self.trust_store, now=NOW)
+        first, second = self.sign_two_person(document)
+        store = engine.load_trust_store(self.two_person_trust_store(), now=NOW)
         with self.assertRaises(engine.UpdateError) as caught:
             engine.validate_recovery_authorization(
-                document, signature, store, site=engine.SITE_NAME,
-                receipt_sha256="d" * 64, now=NOW, max_age_hours=72)
+                document, first, store, site=engine.SITE_NAME,
+                receipt_sha256="d" * 64, now=NOW, max_age_hours=72, signature_path_2=second)
         self.assertEqual(caught.exception.code, "preflight.recovery.binding_mismatch")
 
     def test_unsigned_key_custody_is_never_signed(self):

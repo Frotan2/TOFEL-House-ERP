@@ -63,6 +63,9 @@ $lockPath = Join-Path $updatesRoot "update.lock"
 $backupReceiptPath = Join-Path $dataRoot "activation\backup-receipt.json"
 $recoveryAuthorizationPath = Join-Path $updatesRoot "recovery-authorization.json"
 $recoverySignaturePath = Join-Path $updatesRoot "recovery-authorization.sig"
+# Second approver's signature over the identical document bytes.  The engine
+# refuses a migrating update unless both signatures are present and valid.
+$recoverySignature2Path = Join-Path $updatesRoot "recovery-authorization-2.sig"
 $composeFile = Join-Path $productRoot "docker-compose.yml"
 $catalogPath = Join-Path $PSScriptRoot "updater-strings.json"
 $siteName = "toeflhouse.localhost"
@@ -890,6 +893,7 @@ function Invoke-UpdateCheck {
         backup_dir = $script:BackupDirRelative
         recovery_authorization = ""
         recovery_signature = ""
+        recovery_signature_2 = ""
         installed = [pscustomobject]@{
             version = [string]$installed.version
             release_sequence = $installed.release_sequence
@@ -905,6 +909,9 @@ function Invoke-UpdateCheck {
     }
     if (Test-Path -LiteralPath $recoverySignaturePath -PathType Leaf) {
         $request.recovery_signature = "data/updates/recovery-authorization.sig"
+    }
+    if (Test-Path -LiteralPath $recoverySignature2Path -PathType Leaf) {
+        $request.recovery_signature_2 = "data/updates/recovery-authorization-2.sig"
     }
     # Phase A: signed manifest, authorization, compatibility and local
     # readiness.  Nothing is downloaded into the image path until this allows.
@@ -1108,6 +1115,7 @@ function Invoke-UpdateInstall($Check) {
         backup_dir = $script:BackupDirRelative
         recovery_authorization = ""
         recovery_signature = ""
+        recovery_signature_2 = ""
         sites_dir = "/home/frappe/bench/sites"
         bench = "/build/tools/bin/bench"
         host_updater_version = [string]$Check.Installed.version
@@ -1119,6 +1127,9 @@ function Invoke-UpdateInstall($Check) {
     }
     if (Test-Path -LiteralPath $recoverySignaturePath -PathType Leaf) {
         $applyRequest.recovery_signature = "data/updates/recovery-authorization.sig"
+    }
+    if (Test-Path -LiteralPath $recoverySignature2Path -PathType Leaf) {
+        $applyRequest.recovery_signature_2 = "data/updates/recovery-authorization-2.sig"
     }
 
     $report = Invoke-EngineStep "apply" $applyRequest $Check.Version

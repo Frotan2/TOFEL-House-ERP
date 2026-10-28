@@ -159,7 +159,7 @@ Failures:
 | `index.json` | same tool | Windows transport check only; never a trust decision |
 | `trust-store.json` | provider, installed separately | engine (`provisioned`, key validity window, RSA key shape) |
 | `backup-receipt.json` | `Backup TOEFL House ERP.ps1` | `product/activate.py` receipt validator (shared with activation) |
-| `recovery-authorization.json` + `.sig` | Owner + provider support | engine, bound to the receipt SHA-256 |
+| `recovery-authorization.json` + `.sig` + `-2.sig` | Course Owner **and** General Manager / designated recovery authority, each with their own offline key | engine, two-person schema-2: both signatures over identical bytes, bound to site, operation, backup receipt SHA-256 and a single-use request id |
 | `journal.json` | Windows updater | engine (`journal_state` must be terminal) |
 
 `release-manifest.json` (the customer *package* manifest) and `update.json` (the
@@ -201,6 +201,31 @@ extra local state has to be trusted.
   volume, and a replay from another run folder each stop the update before the
   first `bench migrate`.
 * A migration failure never reopens the application automatically.
+* Two-person recovery authorization is enforced, not recorded.  A migrating
+  update requires a schema-2 recovery document signed by two distinct
+  trusted keys, bound in the trust store to one Course Owner and one General
+  Manager or designated recovery authority, over identical document bytes
+  bound to the site, the `site-update` operation, the verified backup
+  receipt and a single-use `request_id`.  A single-signature (schema-1)
+  document, a self-approval, two Owners, a swapped or forged signature, an
+  unbound recovery key, an altered document, an expired window or a replayed
+  request id is refused before any migration.  The request id is consumed
+  when apply starts, so a failed or interrupted apply needs fresh approvals
+  from both approvers.  The recovery request is marked consumed **before**
+  the transaction-use marker is written, so a crash between the two writes
+  cannot leave the same signed approval reusable with a new transaction.
+  Provisioning a second recovery key with its approver
+  binding is a migration requirement for existing single-key installations:
+  until then, migrating updates are refused, by design.
+* Emergency administrator recovery is separately controlled and is **not**
+  two-person approved.  Direct use of `product/restore.py` on the production
+  site, or any OS/container-level restore, bypasses application approvals
+  by construction; it must be treated as an emergency-admin action, performed
+  only under a separately documented Owner procedure, logged outside the
+  application, and never presented as an approved two-person recovery.
+  `product/restore.py` remains un-authenticated at its own layer and is used
+  in CI only against disposable synthetic sites; production recovery must go
+  through the two-person update-engine gate plus a disposable rehearsal.
 * Every customer-visible message is a stable code with English and Dari text in
   `product/windows/updater-strings.json`; the Windows GUI only renders catalogue
   text and never free text from a log or result file.

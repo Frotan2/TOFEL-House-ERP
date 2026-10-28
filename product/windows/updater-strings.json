@@ -140,6 +140,18 @@
       "en": "Signed Owner recovery and key-custody authorization is missing. The update was refused.",
       "fa": "اجازه‌نامه امضاشده صاحب مکتب برای بازیابی و نگهداری کلید موجود نیست. به‌روزرسانی رد شد."
     },
+    "preflight.recovery.approval_missing": {
+      "en": "Both recovery approvals are required. One approval alone cannot authorize an update.",
+      "fa": "هر دو تأیید بازیابی لازم است. یک تأیید به‌تنهایی نمی‌تواند به‌روزرسانی را مجاز کند."
+    },
+    "preflight.recovery.approval_invalid": {
+      "en": "The recovery approvals are not from two distinct authorized approvers. Nothing was installed.",
+      "fa": "تأییدهای بازیابی از دو تأییدکننده مجاز جداگانه نیست. هیچ چیزی نصب نشد."
+    },
+    "preflight.recovery.request_replayed": {
+      "en": "This recovery request was already used. Obtain fresh approvals from both approvers, then try again.",
+      "fa": "این درخواست بازیابی قبلاً استفاده شده است. از هر دو تأییدکننده تأییدهای تازه بگیرید و دوباره تلاش کنید."
+    },
     "preflight.recovery.binding_mismatch": {
       "en": "The recovery authorization belongs to a different backup or site. Nothing was changed.",
       "fa": "اجازه‌نامه بازیابی مربوط به بکاپ یا سایت دیگر است. هیچ چیزی تغییر نکرد."
