@@ -172,11 +172,21 @@ class ProtectedRecord(Document):
         never changes.
         """
         for field in ("student", "company", "fees", "requested_amount",
-                      "reason", "evidence"):
+                      "reason", "evidence", "requested_by"):
             if before.get(field) != self.get(field):
                 raise frappe.PermissionError("Tuition refund request facts are immutable")
+        if (before.get("approved_amount") is not None
+                and before.approved_amount != self.approved_amount):
+            raise frappe.PermissionError("Tuition refund approved amount is immutable")
+        if (before.get("approval_evidence")
+                and before.approval_evidence != self.approval_evidence):
+            raise frappe.PermissionError("General Manager approval evidence is immutable")
         if before.status == self.status:
             raise frappe.PermissionError("Tuition refund decisions are one-shot")
+        if (before.status == "Requested" and self.status == "Approved"
+                and (not self.approved_by or self.approved_amount is None
+                     or not self.approval_evidence)):
+            raise frappe.PermissionError("Tuition refund approval evidence is required")
         if (before.status, self.status) not in (
                 ("Requested", "Approved"), ("Requested", "Denied"),
                 ("Approved", "Paid")):
