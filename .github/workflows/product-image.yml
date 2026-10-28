@@ -38,6 +38,14 @@ on:
       - tests/foundation/test_windows_package_hashing.py
       - tests/security/test_setuptools_windows_boundary_2026_10_24.py
       - tests/foundation/test_native_restore_rehearsal.py
+      # Foundation recovery fixture must qualify the exact deliverable SHA,
+      # not just run isolated source checks on a different branch.
+      - tools/foundation/runtime_install.py
+      - tools/foundation/runtime_encryption_key.py
+      - tools/foundation/runtime_recovery_secret.py
+      - tools/foundation/runtime_recovery_session.py
+      - tests/foundation/test_foundation_disposable_restore.py
+      - tests/foundation/test_encryption_key_recovery.py
       # The native restore rehearsal must also keep the actual desktop image
       # build green; changes to the disposable runner cannot silently skip it.
       - tools/native/runtime_restore.py
