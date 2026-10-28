@@ -39,7 +39,7 @@ class GradingScaleValidationTests(unittest.TestCase):
                                  {"grade_code": "B", "threshold": 80}])
 
     def test_refuse_nan_infinity_bool_and_invalid_percent(self):
-        for number in ("NaN", "Infinity", -1, 100.1, True, "not a score"):
+        for number in ("NaN", "Infinity", -1, 65.5, 100.1, True, "not a score"):
             with self.subTest(number=number), self.assertRaises(ValueError):
                 normalize_intervals([{"grade_code": "A", "threshold": number},
                                      {"grade_code": "F", "threshold": 0}])
