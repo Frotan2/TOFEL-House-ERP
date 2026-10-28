@@ -61,6 +61,14 @@ class ReleaseImageTriggerContract(unittest.TestCase):
             with self.subTest(workflow=name):
                 self.assertTrue(set(patterns).issubset(push_paths(name)))
 
+    def test_windows_only_package_manifest_suite_has_a_windows_runner(self):
+        workflow = (WORKFLOWS / "windows-customer-package.yml").read_text(encoding="utf-8")
+        self.assertIn("runs-on: windows-2022", workflow)
+        self.assertIn(
+            "python -m unittest tests.foundation.test_customer_package_manifest -v",
+            workflow,
+        )
+
     def test_product_image_keeps_exact_sha_release_gates(self):
         workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
         self.assertIn("python3 tools/release/verify_ci_gates.py --ensure-started", workflow)
