@@ -92,6 +92,12 @@ jobs:
         run: |
           & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'tests/foundation/test_windows_service_readiness.ps1'
           if ($LASTEXITCODE -ne 0) { throw "Service readiness regression failed." }
+      - name: Execute Windows-only manifest, verifier and preparer contracts
+        # These skip on Linux; exercise them on the same OS as the customer kit.
+        shell: powershell
+        run: |
+          python -m unittest tests.foundation.test_customer_package_manifest -v
+          if ($LASTEXITCODE -ne 0) { throw "Windows customer package manifest tests failed." }
       - name: Exercise clean offline package with a synthetic image
         shell: powershell
         run: |
