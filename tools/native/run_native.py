@@ -317,7 +317,8 @@ def main():
         temp_before={p.name for p in Path('/tmp').glob('toefl-house-native-restore-*')}
         failure_payload=json.dumps({
             'site':failure_site,'backup_set':backup_set,'encryption_key':wrong_backup_key,
-            'db_root_password':rootpw,'admin_password':adminpw})
+            'db_root_password':rootpw,'admin_password':adminpw,
+            'target':'disposable'})
         failure_rc=run_refusal('restore-wrong-key-must-fail',
             [benchdir/'env/bin/python',ROOT/'product/restore.py'],cwd=failure_bench,
             input_text=failure_payload,
@@ -367,7 +368,8 @@ def main():
         }
         restore_payload=json.dumps({'site':restore_site,'backup_set':backup_set,
                                     'encryption_key':backup_encryption_key,
-                                    'db_root_password':rootpw,'admin_password':adminpw})
+                                    'db_root_password':rootpw,'admin_password':adminpw,
+                                    'target':'disposable'})
         run('restore-placement-test-with-files',
             [benchdir/'env/bin/python',ROOT/'product/restore.py'],cwd=restore_bench,
             input_text=restore_payload,
