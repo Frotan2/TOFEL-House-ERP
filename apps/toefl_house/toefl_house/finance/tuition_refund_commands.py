@@ -53,8 +53,11 @@ def _ledger_rows(student, company, fees, *, kind):
         "Payment Entry Reference",
         filters={"reference_doctype": FEES, "reference_name": fees},
         fields=["parent", "allocated_amount"],
-        limit_page_length=1000,
+        limit_page_length=1001,
     )
+    if len(rows or []) > 1000:
+        raise frappe.ValidationError(
+            "Tuition payment references exceed the verified reporting limit")
     scoped = []
     for row in rows or []:
         entry = frappe.db.get_value(
@@ -64,7 +67,8 @@ def _ledger_rows(student, company, fees, *, kind):
         if not entry or entry.get("party_type") != "Student" \
                 or entry.get("party") != student \
                 or entry.get("company") != company:
-            continue
+            raise frappe.ValidationError(
+                "Tuition payment reference has missing or mismatched ownership")
         if kind == "Collections" and entry.get("payment_type") != "Receive":
             continue
         if kind == "Refunds" and entry.get("payment_type") != "Pay":
@@ -81,8 +85,11 @@ def _ledger_rows(student, company, fees, *, kind):
 def _existing_requests(fees):
     rows = frappe.db.get_all(
         REQUEST, filters={"fees": fees},
-        fields=["status", "requested_amount", "approved_amount"],
-        limit_page_length=1000)
+        fields=["fees", "status", "requested_amount", "approved_amount"],
+        limit_page_length=1001)
+    if len(rows or []) > 1000:
+        raise frappe.ValidationError(
+            "Tuition refund request evidence exceeds the verified reporting limit")
     return [dict(row) for row in (rows or [])]
 
 
@@ -146,8 +153,7 @@ def request_tuition_refund(request_key, student, company, fees, requested_amount
 
 @frappe.whitelist(methods=["POST"])
 def approve_tuition_refund(request_key, request, evidence=None):
-    """General Manager approval. Dual key: Finance Officer command gate
-    plus General Manager role, and the approver must not be the requester."""
+    """General Manager approval; requester may not self-approve."""
     def work(actor):
         _require_role(actor, tuition_refunds.APPROVER_ROLE)
         req = _pending_request(_name(request, "Tuition refund request"))
@@ -165,7 +171,7 @@ def approve_tuition_refund(request_key, request, evidence=None):
         req.status = "Approved"
         req.approved_by = actor
         req.approved_amount = float(approved["approved_amount"])
-        req.evidence = approved["evidence"]
+        req.approval_evidence = approved["evidence"]
         req.save(ignore_permissions=True)
         return {"name": req.name, "status": "Approved",
                 "approved_amount": approved["approved_amount"]}, \
