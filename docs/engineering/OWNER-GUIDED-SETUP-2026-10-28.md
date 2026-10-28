@@ -70,6 +70,14 @@ The pinned Education Grading Scale DocType grants the native `Academics User` ro
 
 The Academic Setup read-only preview now offers a prefilled **Create new grading scale** action, requiring an explicit reason and user submission. Approved changes to thresholds require a **new unique scale name**, followed by separately reviewed `set_assessment_policy_version` linking to the new scale; earlier assessment versions retain the old link. Native Frappe/Windows acceptance for actual insert/submit, permission denial and resulting grade evaluation **remains mandatory before merge or production**. The new role-scoped route is not live on the personal test PC until a qualified update is installed.
 
+## Final refund and registered-name decision (Owner-confirmed)
+
+The **official English spelling as reported by the Owner** is **The TOEFL House**, with **خانه موفقیت** in Dari, and the business is registered as a language center under an individual natural person. Match the original license and individual holder independently before creating the legal ERPNext Company/first live receipt; no tax exemption is inferred.
+
+Ordinary student tuition withdrawal refunds are **case-by-case**, with documented reason and an AFN amount approved by General Manager. A different Finance Manager independently posts/pays the authorized amount; routine Course Owner approval is not required. Cumulative completed refunds against a student's same company and original paid Fees must never exceed verified submitted, non-cancelled collections less previously completed refunds. Cancelled/draft amounts and unrelated student/company/Fees records do not count. No automatic refund, fixed time window, percentage, or time proration is authorized.
+
+The pure `setup_presets/tuition_refund_review.py` implements a **read-only, fail-closed monetary ceiling and separation-of-duties preflight**. Its evidence must come from an authoritative, scoped and transactionally locked native ledger in a future Finance implementation; arbitrary client JSON is not proof. It returns `payment_permitted=false` and never calls Frappe or issues a Payment Entry. `finance/refunds.py` presently handles native **book return credit notes**, not a qualified tuition Fees credit/payout mechanism. The tuition refund approval and native posting/GL integration remain **HOLD** until they pass actual Frappe/Windows and role-based tests; a passed pure ceiling test is not authorization to pay money.
+
 ## 2026-10-28 continued safety fixes
 
 - All setup catalog reads now request explicit bounded page lengths rather than Frappe's implicit 20-row default; an over-limit result fails closed.
