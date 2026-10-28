@@ -40,7 +40,13 @@ def payload(site="toeflhouse.localhost", backup_set="20261008-test"):
 class ProductRestoreInputTests(unittest.TestCase):
     def test_credentials_are_read_from_stdin_and_passed_in_process(self):
         restore = load_restore()
-        request = payload()
+        # A disposable restore site: production sites can never be declared
+        # disposable, and a production restore needs a two-approver emergency
+        # authorization, which this stdin-contract test does not exercise.
+        restore.SITE_NAME = "placement-restore.localhost"
+        restore.PRODUCTION_SITE = "toeflhouse.localhost"
+        request = payload(site="placement-restore.localhost")
+        request["target"] = "disposable"
         stdout, stderr = io.StringIO(), io.StringIO()
         with patch.object(restore, "_native_restore") as native:
             status = restore.main(io.StringIO(json.dumps(request)), stdout, stderr, argv=[])
@@ -48,6 +54,8 @@ class ProductRestoreInputTests(unittest.TestCase):
         native.assert_called_once_with(
             request["site"], request["backup_set"], request["encryption_key"],
             request["db_root_password"], request["admin_password"],
+            target="disposable", pre_restore_backup_set=None,
+            authorization=None, signature_1=None, signature_2=None,
             context_writer=stdout)
         self.assertEqual(stdout.getvalue(), "Native Frappe restore completed.\n")
         self.assertEqual(stderr.getvalue(), "")
@@ -158,7 +166,11 @@ class ProductRestoreInputTests(unittest.TestCase):
                          "native restore uses Linux /tmp and POSIX file semantics")
     def test_native_restore_output_and_exceptions_cannot_leak_credentials(self):
         restore = load_restore()
-        site = "toeflhouse.localhost"
+        # Disposable restore site: this test exercises the native restore
+        # path itself, not the production authorization gate (covered by
+        # test_emergency_restore.py).
+        site = "toeflhouse-restore.localhost"
+        restore.SITE_NAME = site
         backup_set = "20261008-test"
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
@@ -271,6 +283,7 @@ class ProductRestoreInputTests(unittest.TestCase):
             "frappe.utils.synchronization": synchronization,
         }
         request = payload(site=site, backup_set=backup_set)
+        request["target"] = "disposable"
         caller_cwd = Path.cwd()
         stdout, stderr = io.StringIO(), io.StringIO()
         gpg_calls = []
