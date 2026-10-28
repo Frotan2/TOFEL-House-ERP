@@ -257,7 +257,7 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("docker compose up -d --no-build", INSTALL)
         self.assertLess(INSTALL.index("Verify Package Image.ps1"),
                         INSTALL.index('docker load -i "release\\toefl-house-erp-app.tar"'))
-        self.assertIn("Get-FileHash -LiteralPath $Archive -Algorithm SHA256", VERIFY)
+        self.assertIn("Get-ProductFileSha256 -LiteralPath $Archive", VERIFY)
         self.assertIn("^[0-9a-fA-F]{64}$", VERIFY)
         self.assertIn("SHA-256 check", VERIFY)
         self.assertNotIn("docker load", VERIFY)
@@ -293,7 +293,7 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn('"product/windows/Verify Package Image.ps1"', PACKAGER)
         self.assertIn("reparse", PACKAGER.lower())
         self.assertIn("product\\data", PACKAGER)
-        self.assertIn("Get-FileHash", PACKAGER)
+        self.assertIn("Get-ProductFileSha256", PACKAGER)
         self.assertNotIn("Copy-Item -Recurse", PACKAGER)
         self.assertNotIn("docker volume rm", PACKAGER)
         self.assertNotIn("docker system prune", PACKAGER)

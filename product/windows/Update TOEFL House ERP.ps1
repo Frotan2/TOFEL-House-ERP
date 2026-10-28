@@ -24,6 +24,25 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+function Get-ProductFileSha256 {
+    param([string]$LiteralPath)
+    $fullPath = [IO.Path]::GetFullPath($LiteralPath)
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT -and -not $fullPath.StartsWith("\\?\")) {
+        if ($fullPath.StartsWith("\\")) { $fullPath = "\\?\UNC\" + $fullPath.Substring(2) }
+        else { $fullPath = "\\?\" + $fullPath }
+    }
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    $stream = $null
+    try {
+        $stream = [IO.File]::OpenRead($fullPath)
+        return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        if ($stream) { $stream.Dispose() }
+        $algorithm.Dispose()
+    }
+}
+
 $script:ExitAllowed = 0
 $script:ExitRefused = 3
 $script:ExitRequestInvalid = 4
@@ -912,7 +931,7 @@ function Invoke-UpdateCheck {
         Stop-Update $script:ExitRefused "refused" "messages" "release.archive.size_mismatch" $targetVersion
     }
     if ($null -ne $latest.archive_sha256) {
-        $actual = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $actual = (Get-ProductFileSha256 -LiteralPath $archivePath)
         if ($actual -cne ([string]$latest.archive_sha256).ToLowerInvariant()) {
             Stop-Update $script:ExitRefused "refused" "messages" "release.archive.hash_mismatch" $targetVersion
         }

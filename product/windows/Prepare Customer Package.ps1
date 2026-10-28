@@ -8,6 +8,25 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+function Get-ProductFileSha256 {
+    param([string]$LiteralPath)
+    $fullPath = [IO.Path]::GetFullPath($LiteralPath)
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT -and -not $fullPath.StartsWith("\\?\")) {
+        if ($fullPath.StartsWith("\\")) { $fullPath = "\\?\UNC\" + $fullPath.Substring(2) }
+        else { $fullPath = "\\?\" + $fullPath }
+    }
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    $stream = $null
+    try {
+        $stream = [IO.File]::OpenRead($fullPath)
+        return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        if ($stream) { $stream.Dispose() }
+        $algorithm.Dispose()
+    }
+}
+
 try {
     Add-Type -AssemblyName System.Windows.Forms
     if (-not $Destination) {
@@ -140,12 +159,12 @@ try {
             throw "The exported image labels differ from the inspected application image."
         }
     }
-    $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = (Get-ProductFileSha256 -LiteralPath $archive)
     [System.IO.File]::WriteAllText(
         $checksum, $hash + "  toefl-house-erp-app.tar" + [Environment]::NewLine,
         [System.Text.UTF8Encoding]::new($false))
     $matrixPath = Join-Path $repositoryRoot "docs\engineering\foundation-version-matrix.json"
-    $matrixHash = (Get-FileHash -LiteralPath $matrixPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $matrixHash = (Get-ProductFileSha256 -LiteralPath $matrixPath)
     $matrix = Get-Content -LiteralPath $matrixPath -Raw | ConvertFrom-Json
     $dependencies = @($matrix.components | ForEach-Object {
         $row = [ordered]@{ name = $_.name }
@@ -182,7 +201,7 @@ try {
     $manifestText = $manifest | ConvertTo-Json -Depth 12
     [System.IO.File]::WriteAllText($manifestPath, $manifestText + [Environment]::NewLine,
         [System.Text.UTF8Encoding]::new($false))
-    $manifestHash = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $manifestHash = (Get-ProductFileSha256 -LiteralPath $manifestPath)
     [System.IO.File]::WriteAllText((Join-Path $releaseDir "release-manifest.json.sha256"),
         $manifestHash + "  release-manifest.json" + [Environment]::NewLine,
         [System.Text.UTF8Encoding]::new($false))

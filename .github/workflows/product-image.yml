@@ -32,6 +32,8 @@ on:
       - tests/foundation/test_customer_package_manifest.py
       - tests/foundation/test_customer_install_package.py
       - tests/foundation/test_windows_delivery_finalization.py
+      - tests/foundation/test_windows_backup_discovery.py
+      - tests/foundation/test_windows_package_hashing.py
       - tests/security/test_setuptools_windows_boundary_2026_10_24.py
       - tests/foundation/test_native_restore_rehearsal.py
       # The native restore rehearsal must also keep the actual desktop image
