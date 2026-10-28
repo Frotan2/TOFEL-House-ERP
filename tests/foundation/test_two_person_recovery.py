@@ -163,6 +163,25 @@ class TwoPersonRecoveryTests(UpdateEngineBase):
             # captured as the "real" observer by later live-host tests.
             apply_case.doCleanups()
 
+    def test_failed_transaction_marker_cannot_leave_recovery_approval_reusable(self):
+        # Simulate failure to create the second single-use marker.
+        # The recovery request must already be spent, even when apply aborts
+        # before migrations or the transaction marker can be written.
+        fixture = self.fixture()
+        transaction = {
+            "transaction_id": "f" * 32,
+            "target": {"version": "synthetic"},
+            "evidence": {"recovery_request_id": "a" * 32},
+        }
+        blocked = fixture.state_dir / engine.TRANSACTION_CONSUMED_DIR
+        blocked.write_text("unsafe marker directory", encoding="utf-8")
+        with self.assertRaises(engine.UpdateError):
+            engine._consume_transaction(fixture.state_dir, transaction)
+        marker = (fixture.state_dir / engine.RECOVERY_CONSUMED_DIR
+                  / ("a" * 32 + ".json"))
+        self.assertTrue(marker.is_file())
+        self.assertIn("preflight.recovery.request_replayed", codes(fixture.preflight()))
+
     def test_a_fresh_request_id_allows_a_later_update(self):
         fixture = self.fixture()
         marker = fixture.state_dir / engine.RECOVERY_CONSUMED_DIR / ("a" * 32 + ".json")
