@@ -56,7 +56,7 @@ def _rubrics(components: list) -> list:
 
 
 def build_assessment_facets(family: str, preset: dict | None = None) -> dict:
-    """Return seven valid facet objects; never post or auto-approve them.
+    """Build academic templates; never post or auto-approve them.
 
     CA/Final sums of 40/60 and full skill proportions are exact. Continuous
     attendance/participation/assignment/quiz evidence is *not* automatically
@@ -81,6 +81,16 @@ def build_assessment_facets(family: str, preset: dict | None = None) -> dict:
             weights.append({
                 "component": code, "weight": share * percentage / 100,
             })
+    if program["progression_kind"] != "sequential":
+        # Specialist courses provide narrative competency progress, not
+        # automatic pass/fail or level promotion.  The current native grading
+        # book needs a pass rule; a dedicated progress-report workflow must
+        # be qualified before enabling this specialist template.
+        return {
+            "components": components, "weights": weights,
+            "rubrics": _rubrics(components),
+            "level_mapping": {"levels": [level["code"] for level in program["levels"]]},
+        }
     return {
         "components": components,
         "weights": weights,
