@@ -6,6 +6,7 @@ native posting is attempted anywhere here: the pinned native Fees refund
 mechanism does not exist, so pay_preflight must refuse at the posting
 step with NativeRefundBlocked and leave the request Approved.
 """
+import ast
 import importlib.util
 import sys
 import types
@@ -303,6 +304,62 @@ class StudentPayGuardHoldTests(unittest.TestCase):
             "Receive", "Student", "validate"))
         self.assertTrue(POLICY.student_pay_write_allowed(
             "Pay", "Customer", None))
+
+
+class RefundSourceCompletenessTests(unittest.TestCase):
+    def load_query(self, function, db):
+        path = APP / "finance" / "tuition_refund_commands.py"
+        source = ast.parse(path.read_text(encoding="utf-8"))
+        selected = next(n for n in source.body
+                        if isinstance(n, ast.FunctionDef) and n.name == function)
+        namespace = {
+            "frappe": types.SimpleNamespace(db=db, ValidationError=ValueError),
+            "REQUEST": "TH Tuition Refund Request",
+            "FEES": "Fees", "PAYMENT": "Payment Entry",
+        }
+        exec(compile(ast.Module(body=[selected], type_ignores=[]),
+                     str(path), "exec"), namespace)
+        return namespace[function]
+
+    def test_refund_source_rows_keep_fee_identity_for_open_reservations(self):
+        class Stub:
+            def get_all(self, doctype, filters, fields, limit_page_length):
+                self_fields = {"fees": "FEES-01", "status": "Approved",
+                               "requested_amount": 200,
+                               "approved_amount": 200}
+                return [{key: self_fields[key] for key in fields}]
+        rows = self.load_query("_existing_requests", Stub())("FEES-01")
+        self.assertEqual(rows[0]["fees"], "FEES-01")
+        self.assertEqual(str(REFUNDS.open_amount(rows, fees="FEES-01")), "200")
+        with self.assertRaises(RefundError):
+            REFUNDS.create_request(
+                student="STU-01", company="TH-CO", fees="FEES-01",
+                requested_amount="101.00", reason="Oversubscribed",
+                evidence="Evidence", requested_by="officer@example.invalid",
+                existing_requests=rows,
+                collections=collections("300.00"), refunds=[])
+
+    def test_truncated_refund_claim_sources_fail_closed(self):
+        class Stub:
+            def get_all(self, doctype, filters, fields, limit_page_length):
+                self.limit = limit_page_length
+                return [{"fees": "FEES-01"} for _ in range(limit_page_length)]
+        db = Stub()
+        with self.assertRaises(ValueError):
+            self.load_query("_existing_requests", db)("FEES-01")
+        self.assertEqual(db.limit, 1001)
+
+    def test_truncated_payment_allocations_fail_closed(self):
+        class Stub:
+            def get_all(self, doctype, filters, fields, limit_page_length):
+                self.limit = limit_page_length
+                return [{"parent": "PE", "allocated_amount": 1}
+                        for _ in range(limit_page_length)]
+        db = Stub()
+        with self.assertRaises(ValueError):
+            self.load_query("_ledger_rows", db)(
+                "STU-01", "TH-CO", "FEES-01", kind="Collections")
+        self.assertEqual(db.limit, 1001)
 
 
 class NativeBlockerEvidenceTests(unittest.TestCase):
