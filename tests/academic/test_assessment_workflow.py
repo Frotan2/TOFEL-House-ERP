@@ -714,6 +714,21 @@ class ControllerImmutabilityTests(AcademicCase):
         module = _load_controller(slug)
         return getattr(module, class_name)
 
+    def test_retake_student_cannot_be_changed_after_book_opening(self):
+        controller = self._controller("th_assessment_book", "THAssessmentBook")
+        document = controller.__new__(controller)
+        values = {field: "unchanged" for field in controller.IMMUTABLE}
+        values["retake_student"] = "SYN-STU-2"
+        document.__dict__["_values"] = values
+        document.get = lambda field, default=None: values.get(field, default)
+        document.get_doc_before_save = lambda: types.SimpleNamespace(
+            get=lambda field, default=None: (
+                "SYN-STU-1" if field == "retake_student"
+                else values.get(field, default)))
+        with self.assertRaises(Exception) as ctx:
+            document.validate()
+        self.assertIn("immutable", str(ctx.exception).lower())
+
     def test_a_published_result_is_immutable(self):
         controller = self._controller("th_academic_result", "THAcademicResult")
         document = controller.__new__(controller)
