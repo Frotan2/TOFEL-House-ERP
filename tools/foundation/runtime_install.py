@@ -334,7 +334,7 @@ http {{
  large_client_header_buffers 4 4k;
  client_max_body_size 1m;
  client_body_buffer_size 16k;
- map $host $foundation_site {{ default ''; foundation.localhost foundation.localhost; restore.localhost restore.localhost; recovery.localhost recovery.localhost; }}
+ map $host $foundation_site {{ default ''; foundation.localhost foundation.localhost; restore.localhost restore.localhost; restore-recovery.localhost restore-recovery.localhost; }}
  server {{
   listen 127.0.0.1:8080;
   if ($foundation_site = '') {{ return 444; }}
@@ -657,7 +657,7 @@ def main() -> int:
         # DNS; this lab must add them to /etc/hosts instead of relying on the
         # hosted runner's resolver, which is not guaranteed to answer for
         # *.localhost.
-        lab_hosts = ("foundation.localhost", "restore.localhost", "recovery.localhost", "upstream-tests.localhost")
+        lab_hosts = ("foundation.localhost", "restore.localhost", "restore-recovery.localhost", "upstream-tests.localhost")
         try:
             current_hosts = Path("/etc/hosts").read_text()
         except OSError:
@@ -1036,7 +1036,7 @@ def main() -> int:
             if not artifact.is_file() or artifact.stat().st_size <= 0:
                 raise RuntimeError("Hardened native encrypted backup set is incomplete: " + artifact.name)
         report["hardened_backup"] = {label: {"bytes": p.stat().st_size, "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for label, p in (("database",secured_database),("private_files",secured_private),("public_files",secured_public))}
-        recovered_site = "recovery.localhost"
+        recovered_site = "restore-recovery.localhost"
         create_site("new-hardened-recovery-site", recovered_site, recovery_password)
         report["created_sites"].append(recovered_site)
         product_restore("hardened-restore-with-files", recovered_site,
