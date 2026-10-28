@@ -102,7 +102,7 @@ class TuitionRefundReviewTests(unittest.TestCase):
             self.check(case=dict(self.case, approval_status="Requested"))
 
     def test_no_zero_negative_nan_or_fractional_cents(self):
-        for amount in ("0", "-1", "NaN", "Infinity", "10.001", True, None):
+        for amount in ("0", "-1", "NaN", "Infinity", "10.001", "1E+999", "1000000000000", True, None):
             with self.subTest(amount=amount), self.assertRaises(ValueError):
                 self.check(case=dict(self.case, approved_amount=amount))
 
