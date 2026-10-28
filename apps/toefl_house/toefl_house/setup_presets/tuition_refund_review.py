@@ -23,9 +23,14 @@ def _money(value, what):
         number = Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError) as exc:
         raise ValueError(f"{what} must be a currency amount") from exc
-    if (not number.is_finite() or number < 0 or
-            number != number.quantize(_CENT)):
-        raise ValueError(f"{what} must be a nonnegative amount with at most two decimals")
+    if not number.is_finite() or number < 0 or number > Decimal("999999999999.99"):
+        raise ValueError(f"{what} must be a bounded nonnegative currency amount")
+    try:
+        valid_cents = number == number.quantize(_CENT)
+    except InvalidOperation as exc:
+        raise ValueError(f"{what} exceeds supported currency precision") from exc
+    if not valid_cents:
+        raise ValueError(f"{what} must have at most two decimals")
     return number
 
 
