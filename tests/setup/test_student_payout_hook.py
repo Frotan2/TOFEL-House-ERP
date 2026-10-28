@@ -47,7 +47,6 @@ def real_hook():
     security.require_operational = lambda: require_calls.append("operational")
     payout = types.ModuleType("toefl_house.finance.student_payout_policy")
     payout.student_pay_write_allowed = student_pay_write_allowed
-    original_import = builtins.__import__
 
     def restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
         if name == "toefl_house.security":
