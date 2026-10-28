@@ -442,6 +442,9 @@ PASS_MINIMUM_KINDS = ("percent", "grade")
 PROGRESSION_EVIDENCE_KINDS = ("assessment_pass", "attendance", "approval")
 RETAKE_SCOPES = ("full", "partial")
 RETAKE_GOVERNING = ("best",)
+# Historical policy versions must stay readable without admitting these
+# retired choices into new academic policy authoring.
+RETAKE_LEGACY_GOVERNING = ("latest", "first")
 PROGRESSION_NEXT = "next"
 
 
@@ -717,7 +720,7 @@ def validate_progression(mapping):
                          for position, entry in enumerate(requires, start=1)]}
 
 
-def validate_retakes(mapping):
+def validate_retakes(mapping, *, allow_legacy=False):
     body = _facet_object(mapping, "Retakes")
     _refuse_unknown(body, {"max_attempts", "wait_days", "scope",
                            "governing"},
@@ -738,10 +741,12 @@ def validate_retakes(mapping):
             "Retake scope must be one of " + ", ".join(RETAKE_SCOPES))
     cleaned["scope"] = scope
     governing = body.get("governing")
-    if governing not in RETAKE_GOVERNING:
+    choices = (RETAKE_GOVERNING + RETAKE_LEGACY_GOVERNING
+               if allow_legacy else RETAKE_GOVERNING)
+    if governing not in choices:
         raise ValueError(
             "Retake governing attempt must be one of "
-            + ", ".join(RETAKE_GOVERNING))
+            + ", ".join(choices))
     cleaned["governing"] = governing
     return cleaned
 
@@ -814,7 +819,7 @@ def validate_policy_facets(facets):
     if "progression" in parsed:
         parsed["progression"] = validate_progression(parsed["progression"])
     if "retakes" in parsed:
-        parsed["retakes"] = validate_retakes(parsed["retakes"])
+        parsed["retakes"] = validate_retakes(parsed["retakes"], allow_legacy=True)
     if "level_mapping" in parsed:
         parsed["level_mapping"] = validate_level_mapping(
             parsed["level_mapping"])
