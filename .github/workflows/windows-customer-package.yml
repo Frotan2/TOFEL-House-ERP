@@ -22,6 +22,9 @@ on:
       - "tests/foundation/test_windows_pc_inventory.py"
       - "tests/foundation/test_windows_service_readiness.ps1"
       - ".github/workflows/windows-customer-package.yml"
+      # Exact-SHA release proof also covers newly triaged security advisories.
+      - "docs/engineering/evidence/sec-deps-01/**"
+      - "tests/security/**"
   workflow_dispatch:
 
 permissions:
