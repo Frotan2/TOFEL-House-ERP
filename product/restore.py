@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import fcntl
 import hashlib
 import hmac
 import io
@@ -369,42 +370,68 @@ def _restore_state_dir(site: str) -> Path:
 
 def _ensure_state_dir(site: str) -> Path:
     state_dir = _restore_state_dir(site)
-    state_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
+    # Restore state is security-critical. Never follow a symlink at the
+    # state directory or any ancestor, including a configured parent.
+    for ancestor in (state_dir, *state_dir.parents):
+        if ancestor.is_symlink():
+            raise RestoreInputError("emergency restore state directory is unsafe")
     try:
+        state_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
+        if state_dir.is_symlink() or not state_dir.is_dir():
+            raise RestoreInputError("emergency restore state directory is unsafe")
         state_dir.chmod(0o700)
     except OSError:
-        pass
+        raise RestoreInputError("emergency restore state directory is unavailable") from None
     return state_dir
 
 
 def _append_audit(state_dir: Path, record: dict) -> None:
-    """Append one hash-chained audit record. Secrets are never in a record:
-    callers pass only site, target, backup identity, hashes, request_id and
-    approver identities. The chain lets a later reader detect a rewritten or
-    deleted earlier line by recomputing hashes."""
+    """Append one verified hash-chain record under an interprocess file lock.
+
+    Existing log lines are verified before appending. No password, key, or
+    detached signature is recorded. A hash chain detects changes to retained
+    earlier lines, but cannot prove that the complete log was not replaced
+    or its tail removed: independent host-level retention is still needed.
+    """
     audit_path = state_dir / "audit.jsonl"
-    previous_hash = ""
+    lock_path = state_dir / "audit.lock"
+    if audit_path.is_symlink() or lock_path.is_symlink():
+        raise RestoreInputError("emergency restore audit path is unsafe")
     try:
-        if audit_path.is_file():
-            with audit_path.open("rb") as stream:
-                for line in stream:
-                    if line.strip():
-                        previous_hash = hashlib.sha256(line.rstrip(b"\n")).hexdigest()
-    except OSError:
-        pass
-    entry = dict(record)
-    entry["prev_hash"] = previous_hash
-    entry["hash"] = hashlib.sha256(
-        _canonical_document_bytes(entry)).hexdigest()
-    line = _canonical_document_bytes(entry) + b"\n"
-    with audit_path.open("ab") as stream:
-        stream.write(line)
-        stream.flush()
-        os.fsync(stream.fileno())
-    try:
-        audit_path.chmod(0o600)
-    except OSError:
-        pass
+        flags = os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW
+        with os.fdopen(os.open(lock_path, flags, 0o600), "rb+") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            previous_hash = ""
+            if audit_path.exists():
+                with os.fdopen(os.open(audit_path, os.O_RDONLY | os.O_NOFOLLOW),
+                               "rb") as audit_input:
+                    for line in audit_input:
+                        if not line.endswith(b"\\n"):
+                            raise RestoreInputError("emergency restore audit chain is invalid")
+                        item = json.loads(line)
+                        if not isinstance(item, dict):
+                            raise RestoreInputError("emergency restore audit chain is invalid")
+                        stamped = dict(item)
+                        supplied_hash = stamped.pop("hash", None)
+                        if (not isinstance(supplied_hash, str)
+                                or item.get("prev_hash") != previous_hash
+                                or supplied_hash != hashlib.sha256(
+                                    _canonical_document_bytes(stamped)).hexdigest()):
+                            raise RestoreInputError("emergency restore audit chain is invalid")
+                        previous_hash = hashlib.sha256(line.rstrip(b"\\n")).hexdigest()
+            entry = {**record, "prev_hash": previous_hash}
+            entry["hash"] = hashlib.sha256(
+                _canonical_document_bytes(entry)).hexdigest()
+            line = _canonical_document_bytes(entry) + b"\\n"
+            with os.fdopen(os.open(audit_path,
+                                   os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW,
+                                   0o600), "ab") as audit_output:
+                os.fchmod(audit_output.fileno(), 0o600)
+                audit_output.write(line)
+                audit_output.flush()
+                os.fsync(audit_output.fileno())
+    except (OSError, ValueError, UnicodeError):
+        raise RestoreInputError("emergency restore audit path or chain is unsafe") from None
 
 
 def _load_restore_trust_store(path: Path) -> dict:
