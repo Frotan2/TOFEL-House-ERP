@@ -47,6 +47,10 @@ on:
       # Changes to finance acceptance tests must also qualify the deliverable
       # that the customer is about to receive, not only the fast Owned suite.
       - tests/finance/**
+      # Security-triage deltas and their regression tests are release inputs.
+      # A new advisory decision must qualify the actual customer image.
+      - docs/engineering/evidence/sec-deps-01/**
+      - tests/security/**
       # Payroll regression contracts are release-critical: a change to the
       # additive/finance-approval guard must qualify the customer image too.
       - tests/teaching/test_compensation_guards.py
