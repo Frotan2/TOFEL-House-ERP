@@ -252,10 +252,12 @@
     "monthly_installments_use_afghan_calendar_boundaries": true,
     "installment_due_date_policy": "FIRST_OF_EACH_AFGHAN_MONTH_OR_OWNER_SPECIFIED",
     "ability_to_pay_full_semester_in_advance": true,
-    "installment_due_strategy": "requires_billing_engine_month_aware_upgrade",
+    "installment_due_strategy": "native_solar_hijri_monthly_cadence_present_requires_governing_owner_billing_terms_and_windows_acceptance",
     "carry_forward_unpaid_balance": true,
     "attendance_hold_requires_authorized_decision": true,
-    "books_and_refunds_separate_from_tuition": true
+    "books_and_refunds_separate_from_tuition": true,
+    "owner_policy_must_explicitly_enable_installments": true,
+    "non_silent_payment_grace_days_required": true
   },
   "discounts": {
     "available_percentages": [
