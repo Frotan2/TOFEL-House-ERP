@@ -43,8 +43,8 @@ def normalize_intervals(value):
         except (InvalidOperation, ValueError, TypeError) as exc:
             raise ValueError("Grade threshold must be numeric") from exc
         if (not percent.is_finite() or not Decimal("0") <= percent <= Decimal("100")
-                or percent != percent.quantize(Decimal("0.1"))):
-            raise ValueError("Grade threshold must be 0–100 with one decimal maximum")
+                or percent != percent.to_integral_value()):
+            raise ValueError("Native grade threshold must be a whole percent from 0 to 100")
         if percent in thresholds:
             raise ValueError("Duplicate grade threshold")
         thresholds.add(percent)
