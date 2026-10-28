@@ -698,7 +698,10 @@ def create_discount_rule(request_key, code, title, discount_percentage,
         doc = frappe.get_doc({
             "doctype": DISCOUNT_RULE, "code": clean_code, "title": clean_title,
             "discount_percentage": clean_percent, "precedence": clean_precedence,
-            "status": "Active", "fee_category": clean_category or None,
+            # New rule is a draft, not an approved award. A named student
+            # and explicit activation are mandatory before any tuition Fees
+            # can consume it. Never create a broadly active discount.
+            "status": "Retired", "fee_category": clean_category or None,
             "program": clean_program or None, "student": clean_student or None,
             "description": clean_description,
         })
@@ -736,6 +739,23 @@ def set_discount_rule_status(request_key, code, active):
             raise frappe.ValidationError(str(exc)) from exc
 
         doc = _discount_rule_doc(clean_code, for_update=True)
+        if flag:
+            if not doc.student:
+                raise frappe.ValidationError(
+                    "Activating a discount requires one named Student; "
+                    "global discount templates must remain inactive")
+            if not doc.description or len(doc.description.strip()) < 8:
+                raise frappe.ValidationError(
+                    "Activating a discount requires a recorded approval reason")
+            if not frappe.db.exists("Student", doc.student):
+                raise frappe.ValidationError(
+                    "The named discount Student no longer exists")
+            try:
+                rules.validate_discount_award(
+                    doc.discount_percentage, doc.student, doc.description,
+                    active=True)
+            except ValueError as exc:
+                raise frappe.ValidationError(str(exc)) from exc
         doc.status = "Active" if flag else "Retired"
         doc.save(ignore_permissions=True)
         result = {
@@ -866,10 +886,6 @@ def set_assessment_policy_version(request_key, policy, effective_from,
             raise frappe.ValidationError(
                 f"The program family {doc.family} is retired; reactivate it "
                 "before adding a version")
-        if clean_scale and not frappe.db.exists(GRADING_SCALE, clean_scale):
-            raise frappe.ValidationError(
-                f"Grading scale {clean_scale} does not exist; define it "
-                "natively first")
         versions = [row.as_dict() for row in (doc.get("versions") or [])]
         try:
             configuration_rules.check_appends(
@@ -877,10 +893,19 @@ def set_assessment_policy_version(request_key, policy, effective_from,
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         current = configuration_rules.latest_version(versions)
+        # A blank optional field means keep the last approved scale, NOT
+        # erase it silently on a policy revision. Historical grades and
+        # future assessment books must continue to use the pinned scale.
+        effective_scale = clean_scale or (
+            (current.get("grading_scale") or "") if current else "")
+        if effective_scale and not frappe.db.exists(GRADING_SCALE, effective_scale):
+            raise frappe.ValidationError(
+                f"Grading scale {effective_scale} does not exist; define it "
+                "natively first")
         carried = _carried_facets(versions)
         before = configuration_audit.latest_after_hash(doc.name)
         row = {"effective_from": clean_from,
-               "grading_scale": clean_scale or None,
+               "grading_scale": effective_scale or None,
                "reason": clean_reason, "set_by": actor,
                "set_on": frappe.utils.now_datetime()}
         row.update(carried)
