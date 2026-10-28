@@ -225,6 +225,39 @@ class InvoiceDiscountBoundaryTests(unittest.TestCase):
         self.assertFalse(self.books.book_sale_terms_ok(
             self.invoice(additional_discount_percentage=10.0)))
 
+    def test_a_hand_typed_line_discount_is_refused_like_a_header_discount(self):
+        """A row discount must not slip past the price check.
+
+        The row ``rate`` can equal the configured price while a native
+        discount field still reduces what the student is charged, so an
+        unreviewed book markdown would otherwise be accepted. Only a native
+        Pricing Rule (which stamps ``pricing_rules`` on the row) may discount.
+        """
+        def invoiced(**line):
+            return Doc(
+                selling_price_list="Standard Selling", currency="AFN",
+                customer="SYN-STUDENT", discount_amount=0.0,
+                additional_discount_percentage=0.0,
+                posting_date="2026-10-27",
+                items=[Doc(item_code="SYN-BOOK", warehouse="SYN-WH",
+                           qty=2.0, conversion_factor=1.0,
+                           **{"pricing_rules": "[]", **line})])
+
+        # No discount at all: the configured price, accepted.
+        self.assertTrue(self.books.book_sale_terms_ok(invoiced(rate=300.0)))
+        # Explicit zero discount fields are not a discount.
+        self.assertTrue(self.books.book_sale_terms_ok(
+            invoiced(rate=300.0, discount_percentage=0.0, discount_amount=0.0)))
+        # A hand-typed line discount is refused in either native form.
+        self.assertFalse(self.books.book_sale_terms_ok(
+            invoiced(rate=300.0, discount_percentage=10.0)))
+        self.assertFalse(self.books.book_sale_terms_ok(
+            invoiced(rate=300.0, discount_amount=25.0)))
+        # A native Pricing Rule stays the one authority that may lower it.
+        self.assertTrue(self.books.book_sale_terms_ok(
+            invoiced(rate=270.0, discount_percentage=10.0,
+                     pricing_rules='["SYN-PRICE-RULE"]')))
+
     def test_normal_book_sale_without_invoice_header_discount_is_allowed(self):
         self.assertTrue(self.books.book_sale_terms_ok(
             self.invoice(line_rate=300.0, pricing_rules="[]")))

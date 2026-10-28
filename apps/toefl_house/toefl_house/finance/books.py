@@ -124,6 +124,18 @@ def sale_prices_ok(lines, prices):
         configured = _flt(configured)
         if not math.isfinite(configured) or configured <= 0:
             return False
+        # A hand-typed LINE discount is refused exactly like a hand-typed
+        # header discount. The row rate can look correct while a native
+        # discount field still reduces what is charged, so an unreviewed
+        # markdown of a book would otherwise pass the price check. A native
+        # Pricing Rule (which sets ``pricing_rules``) is the only authority
+        # allowed to price a book below its configured selling price.
+        if not _has_pricing_rule(row):
+            line_discount = (
+                abs(_flt(_row_value(row, "discount_percentage"))) > 1e-9
+                or abs(_flt(_row_value(row, "discount_amount"))) > 0.005)
+            if line_discount:
+                return False
         if rate - configured > PRICE_TOLERANCE:
             return False  # never above the configured price
         if configured - rate > PRICE_TOLERANCE and not _has_pricing_rule(row):
@@ -328,6 +340,10 @@ def book_sale_terms_ok(doc):
             "rate": getattr(row, "rate", None),
             "pricing_rules": getattr(row, "pricing_rules", None),
             "conversion_factor": getattr(row, "conversion_factor", None),
+            # Forwarded so a hand-typed line discount is judged with the
+            # same authority rule as a hand-typed header discount.
+            "discount_percentage": getattr(row, "discount_percentage", None),
+            "discount_amount": getattr(row, "discount_amount", None),
         })
         key = (code, warehouse)
         requested[key] = requested.get(key, 0.0) + qty
