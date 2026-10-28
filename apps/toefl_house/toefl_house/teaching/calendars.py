@@ -34,6 +34,7 @@ DAY_TABLE = "TH Academic Calendar Day"
 DAY_KINDS = ("Holiday", "Closed", "Working Day")
 BLOCKING_KINDS = ("Holiday", "Closed")
 _DESCRIPTION_LIMIT = 140
+_MAX_ACTIVE_CALENDARS = 100
 
 
 def validate_day_kind(value):
@@ -194,9 +195,16 @@ def calendar_plan(start_day, end_day, academic_year="", branch=""):
     end = parse_day(end_day)
     if end < start:
         raise ValueError("Calendar range end precedes its start")
+    # Fetch one extra record so reaching the query cap cannot quietly omit
+    # an Owner-defined closure and turn an unsafe teaching date into "open".
     calendars = frappe.get_all(
         CALENDAR, filters={"status": "Active"},
-        fields=["name", "branch", "academic_year"], limit_page_length=100)
+        fields=["name", "branch", "academic_year"],
+        limit_page_length=_MAX_ACTIVE_CALENDARS + 1)
+    if len(calendars) > _MAX_ACTIVE_CALENDARS:
+        raise frappe.ValidationError(
+            "More than 100 active academic calendars; scheduling is blocked "
+            "until the calendar configuration is consolidated")
     rows_by_date = {}
     for row in calendars:
         if row.get("academic_year") and row.get("academic_year") != (academic_year or ""):
