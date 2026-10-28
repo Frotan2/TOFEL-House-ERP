@@ -24,6 +24,7 @@ on:
       # The SEC-DEPS-01 dispositions are read by tools/foundation/advisory_triage.py,
       # so any disposition change must re-run the audit that consumes it.
       - docs/engineering/evidence/sec-deps-01/**
+      - tests/security/**
   workflow_dispatch:
 
 permissions:
