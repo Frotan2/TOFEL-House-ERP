@@ -342,7 +342,7 @@
     "require_published_marks_and_manager_approval_for_promotion": true,
     "non_recorded_marks_outcome": "Incomplete",
     "grading_scale": {
-      "name": "TOEFL House GE/EAP Scale 60 V1",
+      "name": "TOEFL House GE EAP Scale 60 V1",
       "grade_thresholds": [
         {
           "grade": "A",
