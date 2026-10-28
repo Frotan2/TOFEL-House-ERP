@@ -145,21 +145,46 @@ def semester_bounds(start_iso, months=2):
     return date.fromisoformat(str(start_iso)), end_boundary - timedelta(days=1)
 
 
-def monthly_due_dates(first_period, count, grace_days=0):
-    """Due first of each Solar Hijri month plus Owner-configured grace days.
+#: The largest Solar Hijri day-of-month that exists in *every* month. The
+#: twelfth month (Hoot) has 29 days in a common year, so a day above this
+#: could not be honoured in every month of a plan. Owner-approved due days
+#: are within this bound; anything larger is refused rather than clamped,
+#: because clamping would silently move a contractual due date.
+DUE_DAY_MAX = 29
 
-    Native payment allocation is separate. This creates ONLY date proposals,
-    not invoices or future-cash receipts.
+
+def validate_due_day(due_day):
+    """A contractual Solar Hijri day-of-month, never clamped or guessed.
+
+    ``1`` is the first of the month (the ordinary Afghan tuition due day).
+    The Owner-approved alternative, the 25th of the starting month, is an
+    ordinary value here; no due day is hard-coded policy.
+    """
+    value = _integer(due_day, "Installment due day")
+    if not 1 <= value <= DUE_DAY_MAX:
+        raise ValueError(
+            f"Installment due day must be between 1 and {DUE_DAY_MAX}; a "
+            "later day does not exist in every Solar Hijri month")
+    return value
+
+
+def monthly_due_dates(first_period, count, grace_days=0, due_day=1):
+    """Due on ``due_day`` of each Solar Hijri month plus configured grace.
+
+    ``due_day`` defaults to 1 (first of the month) so every existing caller
+    keeps its contract. Native payment allocation is separate: this creates
+    ONLY date proposals, not invoices or future-cash receipts.
     """
     _integer(count, "Month count")
     _integer(grace_days, "Payment grace days")
+    due = validate_due_day(due_day)
     if not 1 <= count <= 24 or not 0 <= grace_days <= 31:
         raise ValueError("Month count must be 1-24 and grace days 0-31")
     year, month = parse_shamsi_month(first_period)
     result = []
     for offset in range(count):
         y, m = add_months(year, month, offset)
-        result.append(shamsi_to_gregorian(y, m, 1) + timedelta(days=grace_days))
+        result.append(shamsi_to_gregorian(y, m, due) + timedelta(days=grace_days))
     return result
 
 

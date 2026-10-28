@@ -21,6 +21,7 @@ import frappe
 from toefl_house.academic import rules
 from toefl_house.configuration import audit as configuration_audit
 from toefl_house.configuration import rules as configuration_rules
+from toefl_house.finance import shamsi
 from toefl_house.policy import ATTEMPT_STATUSES, digest
 
 POLICY = "TH Billing Policy"
@@ -139,6 +140,46 @@ def validate_shamsi_cadence(cadence, grace_days):
     return cadence, grace_days
 
 
+def validate_due_day(cadence, due_day):
+    """The Owner's contracted Solar Hijri day-of-month for installment dues.
+
+    The Owner approved two due-date choices for the remaining installment —
+    the 25th of the starting Afghan month, or the first of the following
+    month (preferred). Both are *values*, never code: ``1`` is the month's
+    first day and is what a version written before this field existed means,
+    so history keeps its meaning. A non-Solar cadence carries no due day.
+    """
+    if isinstance(due_day, bool) or not isinstance(due_day, int):
+        raise ValueError("Installment due day must be a whole number")
+    if cadence != "Solar Hijri Month":
+        if due_day:
+            raise ValueError(
+                "An installment due day requires Solar Hijri Month cadence")
+        return 0
+    if due_day == 0:
+        return 1
+    try:
+        return shamsi.validate_due_day(due_day)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
+
+
+def validate_unequal_installments(allowed, installments_allowed):
+    """Owner authorization for contractual *unequal* installment shares.
+
+    The Owner approved variable contractual shares (for example 50%/50% or
+    60%/40%) that must still add up to the full net tuition. Because a share
+    split is a commercial term per student, it is authorized by an
+    effective-dated version and never switched on by default; a version that
+    does not mention it keeps equal splits only.
+    """
+    flag = as_flag(allowed, "Unequal installments allowed")
+    if flag and not as_flag(installments_allowed, "Installments allowed"):
+        raise ValueError(
+            "Unequal installments need installments enabled on the same version")
+    return 1 if flag else 0
+
+
 def check_posting_bounds(posting, today, backdate_days, future_days):
     """Refuse a posting date outside the owner's backdate/future bounds."""
     posted = date.fromisoformat(str(posting))
@@ -203,9 +244,13 @@ def _policy_result(doc, extra=None):
         "governing_installment_interval_days": (
             governing.get("installment_interval_days") if governing else ""),
         "governing_installment_cadence": (
-            governing.get("installment_cadence") or "Days" if governing else ""),
+            (governing.get("installment_cadence") or "Days") if governing else ""),
         "governing_payment_grace_days": (
             int(governing.get("payment_grace_days") or 0) if governing else 0),
+        "governing_installment_due_day": (
+            int(governing.get("installment_due_day") or 0) if governing else 0),
+        "governing_allow_unequal_installments": (
+            int(governing.get("allow_unequal_installments") or 0) if governing else 0),
     }
     if extra:
         result.update(extra)
@@ -242,6 +287,11 @@ def governing_billing_terms(on_date=None):
         "max_installments": int(governing.get("max_installments") or 1),
         "installment_interval_days": int(
             governing.get("installment_interval_days") or 0),
+        # Contractual unequal shares are authorized only by an explicit
+        # effective version; a version written before this field existed
+        # reads as 0, so equal splits keep their existing behavior.
+        "allow_unequal_installments": int(
+            governing.get("allow_unequal_installments") or 0),
     }
     # Existing policy versions are unmodified and preserve legacy fixed-day
     # behavior; only the explicit Owner-selected Solar cadence adds fields.
@@ -249,6 +299,10 @@ def governing_billing_terms(on_date=None):
         terms["installment_cadence"] = "Solar Hijri Month"
         terms["payment_grace_days"] = int(
             governing.get("payment_grace_days") or 0)
+        # A version written before the due-day field existed means the
+        # first of the month — the old behavior, unchanged.
+        terms["installment_due_day"] = int(
+            governing.get("installment_due_day") or 1)
     return terms
 
 
@@ -297,7 +351,9 @@ def set_billing_policy_version(request_key, policy, effective_from, reason,
                                placement_fee_timing, installments_allowed=0,
                                max_installments=1,
                                installment_interval_days=0,
-                               installment_cadence="Days", payment_grace_days=0):
+                               installment_cadence="Days", payment_grace_days=0,
+                               installment_due_day=0,
+                               allow_unequal_installments=0):
     """Append an effective-dated billing policy version.
 
     The version enacts one pair of posting-date bounds, one
@@ -320,6 +376,9 @@ def set_billing_policy_version(request_key, policy, effective_from, reason,
                 validate_installment_terms(
                     installments_allowed, max_installments,
                     installment_interval_days, cadence=clean_cadence)
+            clean_due_day = validate_due_day(clean_cadence, installment_due_day)
+            clean_unequal = validate_unequal_installments(
+                allow_unequal_installments, clean_inst_on)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         doc = _policy_doc(clean_code, for_update=True)
@@ -344,6 +403,8 @@ def set_billing_policy_version(request_key, policy, effective_from, reason,
             "installment_interval_days": clean_inst_days,
             "installment_cadence": clean_cadence,
             "payment_grace_days": clean_grace,
+            "installment_due_day": clean_due_day,
+            "allow_unequal_installments": clean_unequal,
             "reason": clean_reason, "set_by": actor,
             "set_on": frappe.utils.now_datetime()})
         if current:
@@ -369,7 +430,9 @@ def set_billing_policy_version(request_key, policy, effective_from, reason,
                "max_installments": max_installments,
                "installment_interval_days": installment_interval_days,
                "installment_cadence": installment_cadence,
-               "payment_grace_days": payment_grace_days}
+               "payment_grace_days": payment_grace_days,
+               "installment_due_day": installment_due_day,
+               "allow_unequal_installments": allow_unequal_installments}
     return configuration_audit.execute(
         "set_billing_policy_version", request_key, payload, work)
 

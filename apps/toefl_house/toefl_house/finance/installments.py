@@ -26,8 +26,9 @@ Rules this module binds, and why they are not configurable here:
   and native cancellation/correction. There is no parallel schedule table and
   no owned ledger.
 """
+import json
 from datetime import date, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 import frappe
 
 from toefl_house.api import _execute
@@ -76,14 +77,100 @@ def split_amounts(total, parts):
     return [round(value / 100.0, 2) for value in amounts]
 
 
+def validate_shares(shares, parts):
+    """Exact contractual percentage shares, summing to the whole tuition.
+
+    The Owner approved negotiation of *unequal* installments (e.g. 60/40);
+    the shares are percentages of the net tuition and must total exactly
+    100%, so the plan can never under- or over-bill the configured price.
+    Four decimal places are accepted and no rounding is applied to a
+    requested share: a 33.33/33.33/33.34 style split is written as given,
+    not silently re-balanced.
+    """
+    if isinstance(parts, bool) or not isinstance(parts, int) or parts < 1:
+        raise ValueError("Installment count must be a whole number of at least 1")
+    if not isinstance(shares, (list, tuple)):
+        raise ValueError("Installment shares must be a list of percentages")
+    if len(shares) != parts:
+        raise ValueError(
+            f"An installment plan of {parts} needs exactly {parts} shares")
+    cleaned = []
+    total = Decimal("0")
+    for position, share in enumerate(shares, start=1):
+        if isinstance(share, bool):
+            raise ValueError(f"Share {position} must be a number")
+        try:
+            value = Decimal(str(share).strip())
+        except (InvalidOperation, ValueError, TypeError) as exc:
+            raise ValueError(f"Share {position} must be a number") from exc
+        if not value.is_finite() or value <= 0:
+            raise ValueError(f"Share {position} must be a positive percentage")
+        try:
+            precise = value.quantize(Decimal("0.0001"))
+        except InvalidOperation as exc:
+            raise ValueError(f"Share {position} is outside supported precision") from exc
+        if value != precise:
+            raise ValueError(
+                f"Share {position} must use at most four decimal places")
+        cleaned.append(precise)
+        total += precise
+    if total != Decimal("100"):
+        raise ValueError(
+            f"Installment shares must total 100%, not {total.normalize():f}%")
+    return cleaned
+
+
+def split_amounts_by_shares(total, shares):
+    """Split ``total`` by exact percentages; the cents always add up.
+
+    Every share but the last is rounded *down* to the cent and the last
+    carries the remainder, so the schedule totals the configured amount to
+    the cent for any approved ratio. A share that would carry no money is
+    refused: a zero-amount native Fees document is not a receivable.
+    """
+    cleaned = validate_shares(shares, len(shares))
+    try:
+        value = Decimal(str(total))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise ValueError("Tuition amount must be a finite exact currency value") from exc
+    if not value.is_finite():
+        raise ValueError("Tuition amount must be finite")
+    try:
+        precise = value.quantize(Decimal("0.01"))
+    except InvalidOperation as exc:
+        raise ValueError("Tuition amount is outside supported precision") from exc
+    if value != precise:
+        raise ValueError("Tuition amount must use exact two-decimal currency units")
+    cents = int(value * 100)
+    amounts = []
+    allocated = 0
+    for index, share in enumerate(cleaned):
+        if index == len(cleaned) - 1:
+            part = cents - allocated
+        else:
+            part = int((Decimal(cents) * share / Decimal("100")).to_integral_value(
+                rounding=ROUND_DOWN))
+        if part < 1:
+            raise ValueError(
+                "Each installment must carry a positive amount; the shares are "
+                "too small for this tuition")
+        amounts.append(part)
+        allocated += part
+    if sum(amounts) != cents:
+        raise ValueError("The share split did not total the tuition amount")
+    return [round(amount / 100.0, 2) for amount in amounts]
+
+
 def schedule_due_dates(first_due, count, interval_days,
-                       cadence="Days", grace_days=0):
+                       cadence="Days", grace_days=0, due_day=0):
     """Legacy day-spaced plans or exact Afghan Solar Hijri month dues.
 
     `first_due` is the first *actual* due date (including grace).
-    Solar mode fails closed unless that day is exactly the first day of
-    the selected Shamsi month plus configured grace. An arbitrary date
-    must never silently create a rolling personal student semester.
+    Solar mode fails closed unless that day is exactly the contracted
+    Solar Hijri day of the month plus configured grace — the first of the
+    month unless ``due_day`` names another day such as the Owner-approved
+    25th. An arbitrary date must never silently create a rolling personal
+    student semester.
     """
     start = date.fromisoformat(str(first_due))
     if isinstance(count, bool) or not isinstance(count, int) or count < 1:
@@ -92,13 +179,17 @@ def schedule_due_dates(first_due, count, interval_days,
         raise ValueError("Installment interval must be a whole number of days")
     cadence, grace_days = billing_policies.validate_shamsi_cadence(
         cadence, grace_days)
+    # Validated for both cadences: a due day supplied for a day-spaced plan is
+    # a contradiction and must be refused, never silently ignored.
+    contracted_day = billing_policies.validate_due_day(cadence, due_day)
     if cadence == "Solar Hijri Month":
         first_period = shamsi.month_key(start - timedelta(days=grace_days))
-        result = shamsi.monthly_due_dates(first_period, count, grace_days)
+        result = shamsi.monthly_due_dates(first_period, count, grace_days,
+                                          contracted_day or 1)
         if result[0] != start:
             raise ValueError(
-                "The first Solar Hijri month due date must be the first "
-                "day of the month plus the configured grace days")
+                "The first Solar Hijri month due date must be day "
+                f"{contracted_day} of the month plus the configured grace days")
         return [day.isoformat() for day in result]
     return [str(start + timedelta(days=interval_days * index))
             for index in range(count)]
@@ -137,37 +228,53 @@ def plan_terms(terms, installments, posting, first_due):
         raise ValueError(
             "The governing billing policy does not state an installment "
             "interval; the Course Owner must set one")
+    # The contracted day-of-month is the Owner's value (1 by default, or the
+    # approved 25th); a plan can never invent its own due day.
+    due_day = billing_policies.validate_due_day(
+        cadence, int(terms.get("installment_due_day") or 0))
     posted = date.fromisoformat(str(posting))
     first = date.fromisoformat(str(first_due))
+    # ``due_day`` is 0 for a day-spaced plan (no contracted day of month) and
+    # a real day for Solar cadence; passed through so the validator judges it.
     due_dates = schedule_due_dates(
-        first, installments, interval, cadence, grace)
+        first, installments, interval, cadence, grace, due_day)
     if first < posted:
         # Owner-approved late join: the contractual first-of-Shamsi-month
         # due date may already have passed when a learner is enrolled in an
         # active cohort. Keep the real (current) GL posting date, expose that
         # first invoice as outstanding/overdue, and prohibit arbitrary
         # previous-month backbilling by this everyday Finance command.
+        # Compare the *contracted* month (grace removed), not the payable
+        # date: grace days may legitimately push the due date into the next
+        # Gregorian day while the obligation still belongs to its own month.
+        contracted_month = shamsi.month_key(first - timedelta(days=grace))
         if (cadence != "Solar Hijri Month"
-                or shamsi.month_key(first) != shamsi.month_key(posted)):
+                or contracted_month != shamsi.month_key(posted)):
             raise ValueError(
                 "The first installment cannot fall due before the bill is "
                 "posted unless it is the current Solar Hijri month")
     return installments, interval, due_dates
 
 
-def build_installment_components(fee_components, installments):
+def build_installment_components(fee_components, installments, shares=None):
     """Split every billable component row across the schedule.
 
     Returns one row list per installment. The per-installment rows sum to the
     configured (net-of-discount) component amounts, which is what native
-    ``Fees`` totals and posts.
+    ``Fees`` totals and posts. ``shares`` are the Owner-authorized
+    contractual percentages (e.g. 60/40); omitted means an equal split.
     """
     # Fee Category is not a unique row identifier: two native component
     # lines may legitimately share a category but differ in amount. Keeping
     # splits per *row*, and never converting money to float before splitting,
     # prevents one line silently inheriting another line's distribution.
-    splits = [split_amounts(row["amount"], installments)
-              for row in fee_components]
+    if shares is None:
+        splits = [split_amounts(row["amount"], installments)
+                  for row in fee_components]
+    else:
+        exact_shares = validate_shares(shares, installments)
+        splits = [split_amounts_by_shares(row["amount"], exact_shares)
+                  for row in fee_components]
     plan = []
     for index in range(installments):
         rows = []
@@ -188,9 +295,33 @@ def _plan_total(rows):
     return round(sum(float(row["amount"]) for row in rows), 2)
 
 
+def _shares(value, installments):
+    """Read the optional contractual shares from a desk form or API call.
+
+    Nothing is inferred: an absent value keeps the equal split, and any
+    supplied value must be an explicit list of percentages that the policy
+    layer then authorizes and the arithmetic validates exactly.
+    """
+    if value is None or value == "" or value == []:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            value = json.loads(text)
+        except (ValueError, TypeError):
+            value = [part for part in text.replace(";", ",").split(",")]
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    raise frappe.ValidationError(
+        "Installment shares must be a list of percentages")
+
+
 @frappe.whitelist(methods=["POST"])
 def issue_tuition_installment_plan(request_key, program_enrollment, fee_structure,
-                                   posting_date, first_due_date, installments):
+                                   posting_date, first_due_date, installments,
+                                   shares=None):
     """Bill one submitted enrollment as an owner-authorized native schedule.
 
     Produces N submitted ``Fees`` documents, one per installment, each posting
@@ -223,6 +354,14 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
                 terms["max_backdate_days"], terms["max_future_days"])
             count, interval, due_dates = plan_terms(
                 terms, installments, posting, due)
+            requested_shares = _shares(shares, count)
+            if requested_shares is not None:
+                if not int(terms.get("allow_unequal_installments") or 0):
+                    raise ValueError(
+                        "The governing billing policy does not authorize "
+                        "unequal installment shares; the Course Owner must "
+                        "enable them on an effective version")
+                requested_shares = validate_shares(requested_shares, count)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
 
@@ -257,7 +396,8 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
 
         fee_components, applied_discounts, gross_total = \
             resolved_billable_components(pe, fs_name)
-        plan = build_installment_components(fee_components, count)
+        plan = build_installment_components(fee_components, count,
+                                            requested_shares)
         net_total = round(sum(_plan_total(rows) for rows in plan), 2)
         if applied_discounts and round(gross_total - net_total, 2) <= 0:
             raise frappe.ValidationError(
@@ -308,6 +448,9 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
             "interval_days": interval, "posting_date": posting,
             "installment_cadence": terms.get("installment_cadence") or "Days",
             "payment_grace_days": int(terms.get("payment_grace_days") or 0),
+            "installment_due_day": int(terms.get("installment_due_day") or 0),
+            "installment_shares": ([float(share) for share in requested_shares]
+                                   if requested_shares is not None else []),
             "installment_total": net_total, "gross_total": gross_total,
             "installments_issued": issued,
         }
@@ -322,6 +465,8 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
             after_hash=digest([pe_name, fs_name, posting, count, interval,
                                result["installment_cadence"],
                                result["payment_grace_days"],
+                               result["installment_due_day"],
+                               result["installment_shares"],
                                [row["fees"] for row in issued],
                                [row["grand_total"] for row in issued],
                                applied_discounts]))
@@ -331,4 +476,8 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
                      "fee_structure": fee_structure,
                      "posting_date": posting_date,
                      "first_due_date": first_due_date,
-                     "installments": installments}, work)
+                     "installments": installments,
+                     # Normalized so the same logical request replays under
+                     # its idempotency key whether the shares arrived as a
+                     # JSON string, a comma list or an array.
+                     "shares": _shares(shares, installments)}, work)

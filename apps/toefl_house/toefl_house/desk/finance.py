@@ -515,10 +515,16 @@ def work():
     if ((installment_terms or {}).get("installment_cadence") == "Solar Hijri Month"
             and int(installment_terms.get("installments_allowed") or 0)):
         grace = int(installment_terms.get("payment_grace_days") or 0)
+        # The contracted day is the Owner's value (1 unless another day such
+        # as the 25th is set). Proposing the month's first day under a 25th
+        # policy would offer an action the command must refuse.
+        due_day = int(installment_terms.get("installment_due_day") or 1)
         first_solar_due = solar_calendar.monthly_due_dates(
-            solar_calendar.month_key(day), 1, grace)[0].isoformat()
+            solar_calendar.month_key(day), 1, grace, due_day)[0].isoformat()
+        day_label = ("first of each month" if due_day == 1
+                     else f"day {due_day} of each month")
         installment_message = (
-            f"Solar Hijri monthly, first of each month + {grace} grace days; "
+            f"Solar Hijri monthly, {day_label} + {grace} grace days; "
             f"up to {int(installment_terms.get('max_installments') or 0)} charges")
     else:
         first_solar_due = None

@@ -268,7 +268,10 @@ class BillingPolicyTests(unittest.TestCase):
             # A version that does not mention installments leaves them OFF:
             # splitting is never inferred from the absence of a decision.
             "installments_allowed": 0, "max_installments": 1,
-            "installment_interval_days": 0})
+            "installment_interval_days": 0,
+            # Neither contractual unequal shares nor a non-default due day is
+            # inferred from a version that does not mention them.
+            "allow_unequal_installments": 0})
 
     def test_owner_can_version_solar_month_due_dates_and_grace(self):
         self._existing_policy()
@@ -302,6 +305,61 @@ class BillingPolicyTests(unittest.TestCase):
                         installment_interval_days=0,
                         installment_cadence=cadence,
                         payment_grace_days=grace)
+
+    def test_owner_can_authorize_unequal_shares_and_a_contracted_due_day(self):
+        """The 2026-10-28 Owner addendum: 60/40 style shares and the 25th.
+
+        Both are effective-dated values the Owner must state; neither is
+        inferred, and the governing read exposes exactly what was recorded.
+        """
+        self._existing_policy()
+        self.policies.set_billing_policy_version(
+            "test-key-billpol-shares01", "BILL-POL", "2026-09-23",
+            "Owner approves unequal contractual installments", 90, 30, "any",
+            installments_allowed=1, max_installments=2,
+            installment_interval_days=0,
+            installment_cadence="Solar Hijri Month", payment_grace_days=5,
+            installment_due_day=25, allow_unequal_installments=1)
+        self.today = "2026-09-23"
+        terms = self.policies.governing_billing_terms()
+        self.assertEqual(terms["installment_due_day"], 25)
+        self.assertEqual(terms["allow_unequal_installments"], 1)
+        self.assertEqual(terms["payment_grace_days"], 5)
+        result = self.policies._policy_result(self.policy_doc)
+        self.assertEqual(result["governing_installment_due_day"], 25)
+        self.assertEqual(result["governing_allow_unequal_installments"], 1)
+
+    def test_unequal_shares_need_installments_enabled_on_the_same_version(self):
+        self._existing_policy()
+        with self.assertRaises(_ValidationError):
+            self.policies.set_billing_policy_version(
+                "test-key-billpol-shares02", "BILL-POL", "2026-09-23",
+                "Unequal shares without installments", 90, 30, "any",
+                installments_allowed=0, max_installments=1,
+                installment_interval_days=0, allow_unequal_installments=1)
+
+    def test_due_day_shapes_are_refused_rather_than_guessed(self):
+        self._existing_policy()
+        cases = (
+            # A due day means nothing without exact Solar Hijri months.
+            dict(installment_cadence="Days", installment_due_day=25),
+            # Hoot has 29 days, so 30 cannot be honoured in every month.
+            dict(installment_cadence="Solar Hijri Month",
+                 installments_allowed=1, max_installments=2,
+                 installment_due_day=30),
+            dict(installment_cadence="Solar Hijri Month",
+                 installments_allowed=1, max_installments=2,
+                 installment_due_day=-1),
+        )
+        for index, extra in enumerate(cases):
+            with self.subTest(extra=extra):
+                with self.assertRaises(_ValidationError):
+                    self.policies.set_billing_policy_version(
+                        f"test-key-billpol-dueday0{index}", "BILL-POL",
+                        "2026-09-23", "Owner rejects an impossible due day",
+                        90, 30, "any",
+                        max_installments=extra.pop("max_installments", 1),
+                        installment_interval_days=0, **extra)
 
     def test_bad_bounds_are_refused(self):
         self._existing_policy()

@@ -814,6 +814,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "posting_date", label: "Posting date", fieldtype: "Date", reqd: 1 },
 			{ fieldname: "first_due_date", label: "First due date", fieldtype: "Date", reqd: 1 },
 			{ fieldname: "installments", label: "Installments (owner policy)", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "shares", label: "Contractual shares % (optional, owner policy)", fieldtype: "Small Text", description: "Leave empty for an equal split. Negotiated unequal installments such as 60,40 must total 100% and are refused unless the governing Owner billing policy authorizes them. The plan always totals the full net tuition." },
 		],
 		"toefl_house.finance.cashier.reconcile_cashier_day": [
 			{ fieldname: "company", label: "Company", fieldtype: "Data", reqd: 1, read_only: 1 },
@@ -837,6 +838,8 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "installment_interval_days", label: "Installment interval (days)", fieldtype: "Int", reqd: 1 },
 			{ fieldname: "installment_cadence", label: "Installment schedule", fieldtype: "Select", options: ["Days", "Solar Hijri Month"].join("\n"), default: "Days", reqd: 1, description: "Choose Solar Hijri Month for Afghan month-based tuition. Days preserves existing plans." },
 			{ fieldname: "payment_grace_days", label: "Shamsi month payment grace (days)", fieldtype: "Int", default: 0, reqd: 1, description: "Only used for Solar Hijri Month, from 0 to 15 days after first day of the month." },
+			{ fieldname: "installment_due_day", label: "Contracted Shamsi due day", fieldtype: "Int", default: 0, description: "0 keeps the first of the month (preferred). 25 sets the Owner-approved 25th of the starting month. Only used for Solar Hijri Month; the day is never clamped." },
+			{ fieldname: "allow_unequal_installments", label: "Allow unequal installments", fieldtype: "Check", default: 0, description: "Authorizes contractual unequal shares such as 60/40 that must still total the full net tuition. Off by default." },
 		],
 		"toefl_house.finance.policies.set_billing_policy_status": [
 			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },

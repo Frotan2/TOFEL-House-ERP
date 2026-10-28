@@ -101,6 +101,20 @@
    "description": "Days after first day of each Solar Hijri month when payment falls due (0-15); only valid for Solar Hijri Month cadence."
   },
   {
+   "default": "0",
+   "description": "Contracted Solar Hijri day of the month for installment dues: 1 = first of the month (preferred for the following month), 25 = the Owner-approved 25th of the starting month. Only used with Solar Hijri Month cadence. Never clamped; max 29.",
+   "fieldname": "installment_due_day",
+   "fieldtype": "Int",
+   "label": "Installment due day (Solar Hijri)"
+  },
+  {
+   "default": "0",
+   "description": "Authorize contractual UNEQUAL installment shares (for example 60/40) that must still total the full net tuition. Off unless an effective version turns it on; equal splits remain the default.",
+   "fieldname": "allow_unequal_installments",
+   "fieldtype": "Check",
+   "label": "Allow unequal installments"
+  },
+  {
    "fieldname": "section_break_1",
    "fieldtype": "Section Break",
    "label": "Change control"

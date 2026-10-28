@@ -69,6 +69,22 @@ def load_installments():
             raise ValueError("Payment grace days require Solar Hijri Month cadence")
         return cadence, grace
     policies.validate_shamsi_cadence = validate_cadence
+    def validate_due_day(cadence, due_day):
+        # Mirrors policies.validate_due_day: a due day is contractual and is
+        # refused rather than clamped when no Solar Hijri month can honour it.
+        if isinstance(due_day, bool) or not isinstance(due_day, int):
+            raise ValueError("Installment due day must be a whole number")
+        if cadence != "Solar Hijri Month":
+            if due_day:
+                raise ValueError(
+                    "An installment due day requires Solar Hijri Month cadence")
+            return 0
+        if due_day == 0:
+            return 1
+        if not 1 <= due_day <= 29:
+            raise ValueError("Installment due day must be between 1 and 29")
+        return due_day
+    policies.validate_due_day = validate_due_day
     sys.modules["toefl_house.finance.policies"] = policies
 
     package = types.ModuleType("toefl_house")
@@ -117,6 +133,72 @@ class SplitArithmeticTests(unittest.TestCase):
                     self.module.split_amounts(100, parts)
 
 
+class ApprovedShareSplitTests(unittest.TestCase):
+    """Owner-approved unequal contractual installments (e.g. 60/40).
+
+    The shares are percentages of the net tuition and must total exactly
+    100%; the native documents must still add up to the configured price to
+    the cent, and a share that would carry no money is refused rather than
+    dropped.
+    """
+
+    def setUp(self):
+        self.module = load_installments()
+
+    def test_approved_ratios_split_exactly(self):
+        cases = (
+            (25000, [50, 50], [12500.0, 12500.0]),
+            (25000, [60, 40], [15000.0, 10000.0]),
+            (25000, ["60.0000", "40.0000"], [15000.0, 10000.0]),
+            (20000, [70, 20, 10], [14000.0, 4000.0, 2000.0]),
+        )
+        for total, shares, expected in cases:
+            with self.subTest(total=total, shares=shares):
+                amounts = self.module.split_amounts_by_shares(total, shares)
+                self.assertEqual(amounts, expected)
+                self.assertEqual(round(sum(amounts), 2), round(float(total), 2))
+
+    def test_remainder_keeps_the_schedule_exact_to_the_cent(self):
+        for total, shares in ((100, [60, 40]), (0.07, [50, 50]),
+                              (999.99, [33, 33, 34]), (12345.67, [25, 25, 50])):
+            with self.subTest(total=total, shares=shares):
+                amounts = self.module.split_amounts_by_shares(total, shares)
+                self.assertEqual(len(amounts), len(shares))
+                self.assertEqual(round(sum(amounts), 2), round(float(total), 2))
+                self.assertTrue(all(amount > 0 for amount in amounts))
+
+    def test_shares_must_total_exactly_one_hundred_percent(self):
+        for shares in ([60, 39], [60, 41], [50, 50, 1], [99.9999, 0.0001][::-1][:1]):
+            with self.subTest(shares=shares):
+                with self.assertRaises(ValueError):
+                    self.module.split_amounts_by_shares(1000, shares)
+
+    def test_unapproved_share_shapes_are_refused(self):
+        for shares in ([], [0, 100], [-10, 110], [True, 99],
+                       [33.33333, 66.66667], ["sixty", 40], None, 60,
+                       [100, 0]):
+            with self.subTest(shares=shares):
+                with self.assertRaises((ValueError, TypeError)):
+                    self.module.split_amounts_by_shares(1000, shares)
+
+    def test_a_share_too_small_to_carry_money_is_refused(self):
+        # 1% of 0.50 is half a cent: it cannot become a receivable.
+        with self.assertRaisesRegex(ValueError, "positive amount"):
+            self.module.split_amounts_by_shares(0.02, [50, 25, 25])
+
+    def test_component_plan_with_shares_totals_the_configured_price(self):
+        rows = [{"fees_category": "SYN-Tuition", "amount": 25000.0,
+                 "discount": None},
+                {"fees_category": "SYN-Books", "amount": 5000.0,
+                 "discount": None}]
+        plan = self.module.build_installment_components(rows, 2, [60, 40])
+        self.assertEqual([self.module._plan_total(part) for part in plan],
+                         [18000.0, 12000.0])
+        self.assertEqual(
+            round(sum(self.module._plan_total(part) for part in plan), 2),
+            30000.0)
+
+
 class ScheduleTests(unittest.TestCase):
     def setUp(self):
         self.module = load_installments()
@@ -137,6 +219,36 @@ class ScheduleTests(unittest.TestCase):
         self.assertEqual(self.module.schedule_due_dates(
             "2026-09-26", 2, 0, "Solar Hijri Month", 3),
             ["2026-09-26", "2026-10-26"])
+
+    def test_owner_selected_solar_due_day_is_honoured(self):
+        # The Owner-approved alternative to the month's first day: the 25th
+        # of each starting Afghan month, with the configured grace on top.
+        # Aqrab 1405 starts 2026-10-23, so its 25th is 2026-11-16 and Qaws
+        # 1405 starts 2026-11-22, so its 25th is 2026-12-16.
+        self.assertEqual(self.module.schedule_due_dates(
+            "2026-11-16", 2, 0, "Solar Hijri Month", 0, 25),
+            ["2026-11-16", "2026-12-16"])
+        # The configured grace applies on top of the contracted day.
+        self.assertEqual(self.module.schedule_due_dates(
+            "2026-11-20", 2, 0, "Solar Hijri Month", 4, 25),
+            ["2026-11-20", "2026-12-20"])
+        # A first due date that is not the contracted day is still refused.
+        with self.assertRaisesRegex(ValueError, "day 25"):
+            self.module.schedule_due_dates(
+                "2026-10-28", 2, 0, "Solar Hijri Month", 3, 25)
+
+    def test_due_day_never_exists_beyond_the_shortest_month(self):
+        # Hoot has 29 days in a common year, so 30 could not be honoured in
+        # every month of a plan. It is refused, never silently clamped.
+        for day in (0, 30, 31, -1, True, "25"):
+            with self.subTest(day=day):
+                with self.assertRaises((ValueError, TypeError)):
+                    self.module.schedule_due_dates(
+                        "2026-10-25", 2, 0, "Solar Hijri Month", 0, day)
+
+    def test_due_day_requires_the_solar_cadence(self):
+        with self.assertRaisesRegex(ValueError, "Solar Hijri Month"):
+            self.module.schedule_due_dates("2026-10-24", 2, 30, "Days", 0, 25)
 
     def test_unaligned_first_solar_due_date_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "first Solar Hijri"):
@@ -207,6 +319,29 @@ class PlanTermsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "first Solar Hijri"):
             self.module.plan_terms(terms, 2, "2026-10-26", "2026-10-24")
 
+    def test_policy_contracted_due_day_drives_the_schedule(self):
+        # The Owner's 25th-of-the-month choice is a policy value, so a plan
+        # scheduled from those terms must bill on the 25th of each month.
+        terms = dict(self.enabled, installment_interval_days=0,
+                     installment_cadence="Solar Hijri Month",
+                     payment_grace_days=0, installment_due_day=25)
+        count, interval, dates = self.module.plan_terms(
+            terms, 2, "2026-11-16", "2026-11-16")
+        self.assertEqual((count, interval), (2, 0))
+        self.assertEqual(dates, ["2026-11-16", "2026-12-16"])
+        # The month's first day is no longer the contracted day here.
+        with self.assertRaisesRegex(ValueError, "day 25"):
+            self.module.plan_terms(terms, 2, "2026-11-16", "2026-11-01")
+
+    def test_unspecified_due_day_keeps_the_first_of_the_month(self):
+        terms = dict(self.enabled, installment_interval_days=0,
+                     installment_cadence="Solar Hijri Month",
+                     payment_grace_days=0)
+        # Aqrab 1405 begins 2026-10-23; Qaws 1405 begins 2026-11-22.
+        _count, _interval, dates = self.module.plan_terms(
+            terms, 2, "2026-10-26", "2026-10-23")
+        self.assertEqual(dates, ["2026-10-23", "2026-11-22"])
+
     def test_fixed_day_mode_still_disallows_overdue_first_due(self):
         with self.assertRaisesRegex(ValueError, "cannot fall due"):
             self.module.plan_terms(self.enabled, 2, "2026-10-26", "2026-10-23")
@@ -219,6 +354,31 @@ class PlanTermsTests(unittest.TestCase):
             terms, 2, "2026-09-25", "2026-09-26")
         self.assertEqual((count, interval), (2, 0))
         self.assertEqual(dates, ["2026-09-26", "2026-10-26"])
+
+
+class ShareInputTests(unittest.TestCase):
+    """The desk form, a JSON string and an array must mean the same plan."""
+
+    def setUp(self):
+        self.module = load_installments()
+
+    def test_absent_shares_keep_the_equal_split(self):
+        for value in (None, "", "   ", []):
+            with self.subTest(value=value):
+                self.assertIsNone(self.module._shares(value, 2))
+
+    def test_equivalent_forms_normalize_to_the_same_list(self):
+        self.assertEqual(self.module._shares("60,40", 2), ["60", "40"])
+        self.assertEqual(self.module._shares("60; 40", 2), ["60", " 40"])
+        self.assertEqual(self.module._shares("[60, 40]", 2), [60, 40])
+        self.assertEqual(self.module._shares([60, 40], 2), [60, 40])
+        self.assertEqual(self.module._shares((60, 40), 2), [60, 40])
+
+    def test_a_scalar_is_not_a_share_list(self):
+        for value in (60, 40.0, True, {"shares": [60, 40]}):
+            with self.subTest(value=value):
+                with self.assertRaises(_ValidationError):
+                    self.module._shares(value, 2)
 
 
 class ComponentSplitTests(unittest.TestCase):
