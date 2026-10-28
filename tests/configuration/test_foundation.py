@@ -442,6 +442,8 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "validate_owner_operations_policy": "business_policy",
             "set_backup_enabled": "business_policy",
             "create_assessment_policy": "business_policy",
+            # Strict allowlist: new native grading-scale writes remain Owner-only.
+            "create_owner_grading_scale": "business_policy",
             "set_assessment_policy_version": "business_policy",
             "set_assessment_policy_status": "business_policy",
             "validate_assessment_policy": "business_policy",
