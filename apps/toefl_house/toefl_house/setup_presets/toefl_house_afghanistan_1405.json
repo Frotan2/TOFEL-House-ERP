@@ -17,7 +17,7 @@
     "no_private_keys_or_credentials": true
   },
   "institution": {
-    "display_name": "TOEFL House",
+    "display_name": "The TOEFL House",
     "currency": "AFN",
     "timezone": "Asia/Kabul",
     "calendar": "Afghan Solar Hijri",
@@ -26,12 +26,14 @@
       "start": "06:00",
       "end": "19:10"
     },
-    "legal_display_name_supplied": "The Tofel House",
+    "legal_display_name_supplied": "The TOEFL House",
     "dari_display_name": "خانه موفقیت",
     "legal_form": "Privately registered English language course under an individual natural person",
-    "legal_spelling_pending_document_verification": true,
+    "legal_spelling_pending_document_verification": false,
     "public_brand_alias": "TOEFL House",
-    "production_company_must_be_verified_from_license": true
+    "production_company_must_be_verified_from_license": true,
+    "official_english_name_owner_confirmed": true,
+    "official_name_source": "Explicit owner confirmation: English name on course registration/license"
   },
   "academic_years": [
     {
@@ -460,9 +462,21 @@
     "approve_refund_role": "General Manager",
     "execute_native_refund_role": "Finance Manager",
     "owner_approval_not_required_for_ordinary_withdrawal": true,
-    "refund_amount_and_eligibility_formula_status": "NEEDS_OWNER_DECISION",
+    "refund_amount_and_eligibility_formula_status": "APPROVED_CASE_BY_CASE_GENERAL_MANAGER",
     "must_record_receipt_ref_and_reason": true,
-    "no_refund_without_verified_receivable_and_original_payment": true
+    "no_refund_without_verified_receivable_and_original_payment": true,
+    "decision_policy": "Each withdrawal refund request reviewed individually; General Manager documents justification and approves a specific AFN amount; Finance Manager alone posts native authorized payout.",
+    "request_requires_original_payment_evidence": true,
+    "approver_and_payer_must_be_different_people": true,
+    "refund_amount_must_be_positive": true,
+    "cumulative_refunds_cannot_exceed_actual_collections": true,
+    "cumulative_refunds_exclude_cancelled_entries": true,
+    "cumulative_refunds_scoped_to_student_company_and_original_payment": true,
+    "no_automatic_proration_or_refund_entitlement": true,
+    "no_auto_payout_on_approval": true,
+    "preserve_denials_reversals_and_history": true,
+    "native_fees_credit_note_and_payment_entry_path_requires_acceptance": true,
+    "live_workflow_is_not_enabled_by_this_preset": true
   },
   "policy_revision": {
     "approved_history_immutable": true,
@@ -484,7 +498,9 @@
       "refund_manager_approves_finance_executes",
       "discount_approval_tiers_and_eligible_family",
       "per_class_capacity_15_to_30",
-      "individual_anniversary_based_online_month"
+      "individual_anniversary_based_online_month",
+      "case_by_case_refund_GM_approval_Finance_payout_cap_actual_collected",
+      "official_english_name_The_TOEFL_House"
     ],
     "engineering_proposals_pending_runtime_acceptance": [
       "alphabetic_grade_thresholds",
