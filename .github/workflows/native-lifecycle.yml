@@ -10,6 +10,9 @@ on:
       - .github/workflows/native-lifecycle.yml
       - apps/**
       - tools/native/**
+      # Recheck native security whenever an advisory disposition changes.
+      - docs/engineering/evidence/sec-deps-01/**
+      - tests/security/**
       # Native HRMS evidence must be rerun when the payroll regression
       # contracts change, even if application source is unchanged.
       - tests/teaching/test_compensation_guards.py
