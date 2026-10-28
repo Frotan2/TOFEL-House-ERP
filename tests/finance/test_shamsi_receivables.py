@@ -141,6 +141,35 @@ class CrossMonthReceivables(unittest.TestCase):
         self.assertEqual(statement["collections_in_month"],Decimal("0.00"))
         self.assertEqual(statement["overdue_as_of_month_end"],Decimal("1000.00"))
 
+    def test_missing_or_malformed_native_fees_identity_is_rejected(self):
+        for invalid in (None, "", "  ", 0, False):
+            with self.subTest(identity=invalid):
+                invoice = dict(self.fees[0], name=invalid)
+                with self.assertRaisesRegex(ValueError, "native Fees identity"):
+                    self.r.invoice_balances([invoice], [], "2026-10-25")
+
+    def test_missing_or_malformed_native_payment_and_reference_id_is_rejected(self):
+        for field in ("name", "reference_name"):
+            for invalid in (None, "", "  ", 0, False):
+                with self.subTest(field=field, identity=invalid):
+                    receipt = dict(self.allocations[0], **{field: invalid})
+                    with self.assertRaisesRegex(ValueError, "native .*identity"):
+                        self.r.invoice_balances(self.fees, [receipt], "2026-10-25")
+
+    def test_debt_allocation_proposal_requires_real_native_fees_id(self):
+        for invalid in (None, "", "  ", 0, False):
+            with self.subTest(identity=invalid):
+                invoice = {"name": invalid, "due_date": "2026-09-23",
+                           "outstanding_amount": 400}
+                with self.assertRaisesRegex(ValueError, "native Fees identity"):
+                    self.r.suggest_oldest_debt_allocation([invoice], 200)
+
+    def test_native_id_is_not_rewritten_or_coerced_to_a_text_placeholder(self):
+        # Legitimate document names remain unchanged: no trim/normalization.
+        invoice = dict(self.fees[0], name="F-MIZAN")
+        self.assertIn("F-MIZAN", self.r.invoice_balances(
+            [invoice], [], "2026-10-25"))
+
 
 if __name__ == "__main__":
     unittest.main()
