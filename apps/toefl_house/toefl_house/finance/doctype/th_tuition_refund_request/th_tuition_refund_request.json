@@ -56,7 +56,7 @@
     },
     {
       "fieldname": "reason",
-      "fieldtype": "Small Text",
+      "fieldtype": "Text",
       "label": "Reason",
       "reqd": 1
     },
