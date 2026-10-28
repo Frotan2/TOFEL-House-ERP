@@ -8,6 +8,7 @@ production site. All tests use synthetic data in disposable directories and
 mock the native Frappe restore itself; no live site is touched.
 """
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import importlib.util
 import io
 import json
@@ -419,6 +420,26 @@ class EmergencyRestoreTests(unittest.TestCase):
                 self._run_authorized()
         native.assert_not_called()
         self.assertEqual(list(outside.iterdir()), [])
+
+    def test_concurrent_audit_writers_preserve_one_verifiable_chain(self):
+        state_dir = self.restore._ensure_state_dir(self.site)
+
+        def write_one(number):
+            self.restore._append_audit(
+                state_dir, {"site": self.site, "target": "disposable",
+                            "seq": number, "outcome": "synthetic"})
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            list(pool.map(write_one, range(24)))
+        lines = (state_dir / "audit.jsonl").read_text(
+            encoding="utf-8").splitlines()
+        self.assertEqual(len(lines), 24)
+        # This append verifies the entire existing chain and fails closed if
+        # concurrent writers have lost or interleaved any predecessor.
+        self.restore._append_audit(
+            state_dir, {"site": self.site, "outcome": "verified"})
+        self.assertEqual(
+            len((state_dir / "audit.jsonl").read_text().splitlines()), 25)
 
     def test_disposable_restore_is_isolated_from_the_production_site(self):
         disposable = "placement-restore.localhost"
