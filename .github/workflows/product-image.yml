@@ -9,6 +9,8 @@ on:
   push:
     branches:
       - main
+      # Qualification-only release candidate; tagged publication remains gated.
+      - work
       # Release-critical fixes must qualify before integration, not first
       # discover image/runtime failures after reaching main.
       - 'fix/**'
