@@ -58,11 +58,17 @@ Owner requested 17:00 local backup. The current code already defaults independen
 ## Required next engineering slices before any production installer is accepted
 
 1. Integrate a guided `Owner Initial Setup` page into the launcher/Desk: inspect -> display differences -> owner approve each proposed section -> execute guarded native commands idempotently -> verify exact expected records. Existing test data must not be treated as final course data.
-2. Add a native Grading Scale creation/linking path with precisely authorized access and Frappe integration tests. Do not give broad System Manager rights merely to avoid `Page` permission errors.
+2. Qualify the new guarded native Grading Scale creation/action with real Frappe integration, native submit and denial tests; separately test linking it in a new assessment policy version and do not broaden Owner permissions.
 3. Build an effective-dated, editable-as-new-version policy editor for academic, fees, classes and owner operations. An approved snapshot remains immutable. The owner backup policy must remain held until real-machine gates are satisfied.
 4. Qualify the release-candidate Solar-Hijri monthly cadence in actual billed native Fees, including late joins, partial payments, reversals, outstanding invoice reporting and precise GL totals against one authoritative semester price. Prevent automatic discount grants and cross-family progression.
 5. Add capacity, schedules, per-gender shifts and two-instructor GE mapping **from actual site staffing**, never fictional employees. Validate Student Group, Instructor, Payroll/HRMS, permissions and teacher attendance.
 6. Bundle an installable signed/offline Windows product, run fresh customer-PC E2E acceptance with synthetic records, roles (Reception/Finance/Academic/Instructor/Owner), cashier/books/refunds/payroll and isolated backup/restore; deliver only after protected CI and explicit Owner approval.
+
+## Owner Grading Scale access — native and governed
+
+The pinned Education Grading Scale DocType grants the native `Academics User` role full CRUD/submit access; the Course Owner does **not** inherit this broad native permission. The new `toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale` POST command uses the existing `business_policy` Course Owner command gate, validates a bounded list of unique native grade codes/thresholds (mandatory 0%), creates a **new** native scale with a mandatory change reason, submits the native document and writes a configuration audit receipt. It refuses duplicate scale names, never patches an older submitted scale, and never grants the Owner generic Academics User or Page permission.
+
+The Academic Setup read-only preview now offers a prefilled **Create new grading scale** action, requiring an explicit reason and user submission. Approved changes to thresholds require a **new unique scale name**, followed by separately reviewed `set_assessment_policy_version` linking to the new scale; earlier assessment versions retain the old link. Native Frappe/Windows acceptance for actual insert/submit, permission denial and resulting grade evaluation **remains mandatory before merge or production**. The new role-scoped route is not live on the personal test PC until a qualified update is installed.
 
 ## 2026-10-28 continued safety fixes
 
