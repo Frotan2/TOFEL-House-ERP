@@ -7957,7 +7957,48 @@ def main():
                 immediate_student_reduction=100,handover_student_change=0,counter_net=0,
                 main_cash_increase=100,idempotent=True,temporary_shares_removed=True,
                 unauthorized_read_denied=True,second_handover_denied=True)
-        check('reception-native-http-cash-receipt-correction-handover',traced(reception_cash_cycle))
+        reception_proof=check('reception-native-http-cash-receipt-correction-handover',traced(reception_cash_cycle))
+        def tuition_refund_read_list_parity():
+            # A real submitted/amended collection is the source of the
+            # synthetic refund request; no refund money is ever moved.
+            from toefl_house.finance import tuition_refund_commands as tuition_refund_cmd
+            frappe.set_user('Administrator')
+            fee=frappe.db.get_value('Payment Entry Reference',
+                {'parent':reception_proof['amended_receipt'],
+                 'reference_doctype':'Fees'},'reference_name')
+            assert fee,'Synthetic tuition receipt is missing its native Fees allocation'
+            original=frappe.db.get_value('Fees',fee,['student','company'],as_dict=True)
+            assert original and original.student and original.company
+            created=as_user('finance_officer',lambda:tuition_refund_cmd.request_tuition_refund(
+                'native_refund_visibility_0001',original.student,original.company,
+                fee,'50.00','SYN native refund visibility case',
+                'Synthetic paid Fees allocation and documented review reason'))
+            name=created['name']
+            assert created['status']=='Requested'
+            dt='TH Tuition Refund Request'
+            allowed=('finance_officer','finance_auditor','general_manager','finance_manager')
+            for label in allowed:
+                def allowed_read():
+                    doc=frappe.get_doc(dt,name)
+                    assert doc.has_permission('read'),(label,'direct document read denied')
+                    rows=frappe.get_list(dt,filters={'name':name},fields=['name'])
+                    assert [row.name for row in rows]==[name],(label,'list/read mismatch',rows)
+                as_user(label,allowed_read)
+            for label in ('publisher','outsider'):
+                def refused_read():
+                    doc=frappe.get_doc(dt,name)
+                    assert not doc.has_permission('read'),(label,'unexpected document access')
+                    try:
+                        rows=frappe.get_list(dt,filters={'name':name},fields=['name'])
+                    except frappe.PermissionError:
+                        rows=[]
+                    assert not rows,(label,'unauthorized refund list disclosure')
+                as_user(label,refused_read)
+            frappe.set_user('Administrator')
+            assert frappe.db.get_value(dt,name,'status')=='Requested'
+            return {'request':name,'allowed_role_count':len(allowed),
+                    'unauthorized_roles_denied':2,'no_refund_payout':True}
+        check('native-tuition-refund-list-document-role-parity',traced(tuition_refund_read_list_parity))
         report['status']='pass'
 
     except Exception as exc:

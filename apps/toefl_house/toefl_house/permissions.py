@@ -524,6 +524,12 @@ def _query_role(kind, user=None):
                                  "Finance Officer", "Finance Auditor"} else "1=0"
     if kind in ("correction_policy", "correction_request"):
         return "1=1" if roles & {"Finance Officer", "Finance Auditor"} else "1=0"
+    # A refund request must have the same read/list role gate. Check this
+    # before Placement Publisher's broad placement-only fallback; Company
+    # and Branch restrictions are still added by query() and native Frappe.
+    if kind == "tuition_refund_request":
+        return "1=1" if roles & {"Finance Officer", "Finance Auditor",
+                                 "General Manager", "Finance Manager"} else "1=0"
     # Cashier day closes: the cashier who signs them, the auditor who reviews
     # them, and the Finance Manager whose desk summarises them.
     if kind == "cashier_day":

@@ -5,9 +5,10 @@ they lock the Fees row and the request row (``for update``), re-prove live
 facts against the native ledger at each step, enforce Company scope
 (``require_finance_company``) and Branch scope (``command_scope`` via
 ``_execute``), and record the decision on the ``TH Tuition Refund Request``
-record. The command roles are Finance Officer (command gate); approve/deny
-additionally require General Manager and pay additionally requires
-Finance Manager, checked in-command (dual key, like correction approvals).
+record. Request creation requires Finance Officer; approve/deny
+require General Manager, and payout requires a different Finance Manager.
+These are distinct command roles (no Finance Officer prerequisite for the
+approver or payer), and native Fees payout remains blocked.
 
 Payout is deliberately NOT posted here: ``pay_tuition_refund`` runs the
 full preflight and then raises the native-mechanism blocker, leaving the
