@@ -98,6 +98,14 @@ class PureSelectionTests(unittest.TestCase):
                 "overall_percent": percent, "published_on": published,
                 "attempt": attempt}
 
+    def test_incomplete_result_cannot_displace_a_published_failure(self):
+        failure = self.attempt("FAIL", 46, attempt=1)
+        failure["outcome"] = "Fail"
+        incomplete = self.attempt("INCOMPLETE", 98, attempt=2)
+        incomplete["outcome"] = "Incomplete"
+        self.assertEqual(
+            grading.select_best_attempt([incomplete, failure])["name"], "FAIL")
+
     def test_a_lower_percent_pass_beats_a_higher_percent_fail(self):
         passed = self.attempt("PASS", 61, attempt=1)
         failed = self.attempt("HIGHER-FAIL", 85, attempt=2)
