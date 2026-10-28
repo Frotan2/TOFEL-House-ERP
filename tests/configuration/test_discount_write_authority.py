@@ -5,6 +5,7 @@ context implementation used by configuration_audit, with an isolated Frappe
 PermissionError stub. No real student/financial data is touched.
 """
 import ast
+import importlib.util
 import json
 import sys
 import types
@@ -14,7 +15,13 @@ from pathlib import Path
 APP = Path(__file__).resolve().parents[2] / "apps" / "toefl_house"
 sys.path.insert(0, str(APP))
 from toefl_house.configuration import rules as config_rules  # noqa: E402
-from toefl_house.academic import rules as academic_rules  # noqa: E402
+
+# The academic package's __init__ imports Frappe and cannot be used by the
+# Frappe-free Owned Suite. Load the pure rules file without importing it.
+pure_spec = importlib.util.spec_from_file_location(
+    "offline_discount_rules", APP / "toefl_house/academic/rules.py")
+academic_rules = importlib.util.module_from_spec(pure_spec)
+pure_spec.loader.exec_module(academic_rules)
 
 CONTROLLER = APP / "toefl_house/academic/doctype/th_discount_rule/th_discount_rule.py"
 SCHEMA = APP / "toefl_house/academic/doctype/th_discount_rule/th_discount_rule.json"
