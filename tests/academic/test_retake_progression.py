@@ -58,10 +58,11 @@ class RetakeCase(AcademicCase):
         self.counter += 1
         return f"key-retake-{label}-{self.counter}"
 
-    def publish(self, scores, effective_from="2026-10-01", policy="SYN-GEN-ENG"):
-        """Open, mark, submit, review, approve and publish one book."""
+    def publish(self, scores, effective_from="2026-10-01", policy="SYN-GEN-ENG",
+                retake_student=""):
+        """Publish one first-class or individually authorized retake book."""
         book = self.book(key=self.key("open"), effective_from=effective_from,
-                         policy=policy)
+                         policy=policy, retake_student=retake_student)
         self.h.record(book["name"], marks_for(scores), key=self.key("marks"))
         self.h.acting_as(INSTRUCTOR)
         self.h.assessment.submit_assessment_book(self.key("submit"), book["name"])
@@ -275,15 +276,15 @@ class BookGateTests(RetakeCase):
         result = self.results_for("SYN-STU-1")[1]
         self.h.today = DAY_7
         self.retake_decision(result["name"])
-        second = self.book(key=self.key("open2"))
+        second = self.book(key=self.key("open2"), retake_student="SYN-STU-1")
         self.assertEqual(second["attempt"], 2)
         with self.assertRaises(ValidationError) as ctx:
-            self.book(key=self.key("open3"))
+            self.book(key=self.key("open3"), retake_student="SYN-STU-1")
         self.assertIn("already in progress", str(ctx.exception))
 
     def test_a_preopened_book_cannot_publish_as_an_unauthorized_retake(self):
         first = self.book(key=self.key("open1"))
-        second = self.book(key=self.key("open2"))
+        second = self.book(key=self.key("open2"), retake_student="SYN-STU-1")
         # Publish the first book (all fail); the second book was opened
         # before any result existed, so it opened freely — but publishing
         # it now would be an unauthorized further attempt.
@@ -311,10 +312,10 @@ class BookGateTests(RetakeCase):
 
     def test_third_unpublished_class_book_is_refused(self):
         first = self.book(key=self.key("open1"))
-        second = self.book(key=self.key("open2"))
+        second = self.book(key=self.key("open2"), retake_student="SYN-STU-1")
         self.assertEqual((first["attempt"], second["attempt"]), (1, 2))
         with self.assertRaises(ValidationError) as ctx:
-            self.book(key=self.key("open3"))
+            self.book(key=self.key("open3"), retake_student="SYN-STU-1")
         self.assertIn("third attempt", str(ctx.exception))
 
     def test_open_and_publish_lock_the_native_class_row(self):
@@ -340,26 +341,31 @@ class BookGateTests(RetakeCase):
         self.h.today = DAY_7
         with self.assertRaises(ValidationError):
             self.book(key=self.key("unapproved-alternate"),
-                      policy="SYN-ALTERNATE", effective_from="2026-10-01")
+                      policy="SYN-ALTERNATE", effective_from="2026-10-01",
+                      retake_student="SYN-STU-1")
         self.retake_decision(original["name"])
         second = self.book(key=self.key("approved-alternate"),
-                           policy="SYN-ALTERNATE", effective_from="2026-10-01")
+                           policy="SYN-ALTERNATE", effective_from="2026-10-01",
+                           retake_student="SYN-STU-1")
         self.assertEqual(second["attempt"], 2)
         with self.assertRaises(ValidationError):
             self.book(key=self.key("reused-alternate"),
-                      policy="SYN-GEN-ENG", effective_from="2026-10-01")
+                      policy="SYN-GEN-ENG", effective_from="2026-10-01",
+                      retake_student="SYN-STU-1")
 
     def test_out_of_order_legacy_book_is_never_published_as_a_retake(self):
         self.fail_book()
         first = self.results_for("SYN-STU-1")[1]
         self.h.today = DAY_7
         self.retake_decision(first["name"])
-        second = self.book(key=self.key("second"))
+        second = self.book(key=self.key("second"), retake_student="SYN-STU-1")
         self.assertEqual(second["attempt"], 2)
         # Simulate a historical migration carrying an old ordinal. A stale
         # book must never publish into the already-used attempt identity.
         self.h.store.docs["TH Assessment Book"][second["name"]]["attempt"] = 1
-        self.h.record(second["name"], self.h.full_marks(), key=self.key("marks"))
+        self.h.record(second["name"],
+                      self.h.full_marks(students=["SYN-STU-1"]),
+                      key=self.key("marks"))
         self.h.acting_as(INSTRUCTOR)
         self.h.assessment.submit_assessment_book(self.key("submit"), second["name"])
         self.h.acting_as(MANAGER)
@@ -370,7 +376,7 @@ class BookGateTests(RetakeCase):
         with self.assertRaises(ValidationError) as ctx:
             self.h.assessment.publish_assessment_results(
                 self.key("publish"), second["name"])
-        self.assertIn("out-of-order attempt", str(ctx.exception))
+        self.assertIn("exactly the second attempt ordinal", str(ctx.exception))
 
     def test_a_book_gate_wait_is_enforced_from_the_original_publication(self):
         # A separate policy with a 14-day wait governs this book, so the
@@ -395,11 +401,11 @@ class BookGateTests(RetakeCase):
         self.h.today = "2026-11-03"
         with self.assertRaises(ValidationError) as ctx:
             self.book(key=self.key("open2"), policy="SYN-WAIT14",
-                      effective_from="2026-10-01")
+                      effective_from="2026-10-01", retake_student="SYN-STU-1")
         self.assertIn("retake wait ends on", str(ctx.exception))
         self.h.today = DAY_14
         second = self.book(key=self.key("open2"), policy="SYN-WAIT14",
-                           effective_from="2026-10-01")
+                           effective_from="2026-10-01", retake_student="SYN-STU-1")
         self.assertEqual(second["attempt"], 2)
 
 
@@ -409,7 +415,9 @@ class LegitimateRetakeTests(RetakeCase):
         result = self.results_for("SYN-STU-1")[1]
         self.h.today = DAY_7
         self.retake_decision(result["name"])
-        self.publish({"SYN-STU-1": PASS, "SYN-STU-2": PASS, "SYN-STU-3": PASS})
+        self.publish({"SYN-STU-1": PASS}, retake_student="SYN-STU-1")
+        self.assertEqual(len(self.results_for("SYN-STU-2")), 1)
+        self.assertEqual(len(self.results_for("SYN-STU-3")), 1)
         retaken = self.results_for("SYN-STU-1")[2]
         self.assertEqual(retaken["outcome"], "Pass")
         decision = self.decide(retaken["name"], "Promote", "Retake passed")
@@ -423,13 +431,15 @@ class LegitimateRetakeTests(RetakeCase):
         result = self.results_for("SYN-STU-1")[1]
         self.h.today = DAY_7
         self.retake_decision(result["name"])
-        self.publish({"SYN-STU-1": PASS, "SYN-STU-2": PASS, "SYN-STU-3": PASS})
+        self.publish({"SYN-STU-1": PASS}, retake_student="SYN-STU-1")
+        self.assertEqual(len(self.results_for("SYN-STU-2")), 1)
+        self.assertEqual(len(self.results_for("SYN-STU-3")), 1)
         retaken = self.results_for("SYN-STU-1")[2]
         with self.assertRaises(ValidationError) as ctx:
             self.retake_decision(retaken["name"], reason="Second retake")
         self.assertIn("failed attempt", str(ctx.exception))
         with self.assertRaises(ValidationError) as ctx:
-            self.book(key=self.key("open3"))
+            self.book(key=self.key("open3"), retake_student="SYN-STU-1")
         self.assertIn("No approved retake", str(ctx.exception))
 
 
