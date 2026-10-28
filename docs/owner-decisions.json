@@ -83,7 +83,7 @@
   },
   "unresolved_business_inputs_not_reinterpreted": [
     "Future internet-hosted provider, hostname, DNS, and public-edge selection.",
-    "Deferred academic grading/progression, advanced guardian, tax, refund-term, calendar/transfer policy details, and metrics-steward policy remain unconfigured unless a later resolved decision explicitly supersedes that deferral.",
+    "Academic GE/EAP grading and same-level transfer are superseded only to the extent of Owner's 2026-10-28 addendum; advanced withdrawal/refund execution, specialist assessment, tax, guardian delegation and derived metrics stay held until qualified integration.",
     "Resolved RPO/RTO authorize engineering measurement; off-site backup is deferred future scope and is not a current release gate."
   ],
   "source_documents": [
@@ -537,7 +537,7 @@
   "owner_policy_addenda_2026_10_28": {
     "source": "Explicit Course Owner decisions in 2026-10-28 ChatGPT conversation",
     "status": "OWNER_CONFIRMED_BUSINESS_INPUTS_NOT_PRODUCTION_ACTIVATION",
-    "scope": "Qualified release candidate and new clean course-PC installation only; preserve previous immutable decision records",
+    "scope": "Owner-confirmed scoped business inputs including 2026-10-28 refund and English legal name; no production site activation",
     "supersession_note": "Supersedes D1 default deferral for the specific GE/EAP 60-percent, continuous/final assessment and one 7-day retake; grants restricted same-level class transfer as a new D5 Owner direction subject to implementing technical release and controlled approver. D3 refund routing is newly specified, but calculation and eligibility windows remain open. Does not supersede D7.",
     "academic": {
       "formal_programs": [
@@ -613,7 +613,17 @@
         "approving_role": "General Manager",
         "paying_role": "Finance Manager",
         "owner_approval_ordinary_case": false,
-        "amount_eligibility_and_refund_window": "UNRESOLVED_MUST_NOT_AUTO_REFUND"
+        "amount_eligibility_and_refund_window": "CASE_BY_CASE_GENERAL_MANAGER_APPROVAL_NO_FIXED_AUTO_REFUND_WINDOW",
+        "decision_basis": "General Manager documents the reason, evidence and approved AFN amount for each withdrawal refund; no automatic percentage, fixed window or proration is authorized.",
+        "approval_and_payment_must_use_distinct_staff": true,
+        "approved_refund_cannot_exceed_unreturned_verified_paid_amount": true,
+        "cap_basis": "Total actual submitted tuition collections for this student, company and original fee/payment references minus completed refunds; cancelled and unsubmitted collections do not count.",
+        "finance_must_independently_check_native_submitted_source_payments": true,
+        "finance_issues_documented_native_refund_only": true,
+        "never_pay_automatically_on_manager_approval": true,
+        "no_disbursement_before_manager_approval": true,
+        "conserve_payment_and_audit_history": true,
+        "release_gate": "Native Fees credit/refund mechanics and dual-role financial reconciliation require integration and independent Windows acceptance"
       }
     },
     "discounts": {
@@ -648,11 +658,13 @@
     },
     "tax_legal_identity": {
       "legal_form": "Natural person: individually registered English language training center",
-      "english_name_supplied": "The Tofel House",
+      "english_name_supplied": "The TOEFL House",
       "dari_name": "خانه موفقیت",
       "name_spelling_must_be_checked_against_license_before_company_creation": true,
       "tax_on_student_fee": "NOT_AUTOMATICALLY_ENABLED_OR_DECLARED_EXEMPT",
-      "official_authority_review_needed": true
+      "official_authority_review_needed": true,
+      "english_name_on_license_owner_confirmed": true,
+      "require_license_document_match_before_live_company_creation": true
     },
     "release": {
       "modifies_main": false,
