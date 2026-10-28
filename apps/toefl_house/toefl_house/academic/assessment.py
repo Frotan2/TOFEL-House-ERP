@@ -222,9 +222,18 @@ def _book_result(book, extra=None):
     return result
 
 
-def _attempt_rows(student_group, policy):
-    return frappe.get_all(BOOK, filters={"student_group": student_group, "policy": policy},
+def _attempt_rows(student_group, level_name):
+    # Ordinals belong to the class and academic level, never the pinned
+    # assessment policy. Changing policy must not reset retake consumption.
+    return frappe.get_all(BOOK, filters={"student_group": student_group,
+                                         "level": level_name},
                           fields=["name", "attempt"], order_by="attempt desc")
+
+
+def _lock_assessment_group(student_group):
+    """Serialize book opening/publication for this class in native MariaDB."""
+    frappe.db.sql("select name from `tabStudent Group` where name=%s for update",
+                  (student_group,))
 
 
 # --- Retake authorization for further books --------------------------------
@@ -255,7 +264,8 @@ def _current_published_by_student(student_group, level_name):
     return current
 
 
-def _retake_authorization(student_group, level_name, on_date, *, exclude_book=None):
+def _retake_authorization(student_group, level_name, on_date, *,
+                          next_attempt, exclude_book=None):
     """Is a further book for this class+level authorized, and by whom?
 
     Returns (True, student_name) for the first eligible retaker found, or
@@ -317,6 +327,13 @@ def _retake_authorization(student_group, level_name, on_date, *, exclude_book=No
                 blockers.append(
                     f"{student} attempt {attempt}: no retake rules are configured")
                 continue
+            effective = grading.effective_retake_rules(retakes)
+            if (attempt >= effective["max_attempts"]
+                    or int(next_attempt) != attempt + 1):
+                blockers.append(
+                    f"{student} attempt {attempt}: retake ordinal or total-attempt "
+                    "limit does not match the next assessment book")
+                continue
             wait_until = grading.wait_until_for_retake(
                 retakes.get("wait_days"), row.get("published_on") or "")
             if str(on_date) < wait_until:
@@ -357,6 +374,7 @@ def open_assessment_book(request_key, student_group, policy, effective_from="",
         group_name = _text(student_group, "Student group")
         policy_code = _text(policy, "Assessment policy")
         roster(group_name)
+        _lock_assessment_group(group_name)
         group = frappe.db.get_value(GROUP, group_name, ["program", "academic_year"],
                                     as_dict=True)
         level = _level_for_program(group.program if group else None)
@@ -384,7 +402,7 @@ def open_assessment_book(request_key, student_group, policy, effective_from="",
             plan = _text(assessment_plan, "Native assessment plan")
             if not frappe.db.exists(PLAN, plan):
                 raise frappe.ValidationError("Unknown native assessment plan")
-        existing = _attempt_rows(group_name, policy_code)
+        existing = _attempt_rows(group_name, level.name)
         next_attempt = (max(int(row["attempt"] or 0) for row in existing) + 1
                         if existing else 1)
         # A further book for a class+level that already has published
@@ -393,7 +411,8 @@ def open_assessment_book(request_key, student_group, policy, effective_from="",
         # yet is not a retake (see _retake_authorization), and the publish
         # gate below closes the pre-opened-book path.
         if _current_published_by_student(group_name, level.name):
-            allowed, reason = _retake_authorization(group_name, level.name, today)
+            allowed, reason = _retake_authorization(
+                group_name, level.name, today, next_attempt=next_attempt)
             if not allowed:
                 raise frappe.ValidationError(reason)
         policy_digest = digest({
@@ -911,6 +930,7 @@ def publish_assessment_results(request_key, book):
                 "approval is required first")
         if not doc.approved_by:
             raise frappe.ValidationError("Publication requires a recorded approval")
+        _lock_assessment_group(doc.student_group)
         if doc.submitted_by and doc.submitted_by == doc.approved_by:
             raise frappe.PermissionError(
                 "The submitting instructor cannot be the approving actor")
@@ -938,9 +958,16 @@ def publish_assessment_results(request_key, book):
         others = _current_published_by_student(doc.student_group,
                                                doc.get("level") or "")
         if any(row.get("book") != doc.name for row in others.values()):
+            # Historical/policy-migrated books cannot reuse an old ordinal.
+            highest = max(int(row.get("attempt") or 0) for row in others.values())
+            if int(doc.attempt or 0) != highest + 1:
+                raise frappe.ValidationError(
+                    "An assessment book uses a repeated or out-of-order attempt "
+                    "number for this class and level")
             allowed, reason = _retake_authorization(
                 doc.student_group, doc.get("level") or "",
-                frappe.utils.today(), exclude_book=doc.name)
+                frappe.utils.today(), next_attempt=int(doc.attempt),
+                exclude_book=doc.name)
             if not allowed:
                 raise frappe.ValidationError(reason)
         recorded = {}
