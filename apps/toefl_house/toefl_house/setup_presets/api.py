@@ -130,6 +130,17 @@ def preview_owner_initial_setup():
     _owner()
     snapshot = _snapshot()
     preview = preview_catalog(snapshot)
+    from toefl_house.setup_presets.preset import load_preset
+    import json
+    scale = load_preset()["assessment"]["grading_scale"]
+    preview["grading_scale_suggestion"] = {
+        "grading_scale_name": scale["name"],
+        "intervals": json.dumps([
+            {"grade_code": item["grade"], "threshold": item["min_percent"]}
+            for item in scale["grade_thresholds"]
+        ], separators=(",", ":")),
+        "exists": bool(frappe.db.exists("Grading Scale", scale["name"])),
+    }
     if preview["counts"]["review"] == 0:
         from toefl_house.setup_presets.catalog_plan import prepare_catalog_plan
         from toefl_house.setup_presets.installer import preview_digest
