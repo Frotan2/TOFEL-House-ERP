@@ -9,6 +9,12 @@
 - A Course Owner-only, read-only Frappe preview endpoint (`toefl_house.setup_presets.api.preview_owner_initial_setup`). It returns **READ_ONLY_PREVIEW**, `ready_to_apply=false`, existing/missing/conflicting rows, and unresolved decisions. It does **not** execute setup.
 - Offline unit tests (`python -m unittest discover -s tests/setup -p 'test_*.py'`).
 
+The Academic Setup Desk now offers **Check TOEFL House setup**, a read-only, Course Owner-scoped comparison of missing, matched and conflicting academic master records. The server produces an exact plan hash and a deterministic command sequence without writing anything.
+
+A guarded native **first-run catalog initializer** also exists internally under `toefl_house.setup_presets.installer.initialize_owner_catalog` (POST), but it is **disabled by default**. It requires BOTH site flags `toefl_house_customer_release_approved=true` and `toefl_house_owner_catalog_install_enabled=true`, a clean site with no student, admission, fees, payment, salary or sales records, Backup Control Off, exactly one Company with a default receivable account, the native Education Fee Component Item Group, an exact preflight plan hash and an explicit Owner confirmation. It calls only six guarded native academic commands, in one request transaction, creates **draft** fee structures and verifies the resulting catalog. It never posts an invoice or salary, approves a policy, enables tax/backup, or declares production ready. These flags must never be set to bypass the existing release HOLD; their eventual use requires separately qualified customer release and a clean-install acceptance.
+
+No tested, owner-facing **Apply** button is shipped yet. The code path requires real Frappe integration and Windows acceptance, including rollback and concurrent-request tests, before it can be exposed in the installer.
+
 **This is a first engineering slice, not an installed wizard, activation, or production approval.** Existing release and Owner recovery holds remain in force. Never silently seed a live site.
 
 ## Owner-defined academic and fee defaults (AFN)
