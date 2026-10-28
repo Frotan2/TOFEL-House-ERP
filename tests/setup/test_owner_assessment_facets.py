@@ -19,11 +19,19 @@ class TestProposedAssessmentFacets(unittest.TestCase):
             with self.subTest(program=program):
                 facets = build_assessment_facets(program)
                 clean = rules.validate_policy_facets(facets)
-                self.assertEqual(set(clean), set(rules.ASSESSMENT_FACETS))
                 self.assertEqual(sum(row["weight"] for row in clean["weights"]), 100)
-                self.assertEqual(clean["pass_rules"]["overall"]["value"], 65)
-                self.assertEqual(clean["progression"]["requires"][1]["role"],
-                                 "Academic Manager")
+                if program in ("GEN-ENG", "EAP"):
+                    self.assertEqual(set(clean), set(rules.ASSESSMENT_FACETS))
+                    self.assertEqual(clean["pass_rules"]["overall"]["value"], 60)
+                    self.assertEqual(clean["progression"]["requires"][1]["role"],
+                                     "Academic Manager")
+                    self.assertEqual(clean["retakes"]["max_attempts"], 2)
+                    self.assertEqual(clean["retakes"]["wait_days"], 7)
+                    self.assertEqual(clean["retakes"]["governing"], "best")
+                else:
+                    self.assertNotIn("pass_rules", clean)
+                    self.assertNotIn("progression", clean)
+                    self.assertNotIn("retakes", clean)
 
     def test_general_english_covers_five_levels(self):
         facets = build_assessment_facets("GEN-ENG")
@@ -46,6 +54,17 @@ class TestProposedAssessmentFacets(unittest.TestCase):
                              if w["component"].endswith("-CA")), 40)
         self.assertEqual(sum(w["weight"] for w in facets["weights"]
                              if w["component"].endswith("-FINAL")), 60)
+
+    def test_specialist_courses_never_generate_automatic_pass_fail_or_promotion(self):
+        preset = load_preset()
+        for family in preset["programs"]:
+            if family["progression_kind"] == "sequential":
+                continue
+            with self.subTest(code=family["code"]):
+                facets = build_assessment_facets(family["code"], preset)
+                self.assertNotIn("pass_rules", facets)
+                self.assertNotIn("progression", facets)
+                self.assertNotIn("retakes", facets)
 
     def test_unknown_program_refused(self):
         with self.assertRaises(ValueError):
