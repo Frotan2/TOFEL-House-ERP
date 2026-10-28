@@ -406,7 +406,7 @@ def _append_audit(state_dir: Path, record: dict) -> None:
                 with os.fdopen(os.open(audit_path, os.O_RDONLY | os.O_NOFOLLOW),
                                "rb") as audit_input:
                     for line in audit_input:
-                        if not line.endswith(b"\\n"):
+                        if not line.endswith(b"\n"):
                             raise RestoreInputError("emergency restore audit chain is invalid")
                         item = json.loads(line)
                         if not isinstance(item, dict):
@@ -418,11 +418,11 @@ def _append_audit(state_dir: Path, record: dict) -> None:
                                 or supplied_hash != hashlib.sha256(
                                     _canonical_document_bytes(stamped)).hexdigest()):
                             raise RestoreInputError("emergency restore audit chain is invalid")
-                        previous_hash = hashlib.sha256(line.rstrip(b"\\n")).hexdigest()
+                        previous_hash = hashlib.sha256(line.rstrip(b"\n")).hexdigest()
             entry = {**record, "prev_hash": previous_hash}
             entry["hash"] = hashlib.sha256(
                 _canonical_document_bytes(entry)).hexdigest()
-            line = _canonical_document_bytes(entry) + b"\\n"
+            line = _canonical_document_bytes(entry) + b"\n"
             with os.fdopen(os.open(audit_path,
                                    os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW,
                                    0o600), "ab") as audit_output:
