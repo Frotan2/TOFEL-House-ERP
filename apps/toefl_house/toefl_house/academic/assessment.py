@@ -309,6 +309,11 @@ def _retake_authorization(student_group, level_name, on_date, *,
             continue
         for attempt in sorted(by_student_attempt[candidate]):
             row = by_student_attempt[candidate][attempt]
+            if row.get("outcome") != "Fail":
+                blockers.append(
+                    f"{candidate} attempt {attempt}: outcome is {row.get('outcome')}, "
+                    "not Fail")
+                continue
             names = [item.get("name") for item in frappe.get_all(
                 RESULT, filters={"student": candidate, "level": level_name,
                                  "attempt": attempt}, fields=["name"])]
@@ -317,12 +322,8 @@ def _retake_authorization(student_group, level_name, on_date, *,
                                    "decision": "Retake", "status": "Approved"},
                 fields=["name"]) if names else []
             if not decisions:
-                blockers.append(f"{candidate} attempt {attempt}: no approved Retake decision")
-                continue
-            if row.get("outcome") != "Fail":
                 blockers.append(
-                    f"{candidate} attempt {attempt}: outcome is {row.get('outcome')}, "
-                    "not Fail")
+                    f"{candidate} attempt {attempt}: no approved Retake decision")
                 continue
             try:
                 policy_code = frappe.db.get_value(POLICY, row.get("policy"), "code")
