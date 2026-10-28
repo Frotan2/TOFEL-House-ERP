@@ -31,8 +31,20 @@ class FakeDB:
         if limit_page_length is None:
             raise AssertionError("A native get_all must have explicit bounds")
         records = self.datasets.get(doctype, [])
-        selected = [row for row in records
-                    if not filters or all(row.get(k) == v for k, v in filters.items())]
+        def accepts(row):
+            if not filters:
+                return True
+            for key, value in filters.items():
+                if isinstance(value, tuple):
+                    if len(value) != 2 or value[0] != "!=":
+                        raise AssertionError("Unsupported test filter")
+                    if row.get(key) == value[1]:
+                        return False
+                elif row.get(key) != value:
+                    return False
+            return True
+
+        selected = [row for row in records if accepts(row)]
         if order_by:
             key, direction = order_by.split()[:2]
             selected.sort(key=lambda row: row.get(key) or "",
@@ -121,6 +133,20 @@ class SnapshotSafetyTests(unittest.TestCase):
         })
         state = actual_snapshot_functions(db)["_snapshot"]()
         self.assertIn("1405", state["tuition"]["PRE-STARTER"])
+        self.assertIsNone(state["tuition"]["PRE-STARTER"]["1405"])
+
+    def test_submitted_fee_structure_is_conflict_not_missing(self):
+        db = FakeDB({
+            "TH Program Level": [Row(name="L-1", code="PRE-STARTER",
+                                     title="Pre Starter", family="F-1",
+                                     native_program="N-1", next_level="",
+                                     status="Active")],
+            "Fee Structure": [Row(name="FS-1", program="N-1",
+                                  docstatus=1, academic_year="1405")],
+            "Fee Component": [Row(parent="FS-1", parenttype="Fee Structure",
+                                  fees_category="Semester Tuition Fee", amount=500)],
+        })
+        state = actual_snapshot_functions(db)["_snapshot"]()
         self.assertIsNone(state["tuition"]["PRE-STARTER"]["1405"])
 
     def test_duplicate_draft_fee_structure_is_conflict(self):
