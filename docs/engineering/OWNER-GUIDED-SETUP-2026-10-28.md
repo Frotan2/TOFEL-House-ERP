@@ -70,6 +70,12 @@ The pinned Education Grading Scale DocType grants the native `Academics User` ro
 
 The Academic Setup read-only preview now offers a prefilled **Create new grading scale** action, requiring an explicit reason and user submission. Approved changes to thresholds require a **new unique scale name**, followed by separately reviewed `set_assessment_policy_version` linking to the new scale; earlier assessment versions retain the old link. Native Frappe/Windows acceptance for actual insert/submit, permission denial and resulting grade evaluation **remains mandatory before merge or production**. The new role-scoped route is not live on the personal test PC until a qualified update is installed.
 
+## Direct Student Pay release containment (2026-10-28)
+
+The existing `finance.refunds.guard_payment_entry` guarded Customer Pay against unrelated/non-credit-note book refunds, but it **did not** forbid unapproved native `Payment Entry(payment_type="Pay", party_type="Student")` disbursements. This was an unapproved bypass of the new tuition refund policy. The guarded Payment Entry event now rejects **new/edited Student Pay** until a properly approved, independently tested tuition Fees refund posting path exists. The correction exception is **cancellation of an already-submitted Student Pay**, which must remain possible under native reversal controls. Native `Receive/Student` tuition receipts, supplier payments, customer book credit-note refunds and internal cash transfers are unaffected.
+
+The policy is pure `finance/student_payout_policy.py`, enforced in `finance/refunds.py`, with negative tests `tests/setup/test_student_payout_hold.py` for validate/write/edit denial, cancellation, and unaffected native operations. These changes must pass exact-head CI plus native Frappe and Windows event-gate acceptance. **Do not turn on a bypass flag or treat this containment as a complete tuition refund workflow.** The actual approved GM -> independent Finance Manager payout with exact native GL reconciliation is still blocked by issue #115.
+
 ## Final refund and registered-name decision (Owner-confirmed)
 
 The **official English spelling as reported by the Owner** is **The TOEFL House**, with **خانه موفقیت** in Dari, and the business is registered as a language center under an individual natural person. Match the original license and individual holder independently before creating the legal ERPNext Company/first live receipt; no tax exemption is inferred.
