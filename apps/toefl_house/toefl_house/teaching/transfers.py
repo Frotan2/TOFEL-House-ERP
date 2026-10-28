@@ -85,10 +85,10 @@ def _program_level(program):
 def _same_level(source, target):
     """True only when the two classes' levels are proven equal.
 
-    Identical programs are trivially the same level (level is a function
-    of program). Different programs are the same level only when they
-    resolve to the same TH Program Level row; an unresolvable program
-    fails closed.
+    Both programs must resolve to an existing TH Program Level row.
+    Matching program names alone are not evidence of a configured level.
+    Different program names remain subject to the same level-row check;
+    an unresolvable program always fails closed.
     """
     source_program = source.get("program") if source else None
     target_program = target.get("program") if target else None
