@@ -41,6 +41,8 @@ class ReleaseImageTriggerContract(unittest.TestCase):
         workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
         self.assertIn("- 'fix/**'", workflow)
         self.assertIn("      - work", workflow)
+        self.assertIn("tools/foundation/runtime_install.py", push_paths("product-image.yml"))
+        self.assertIn("tests/foundation/test_foundation_disposable_restore.py", push_paths("product-image.yml"))
         self.assertIn("if: success() && startsWith(github.ref, 'refs/tags/v')", workflow)
         self.assertIn("tools/native/product_update_host_probe.py", push_paths("product-image.yml"))
         self.assertIn("docs/CUSTOMER-UPDATES.md", push_paths("product-image.yml"))
