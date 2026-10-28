@@ -2,10 +2,11 @@
 
 **Disposition: HOLD. Production authorization remains REJECTED.**
 **Branch audited:** `arena/1d76efed-tofel-house-erp` (session branch of release PR #87).
-**Code head audited:** `98c32110a13f9dc3bbeef17a3629cf944f16618a`.
-**Final head of this work:** the docs commit that contains this record; no
-application or test source changed after `98c3211`, so every result in §5
-applies to that code unchanged.
+**Audited heads:** `98c32110a13f9dc3bbeef17a3629cf944f16618a` (first two fixes),
+`83574722699bb0937032ffb7ba7004c994459718` (plus the restore fix), and
+`5f8dca875b743f748158c8746ef724e4c4242b84` (plus the Windows coverage fix).
+The final head of this work is the docs commit that contains this record and
+changes no application, product or CI source relative to `5f8dca8`.
 **Baseline before this audit:** `aeda63fcaeb000d083d4c27c8bc909cbf634709d`.
 
 This record states exactly what was executed and what was not. A green
@@ -28,13 +29,15 @@ MariaDB/Redis service, no Docker, and package installation is not
 permitted. Native execution is therefore evidenced only through the
 repository's hosted `Native lifecycle integration` workflow.
 
-Two hosted workflows that the release protocol names —
-`Product image` and `Windows customer package` — are **branch-gated by
-configuration** (`push.branches: main, fix/**`, and a path filter that this
-change does not touch). They cannot be triggered from this session branch,
-and workflow dispatch returned `HTTP 403: Resource not accessible by
-integration` (the session token has no `actions:write`). Their results are
-therefore **absent**, not passing.
+`Product image` is **branch-gated by configuration** (`push.branches: main,
+fix/**`). It cannot be triggered from this session branch, and workflow
+dispatch returned `HTTP 403: Resource not accessible by integration` (the
+session token has no `actions:write`). Its result is **absent**, not passing.
+
+`Windows customer package` is path-gated to the Windows launcher, product
+updater and Windows-documentation paths. A genuine defect fix described in
+§6.2 touches its own workflow file, so that gate **did** run on a real
+`windows-2022` runner (run `40703876516`) and passed.
 
 Candidate attacks were reproduced by importing the pure guard modules
 directly and fuzzing their documented contracts (malformed money, NaN,
@@ -89,6 +92,22 @@ server refuses.
 *Fix:* the prefill reads `installment_due_day` and composes the same date
 the command will accept; the guidance text names the contracted day.
 
+### D-3 (release infrastructure) — the hardened restore cycle refused its own lab site
+
+`product/restore.py` refused the disposable target `recovery.localhost` because
+its guard required the site name to contain `"restore"`. That made the
+Foundation runtime's hardened encrypted-recovery check fail with exit 2 on
+every branch for ~2 hours before this audit. Fixed by recognizing both lab
+markers while keeping production and business names refused. Full detail and
+evidence in §6.1.
+
+### D-4 (test coverage) — Windows-only package tests were never executed
+
+Nine `skipUnless(os.name == "nt")` contracts guarding the customer package
+verifier, preparer and tar selector were skipped by the Linux suite and run by
+no workflow. Fixed by executing the module on the `windows-2022` runner and
+pinning the coverage. Full detail and evidence in §6.2.
+
 ## 4. Completed workflow — Owner-approved installments
 
 The approved Owner policy (2026-10-28 closure) authorizes **variable
@@ -121,54 +140,98 @@ an array) resolves to one plan instead of a second one.
 browser or Windows acceptance of one. The first-run preset still does not
 enable installments. Those remain OPEN — see §6.
 
-## 5. Exact results on the audited head
+## 5. Exact results
 
 | Gate | Result | Evidence |
 | --- | --- | --- |
 | Static analysis | **PASS** | `ruff check .` → `All checks passed!` |
-| Owned Python suite | **PASS** | 2,781 tests, 23 Windows-only skips, ~153 s |
-| Owned Node suites | **PASS** | `test_product_ingress`, `test_command_pages`, `test_design_system`, `test_role_desks`, `test_portal_views`, `test_realtime_guard` |
-| Owned suite (hosted) | **PASS** | run `40669413045`, head `98c3211` |
-| Native lifecycle (hosted) | **PASS** | run `40669412938`, head `98c3211` — real Frappe/ERPNext/Education/HRMS on MariaDB, including the book and finance journeys |
-| Foundation runtime (hosted) | **FAIL** | run `40669412989`, head `98c3211`, step 7 `Install and validate the pinned foundation` — **not caused by this change**, see §6.1 |
-| Product image (hosted) | **NOT RUN** | branch-gated to `main` / `fix/**`; dispatch denied (403) |
-| Windows customer package (hosted) | **NOT RUN** | path-gated; this change touches none of those paths |
+| Owned Python suite (local) | **PASS** | 2,784 tests, 23 Windows-only skips, ~146 s |
+| Owned Node suites (local) | **PASS** | `test_product_ingress`, `test_command_pages`, `test_design_system`, `test_role_desks`, `test_portal_views`, `test_realtime_guard` |
+| Owned suite (hosted) | **PASS** | run `40703876518`, head `5f8dca8` |
+| Windows customer package (hosted, **real windows-2022**) | **PASS** | run `40703876516`, head `5f8dca8` — all 11 steps, including the newly executed verifier/preparer suite |
+| Native lifecycle (hosted, real Frappe/ERPNext/Education/HRMS on MariaDB) | **PASS** | run `40699261699`, head `8357472` |
+| Foundation runtime (hosted) | **PASS — gate restored** | run `40699261827`, head `8357472`, **zero failure annotations** |
+| Product image (hosted) | **NOT RUN** | branch-gated to `main` / `fix/**`; dispatch denied (403, no `actions:write`) |
 
-The suite grew by **18** tests over the 2,763 baseline: exact unequal
-shares, remainder and refusal cases, the contracted due-day schedule and
-its bounds, policy validation and governing terms, share input
-normalization, and the book line-discount regression.
+**Exact-SHA note.** Owned and Windows are green on `5f8dca8`; Native and
+Foundation are green on `8357472`. The only difference between those two
+heads is `.github/workflows/windows-customer-package.yml` and
+`tests/foundation/test_release_workflow_triggers.py` — no application,
+product or native-check code. Native and Foundation do not path-trigger on
+those two files and cannot be dispatched from this environment, so they
+were not re-run on `5f8dca8`. The canonical four-receipt exact-SHA
+requirement is therefore **not** satisfied by this audit alone; it must be
+produced by the Product-image pipeline, which cannot run from this branch.
 
-Earlier heads of this work also passed hosted Native (`40668818245`,
-`3d5df71`) and hosted Owned (`40668818090`).
+The suite grew by **21** tests over the 2,763 baseline.
 
 ## 6. Unresolved blockers — exact evidence
 
-### 6.1 Foundation runtime gate is broken repository-wide (blocking)
+### 6.1 RESOLVED — repository-wide Foundation failure (fixed, gate green)
 
-The `Install and validate the pinned foundation` step fails on **every**
-branch, not only this one. Across the whole repository there are **zero**
-successful `Foundation runtime` runs after `2026-10-28T08:31Z`, and every
-failure in that window is the same step 7, on unrelated branches
-(`fix/tuition-refund-approval-hold-20261028`, `feat/owner-same-level-class-transfers-20261028`, …).
-The last success was `f150734f` at `08:28Z`, about 90 minutes before this
-session's first commit (`10:01Z`).
+**Symptom.** `Foundation runtime` failed on every branch. Zero successful runs
+after `2026-10-28T08:31Z`; every failure was step 7
+`Install and validate the pinned foundation`; the last success was `f150734f`
+at `08:28Z`. Job logs and evidence artifacts redirect to
+`productionresultssa*.blob.core.windows.net`, which is blocked here, but the
+workflow's own check-run **annotations** named the failing sub-check:
 
-Upstream pin drift is **excluded**: every pinned source-file SHA-256 in
-`docs/engineering/foundation-version-matrix.json` (frappe, erpnext,
-education, hrms, bench) was re-fetched from the pinned commits and
-**matches**.
+```
+hardened-restore-with-files: exit 2
+last failed check: hardened-restore-with-files
+```
 
-The cause cannot be diagnosed from this sandbox: the workflow's retained
-evidence artifact and the job log both redirect to
-`productionresultssa*.blob.core.windows.net`, which this environment's
-network policy blocks. **Required next action:** retrieve
-`foundation-runtime-40669412989-1` (artifact `12807848217`) or the step-7
-log from an environment with normal network access, fix the install
-regression, then re-run the gate on this head. Until then the release
-gate set is incomplete and no release may be declared.
+The same annotation appeared on unrelated branches
+(`36265aa3`, `453b0089`, `7c9e8583`), confirming this was not caused by any
+one change.
 
-### 6.2 Real Windows and real-device acceptance (blocking, unchanged)
+**Root cause.** Exit 2 from `product/restore.py` is a `RestoreInputError`, and
+the failing check is the *second* (hardened, encrypted) restore cycle; the
+first cycle passed. `_validate_payload` required a disposable target's site
+name to contain `"restore"`, but the hosted runtime names the hardened
+recovery site **`recovery.localhost`** (a first-class lab host in the runtime
+nginx site map, next to `restore.localhost`). The hardened payload was refused
+before any restore ran. Reproduced against the pre-fix adapter:
+
+```
+Restore refused: a disposable restore must target a restore site,
+never the production site        -> exit 2
+```
+
+**Fix.** The guard's invariant is unchanged and still fail-closed: a
+disposable restore may never target `PRODUCTION_SITE` and must carry an
+unmistakable lab marker. Both hosted lab markers are now recognized
+(`DISPOSABLE_SITE_MARKERS = ("restore", "recovery")`). Production names and
+ordinary business names (`toeflhouse.localhost`, `acme-academy.localhost`,
+`foundation.localhost`, `upstream-tests.localhost`) are still refused.
+
+**Evidence.** The new regression tests fail on the pre-fix file and pass on
+the fix. Hosted `Foundation runtime` **run `40699261827` on `8357472` is
+success with zero failure annotations** — the first green run since `08:28Z`.
+Other branches remain red until this fix is integrated into them.
+
+### 6.2 RESOLVED — Windows-only package tests never executed anywhere (fixed, green)
+
+`tests/foundation/test_customer_package_manifest.py` protects the shipped
+customer package: `Verify Package Image.ps1` (archive, manifest, checksum and
+loaded-image identity), `Prepare Customer Package.ps1` (dirty checkout /
+wrong-head refusal) and the built-in `tar` selector. Nine of its tests are
+`skipUnless(os.name == "nt")`.
+
+The Linux owned suite skipped them on every run, and **no workflow executed
+the module as a test suite** — the Windows package workflow only imported
+`write_image_archive` from it. A broken verifier or preparer could therefore
+have shipped unnoticed.
+
+**Fix.** The Windows package workflow now runs
+`python -m unittest tests.foundation.test_customer_package_manifest -v` on the
+`windows-2022` runner, and a trigger-contract test pins that coverage.
+
+**Evidence.** Hosted `Windows customer package` run `40703876516` on
+`5f8dca8` passed all 11 steps, including the new step 9. These are the first
+real-Windows executions of those contracts in this repository's CI.
+
+### 6.3 Real Owner hardware acceptance (blocking, unchanged)
 
 Blockers B-01 … B-06 of the acceptance matrix all require the physical
 Owner PC, Docker Desktop/WSL, the staff devices and the backup drive.
@@ -178,14 +241,14 @@ persistence, preserving update and rollback, backup-drive schedule, key
 custody, isolated recovery, five-role browser workflows on real hardware,
 cashier/book stock acceptance and independent download/install.
 
-### 6.3 Two-person production recovery (blocking, unchanged)
+### 6.4 Two-person production recovery (blocking, unchanged)
 
 The cryptographic two-person restore authorization paths from PR #114/#116
 are present and covered by owned tests, but **no executed** two-approver
 production recovery has been evidenced, and a signed static document is
 not evidence of two independent approvers.
 
-### 6.4 Native acceptance of the new installment terms (open, not blocking release policy)
+### 6.5 Native acceptance of the new installment terms (open, not blocking release policy)
 
 No native check posts a positive unequal-installment plan or a
 25th-of-month schedule, so the new terms are proven in owned tests only.
@@ -194,7 +257,7 @@ which cannot be validated from this sandbox (CI logs and artifacts are
 unreachable, so a failing journey could not be debugged). They are
 deliberately **not** added unverified.
 
-### 6.5 Fail-closed behaviour accepted in this change
+### 6.6 Fail-closed behaviour accepted in this change
 
 Both new policy fields default to the previous behaviour, so `bench
 migrate` needs no data patch and older rows read as "first of the month,
@@ -206,6 +269,9 @@ upgrade now receives `Idempotency key conflicts with an existing request`
 
 * No merge into `main`. No branch deletion. No customer or Owner data
   touched; no backup, restore, key or production state was modified.
+* The two resolved blockers in §6.1/§6.2 are **integration-critical**: other
+  branches stay red on the Foundation gate until the `product/restore.py` fix
+  reaches them.
 * No release tag, package or "customer-ready" claim is made by this
   document.
 * Production authorization remains **REJECT** until every B-row, the
