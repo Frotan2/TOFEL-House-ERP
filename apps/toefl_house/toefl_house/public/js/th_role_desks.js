@@ -1475,6 +1475,78 @@ frappe.provide("toefl_house.role_desks");
 		});
 	}
 
+	/* The first-run review never issues a configuration mutation.  Existing
+	 * data, alternate level codes and release blockers must remain visible. */
+	function mountOwnerSetupPreview(page) {
+		const section = $("<section class='th-section th-setup-preview'></section>").appendTo(page.body);
+		$("<h2 class='th-section-title'></h2>").text(text("Review first-run setup")).appendTo(section);
+		const body = $("<div class='th-section-body'></div>").appendTo(section);
+		$("<p></p>").text(text(
+			"Compare the proposed course setup with this site's existing configuration. " +
+			"This is a read-only check: nothing is installed, changed, billed or approved."
+		)).appendTo(body);
+		const actions = $("<div class='th-setup-actions'></div>").appendTo(body);
+		const button = $("<button type='button' class='btn btn-primary btn-sm'></button>")
+			.text(text("Check TOEFL House setup")).appendTo(actions);
+		const output = $("<div class='th-setup-result' aria-live='polite'></div>").appendTo(body);
+		button.on("click", () => {
+			button.prop("disabled", true);
+			output.empty();
+			$("<p></p>").text(text("Checking current configuration…")).appendTo(output);
+			frappe.call({
+				method: "toefl_house.setup_presets.api.preview_owner_initial_setup",
+				callback(response) {
+					button.prop("disabled", false);
+					output.empty();
+					const data = response.message || {};
+					if (data.mode !== "READ_ONLY_PREVIEW" || data.ready_to_apply !== false ||
+						!data.counts || !Array.isArray(data.actions)) {
+						$("<p class='text-danger'></p>").text(text(
+							"Setup preview returned an unexpected response. No configuration was changed."
+						)).appendTo(output);
+						return;
+					}
+					$("<h3></h3>").text(text("Proposed configuration — review only")).appendTo(output);
+					$("<p></p>").text(
+						text("Missing") + ": " + Number(data.counts.create || 0) + "  ·  " +
+						text("Already matches") + ": " + Number(data.counts.match || 0) + "  ·  " +
+						text("Needs review") + ": " + Number(data.counts.review || 0)
+					).appendTo(output);
+					const table = $("<table class='table table-bordered table-condensed'></table>").appendTo(output);
+					const head = $("<thead><tr></tr></thead>").appendTo(table).find("tr");
+					[text("Area"), text("Code"), text("Status"), text("Next step")].forEach(
+						(label) => $("<th></th>").text(label).appendTo(head)
+					);
+					const tbody = $("<tbody></tbody>").appendTo(table);
+					data.actions.slice(0, 100).forEach((item) => {
+						const tr = $("<tr></tr>").appendTo(tbody);
+						[item.kind, item.code, item.status, item.details].forEach(
+							(value) => $("<td></td>").text(String(value || "")).appendTo(tr)
+						);
+					});
+					if (Array.isArray(data.pending_decisions) && data.pending_decisions.length) {
+						$("<h4></h4>").text(text("Still requires Owner review")).appendTo(output);
+						const list = $("<ul></ul>").appendTo(output);
+						data.pending_decisions.slice(0, 30).forEach(
+							(value) => $("<li></li>").text(String(value || "")).appendTo(list)
+						);
+					}
+					$("<p class='text-warning'></p>").text(text(
+						"This site has not been initialized by the preview. " +
+						"Do not use live student or finance records until release acceptance is complete."
+					)).appendTo(output);
+				},
+				error() {
+					button.prop("disabled", false);
+					output.empty();
+					$("<p class='text-danger'></p>").text(text(
+						"Setup inspection was denied or unavailable; no data was changed."
+					)).appendTo(output);
+				},
+			});
+		});
+	}
+
 	Object.entries(SURFACES).forEach(([slug, surface]) => {
 		// Native Page creates its DOM wrapper BEFORE evaluating page_js.
 		// Never create placeholders for unopened pages: pageview.show treats
@@ -1492,6 +1564,7 @@ frappe.provide("toefl_house.role_desks");
 				},
 			});
 			mountSearch(page, surface);
+			if (slug === "th-academic-setup") mountOwnerSetupPreview(page);
 			loadDesk(page, surface, slug);
 		};
 	});

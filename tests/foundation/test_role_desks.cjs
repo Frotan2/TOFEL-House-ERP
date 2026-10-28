@@ -272,6 +272,7 @@ const allowedCalls = new Set([...Object.values(EXPECTED).map((shape) => shape.en
 	"toefl_house.desk.academic.attendance_records",
 	"toefl_house.desk.academic.enrollment_records",
 	"toefl_house.finance.collections.get_collection_receipt",
+	"toefl_house.setup_presets.api.preview_owner_initial_setup",
 	client.toefl_house.role_desks.registry,
 	...Object.keys(actionFields)]);
 for (const method of Object.keys(actionFields)) {
@@ -285,6 +286,21 @@ for (const method of Object.keys(actionFields)) {
 }
 for (const [, method] of source.matchAll(/method:\s*"([\w.]+)"/g)) {
 	assert(allowedCalls.has(method), `desk client calls an unreviewed endpoint: ${method}`);
+}
+
+/* A reviewed, GET-only Course Owner setup preflight may be called.
+ * The bridge must expose no mutation or write privilege. */
+const ownerPreviewSource = fs.readFileSync(path.join(APP, "setup_presets/api.py"), "utf8");
+assert(ownerPreviewSource.includes('def _owner():'), "setup preview has no user gate");
+assert(ownerPreviewSource.includes('"Course Owner" not in frappe.get_roles(actor)'),
+	"setup preview must require Course Owner");
+assert(ownerPreviewSource.includes('@frappe.whitelist(methods=["GET"])'),
+	"setup preview must remain GET-only");
+assert(ownerPreviewSource.includes('def preview_owner_initial_setup():'),
+	"setup preview has no reviewed entry point");
+for (const forbidden of [/frappe\.db\.set_value\(/, /frappe\.db\.commit\(/, /\.insert\(/,
+	/\.save\(/, /\.delete\(/, /@frappe\.whitelist\(methods=\["POST"\]\)/]) {
+	assert(!forbidden.test(ownerPreviewSource), "setup preview must not mutate data");
 }
 
 /* ------------------------------------------------------- behavior smoke */
