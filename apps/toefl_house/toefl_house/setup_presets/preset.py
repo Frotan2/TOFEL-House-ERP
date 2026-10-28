@@ -78,13 +78,33 @@ def validate_preset(data: dict) -> dict:
     assessment = data["assessment"]
     skills = assessment["skills_weight_percent"]
     continuous = assessment["continuous_subweights_percent"]
+    continuous_pct = assessment["continuous_percent"]
+    final_pct = assessment["final_exam_percent"]
     if (sum(skills.values()) != 100
-            or sum(continuous.values()) != 40
-            or assessment["continuous_percent"] != 40
-            or assessment["final_exam_percent"] != 60):
-        raise ValueError("Assessment weights must preserve the approved 40/60 structure")
-    if sum(x["min_percent"] == 0 for x in assessment["grading_scale"]["grade_thresholds"]) != 1:
-        raise ValueError("A grade scale needs exactly one zero threshold")
+            or sum(continuous.values()) != continuous_pct
+            or continuous_pct + final_pct != 100
+            or continuous_pct <= 0 or final_pct <= 0):
+        raise ValueError("Assessment component weights must equal their declared percentages")
+    scale = assessment["grading_scale"]["grade_thresholds"]
+    thresholds = [x["min_percent"] for x in scale]
+    if (thresholds != sorted(set(thresholds), reverse=True)
+            or len([x for x in scale if x["min_percent"] == 0]) != 1):
+        raise ValueError("The grading scale needs unique descending thresholds and one zero")
+    if not any(x["min_percent"] == assessment["overall_pass_percent"]
+               for x in scale):
+        raise ValueError("An explicit pass-grade threshold must match the minimum pass percentage")
+    retake = assessment["retake"]
+    if (retake["max_total_attempts"] != 2 or retake["wait_days"] < 7
+            or retake["governing"] not in ("latest", "best", "first")):
+        raise ValueError("Proposed retake count and wait require policy review")
+    if (not data["fee_policy"]["late_join_full_original_course_fee"]
+            or not data["fee_policy"]["installment_amounts_must_sum_to_net_tuition"]
+            or not data["discounts"]["preapprovals_stored_before_any_active_rule"]):
+        raise ValueError("The approved full-fee and discount-authorization safeguards are mandatory")
+    if (assessment["placement"]["fee_afn_per_attempt"] <= 0
+            or not assessment["placement"]["paper_exam_component"]
+            or not assessment["placement"]["face_to_face_speaking_component"]):
+        raise ValueError("The paid two-component placement policy must be complete")
 
     if data["cross_program_transition"]["from"] not in levels:
         raise ValueError("Unknown cross-program source")
