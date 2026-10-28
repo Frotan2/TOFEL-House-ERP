@@ -22,11 +22,37 @@ import frappe
 from toefl_house.api import _execute
 from toefl_house.finance import tuition_refunds
 from toefl_house.finance.company_scope import require_finance_company
+from toefl_house.policy import digest
 from toefl_house.security import record_synthetic_flag
 
 REQUEST = "TH Tuition Refund Request"
 FEES = "Fees"
 PAYMENT = "Payment Entry"
+
+
+def _audit_hash(req):
+    """Bind one audit event to the exact persisted refund request state.
+
+    No raw student identity, reason, or supporting evidence is copied into
+    the shared event ledger. A hash of the authoritative record distinguishes
+    Requested, Approved, and Denied transitions and exposes stale replays.
+    """
+    return digest({
+        "name": req.name,
+        "student": req.get("student"),
+        "company": req.get("company"),
+        "fees": req.get("fees"),
+        "requested_amount": str(req.get("requested_amount") or ""),
+        "approved_amount": str(req.get("approved_amount") or ""),
+        "reason": req.get("reason") or "",
+        "evidence": req.get("evidence") or "",
+        "approval_evidence": req.get("approval_evidence") or "",
+        "status": req.get("status"),
+        "requested_by": req.get("requested_by"),
+        "approved_by": req.get("approved_by"),
+        "paying_user": req.get("paying_user"),
+        "payment_entry": req.get("payment_entry"),
+    })
 
 
 def _name(value, label):
@@ -144,7 +170,7 @@ def request_tuition_refund(request_key, student, company, fees, requested_amount
         doc.insert(ignore_permissions=True)
         result = {"name": doc.name, "status": "Requested",
                   "requested_amount": validated["requested_amount"]}
-        return result, dict(target=doc.name)
+        return result, dict(target=doc.name, after_hash=_audit_hash(doc))
 
     return _execute("request_tuition_refund", request_key,
                     {"student": student, "company": company, "fees": fees,
@@ -168,6 +194,7 @@ def approve_tuition_refund(request_key, request, evidence=None):
                 evidence=evidence)
         except (tuition_refunds.RefundError, ValueError) as exc:
             raise frappe.ValidationError(str(exc)) from exc
+        before_hash = _audit_hash(req)
         req.flags.ignore_permissions = True
         req.status = "Approved"
         req.approved_by = actor
@@ -176,7 +203,7 @@ def approve_tuition_refund(request_key, request, evidence=None):
         req.save(ignore_permissions=True)
         return {"name": req.name, "status": "Approved",
                 "approved_amount": approved["approved_amount"]}, \
-            dict(target=req.name)
+            dict(target=req.name, before_hash=before_hash, after_hash=_audit_hash(req))
 
     return _execute("approve_tuition_refund", request_key,
                     {"request": request, "evidence": evidence}, work)
@@ -195,11 +222,13 @@ def deny_tuition_refund(request_key, request):
                 approver_roles=frappe.get_roles(actor))
         except (tuition_refunds.RefundError, ValueError) as exc:
             raise frappe.ValidationError(str(exc)) from exc
+        before_hash = _audit_hash(req)
         req.flags.ignore_permissions = True
         req.status = "Denied"
         req.approved_by = actor
         req.save(ignore_permissions=True)
-        return {"name": req.name, "status": "Denied"}, dict(target=req.name)
+        return {"name": req.name, "status": "Denied"}, dict(
+            target=req.name, before_hash=before_hash, after_hash=_audit_hash(req))
 
     return _execute("deny_tuition_refund", request_key,
                     {"request": request}, work)
