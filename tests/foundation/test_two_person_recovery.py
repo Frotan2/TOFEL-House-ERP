@@ -174,6 +174,7 @@ class TwoPersonRecoveryTests(UpdateEngineBase):
             "evidence": {"recovery_request_id": "a" * 32},
         }
         blocked = fixture.state_dir / engine.TRANSACTION_CONSUMED_DIR
+        blocked.parent.mkdir(parents=True, exist_ok=True)
         blocked.write_text("unsafe marker directory", encoding="utf-8")
         with self.assertRaises(engine.UpdateError):
             engine._consume_transaction(fixture.state_dir, transaction)
