@@ -211,7 +211,10 @@ extra local state has to be trusted.
   unbound recovery key, an altered document, an expired window or a replayed
   request id is refused before any migration.  The request id is consumed
   when apply starts, so a failed or interrupted apply needs fresh approvals
-  from both approvers.  Provisioning a second recovery key with its approver
+  from both approvers.  The recovery request is marked consumed **before**
+  the transaction-use marker is written, so a crash between the two writes
+  cannot leave the same signed approval reusable with a new transaction.
+  Provisioning a second recovery key with its approver
   binding is a migration requirement for existing single-key installations:
   until then, migrating updates are refused, by design.
 * Emergency administrator recovery is separately controlled and is **not**
