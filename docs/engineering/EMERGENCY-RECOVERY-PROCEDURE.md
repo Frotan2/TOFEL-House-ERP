@@ -163,8 +163,8 @@ restore as proof that no bypass occurred.
 
 - A failed or interrupted restore still consumes its request_id. Retry
   only with a fresh authorization signed by both approvers.
-- If `in-progress.json` remains after a process was killed, do not start
-  another production restore. First verify no restore process is running
+- If `in-progress.json` remains after a process was killed **or a native
+  restore failed**, do not start another production restore. First verify no restore process is running
   (the native `site_restore` filelock is held only during a live
   restore), inspect the site's state, and only then remove the marker —
   that removal is an Owner/support decision, recorded outside the
