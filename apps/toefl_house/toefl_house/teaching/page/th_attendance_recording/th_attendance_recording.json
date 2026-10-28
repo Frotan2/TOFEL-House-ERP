@@ -1,0 +1,14 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Teaching",
+  "name": "th-attendance-recording",
+  "page_name": "th-attendance-recording",
+  "roles": [
+    {
+      "role": "Attendance Recorder"
+    }
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Attendance Recording"
+}

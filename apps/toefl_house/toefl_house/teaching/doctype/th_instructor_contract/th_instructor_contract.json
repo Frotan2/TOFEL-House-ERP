@@ -1,0 +1,122 @@
+{
+  "doctype": "DocType",
+  "name": "TH Instructor Contract",
+  "module": "Teaching",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "instructor",
+    "employee",
+    "compensation_model",
+    "assignment_basis",
+    "payment_frequency",
+    "effective_start",
+    "effective_end",
+    "conditions",
+    "supersedes",
+    "status",
+    "skill_terms",
+    "adjustments",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "instructor",
+      "label": "Instructor",
+      "fieldtype": "Link",
+      "options": "Instructor",
+      "reqd": 1
+    },
+    {
+      "fieldname": "employee",
+      "label": "Employee",
+      "fieldtype": "Link",
+      "options": "Employee",
+      "reqd": 1
+    },
+    {
+      "fieldname": "compensation_model",
+      "label": "Compensation Model",
+      "fieldtype": "Select",
+      "options": "Fixed Salary\nSkill-Based\nHybrid",
+      "reqd": 1
+    },
+    {
+      "fieldname": "assignment_basis",
+      "label": "Assignment Basis",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "payment_frequency",
+      "label": "Payment Frequency",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "effective_start",
+      "label": "Effective Start",
+      "fieldtype": "Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "effective_end",
+      "label": "Effective End",
+      "fieldtype": "Date"
+    },
+    {
+      "fieldname": "conditions",
+      "label": "Conditions",
+      "fieldtype": "Small Text"
+    },
+    {
+      "fieldname": "supersedes",
+      "label": "Supersedes",
+      "fieldtype": "Link",
+      "options": "TH Instructor Contract"
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Data",
+      "default": "Active",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "skill_terms",
+      "label": "Skill Terms",
+      "fieldtype": "Table",
+      "options": "TH Contract Skill Term"
+    },
+    {
+      "fieldname": "adjustments",
+      "label": "Adjustments",
+      "fieldtype": "Table",
+      "options": "TH Contract Adjustment"
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Finance Officer",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Finance Auditor",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

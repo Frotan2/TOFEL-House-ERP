@@ -1,0 +1,100 @@
+{
+  "doctype": "DocType",
+  "name": "TH Correction Policy",
+  "module": "Finance",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "approver_role",
+    "correction_window_days",
+    "effective_from",
+    "reason",
+    "set_by",
+    "set_on",
+    "superseded_on",
+    "status",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "approver_role",
+      "label": "Approver Role",
+      "fieldtype": "Link",
+      "options": "Role",
+      "reqd": 1
+    },
+    {
+      "fieldname": "correction_window_days",
+      "label": "Correction Window Days",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "effective_from",
+      "label": "Effective from",
+      "fieldtype": "Date",
+      "reqd": 1,
+      "unique": 1,
+      "in_list_view": 1,
+      "description": "The date from which this policy version governs new correction requests. Versions are append-only and strictly increasing; history keeps the version it was created under."
+    },
+    {
+      "fieldname": "reason",
+      "label": "Reason",
+      "fieldtype": "Small Text",
+      "reqd": 1,
+      "description": "Why this version was set. Mandatory on every version write."
+    },
+    {
+      "fieldname": "set_by",
+      "label": "Set by",
+      "fieldtype": "Link",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "set_on",
+      "label": "Set on",
+      "fieldtype": "Datetime",
+      "read_only": 1
+    },
+    {
+      "fieldname": "superseded_on",
+      "label": "Superseded on",
+      "fieldtype": "Date",
+      "read_only": 1,
+      "description": "Closed date: the day a newer version superseded this one. Written once; the row itself is never rewritten."
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Data",
+      "default": "Active",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Finance Officer",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Finance Auditor",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

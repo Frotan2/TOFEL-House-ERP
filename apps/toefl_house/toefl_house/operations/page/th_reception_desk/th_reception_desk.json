@@ -1,0 +1,14 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Operations",
+  "name": "th-reception-desk",
+  "page_name": "th-reception-desk",
+  "roles": [
+    {
+      "role": "Reception"
+    }
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Reception Desk"
+}

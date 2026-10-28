@@ -1,0 +1,14 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Operations",
+  "name": "th-finance-desk",
+  "page_name": "th-finance-desk",
+  "roles": [
+    {
+      "role": "Finance Manager"
+    }
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Finance Desk"
+}

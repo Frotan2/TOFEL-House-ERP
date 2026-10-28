@@ -1,0 +1,14 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Placement",
+  "name": "th-placement-author",
+  "page_name": "th-placement-author",
+  "roles": [
+    {
+      "role": "Placement Author"
+    }
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Placement Authoring"
+}

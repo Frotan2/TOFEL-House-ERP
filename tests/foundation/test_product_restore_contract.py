@@ -1,0 +1,93 @@
+"""Static guards for the disposable TOEFL House product restore rehearsal."""
+from pathlib import Path
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+RUNNER = (ROOT / "tools/native/run_native.py").read_text(encoding="utf-8")
+HELPER = (ROOT / "tools/native/runtime_restore.py").read_text(encoding="utf-8")
+RUNBOOK = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text(encoding="utf-8")
+OWNER_GUIDE = (ROOT / "product/windows/VALIDATION.md").read_text(encoding="utf-8")
+
+
+class ProductRestoreContractTests(unittest.TestCase):
+    def test_helper_is_limited_to_disposable_hosted_sites(self):
+        self.assertIn('os.environ.get("GITHUB_ACTIONS") != "true"', HELPER)
+        self.assertIn('SOURCE_SITE = "placement-test.localhost"', HELPER)
+        self.assertIn('RESTORE_SITE = "placement-restore.localhost"', HELPER)
+        self.assertIn('("capture", SOURCE_SITE), ("verify", RESTORE_SITE)', HELPER)
+
+    def test_snapshot_covers_each_implemented_domain_and_private_file(self):
+        for doctype in (
+            "TH Placement Decision", "TH Admission Decision", "Program Enrollment",
+            "Student Group", "Course Schedule", "Student Attendance",
+            "TH Instructor Contract", "TH Teaching Assignment", "TH Correction Request",
+            "Fees", "Sales Invoice",
+        ):
+            self.assertIn(f'"{doctype}"', HELPER)
+        self.assertIn('"doctype": "File"', HELPER)
+        self.assertIn('"private_file": (', HELPER)
+        self.assertIn('"public_file": (', HELPER)
+        self.assertIn('"is_private": is_private', HELPER)
+        self.assertIn("files_verified", HELPER)
+        self.assertIn("storage_uid", HELPER)
+        self.assertIn("storage_gid", HELPER)
+        self.assertIn("name_digest", HELPER)
+
+    def test_runner_creates_separate_restore_site_and_preserves_non_database_config(self):
+        for token in (
+            "capture-product-restore-snapshot", "backup-placement-test-with-files",
+            "placement-restore.localhost", "restore-placement-test-with-files",
+            "verify-product-restore-snapshot", "verify-product-restore-after-service-restart",
+            "capture-policy-resolvers-before-service-restart",
+            "verify-policy-resolvers-after-service-restart",
+            "PLACEMENT_RESTORE_EXPECTATION", "PLACEMENT_RESTORE_REPORT",
+            "source_db_credentials_copied", "source_backup_hashes_unchanged"
+        ):
+            self.assertIn(token, RUNNER)
+        self.assertIn("restore_backup_dir.mkdir(parents=True,exist_ok=True)", RUNNER)
+        self.assertIn("copied=restore_backup_dir/artifact.name", RUNNER)
+        self.assertIn("copy_hashes_verified", RUNNER)
+        self.assertIn("input_text=restore_payload", RUNNER)
+        self.assertIn("ROOT/'product/restore.py'", RUNNER)
+        self.assertNotIn("'--with-public-files'", RUNNER)
+        self.assertNotIn("'--with-private-files'", RUNNER)
+        self.assertIn("assert source_config['db_name'] != restore_config['db_name']", RUNNER)
+        self.assertIn("assert source_config.get('db_password') != restore_config.get('db_password')", RUNNER)
+        self.assertIn("restore_config['encryption_key'] = source_config['encryption_key']", RUNNER)
+
+    def test_runner_handles_hosted_mysql_client_without_displacing_credential_file_option(self):
+        self.assertIn("dump_binary = shutil.which('mysqldump')", RUNNER)
+        self.assertIn("disable_column_statistics='--column-statistics' in dump_help", RUNNER)
+        self.assertIn("write_mysqldump_wrapper(", RUNNER)
+        self.assertIn("--defaults-extra-file=*|--defaults-file=*", RUNNER)
+        self.assertIn("--column-statistics=0", RUNNER)
+        self.assertIn("lab/'tools/bin/mysqldump'", RUNNER)
+
+    def test_owner_restore_guidance_is_hold_only_and_targets_no_existing_site(self):
+        runbook_restore = RUNBOOK.split(
+            "## 7. Restore and recovery — HOLD", 1)[1].split("## 8.", 1)[0]
+        owner_restore = OWNER_GUIDE.split(
+            "## Backup and restore — Owner PRESERVATION / RESTORE HOLD", 1)[1].split(
+                "---\n\n## Finishing", 1)[0]
+
+        for section in (runbook_restore, owner_restore):
+            with self.subTest(section="runbook" if section is runbook_restore else "Owner guide"):
+                self.assertIn("authorized", section.lower())
+                self.assertIn("toeflhouse.localhost", section)
+                self.assertIn("new", section.lower())
+                self.assertNotIn("```", section, "Owner restore hold must not publish executable steps")
+                for command in (
+                    "docker compose stop", "docker compose run", "bench restore",
+                    "rm -rf", "Remove-Item", "gpg --decrypt",
+                ):
+                    self.assertNotIn(command, section)
+
+        self.assertIn("isolated disposable Bench", runbook_restore)
+        self.assertIn("isolated disposable Bench", owner_restore)
+        self.assertIn("read-only checks", RUNBOOK)
+        self.assertIn("Read-only checks allowed", OWNER_GUIDE)
+
+
+if __name__ == "__main__":
+    unittest.main()

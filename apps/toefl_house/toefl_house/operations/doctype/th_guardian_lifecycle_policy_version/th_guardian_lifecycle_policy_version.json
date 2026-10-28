@@ -1,0 +1,120 @@
+{
+ "actions": [],
+ "creation": "2026-09-25 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "effective_from",
+  "column_break_1",
+  "delegation_window_days",
+  "pre_admission_proxy",
+  "consent_evidence",
+  "consent_expiry_days",
+  "records_recording_rights",
+  "section_break_1",
+  "reason",
+  "column_break_2",
+  "set_by",
+  "set_on",
+  "superseded_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "effective_from",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Effective from",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "How many days an activation/delegation request may wait before it lapses. Owner policy; engineering invents none.",
+   "fieldname": "delegation_window_days",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Delegation window days",
+   "reqd": 1
+  },
+  {
+   "description": "Whether a pre-admission proxy (guardian acting before enrollment) is allowed. The owner chooses Allowed or Refused; no default is offered.",
+   "fieldname": "pre_admission_proxy",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Pre-admission proxy",
+   "options": "Allowed\nRefused",
+   "reqd": 1
+  },
+  {
+   "description": "How consent must be evidenced: Link (a linked authorization record), Attachment (an attached evidence file), or Both. The owner chooses; no default is offered.",
+   "fieldname": "consent_evidence",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Consent evidence",
+   "options": "Link\nAttachment\nBoth",
+   "reqd": 1
+  },
+  {
+   "description": "How many days a recorded consent remains valid before it expires. Owner policy; engineering invents none.",
+   "fieldname": "consent_expiry_days",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Consent expiry days",
+   "reqd": 1
+  },
+  {
+   "description": "Plain-language summary of the records/recording rights under this version (what guardians may see and record). Bounded owner policy text; engineering invents none of it.",
+   "fieldname": "records_recording_rights",
+   "fieldtype": "Small Text",
+   "label": "Records and recording rights",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Why this version was set. Mandatory on every version write.",
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "set_by",
+   "fieldtype": "Link",
+   "label": "Set by",
+   "options": "User"
+  },
+  {
+   "fieldname": "set_on",
+   "fieldtype": "Datetime",
+   "label": "Set on"
+  },
+  {
+   "description": "Closed date: the day this version stopped governing new activity. Written once when a newer version supersedes it; the row itself is never rewritten.",
+   "fieldname": "superseded_on",
+   "fieldtype": "Date",
+   "label": "Superseded on"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-25 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Operations",
+ "name": "TH Guardian Lifecycle Policy Version",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

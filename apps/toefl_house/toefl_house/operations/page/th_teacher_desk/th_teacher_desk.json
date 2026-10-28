@@ -1,0 +1,14 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Operations",
+  "name": "th-teacher-desk",
+  "page_name": "th-teacher-desk",
+  "roles": [
+    {
+      "role": "Instructor"
+    }
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Teacher Desk"
+}

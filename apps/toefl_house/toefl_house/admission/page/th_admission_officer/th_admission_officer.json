@@ -1,0 +1,14 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Admission",
+  "name": "th-admission-officer",
+  "page_name": "th-admission-officer",
+  "roles": [
+    {
+      "role": "Admission Officer"
+    }
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Admission Intake"
+}

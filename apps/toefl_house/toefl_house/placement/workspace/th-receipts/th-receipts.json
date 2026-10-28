@@ -1,0 +1,52 @@
+{
+	"app": "toefl_house",
+	"content": "[{\"id\":\"DSTHYhJqlp\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>TH Receipts</b></span>\",\"col\":12}},{\"id\":\"wlw49VSpWt\",\"type\":\"card\",\"data\":{\"card_name\":\"Receipts\",\"col\":4}},{\"id\":\"c0uZVrFgfe\",\"type\":\"card\",\"data\":{\"card_name\":\"Audit\",\"col\":4}}]",
+	"docstatus": 0,
+	"doctype": "Workspace",
+	"for_user": "",
+	"is_hidden": 0,
+	"label": "TH Receipts",
+	"links": [
+		{
+			"label": "Receipts",
+			"type": "Card Break"
+		},
+		{
+			"label": "Operations",
+			"link_to": "TH Placement Operation",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Audit",
+			"type": "Card Break"
+		},
+		{
+			"label": "Audit Events",
+			"link_to": "TH Placement Audit Event",
+			"link_type": "DocType",
+			"type": "Link"
+		}
+	],
+	"module": "Placement",
+	"name": "TH Receipts",
+	"public": 1,
+	"roles": [
+		{
+			"role": "Placement Auditor"
+		},
+		{
+			"role": "Admission Auditor"
+		},
+		{
+			"role": "Enrollment Auditor"
+		},
+		{
+			"role": "Teaching Auditor"
+		},
+		{
+			"role": "Finance Auditor"
+		}
+	],
+	"title": "TH Receipts"
+}

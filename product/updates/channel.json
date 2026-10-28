@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "document_type": "toefl-house-erp-update-channels",
+  "product": "TOEFL House ERP",
+  "default_channel": "stable",
+  "channels": [
+    {
+      "id": "stable",
+      "provider": "TOEFL House",
+      "metadata_url": "https://updates.toefl-house.invalid/stable/index.json",
+      "allowed_hosts": [
+        "updates.toefl-house.invalid"
+      ],
+      "required_assets": [
+        "update.json",
+        "update.json.sig",
+        "toefl-house-erp-app.tar"
+      ],
+      "enabled": false
+    }
+  ]
+}

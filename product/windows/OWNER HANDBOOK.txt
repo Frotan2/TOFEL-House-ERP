@@ -1,0 +1,312 @@
+TOEFL HOUSE ERP - OWNER HANDBOOK
+================================
+Engineering release candidate handbook - English with Dari safety summary
+
+READ THIS FIRST
+---------------
+Release status: TEST PACKAGE - NO REAL DATA
+Production authorization: REJECT / NO-GO
+
+This handbook is for a normal computer user. You do not need GitHub knowledge,
+Git, Python, PowerShell commands, database commands, or programming.
+
+Automated tests and a green GitHub page are not approval for live operation.
+Until the Owner receives a separate written production approval, use only
+invented practice people, practice books, practice fees, and practice money.
+Never enter real student, guardian, staff, salary, payment, or financial data
+into this engineering candidate.
+
+The current candidate does not provide public student/guardian portals,
+automatic notification delivery, custom Assessment/Progression, or an approved
+automatic updater. Do not ask staff to imitate those functions in spreadsheets
+or unofficial records.
+
+1. WHAT YOU SHOULD RECEIVE
+--------------------------
+Receive the versioned customer ZIP and its .zip.sha256 file from the trusted
+provider's GitHub Release. The provider must identify the exact release version
+and source revision and provide the package fingerprint/attestation.
+
+The complete ZIP contains:
+  * TOEFL House ERP.vbs - the normal Windows launcher.
+  * A provider-built Linux/amd64 application image; you do not build it.
+  * product/release/release-manifest.json and its checksum.
+  * product/release/ci-gates.json and its checksum.
+  * Owner Readiness Guide, Daily Use Guide, and this Owner Handbook.
+
+The CI receipt lists the four hosted engineering workflows and their run links.
+It does NOT prove your Windows PC, backup drive, recovery, staff devices, real
+cashier work, or production readiness.
+
+Do not use a ZIP from a chat forward, unknown website, or unapproved provider.
+Do not accept only a loose image, scripts, or source-code folder as the customer
+package. Do not extract and run individual files while leaving the rest behind.
+
+2. BEFORE ANY INSTALLATION
+--------------------------
+Use a separate, disposable Windows 10/11 64-bit practice PC with no existing
+TOEFL House customer data. Docker Desktop and WSL 2 must be installed and
+working; an administrator may be needed for that initial computer setup.
+
+If the computer has EVER contained TOEFL House ERP data:
+  STOP. Do not reinstall, repair, reset a password, restore, or delete anything.
+  Open TOEFL House ERP.vbs and choose only "Check This PC" for a read-only
+  report. Contact trusted support before any other action.
+
+Never delete, rename, or move product/data, Docker volumes, database secrets,
+recovery keys, or backups. Never restore over an original site. Do not expose
+the service with a router port, public tunnel, or public web address.
+
+3. INSTALL AND OPEN ON THE PRACTICE PC
+--------------------------------------
+[ ] Extract the COMPLETE ZIP to a local, non-synchronized drive.
+[ ] Double-click TOEFL House ERP.vbs.
+[ ] Choose "Check This PC" and save the safe summary. BLOCKED or NOT VERIFIED
+    must remain unchanged; do not reinstall just to make a warning disappear.
+[ ] On a genuinely fresh practice PC only, choose Install.
+[ ] When installation finishes, choose Open / Start.
+[ ] The browser should open the local login page, normally
+    http://127.0.0.1:8000/.
+[ ] Choose "View Administrator Login" privately only on this test computer.
+    Never photograph, email, or publish the password.
+[ ] Sign in and change the initial password. Give each practice staff member
+    an individual account and only the roles required for that job.
+
+If installation fails, record the step and safe message. Do not retry with
+Repair, database deletion, or a source build. Contact the provider.
+
+4. OWNER CONFIGURATION - INSIDE THE APPLICATION
+-----------------------------------------------
+Use the authorized Owner, Configuration, and Academic Setup Desk pages.
+Configure only real policy choices that the Owner has approved. The software
+must not invent missing tuition, discounts, passing bands, salary rates,
+refund rules, notification thresholds, or privacy rules.
+
+Set up, as applicable to practice:
+  * Company, branch, currency, academic year and terms.
+  * Programs, courses, catalogs, instructors, rooms and capacities.
+  * Placement and admission policies.
+  * Enrollment and teaching policies.
+  * Tuition/placement fee Items, Price Lists and effective billing policy.
+  * Instructor contracts and native HRMS Salary Components for practice.
+  * Native book Item Group, stock-enabled Items, Warehouse and stock receipt.
+  * Staff accounts and least-privilege roles.
+
+A setting marked configured is not production approval. If a required choice
+is missing or rejected, stop that process and ask the Owner/provider for an
+authorized policy. Never choose a temporary value merely to bypass a stop.
+
+5. PRACTICE ACADEMIC JOURNEY
+----------------------------
+Use clearly synthetic names and values. Follow the role desks; do not share
+accounts or use another employee's role.
+
+Reception / Applicant:
+[ ] Search for an existing person before creating a duplicate.
+[ ] Create a practice Applicant/intake and confirm its program/branch.
+[ ] Hand the applicant to the authorized placement process.
+
+Placement:
+[ ] Authorized staff allocate the placement case and deliver the attempt.
+[ ] The assessor marks only the permitted sealed attempt.
+[ ] The reviewer and decision-maker complete their separate steps.
+[ ] Confirm the published placement decision references the same applicant.
+
+Admission:
+[ ] Create/review the practice Admission Application from the eligible case.
+[ ] Satisfy every explicit condition; an offer alone is not conversion.
+[ ] Approve/accept through the authorized roles and convert to native Student.
+[ ] Repeating the same action must not create a duplicate Student.
+
+Enrollment:
+[ ] Confirm intake/catalog linkage and eligibility again.
+[ ] Enroll the practice Student in the intended Program/Course.
+[ ] For a returning Student, confirm history is reused rather than replaced.
+
+Repeat, transfer and withdrawal policy is deferred under D5. Do not use an
+exit/transfer mechanism unless a later explicit Owner decision authorizes it.
+
+Schedule / Attendance:
+[ ] Assign an eligible teacher and create the practice teaching schedule.
+[ ] Add/move only authorized roster members.
+[ ] Record attendance through the Teacher/Academic process.
+[ ] Test an allowed correction only with the configured authority, PIN and
+    time window. A denied correction must remain denied.
+
+Assessment / Progression:
+  STOP at this boundary in the current candidate. Custom grading, pass bands,
+  next-level progression, credits and guardian grade views are deferred under
+  Owner decision D1/D4. Existing native historical results must not be changed.
+  Do not invent results in a spreadsheet and call them ERP outcomes.
+
+6. PRACTICE BILLING AND PAYMENT
+-------------------------------
+Finance staff use native ERPNext records through the Finance desk.
+[ ] Confirm the eligible enrollment and effective fee policy.
+[ ] Create the tuition or placement Sales Invoice using the configured native
+    Item and Price List. Check branch/company, currency, amount and Student.
+[ ] Confirm the submitted native invoice and its General Ledger result.
+[ ] Receive a practice Payment Entry against that actual invoice.
+[ ] Confirm outstanding becomes zero and the payment is visible in native
+    financial records. A TH link or on-screen success message alone is not
+    payment evidence.
+[ ] If a correction is needed, use the authorized correction request and
+    separation-of-duties process. Never cancel/amend through an unofficial
+    shortcut or rewrite history.
+
+Do not mix tuition/placement service charges with book stock in the book-sale
+invoice path. No tax setup is inferred (D6a), and no online payment gateway is
+selected or enabled (D6b). Never use real money in this candidate.
+
+7. PRACTICE BOOK SALE, RETURN AND CASH REFUND
+---------------------------------------------
+Authorized administrator/master-data staff first configure the native Books
+Item Group, stock-enabled selling Item, Item Price, Company currency, Price
+List, Warehouse and practice stock receipt.
+
+Finance/cashier staff then:
+[ ] Create a native Sales Invoice containing only practice Books items.
+[ ] Select the stocked Warehouse and enable Update Stock.
+[ ] Verify currency, quantity, price and total; submit the invoice.
+[ ] Confirm stock quantity/value decreased and native GL entries exist.
+[ ] Receive the practice payment through native Payment Entry and confirm the
+    invoice outstanding amount is zero.
+[ ] Create the native Sales Return / Credit Note against the original sale.
+[ ] Confirm the books return to stock and the financial reversal is correct.
+[ ] If money is returned, create the separate native cash-refund payment.
+    A Credit Note by itself is NOT a cash refund.
+[ ] Confirm a user without Finance Officer permission cannot sell.
+[ ] Confirm a mixed Books + tuition/placement invoice is refused.
+
+These are real Windows cashier/stock acceptance steps only when performed by
+the authorized staff on the actual designated PC with synthetic data. Hosted
+CI cannot complete them for you.
+
+8. TEACHER COMPENSATION AND PAYROLL BOUNDARY
+--------------------------------------------
+Instructor Contract and Teaching Assignment are input facts, not proof of pay.
+Practice calculation may create native Additional Salary inputs only when the
+contract, sessions, Employee linkage, Salary Components, dates and adjustment
+policy are explicitly configured.
+
+Before any future real payroll, the Owner must separately approve real rates,
+tax/statutory treatment, payable terms, payroll period and native HRMS review.
+Salary Slip, Payroll Entry and payment remain native HRMS/ERPNext authority.
+Do not run real payroll from this engineering candidate and never invent a
+missing salary or statutory value.
+
+9. REPORTS AND NOTIFICATIONS
+----------------------------
+Use native role-authorized reports/registers and note their source, date,
+branch/company and document status. Do not treat an invented derived risk,
+ranking, next-level, tax or reconciliation formula as approved reporting.
+Owner-defined derived reporting remains deferred under D7.
+
+TH Alerting Policy is a configuration carrier only in the current candidate.
+It does not prove an email/SMS was sent or received. Student/guardian portals
+and delivery providers are not included. Do not record passwords, API keys or
+real guardian consent in practice records.
+
+10. STOP, RESTART, REPAIR AND UPDATES
+-------------------------------------
+[ ] Choose Stop, then Open / Start, and check practice records still exist.
+[ ] Restart Windows on the disposable practice PC, open the app, and check
+    the same records again. Restart persistence is not disaster recovery.
+[ ] Use Repair only when trusted support directs it after existing data has
+    been assessed. Repair is not a reset button.
+
+There is no approved automatic update path in this candidate. PR #46 remains
+on hold. Do not install an updater, replace Docker volumes, import an unknown
+image, or copy a newer package over an existing installation. Preserve the
+current data and ask the provider for a separately approved migration/update
+procedure.
+
+11. BACKUP AND RECOVERY HOLD
+----------------------------
+The Configuration desk has a Course Owner-only Backup On / Off switch.
+Its default is Off, including on upgraded sites. Off prevents new TOEFL
+House packaged backup runs without removing old backup files; selecting
+On later still requires full policy, encryption, separate disk and a new
+verified backup. The switch is not production authorization. During the
+current preservation/restore HOLD do not change it on the Owner machine.
+
+The Owner backup-drive, key-custody and authorized isolated-restore gates are
+still HOLD. Do not create/delete Owner keys, change backup policy, run retention
+or cleanup, or rehearse restore on the Owner machine under this handbook.
+
+A backup file existing is not proof of recovery. A hosted Linux restore test is
+not Owner recovery approval. Real recovery requires a separately authorized
+procedure, preserved source data, isolated target, correct keys, verification,
+and the Owner's explicit acceptance.
+
+12. SAFE SUPPORT AND ACCEPTANCE RECORD
+--------------------------------------
+Choose "Check This PC" and then "Copy Safe Support Status". Share only that
+safe summary with trusted support. For each practice test, record:
+  * Package version and exact source revision from the release manifest.
+  * Date, PC, Windows version and the person performing the test.
+  * Step number, expected result, actual result and PASS/FAIL/BLOCKED.
+  * Redacted screen evidence that contains no passwords or personal data.
+
+Never send Administrator credentials, db.env, private keys, raw backups,
+unredacted logs, real student/guardian/staff records, salary or bank details.
+
+FINAL DECISION
+--------------
+A successful login, persistent practice record, green CI run, or downloadable
+ZIP does not authorize production. Keep the decision at NO-GO until the real
+Owner Windows installation, recovery, staff-device, cashier/stock, configuration,
+payroll and package acceptance gates are completed and the Owner gives explicit
+written approval.
+
+
+خلاصهٔ مهم برای صاحب کورس / DARI SAFETY SUMMARY
+===============================================
+
+این بسته فقط برای آزمایش انجینری است. وضعیت استفادهٔ واقعی: NO-GO / REJECT.
+تا تأیید کتبی و جداگانهٔ صاحب کورس، هیچ معلومات واقعی شاگرد، سرپرست، کارمند،
+معاش، پرداخت یا حسابداری وارد نکنید؛ فقط نام و ارقام تمرینی استفاده کنید.
+
+۱. بسته را فقط از سازندهٔ مورد اعتماد و از صفحهٔ نسخهٔ مشخص GitHub بگیرید.
+نسخه، Source Revision و فایل‌های checksum باید همراه باشند. تست سبز GitHub
+به معنی تأیید کمپیوتر واقعی، بکاپ، بازیابی یا استفادهٔ عملیاتی نیست.
+
+۲. روی کمپیوتری که قبلاً معلومات TOEFL House داشته، Install، Repair، Restore،
+تغییر رمز، حذف Docker volume یا حذف product/data انجام ندهید. فقط
+Check This PC را اجرا کنید و با پشتیبانی مورد اعتماد تماس بگیرید.
+
+۳. روی کمپیوتر جداگانهٔ تمرینی، کل بسته را Extract کنید و
+TOEFL House ERP.vbs را باز کنید. نخست Check This PC، سپس در کمپیوتر کاملاً
+جدید Install و بعد Open / Start را انتخاب کنید. برای کار روزانه به Git،
+PowerShell، Python یا دستور دیتابیس ضرورت نیست.
+
+۴. پالیسی‌ها، شهریه، صنف‌ها، استادها و صلاحیت کارمندان را فقط از صفحات مجاز
+داخل سیستم تنظیم کنید. اگر یک قیمت، فیصدی، شرط قبولی، معاش یا قاعده مشخص
+نشده است، خودتان عدد یا قاعدهٔ موقتی نسازید. هر کارمند حساب جدا و فقط
+صلاحیت وظیفهٔ خودش را داشته باشد.
+
+۵. جریان تمرینی: Applicant، Placement، Admission، Enrollment، Schedule،
+Attendance و بعد Billing و Payment. Assessment/Progression سفارشی و پورتال
+شاگرد/سرپرست در این نسخه فعال نیست. ارسال Email/SMS نیز با داشتن
+TH Alerting Policy ثابت نمی‌شود.
+
+۶. فروش کتاب فقط با Books، Warehouse و Update Stock در اسناد اصلی ERPNext
+انجام شود. کتاب و شهریه را در فاکتور فروش کتاب یک‌جا نکنید. برای برگشت کتاب
+Sales Return / Credit Note لازم است؛ این سند به‌تنهایی برگشت پول نقد نیست
+و پرداخت برگشت جداگانه لازم دارد. همه فقط با پول تمرینی انجام شود.
+
+۷. Additional Salary یا محاسبهٔ تدریس به معنی پرداخت معاش نیست. معاش واقعی،
+مالیه، شرایط پرداخت و Payroll باید جداگانه تأیید و در سیستم اصلی HRMS بررسی
+شود. در این نسخه Payroll واقعی اجرا نکنید.
+
+۸. Stop و شروع دوباره، حفظ معلومات بعد از Restart و Repair فقط روی کمپیوتر
+تمرینی آزمایش شود. مسیر Update خودکار تأیید نشده است. بکاپ واقعی، کلید
+بازیابی و Restore روی کمپیوتر صاحب کورس هنوز HOLD است؛ هیچ‌کدام را بدون
+پروسیجر جداگانه و اجازهٔ رسمی انجام ندهید.
+
+۹. برای پشتیبانی فقط Check This PC و Copy Safe Support Status را شریک کنید.
+رمز Administrator، db.env، کلید خصوصی، بکاپ خام، گزارش خام یا معلومات واقعی
+شاگردان و کارمندان را هرگز نفرستید.
+
+تصمیم نهایی تا تکمیل آزمایش واقعی Windows، بازیابی، دستگاه‌های کارمندان،
+فروش کتاب/صندوق، تنظیمات و تأیید کتبی صاحب کورس: NO-GO.

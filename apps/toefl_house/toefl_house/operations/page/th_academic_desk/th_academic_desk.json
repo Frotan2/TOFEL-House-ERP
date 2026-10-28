@@ -1,0 +1,14 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Operations",
+  "name": "th-academic-desk",
+  "page_name": "th-academic-desk",
+  "roles": [
+    {
+      "role": "Academic Manager"
+    }
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Academic Desk"
+}

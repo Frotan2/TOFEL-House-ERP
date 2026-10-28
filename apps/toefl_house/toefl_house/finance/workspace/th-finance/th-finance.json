@@ -1,0 +1,106 @@
+{
+	"app": "toefl_house",
+	"content": "[{\"id\": \"aZ5TIJcuwi\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>TH Finance</b></span>\", \"col\": 12}}, {\"id\": \"nzApgnA1oh\", \"type\": \"card\", \"data\": {\"card_name\": \"Billing\", \"col\": 4}}, {\"id\": \"91pPTEfLKc\", \"type\": \"card\", \"data\": {\"card_name\": \"Configuration\", \"col\": 4}}, {\"id\": \"thRegCard01\", \"type\": \"card\", \"data\": {\"card_name\": \"Registers\", \"col\": 4}}]",
+	"docstatus": 0,
+	"doctype": "Workspace",
+	"for_user": "",
+	"is_hidden": 0,
+	"label": "TH Finance",
+	"links": [
+		{
+			"label": "Billing",
+			"type": "Card Break"
+		},
+		{
+			"label": "Fees",
+			"link_to": "Fees",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Sales Invoices",
+			"link_to": "Sales Invoice",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Payment Entries",
+			"link_to": "Payment Entry",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Configuration",
+			"type": "Card Break"
+		},
+		{
+			"label": "Fee Structures",
+			"link_to": "Fee Structure",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Fee Categories",
+			"link_to": "Fee Category",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Items",
+			"link_to": "Item",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Price Lists",
+			"link_to": "Price List",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Pricing Rules",
+			"link_to": "Pricing Rule",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Customers",
+			"link_to": "Customer",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Company",
+			"link_to": "Company",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Registers",
+			"type": "Card Break"
+		},
+		{
+			"is_query_report": 1,
+			"label": "TH Tuition Billing Register",
+			"link_to": "TH Tuition Billing Register",
+			"link_type": "Report",
+			"type": "Link"
+		},
+		{
+			"is_query_report": 1,
+			"label": "TH Placement Billing Register",
+			"link_to": "TH Placement Billing Register",
+			"link_type": "Report",
+			"type": "Link"
+		}
+	],
+	"module": "Accounts",
+	"name": "TH Finance",
+	"public": 1,
+	"roles": [
+		{
+			"role": "Finance Officer"
+		}
+	],
+	"title": "TH Finance"
+}

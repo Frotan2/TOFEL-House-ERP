@@ -1,8 +1,0 @@
-{
-  "name": "TOEFL House ERP",
-  "description": "Course Management ERP for the TOEFL House language institute featuring eight role desks, placement testing, intake, academic operations, finance, and policy configuration.",
-  "permissions": [],
-  "capabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}

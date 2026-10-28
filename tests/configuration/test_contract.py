@@ -1,0 +1,616 @@
+"""Contract for the Academic Control Plane (docs/CONFIGURATION-PLANE.md).
+
+Four layers are pinned here, offline:
+
+1. The PURE RULES — validation, effective-dated duration resolution, the
+   monotone version rule, progression integrity, and the business-language
+   refusal messages. These functions are the reason "change Starter tuition"
+   can never corrupt history: the same (versions, date) pair always resolves
+   to the same governing version.
+2. The DOCTYPE JSONs — identity fields are set-once, codes are unique, NO
+   role holds delete (configuration is retired, never removed), Course Owner
+   is the only writer, and native Version audit is on.
+3. The COMMANDS — whitelisted, request-key-first, Course-Owner-gated,
+   deliberately NOT synthetic-gated (governance precedent), consuming the
+   pure rules instead of re-implementing them.
+4. The TIES — registry/Page/hooks/projection entries, the modules.txt entry,
+   and the hard-coded-policy audit: the owned application must contain no
+   program names, level names, fee amounts or discount percentages.
+"""
+import ast
+import json
+import sys
+import unittest
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+APP = REPO / "apps/toefl_house/toefl_house"
+ACADEMIC = APP / "academic"
+sys.path.insert(0, str(REPO / "apps/toefl_house"))
+sys.path.insert(0, str(ACADEMIC))
+
+import rules  # noqa: E402  (pure module, no frappe)
+
+
+def _version(value, unit, effective_from):
+    return {"duration_value": value, "duration_unit": unit,
+            "effective_from": effective_from}
+
+
+class CodeValidationTests(unittest.TestCase):
+    def test_codes_are_stable_identifiers(self):
+        for good in ("GEN-ENG", "PREP-1", "EAP-L3", "AB"):
+            self.assertEqual(rules.validate_code(good), good)
+        for bad in ("", None, "a", "gen-eng", "-LEAD", "TRAIL-", "DOUB--LE",
+                    "WITH SPACE", 7, "X" * 33):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                rules.validate_code(bad)
+
+    def test_titles_collapse_whitespace_and_bound_length(self):
+        self.assertEqual(rules.validate_title("  General   English  "), "General English")
+        with self.assertRaises(ValueError):
+            rules.validate_title("   ")
+        with self.assertRaises(ValueError):
+            rules.validate_title("x" * 141, "Title")
+
+    def test_sequence_bounds(self):
+        self.assertEqual(rules.validate_sequence("3"), 3)
+        for bad in (0, -1, "abc", None, True, 1000, 2.5):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                rules.validate_sequence(bad)
+
+    def test_duration_rejects_nonpositive_and_typos(self):
+        self.assertEqual(rules.validate_duration_value("2", "Month"), 2.0)
+        with self.assertRaises(ValueError):
+            rules.validate_duration_value(0, "Month")
+        with self.assertRaises(ValueError):
+            rules.validate_duration_value(-3, "Week")
+        # The ceiling is a typo guard, not business policy.
+        with self.assertRaises(ValueError):
+            rules.validate_duration_value(30, "Month")
+        with self.assertRaises(ValueError):
+            rules.validate_duration_value(2, "Quarter")
+
+    def test_dates_are_real_calendar_dates(self):
+        self.assertEqual(rules.parse_date("2026-07-01"), "2026-07-01")
+        for bad in ("2026-13-01", "2026-02-30", "01-07-2026", "", None):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                rules.parse_date(bad)
+
+
+class DurationVersionTests(unittest.TestCase):
+    """The §17 hard rule: configuration changes never rewrite history."""
+
+    VERSIONS = (
+        _version(2, "Month", "2026-01-01"),
+        _version(3, "Month", "2026-07-01"),
+    )
+
+    def test_each_date_resolves_to_exactly_one_version(self):
+        self.assertEqual(rules.resolve_duration(self.VERSIONS, "2025-12-31"), None)
+        self.assertEqual(rules.resolve_duration(self.VERSIONS, "2026-01-01"),
+                         self.VERSIONS[0])
+        self.assertEqual(rules.resolve_duration(self.VERSIONS, "2026-06-30"),
+                         self.VERSIONS[0])
+        self.assertEqual(rules.resolve_duration(self.VERSIONS, "2026-07-01"),
+                         self.VERSIONS[1])
+        self.assertEqual(rules.resolve_duration(self.VERSIONS, "2030-01-01"),
+                         self.VERSIONS[1])
+
+    def test_resolution_is_stable_under_later_appends(self):
+        later = self.VERSIONS + (_version(4, "Month", "2027-01-01"),)
+        # A date that already resolved keeps resolving to the same version.
+        self.assertEqual(rules.resolve_duration(later, "2026-06-30"), self.VERSIONS[0])
+        self.assertEqual(rules.resolve_duration(later, "2026-08-01"), self.VERSIONS[1])
+
+    def test_unsorted_input_resolves_identically(self):
+        shuffled = (self.VERSIONS[1], self.VERSIONS[0])
+        self.assertEqual(rules.resolve_duration(shuffled, "2026-06-30"),
+                         self.VERSIONS[0])
+
+    def test_new_versions_must_start_after_the_latest(self):
+        with self.assertRaises(ValueError) as ctx:
+            rules.check_version_appends(self.VERSIONS, "2026-07-01")
+        self.assertIn("after the latest version (2026-07-01)", str(ctx.exception))
+        with self.assertRaises(ValueError):
+            rules.check_version_appends(self.VERSIONS, "2026-05-01")
+        # Strictly later is accepted.
+        rules.check_version_appends(self.VERSIONS, "2027-01-01")
+
+    def test_latest_version_and_labels(self):
+        self.assertEqual(rules.latest_version(self.VERSIONS), self.VERSIONS[1])
+        self.assertEqual(rules.latest_version(()), None)
+        self.assertEqual(rules.duration_label(_version(2, "Month", "2026-01-01")),
+                         "2 months")
+        self.assertEqual(rules.duration_label(_version(1, "Month", "2026-01-01")),
+                         "1 month")
+        self.assertEqual(rules.duration_label(_version(1.5, "Week", "2026-01-01")),
+                         "1.5 weeks")
+        self.assertEqual(rules.duration_label(None), "")
+
+
+class FeeRuleTests(unittest.TestCase):
+    def test_fee_amount_bounds(self):
+        self.assertEqual(rules.validate_fee_amount("5000"), 5000.0)
+        self.assertEqual(rules.validate_fee_amount(1250.5), 1250.5)
+        for bad in (0, -1, "abc", None, True, 100_000_001):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                rules.validate_fee_amount(bad)
+
+    def test_component_rows_require_unique_nonempty_categories(self):
+        rows = rules.validate_component_rows(
+            [{"category": "Tuition Fee", "amount": 5000},
+             {"category": "ID Card Fee", "amount": "300"}])
+        self.assertEqual(rows[1]["amount"], 300.0)
+        with self.assertRaises(ValueError, msg="empty"):
+            rules.validate_component_rows([])
+        with self.assertRaises(ValueError, msg="duplicate"):
+            rules.validate_component_rows(
+                [{"category": "Tuition Fee", "amount": 1},
+                 {"category": " Tuition Fee ", "amount": 2}])
+        with self.assertRaises(ValueError, msg="no category"):
+            rules.validate_component_rows([{"amount": 5}])
+
+    def test_year_bounds(self):
+        start, end = rules.validate_year_bounds("2026-07-01", "2027-06-30")
+        self.assertEqual((start, end), ("2026-07-01", "2027-06-30"))
+        with self.assertRaises(ValueError):
+            rules.validate_year_bounds("2027-06-30", "2026-07-01")
+
+
+class DurationHistoryTests(unittest.TestCase):
+    """§17: 'which configuration was active when this student was enrolled?'"""
+
+    VERSIONS = (
+        _version(2, "Month", "2026-01-01"),
+        _version(3, "Month", "2026-07-01"),
+    )
+
+    def test_history_splits_enrollments_by_governing_version(self):
+        counts = rules.duration_history_counts(
+            self.VERSIONS,
+            ["2026-02-15", "2026-03-01", "2026-06-20", "2026-07-05", "2026-08-01"])
+        self.assertEqual(counts["2 months (from 2026-01-01)"], 3)
+        self.assertEqual(counts["3 months (from 2026-07-01)"], 2)
+
+    def test_unresolvable_dates_are_surfaced_not_guessed(self):
+        counts = rules.duration_history_counts(self.VERSIONS, ["2025-12-31"])
+        self.assertEqual(counts["before the first configured version"], 1)
+        self.assertEqual(rules.duration_history_counts(self.VERSIONS, []), {})
+
+    def test_setup_desk_surfaces_history(self):
+        source = (APP / "desk/setup.py").read_text(encoding="utf-8")
+        self.assertIn("rules.duration_history_counts", source,
+                      "the desk must resolve history through the pure rules")
+        self.assertIn("History: ", source)
+
+
+class ProgressionRuleTests(unittest.TestCase):
+    LEVELS = {
+        "A1": ("GEN", None),
+        "A2": ("GEN", "A3"),
+        "A3": ("GEN", None),
+        "B1": ("EAP", None),
+    }
+
+    def family_of(self, code):
+        row = self.LEVELS.get(code)
+        return row[0] if row else None
+
+    def next_of(self, code):
+        row = self.LEVELS.get(code)
+        return row[1] if row else None
+
+    def test_next_level_must_exist_same_family_not_self_acyclic(self):
+        rules.validate_next_level("A1", "A2", self.family_of, self.next_of)
+        with self.assertRaises(ValueError):
+            rules.validate_next_level("A1", "A1", self.family_of, self.next_of)
+        with self.assertRaises(ValueError, msg="unknown level"):
+            rules.validate_next_level("A1", "NOPE", self.family_of, self.next_of)
+        with self.assertRaises(ValueError, msg="cross family"):
+            rules.validate_next_level("A1", "B1", self.family_of, self.next_of)
+        cyclic = dict(self.LEVELS, A3=("GEN", "A1"))
+        family = lambda c: (cyclic.get(c) or (None,))[0]  # noqa: E731
+        nxt = lambda c: (cyclic.get(c) or (None, None))[1]  # noqa: E731
+        with self.assertRaises(ValueError, msg="cycle"):
+            rules.validate_next_level("A1", "A2", family, nxt)
+        rules.validate_next_level("A1", "", self.family_of, self.next_of)
+
+
+class RefusalMessageTests(unittest.TestCase):
+    def test_deactivation_refusals_carry_the_real_counts(self):
+        message = rules.level_in_use_message("STARTER", 84)
+        self.assertIn("STARTER", message)
+        self.assertIn("84 submitted enrollment", message)
+        self.assertIn("cannot be deactivated", message)
+        program_message = rules.program_has_levels_message("GEN-ENG", 5)
+        self.assertIn("GEN-ENG", program_message)
+        self.assertIn("5 active level", program_message)
+
+    def test_integrity_fault_is_surfaced_not_hidden(self):
+        self.assertIn("integrity", rules.level_missing_native_message("X1"))
+
+
+class DiscountRuleTests(unittest.TestCase):
+    def test_discount_percentage_validation(self):
+        self.assertEqual(rules.validate_discount_percentage("10.5"), 10.5)
+        self.assertEqual(rules.validate_discount_percentage(100), 100.0)
+        for bad in (0, -5, 100.5, "abc", None, True, False):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                rules.validate_discount_percentage(bad)
+
+    def test_documented_full_waiver_is_student_scoped(self):
+        with self.assertRaises(ValueError):
+            rules.validate_discount_award(100, "", "Reason for waiver")
+        with self.assertRaises(ValueError):
+            rules.validate_discount_award(100, "STUDENT", "")
+        self.assertEqual(rules.validate_discount_award(
+            100, "STUDENT", "Owner verified relationship"), 100)
+
+    def test_precedence_validation(self):
+        self.assertEqual(rules.validate_precedence(1), 1)
+        self.assertEqual(rules.validate_precedence("10"), 10)
+        for bad in (0, -1, 1000000, "abc", None, True):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                rules.validate_precedence(bad)
+
+    def test_policy_a_single_discount_per_charge_precedence(self):
+        """OD-CP-1 Policy A: single discount per charge line; explicit precedence resolves."""
+        discount_rules = [
+            {"code": "SIBLING-5", "title": "Sibling 5%", "discount_percentage": 5.0,
+             "precedence": 1, "status": "Active"},
+            {"code": "MERIT-10", "title": "Merit 10%", "discount_percentage": 10.0,
+             "precedence": 10, "status": "Active"},
+            {"code": "EARLY-10", "title": "Early Bird 10%", "discount_percentage": 10.0,
+             "precedence": 5, "status": "Active"},
+        ]
+        winner = rules.resolve_charge_discount(discount_rules, fee_category="Tuition Fee")
+        self.assertIsNotNone(winner)
+        self.assertEqual(winner["rule_code"], "MERIT-10")
+        self.assertEqual(winner["discount_percentage"], 10.0)
+
+    def test_policy_a_never_stacks(self):
+        discount_rules = [
+            {"code": "RULE-A", "discount_percentage": 10.0, "precedence": 5, "status": "Active"},
+            {"code": "RULE-B", "discount_percentage": 15.0, "precedence": 5, "status": "Active"},
+        ]
+        # Equal precedence ties broken deterministically by highest percentage
+        winner = rules.resolve_charge_discount(discount_rules)
+        self.assertEqual(winner["rule_code"], "RULE-B")
+        self.assertEqual(winner["discount_percentage"], 15.0)
+
+    def test_applicability_filtering(self):
+        discount_rules = [
+            {"code": "TUITION-ONLY", "fee_category": "Tuition Fee", "discount_percentage": 10.0,
+             "precedence": 10, "status": "Active"},
+            {"code": "RETIRED-RULE", "fee_category": "Tuition Fee", "discount_percentage": 20.0,
+             "precedence": 20, "status": "Retired"},
+        ]
+        # Inactive rule is excluded
+        winner = rules.resolve_charge_discount(discount_rules, fee_category="Tuition Fee")
+        self.assertEqual(winner["rule_code"], "TUITION-ONLY")
+
+        # Category mismatch returns None
+        self.assertIsNone(rules.resolve_charge_discount(discount_rules, fee_category="ID Card Fee"))
+
+
+class ReportingRegisterTests(unittest.TestCase):
+    def test_canonical_definitions_exist(self):
+        from toefl_house.reporting import get_reporting_definition, all_definitions
+        defs = all_definitions()
+        self.assertIn("collected_today", defs)
+        self.assertIn("active_programs", defs)
+        self.assertIn("discount_rules_active", defs)
+        label, definition, owner = get_reporting_definition("collected_today")
+        self.assertEqual(label, "Collected today")
+        self.assertIn("Submitted Payment Entry", definition)
+
+
+class GlobalConfigurationTests(unittest.TestCase):
+    """OD-CP-3 Option A: No overrides; global configuration is the single authority."""
+
+    def test_global_configuration_has_no_branch_override_layer(self):
+        init_source = (APP / "desk/__init__.py").read_text(encoding="utf-8")
+        self.assertNotIn("Branch Program", init_source)
+        self.assertNotIn("Branch Duration", init_source)
+        self.assertNotIn("Branch Fee Structure", init_source)
+
+
+class DoctypeContractTests(unittest.TestCase):
+    DOC = APP / "academic/doctype"
+
+    def _load(self, name):
+        return json.loads(
+            (self.DOC / name / f"{name}.json").read_text(encoding="utf-8"))
+
+    def test_configuration_masters_pin_identity_and_audit(self):
+        for name, identity_fields in (
+                ("th_academic_program", ("code",)),
+                ("th_program_level", ("code", "family", "native_program")),
+                ("th_discount_rule", ("code",))):
+            doc = self._load(name)
+            self.assertEqual(doc["module"], "Academic")
+            self.assertTrue(doc.get("track_changes"),
+                            f"{name} must keep native Version audit")
+            self.assertEqual(doc["engine"], "InnoDB")
+            fields = {field["fieldname"]: field for field in doc["fields"]}
+            for identity in identity_fields:
+                self.assertTrue(fields[identity].get("set_only_once"),
+                                f"{name}.{identity} must be set-once")
+            self.assertTrue(fields["code"].get("unique"), f"{name}.code must be unique")
+
+    def test_program_level_controller_refuses_duplicate_native_anchor(self):
+        source = (self.DOC / "th_program_level" / "th_program_level.py").read_text(
+            encoding="utf-8")
+        self.assertIn('filters={"native_program": doc.native_program}', source)
+        self.assertIn('fields=["name"]', source)
+        self.assertIn("limit_page_length=2", source)
+        self.assertIn("already linked to another", source)
+
+    def test_no_role_may_delete_configuration(self):
+        for name in ("th_academic_program", "th_program_level", "th_discount_rule"):
+            doc = self._load(name)
+            self.assertTrue(doc["permissions"], f"{name} must declare permissions")
+            for perm in doc["permissions"]:
+                self.assertNotIn("delete", {k for k, v in perm.items() if v == 1},
+                                 f"{name}: no role may delete configuration")
+                self.assertNotIn("cancel", {k for k, v in perm.items() if v == 1})
+
+    def test_course_owner_is_the_only_writer(self):
+        for name in ("th_academic_program", "th_program_level", "th_discount_rule"):
+            doc = self._load(name)
+            for perm in doc["permissions"]:
+                writers = {"write", "create"} & {k for k, v in perm.items() if v == 1}
+                if writers:
+                    self.assertEqual(perm["role"], "Course Owner",
+                                     f"{name}: only Course Owner writes configuration")
+            roles = {perm["role"] for perm in doc["permissions"]}
+            self.assertEqual(roles, {"Course Owner", "General Manager", "Academic Manager"})
+
+    def test_duration_child_table_has_no_standalone_life(self):
+        doc = self._load("th_level_duration")
+        self.assertTrue(doc["istable"])
+        self.assertEqual(doc["permissions"], [])
+        fields = {field["fieldname"]: field for field in doc["fields"]}
+        self.assertEqual(fields["duration_unit"]["options"], "Month\nWeek\nDay")
+        for field in ("set_by", "set_on", "superseded_on"):
+            self.assertTrue(fields[field].get("read_only"), field)
+
+
+def _module_source(relative):
+    return (ACADEMIC / relative).read_text(encoding="utf-8")
+
+
+class CommandContractTests(unittest.TestCase):
+    COMMANDS = (
+        "create_program", "create_level", "set_level_duration",
+        "set_next_level", "set_program_status", "set_level_status",
+        "create_academic_year", "create_fee_type",
+        "set_level_fee_component", "remove_level_fee_component",
+        "create_discount_rule", "set_discount_rule_status",
+    )
+
+    def _tree(self):
+        return ast.parse(_module_source("__init__.py"))
+
+    def test_commands_are_whitelisted_and_request_key_first(self):
+        tree = self._tree()
+        source = _module_source("__init__.py")
+        functions = {node.name: node for node in ast.walk(tree)
+                     if isinstance(node, ast.FunctionDef)}
+        for name in self.COMMANDS:
+            node = functions[name]
+            decorated = any(getattr(dec, "attr", "") == "whitelist"
+                            or "whitelist" in ast.unparse(dec)
+                            for dec in node.decorator_list)
+            self.assertTrue(decorated, f"{name} must be whitelisted")
+            args = [a.arg for a in node.args.args]
+            self.assertEqual(args[0], "request_key", f"{name} must be idempotent")
+            position = source.index(f"def {name}")
+            self.assertIn("@frappe.whitelist", source[max(0, position - 200):position])
+
+    def test_gate_is_course_owner_and_never_synthetic(self):
+        # S5: the Course Owner gate moved from a per-command direct call
+        # into configuration_audit.execute (same role, same enabled rule,
+        # same non-administrator rule). Every command must route through it
+        # under its own kind, and every kind must bind business_policy.
+        import ast as _ast
+
+        source = _module_source("__init__.py")
+        self.assertNotIn("require_synthetic", source,
+                         "configuration is a governance surface, not a synthetic command")
+        self.assertNotIn("ignore_permissions=True) if False", source)
+        audit_source = (APP / "configuration/audit.py").read_text(encoding="utf-8")
+        # The live gate: bound-role holder, never Guest/Administrator, enabled.
+        self.assertIn("foundation.require_bound_authority(authority)", audit_source)
+        self.assertIn('user in (None, "Guest", "Administrator")', audit_source)
+        self.assertIn('not set(roles) & set(frappe.get_roles(user))', audit_source)
+        self.assertIn('frappe.db.get_value("User", user, "enabled")', audit_source)
+        audit_tree = _ast.parse(audit_source)
+        kinds = None
+        for node in _ast.walk(audit_tree):
+            if (isinstance(node, _ast.Assign)
+                    and getattr(node.targets[0], "id", "") == "KIND_AUTHORITY"):
+                kinds = _ast.literal_eval(node.value)
+        tree = self._tree()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name in self.COMMANDS:
+                calls = ast.unparse(node)
+                self.assertIn("configuration_audit.execute(", calls,
+                              f"{node.name} must route through the receipted gate")
+                self.assertIn(f"'{node.name}', request_key", calls,
+                              f"{node.name} must execute under its own kind")
+                self.assertEqual(kinds.get(node.name), "business_policy",
+                                 f"{node.name} must bind the Course Owner authority")
+
+    def test_commands_delegate_to_the_pure_rules(self):
+        source = _module_source("__init__.py")
+        for rule in ("rules.validate_code", "rules.validate_duration_value",
+                     "rules.parse_date", "rules.check_version_appends",
+                     "rules.validate_next_level", "rules.level_in_use_message"):
+            self.assertIn(rule, source, f"commands must reuse {rule}")
+
+    def test_governed_writes_use_the_guarded_pattern(self):
+        source = _module_source("__init__.py")
+        self.assertIn("validate_request_key(request_key)", source)
+        self.assertIn("for_update=True", source, "mutations must row-lock the target")
+        # The configuration write path is insert-inside-the-gate; the rule that
+        # no OTHER path exists is enforced by the doctype permissions test.
+
+    def test_refusals_are_business_language_not_raw_exceptions(self):
+        source = _module_source("__init__.py")
+        for literal in ("already exists", "cannot share one position",
+                        "reactivate it before"):
+            self.assertIn(literal, source)
+        self.assertIn("program_has_levels_message", source)
+        self.assertIn("level_in_use_message", source)
+
+
+class ControlPlaneTieTests(unittest.TestCase):
+    def test_desk_registry_page_hooks_and_projection_agree(self):
+        init_source = (APP / "desk/__init__.py").read_text(encoding="utf-8")
+        self.assertIn('"th-academic-setup"', init_source)
+        for literal in ('"roles": ["Course Owner"]',):
+            self.assertIn(literal, init_source)
+        page = json.loads((APP / "operations/page/th_academic_setup/"
+                           "th_academic_setup.json").read_text(encoding="utf-8"))
+        self.assertEqual(page["module"], "Operations")
+        self.assertEqual(page["title"], "TOEFL House Academic Setup")
+        self.assertEqual([row["role"] for row in page["roles"]], ["Course Owner"])
+        hooks = (APP / "hooks.py").read_text(encoding="utf-8")
+        self.assertIn('"th-academic-setup"', hooks)
+        modules = (APP / "modules.txt").read_text(encoding="utf-8").splitlines()
+        self.assertIn("Academic", modules)
+        for pair in (('("setup", "TH Academic Program")',),
+                     ('("setup", "TH Program Level")',),
+                     ('("setup", "TH Level Duration")',),
+                     ('("setup", "Program Enrollment")',)):
+            self.assertIn(pair[0], init_source, f"missing projection allow-list {pair[0]}")
+
+    def test_finance_desk_consumes_the_configured_fee_plans(self):
+        """§18: billing guidance resolves the Owner's plan — one source of truth."""
+        source = (APP / "desk/finance.py").read_text(encoding="utf-8")
+        self.assertIn("Academic Setup", source,
+                      "a missing plan must name its owner and where to fix it")
+        self.assertIn("billing_guidance", source)
+        self.assertIn('"fee_structure": plan["name"]', source,
+                      "the configured plan must be the prefill, never a blank field")
+        for literal in ("No fee plan is configured", "has no components yet",
+                        "More than one complete fee plan"):
+            self.assertIn(literal, source)
+        # U9: one rule everywhere — the desk's readiness is the issuance
+        # command's own acceptance (non-cancelled + components), shared via
+        # helpers rather than a second draft-only definition per desk.
+        self.assertIn("issuable_plans", source,
+                      "billing guidance must use the shared plan-usability rule")
+        setup_source = (APP / "desk/setup.py").read_text(encoding="utf-8")
+        self.assertIn("issuable_plans", setup_source,
+                      "setup readiness must use the shared plan-usability rule")
+        self.assertIn("plan_with_components", setup_source)
+        init_source = (APP / "desk/__init__.py").read_text(encoding="utf-8")
+        for pair in (('("finance", "Fee Structure")',),
+                     ('("finance", "Fee Component")',)):
+            self.assertIn(pair[0], init_source, f"missing allow-list {pair[0]}")
+
+    def test_setup_desk_offers_only_actions_that_can_succeed(self):
+        """Contextual multi-actions: buttons appear exactly when the server
+        rule lets them succeed — no doomed buttons, no dead ends."""
+        source = (APP / "desk/setup.py").read_text(encoding="utf-8")
+        # Retire program only when no active level depends on it:
+        self.assertIn("active_family_levels == 0", source)
+        self.assertIn('"Retire program"', source)
+        # Retire level only when no submitted enrollment runs on it:
+        self.assertIn('if not usage.get(level.get("native_program")):', source)
+        self.assertIn('"Retire level"', source)
+        # Reactivation, progression and component removal are contextual too:
+        for literal in ('"Reactivate program"', '"Reactivate level"',
+                        '"Set progression"', '"Remove component"'):
+            self.assertIn(literal, source)
+        # The client renders the secondary actions.
+        client = (APP / "public/js/th_role_desks.js").read_text(encoding="utf-8")
+        self.assertIn("(item.actions || []).forEach", client)
+
+    def test_setup_desk_audits_native_programs_outside_the_plane(self):
+        source = (APP / "desk/setup.py").read_text(encoding="utf-8")
+        self.assertIn("not claimed by any configured level", source)
+        self.assertIn("anchored_native", source)
+        init_source = (APP / "desk/__init__.py").read_text(encoding="utf-8")
+        self.assertIn('("setup", "Program")', init_source)
+
+    def test_setup_desk_consumes_the_pure_rules(self):
+        source = (APP / "desk/setup.py").read_text(encoding="utf-8")
+        self.assertIn("from toefl_house.academic import rules", source)
+        self.assertIn("rules.resolve_duration", source,
+                      "the desk must resolve durations from versions, not store them")
+        self.assertIn("require_desk_audience(SLUG)", source)
+
+
+class HardCodedPolicyAuditTests(unittest.TestCase):
+    """§31: business names and amounts are Owner data, never code literals."""
+
+    BANNED = ("General English", "Pre-Starter", "Prep One", "Prep Two",
+              "Prep Three", "EAP", "IELTS", "Conversation Program")
+    BANNED_WORDS = ("Starter",)
+
+    def test_no_owned_python_module_contains_program_or_level_names(self):
+        offenders = []
+        for path in APP.rglob("*.py"):
+            if "doctype" in path.parts or "__pycache__" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            for literal in self.BANNED:
+                if literal in text:
+                    offenders.append((str(path), literal))
+            for word in self.BANNED_WORDS:
+                if word in text:
+                    offenders.append((str(path), word))
+        self.assertEqual(offenders, [],
+                         "hard-coded business policy found (move it to configuration "
+                         "or, if a technical constant, rename it away from policy words)")
+
+    def test_fee_orchestration_stays_on_native_authority(self):
+        source = _module_source("__init__.py")
+        # Fee plans are NATIVE Fee Structures keyed on the anchored program;
+        # the command must keep them editable (Draft) and consumable.
+        self.assertIn('"docstatus": 0', source,
+                      "the managed fee structure must be the editable Draft")
+        self.assertIn('"naming_series": FEE_STRUCTURE_NAMING', source)
+        # Fee types are native Fee Categories; the accounting Item is created
+        # by the native controller, and the command must fail closed if the
+        # native Item Group fixture is missing.
+        self.assertIn('"doctype": FEE_CATEGORY', source)
+        self.assertIn("Item Group", source)
+        self.assertIn("'Fee Component' item group is missing", source)
+        # No parallel money model: no amounts beyond validation, no totals
+        # persisted by the control plane.
+        self.assertNotIn('"total_amount":', source)
+
+    def test_no_owned_python_module_contains_fee_amounts_or_discounts(self):
+        import re
+        offenders = []
+        pattern = re.compile(
+            r"(amount|price|fee|tuition|discount)\s*=\s*[0-9]{3,}", re.IGNORECASE)
+        for path in APP.rglob("*.py"):
+            if "doctype" in path.parts or "__pycache__" in path.parts:
+                continue
+            for match in pattern.finditer(path.read_text(encoding="utf-8", errors="ignore")):
+                offenders.append((str(path), match.group(0)))
+        self.assertEqual(offenders, [], "hard-coded money policy found")
+
+
+
+class OwnerDecisionLedgerTests(unittest.TestCase):
+    def test_resolved_recovery_and_backup_decisions_are_not_marked_unresolved(self):
+        decisions = json.loads((REPO / "docs" / "owner-decisions.json").read_text(encoding="utf-8"))
+        resolved = decisions["resolved_business_decisions"]
+        unresolved = " ".join(decisions["unresolved_business_inputs_not_reinterpreted"])
+        self.assertEqual(resolved["D13"]["status"], "DECIDED")
+        self.assertEqual(resolved["D14"]["status"], "DEFERRED / FUTURE")
+        self.assertIn("RPO 24 hours, RTO 8 hours", resolved["D13"]["owner_answers"][0])
+        self.assertIn("separate local drive on the same computer", resolved["D14"]["owner_answers"][0])
+        self.assertNotIn("D13", unresolved)
+        self.assertNotIn("D14", unresolved)
+
+
+if __name__ == "__main__":
+    unittest.main()

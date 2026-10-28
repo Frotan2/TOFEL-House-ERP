@@ -1,0 +1,138 @@
+{
+ "actions": [],
+ "creation": "2026-09-20 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "effective_from",
+  "column_break_1",
+  "grading_scale",
+  "section_break_facets",
+  "components",
+  "weights",
+  "pass_rules",
+  "rubrics",
+  "progression",
+  "retakes",
+  "level_mapping",
+  "section_break_1",
+  "reason",
+  "column_break_2",
+  "set_by",
+  "set_on",
+  "superseded_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "effective_from",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Effective from",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Native Grading Scale this version governs through. Links only; threshold values arrive with owner decision D1 and are never invented here.",
+   "fieldname": "grading_scale",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Grading scale",
+   "options": "Grading Scale"
+  },
+  {
+   "fieldname": "section_break_facets",
+   "fieldtype": "Section Break",
+   "label": "Policy facets (owner-defined)"
+  },
+  {
+   "description": "Owned assessment components as canonical JSON, written only by the guarded facet commands. Empty until the Course Owner defines them; native per-group Assessment Plans are scheduled instances and are never referenced here.",
+   "fieldname": "components",
+   "fieldtype": "Long Text",
+   "label": "Components"
+  },
+  {
+   "description": "Owned component weights as canonical JSON. Native Course weight columns are never read; combination semantics arrive with a future owner rule.",
+   "fieldname": "weights",
+   "fieldtype": "Long Text",
+   "label": "Weights"
+  },
+  {
+   "description": "Owned pass and cutoff rules as canonical JSON. No native pass or fail concept exists; every cutoff is owner-entered.",
+   "fieldname": "pass_rules",
+   "fieldtype": "Long Text",
+   "label": "Pass rules"
+  },
+  {
+   "description": "Owned rubric requirements as canonical JSON: required evidence and rating levels per rubric. Score conversion is a future owner rule.",
+   "fieldname": "rubrics",
+   "fieldtype": "Long Text",
+   "label": "Rubrics"
+  },
+  {
+   "description": "Owned progression rules as canonical JSON: required evidence and the target level. A progression decision never enrolls by itself.",
+   "fieldname": "progression",
+   "fieldtype": "Long Text",
+   "label": "Progression"
+  },
+  {
+   "description": "Owned retake rules as canonical JSON: attempts, waits, scope and which attempt governs. Prior attempts are always preserved.",
+   "fieldname": "retakes",
+   "fieldtype": "Long Text",
+   "label": "Retakes"
+  },
+  {
+   "description": "Owned level mapping as canonical JSON: the level codes this policy version governs. Empty governs nothing.",
+   "fieldname": "level_mapping",
+   "fieldtype": "Long Text",
+   "label": "Level mapping"
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Why this version was set. Mandatory on every version write.",
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "set_by",
+   "fieldtype": "Link",
+   "label": "Set by",
+   "options": "User"
+  },
+  {
+   "fieldname": "set_on",
+   "fieldtype": "Datetime",
+   "label": "Set on"
+  },
+  {
+   "description": "Closed date: the day this version stopped governing new activity. Written once when a newer version supersedes it; the row itself is never rewritten.",
+   "fieldname": "superseded_on",
+   "fieldtype": "Date",
+   "label": "Superseded on"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-20 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Academic",
+ "name": "TH Assessment Policy Version",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
