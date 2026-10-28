@@ -206,6 +206,7 @@ assert(Object.keys(actionFields).length >= 8, "guided actions went missing");
 
 const endpointFiles = {
 	"toefl_house.operations.owner_configuration": ["operations/owner_configuration.py"],
+	"toefl_house.setup_presets.native_grading_scale": ["setup_presets/native_grading_scale.py"],
 	"toefl_house.admission": ["admission/__init__.py"],
 	"toefl_house.enrollment": ["enrollment/__init__.py"],
 	"toefl_house.api": ["api.py"],
