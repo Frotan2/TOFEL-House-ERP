@@ -777,13 +777,18 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
             raise RestoreInputError(
                 "emergency restore request was already used") from None
         marker_path = state_dir / "in-progress.json"
-        with marker_path.open("w", encoding="utf-8") as stream:
-            json.dump({"request_id": request_id, "site": site,
-                       "backup_set": backup_set}, stream, sort_keys=True)
+        # Exclusive creation closes the check-then-create race: a second
+        # signed request can never overwrite another active restore marker.
         try:
-            marker_path.chmod(0o600)
-        except OSError:
-            pass
+            with os.fdopen(os.open(marker_path, os.O_WRONLY | os.O_CREAT
+                                   | os.O_EXCL, 0o600), "w") as stream:
+                json.dump({"request_id": request_id, "site": site,
+                           "backup_set": backup_set}, stream, sort_keys=True)
+                stream.flush()
+                os.fsync(stream.fileno())
+        except FileExistsError:
+            raise RestoreInputError(
+                "another emergency restore is in progress; resolve it first") from None
         _append_audit(state_dir, {**audit_base, "outcome": "started"})
         try:
             _run_native_restore(site, backup_set, encryption_key,
