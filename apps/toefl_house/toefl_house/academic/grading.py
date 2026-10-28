@@ -499,6 +499,10 @@ def select_best_attempt(attempts):
         except (ValueError, TypeError):
             continue
         outcome = _attempt_field(row, "outcome")
+        if outcome not in ("Pass", "Fail"):
+            # An Incomplete assessment can never displace a completed
+            # published result or become progression evidence.
+            continue
         candidates.append((outcome == "Pass", percent, row))
     if not candidates:
         return None
