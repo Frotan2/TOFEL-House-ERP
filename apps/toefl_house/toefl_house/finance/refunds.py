@@ -277,11 +277,21 @@ def refund_permitted(doc, *, existing=False):
 def guard_payment_entry(doc, method=None):
     """``Payment Entry`` seam: customer refunds must settle a credit note.
 
-    Receipts, supplier payments and every other native payment type pass
-    through untouched — the native validations remain the authority for them.
+    Unreviewed Student Pay disbursements are additionally denied (except
+    cancellation of previously submitted transactions). Receipts and
+    unrelated supplier payments remain subject to normal native controls.
     """
     from toefl_house.security import require_operational
+    from toefl_house.finance.student_payout_policy import student_pay_write_allowed
+
     require_operational()
+    if not student_pay_write_allowed(
+            getattr(doc, "payment_type", None),
+            getattr(doc, "party_type", None), method):
+        raise frappe.ValidationError(
+            "Student cash payouts are disabled until a General Manager-approved "
+            "tuition refund is independently executed by Finance through a "
+            "verified, native Fees refund workflow. Direct Student Pay is denied.")
     previous = doc.get_doc_before_save() if callable(getattr(doc, "get_doc_before_save", None)) else None
     protected = ("th_reception_collector", "th_collection_fees", "th_collection_handover", "th_collection_synthetic")
     if any(getattr(doc, field, None) or (previous and previous.get(field)) for field in protected):

@@ -1,0 +1,514 @@
+{
+  "schema_version": 1,
+  "preset_id": "TOEFL-HOUSE-AFG-1405",
+  "status": "PROPOSED_FOR_SYNTHETIC_TEST_ONLY",
+  "purposes": [
+    "Clean customer site initialization",
+    "Existing test site non-destructive preview"
+  ],
+  "safety": {
+    "prohibit_importing_personal_pc_test_data": true,
+    "require_explicit_owner_confirmation": true,
+    "never_auto_submit_invoices_or_payments": true,
+    "never_auto_enable_backup": true,
+    "never_auto_activate_tax": true,
+    "never_auto_activate_blanket_discounts": true,
+    "never_overwrite_existing_records": true,
+    "no_private_keys_or_credentials": true
+  },
+  "institution": {
+    "display_name": "The TOEFL House",
+    "currency": "AFN",
+    "timezone": "Asia/Kabul",
+    "calendar": "Afghan Solar Hijri",
+    "friday_weekly_off": true,
+    "working_hours_local": {
+      "start": "06:00",
+      "end": "19:10"
+    },
+    "legal_display_name_supplied": "The TOEFL House",
+    "dari_display_name": "خانه موفقیت",
+    "legal_form": "Privately registered English language course under an individual natural person",
+    "legal_spelling_pending_document_verification": false,
+    "public_brand_alias": "TOEFL House",
+    "production_company_must_be_verified_from_license": true,
+    "official_english_name_owner_confirmed": true,
+    "official_name_source": "Explicit owner confirmation: English name on course registration/license"
+  },
+  "academic_years": [
+    {
+      "name": "1405",
+      "start": "2026-03-21",
+      "end": "2027-03-20"
+    }
+  ],
+  "programs": [
+    {
+      "code": "GEN-ENG",
+      "title": "General English",
+      "progression_kind": "sequential",
+      "levels": [
+        {
+          "code": "PRE-STARTER",
+          "title": "Pre-Starter",
+          "sequence": 1,
+          "duration_months": 1,
+          "semester_tuition_afn": 500
+        },
+        {
+          "code": "STARTER",
+          "title": "Starter",
+          "sequence": 2,
+          "duration_months": 2,
+          "semester_tuition_afn": 1000
+        },
+        {
+          "code": "PREP-1",
+          "title": "Prep 1",
+          "sequence": 3,
+          "duration_months": 2,
+          "semester_tuition_afn": 1000,
+          "existing_site_aliases": [
+            "PREP-ONE"
+          ]
+        },
+        {
+          "code": "PREP-2",
+          "title": "Prep 2",
+          "sequence": 4,
+          "duration_months": 2,
+          "semester_tuition_afn": 1000,
+          "existing_site_aliases": [
+            "PREP-TWO"
+          ]
+        },
+        {
+          "code": "PREP-3",
+          "title": "Prep 3",
+          "sequence": 5,
+          "duration_months": 2,
+          "semester_tuition_afn": 1000,
+          "existing_site_aliases": [
+            "PREP-THREE"
+          ]
+        }
+      ],
+      "assessment_policy_code": "GEN-ENG-ASSESS-01",
+      "assessment_skill_weights_percent": {
+        "speaking": 25,
+        "listening": 20,
+        "writing": 20,
+        "reading": 15,
+        "grammar": 10,
+        "vocabulary": 10
+      }
+    },
+    {
+      "code": "EAP",
+      "title": "English for Academic Purposes",
+      "progression_kind": "sequential",
+      "levels": [
+        {
+          "code": "EAP-1",
+          "title": "EAP Level 1",
+          "sequence": 1,
+          "duration_months": 2,
+          "semester_tuition_afn": 2000,
+          "existing_site_aliases": [
+            "EAP-ONE"
+          ]
+        },
+        {
+          "code": "EAP-2",
+          "title": "EAP Level 2",
+          "sequence": 2,
+          "duration_months": 2,
+          "semester_tuition_afn": 2000,
+          "existing_site_aliases": [
+            "EAP-TWO"
+          ]
+        },
+        {
+          "code": "EAP-3",
+          "title": "EAP Level 3",
+          "sequence": 3,
+          "duration_months": 2,
+          "semester_tuition_afn": 2000,
+          "existing_site_aliases": [
+            "EAP-THREE"
+          ]
+        },
+        {
+          "code": "EAP-4",
+          "title": "EAP Level 4",
+          "sequence": 4,
+          "duration_months": 2,
+          "semester_tuition_afn": 2000,
+          "existing_site_aliases": [
+            "EAP-FOUR"
+          ]
+        }
+      ],
+      "assessment_policy_code": "EAP-ASSESS-01",
+      "assessment_skill_weights_percent": {
+        "speaking": 25,
+        "listening": 20,
+        "writing": 20,
+        "reading": 15,
+        "grammar": 10,
+        "vocabulary": 10
+      }
+    },
+    {
+      "code": "SPECIAL-SPEAKING",
+      "title": "Special Speaking",
+      "progression_kind": "independent_concurrent",
+      "levels": [
+        {
+          "code": "SPECIAL-SPEAKING-2M",
+          "title": "Special Speaking",
+          "sequence": 1,
+          "duration_months": 2,
+          "semester_tuition_afn": 2000
+        }
+      ],
+      "assessment_policy_code": "SS-ASSESS-01",
+      "assessment_skill_weights_percent": {
+        "speaking": 100
+      }
+    },
+    {
+      "code": "TOEFL-PREP",
+      "title": "TOEFL Preparation",
+      "progression_kind": "independent",
+      "levels": [
+        {
+          "code": "TOEFL-PREP-4M",
+          "title": "TOEFL Preparation",
+          "sequence": 1,
+          "duration_months": 4,
+          "semester_tuition_afn": 7000
+        }
+      ],
+      "assessment_policy_code": "TOEFL-ASSESS-01",
+      "assessment_skill_weights_percent": {
+        "speaking": 25,
+        "listening": 25,
+        "writing": 25,
+        "reading": 25
+      }
+    }
+  ],
+  "cross_program_transition": {
+    "from": "PREP-3",
+    "to": "EAP-1",
+    "mode": "admission_or_placement_decision_not_native_next_level",
+    "automated": false
+  },
+  "concurrent_enrollment": {
+    "allow_speaking_with": [
+      "EAP",
+      "TOEFL-PREP"
+    ],
+    "require_independent_enrollment_and_billing": true,
+    "prohibit_duplicate_same_group": true
+  },
+  "online_one_to_one": {
+    "delivery_mode": "Online One-to-One",
+    "teacher_student_ratio": "1:1",
+    "tuition": {
+      "currency": "AFN",
+      "period": "one_calendar_month",
+      "pricing_type": "negotiated_per_student_contract",
+      "suggested_monthly_afn": {
+        "general_english": 5000,
+        "eap_min": 6000,
+        "eap_max": 7000,
+        "toefl_preparation": 9000
+      },
+      "amounts_are_guidance_not_automatically_charged": true,
+      "needs_owner_approved_student_contract": true,
+      "renewal_or_termination_requires_explicit_contract_decision": true,
+      "separate_from_on_site_semester_fee_structure": true,
+      "contract_month_basis": "Calendar-month anniversary from individual start date; never universally the first day of Shamsi month",
+      "renewal_date_rule": "Same calendar day next month; shorter months require a documented end-of-month convention"
+    },
+    "instructor_pay": {
+      "source_of_truth": "Native HRMS/Payroll and authorized instructor agreement",
+      "indicative_monthly_afn": {
+        "lower_example": 3000,
+        "upper_example": 5000
+      },
+      "examples_are_not_salary_rates_or_bounds": true,
+      "salary_basis": "per_assigned_class_month_subject_to_signed_agreement",
+      "never_derive_payroll_automatically_from_student_tuition": true,
+      "no_payroll_posting_during_setup": true
+    },
+    "financial_controls": {
+      "online_tuition_and_payroll_are_independent_ledgers": true,
+      "no_auto_invoice_without_contract_and_authorization": true,
+      "no_auto_salary_posting_without_payroll_approval": true,
+      "gross_receipts_minus_teacher_cost_is_not_automatically_net_profit": true,
+      "fees_and_payroll_support_monthly_reporting": true
+    },
+    "requires_named_student_instructor_contract_and_schedule": true,
+    "no_default_billing_or_salary_posting": true
+  },
+  "fee_policy": {
+    "category": "Semester Tuition Fee",
+    "billing_currency": "AFN",
+    "semester_price_is_authoritative": true,
+    "optional_installments_per_level": true,
+    "monthly_installments_use_afghan_calendar_boundaries": true,
+    "installment_due_date_policy": "FIRST_OF_EACH_AFGHAN_MONTH_OR_OWNER_SPECIFIED",
+    "ability_to_pay_full_semester_in_advance": true,
+    "installment_due_strategy": "native_solar_hijri_monthly_cadence_present_requires_governing_owner_billing_terms_and_windows_acceptance",
+    "carry_forward_unpaid_balance": true,
+    "attendance_hold_requires_authorized_decision": true,
+    "books_and_refunds_separate_from_tuition": true,
+    "owner_policy_must_explicitly_enable_installments": true,
+    "non_silent_payment_grace_days_required": true,
+    "late_join_full_original_course_fee": true,
+    "no_automatic_prorating_for_late_join": true,
+    "late_join_reduction_requires_explicit_discount_approval": true,
+    "installment_first_payment_flexible_percent_examples": [
+      50,
+      60
+    ],
+    "installment_amounts_must_sum_to_net_tuition": true,
+    "remaining_due_choices": [
+      "25th of starting Afghan Solar Hijri month",
+      "1st of next Afghan Solar Hijri month"
+    ],
+    "preferred_remaining_due": "1st of next Afghan Solar Hijri month",
+    "payment_grace_days": 5,
+    "installment_due_and_amount_contract_specific": true,
+    "installment_engine_must_support_unequal_approved_installments": true,
+    "never_silent_payment_reschedule": true
+  },
+  "discounts": {
+    "available_percentages": [
+      5,
+      10,
+      15,
+      20,
+      50,
+      100
+    ],
+    "templates_are_inactive_by_default": true,
+    "require_reason_and_authorized_approval": true,
+    "maximum_one_discount_per_charge": true,
+    "hundred_percent_only_student_specific": true,
+    "hundred_percent_allowed_reasons": [
+      "Staff Family",
+      "Scholarship",
+      "Owner Exceptional Waiver"
+    ],
+    "prohibit_family_wide_auto_grant": true,
+    "approval_matrix": {
+      "pct_5_10_15_20": "General Manager",
+      "pct_50": "Course Owner",
+      "pct_100": "Course Owner"
+    },
+    "staff_family_full_waiver_relationships": [
+      "spouse",
+      "children",
+      "parents"
+    ],
+    "staff_family_full_waiver_excluded_relationships": [
+      "siblings"
+    ],
+    "all_beneficiaries_must_be_named": true,
+    "requires_reason_and_authorized_approval": true,
+    "preapprovals_stored_before_any_active_rule": true
+  },
+  "assessment": {
+    "policy_code": "GEN-ENG-ASSESS-01",
+    "overall_pass_percent": 60,
+    "final_exam_percent": 60,
+    "continuous_percent": 40,
+    "continuous_subweights_percent": {
+      "attendance": 5,
+      "participation": 10,
+      "assignments": 10,
+      "short_quizzes": 15
+    },
+    "skills_weight_percent": {
+      "speaking": 25,
+      "listening": 20,
+      "writing": 20,
+      "reading": 15,
+      "grammar": 10,
+      "vocabulary": 10
+    },
+    "require_published_marks_and_manager_approval_for_promotion": true,
+    "non_recorded_marks_outcome": "Incomplete",
+    "grading_scale": {
+      "name": "TOEFL House GE EAP Scale 60 V1",
+      "grade_thresholds": [
+        {
+          "grade": "A",
+          "min_percent": 90
+        },
+        {
+          "grade": "B",
+          "min_percent": 80
+        },
+        {
+          "grade": "C",
+          "min_percent": 70
+        },
+        {
+          "grade": "D",
+          "min_percent": 60
+        },
+        {
+          "grade": "F",
+          "min_percent": 0
+        }
+      ]
+    },
+    "retake": {
+      "max_total_attempts": 2,
+      "wait_days": 7,
+      "scope": "full",
+      "governing": "best",
+      "eligibility": "Only students who failed the initial term exam",
+      "history": "Preserve both original and retake attempts",
+      "governing_best_result_requires_live_integration_verification": true,
+      "never_replace_original_mark": true
+    },
+    "placement": {
+      "internal_not_official_toefl": true,
+      "assessor_led": true,
+      "record_component_evidence": true,
+      "no_invented_compulsory_total_score": true,
+      "fee_afn_per_attempt": 100,
+      "payment_required_before_assessment": true,
+      "registration_by": "Reception",
+      "assessment_by": "Authorized academic assessor",
+      "paper_exam_component": true,
+      "face_to_face_speaking_component": true,
+      "record_both_evidence_and_final_level": true,
+      "receipt_via_native_education_and_finance": true,
+      "retake_or_reassessment_fees_not_implicitly_waived": true
+    },
+    "scope": "Initial proposed template; level-specific rubrics and final approval required",
+    "academic_program_scope": {
+      "general_english": "formal_grades_and_level_promotion",
+      "eap": "formal_grades_and_level_promotion",
+      "special_speaking": "competency_progress_report_no_mandatory_pass_fail_or_level_promotion",
+      "toefl_preparation": "four_skills_progress_report_no_mandatory_pass_fail_or_level_promotion",
+      "specialist_runtime_reporting_requires_separate_verified_path": true
+    }
+  },
+  "staffing": {
+    "teachers_created_on_install": false,
+    "roster_requires_actual_employees_and_availability": true,
+    "schedule_templates_preserved_not_assigned": true,
+    "support_two_teacher_general_english": true,
+    "one_to_one_requires_named_instructor_and_contract": true
+  },
+  "permissions": {
+    "use_existing_frappe_role_and_document_permissions": true,
+    "course_owner_approves_policy_versions": true,
+    "receptionist_cannot_approve_discounts_or_reverse_cash": true,
+    "finance_posts_only_native_erpnext_documents": true,
+    "instructors_cannot_approve_their_own_assessment_book": true
+  },
+  "tax": {
+    "enabled_for_student_fee_billing": false,
+    "rate_percent": null,
+    "legal_review_required_before_activation": true,
+    "scope_note": "Tuition indirect taxes, income tax, BRT, payroll withholding and rent withholding must be classified separately; OFF here is not a tax exemption claim.",
+    "legal_entity_type": "natural_person",
+    "business_kind": "Privately registered language training course",
+    "student_tuition_tax_treatment": "OFF pending specific Afghanistan Revenue Department/legal review; not an exemption conclusion",
+    "withholding_and_income_tax_require_independent_classification": true
+  },
+  "backup": {
+    "enabled": false,
+    "requested_backup_local_time": "17:00",
+    "on_off_control_required": true,
+    "retention_mode_proposal": "Preserve all valid backup sets",
+    "keep_count_for_optional_deletion_mode": 7,
+    "recovery_quorum_proposal": 2,
+    "recovery_public_key": null,
+    "private_key_must_remain_outside_erp": true,
+    "requires_separate_drive_and_verified_restore_before_enabling": true,
+    "powered_off_pc_behavior": "No guarantee; do not claim backups ran while machine was off",
+    "initial_production_status": "HOLD"
+  },
+  "policy_editing": {
+    "user_experience": "Edit current -> review changes -> create new effective-dated version",
+    "immutable_approved_history": true,
+    "inherited_unchanged_fields": true,
+    "show_diff_and_effective_date": true,
+    "explicit_approval_required": true
+  },
+  "class_operations": {
+    "site_default_capacity_proposal": 20,
+    "configurable_capacity_min": 15,
+    "configurable_capacity_max": 30,
+    "actual_capacity_per_class_required": true,
+    "transfers_between_classes_same_level": true,
+    "transfer_authorizer": "Academic Manager",
+    "transfer_requires_separate_d5_supersession_and_live_permissions": true,
+    "waitlist_or_overbooking_requires_explicit_policy": true,
+    "attendance_and_roster_history_preserved": true
+  },
+  "refunds": {
+    "withdrawal_refund_claim_allowed": true,
+    "approve_refund_role": "General Manager",
+    "execute_native_refund_role": "Finance Manager",
+    "owner_approval_not_required_for_ordinary_withdrawal": true,
+    "refund_amount_and_eligibility_formula_status": "APPROVED_CASE_BY_CASE_GENERAL_MANAGER",
+    "must_record_receipt_ref_and_reason": true,
+    "no_refund_without_verified_receivable_and_original_payment": true,
+    "decision_policy": "Each withdrawal refund request reviewed individually; General Manager documents justification and approves a specific AFN amount; Finance Manager alone posts native authorized payout.",
+    "request_requires_original_payment_evidence": true,
+    "approver_and_payer_must_be_different_people": true,
+    "refund_amount_must_be_positive": true,
+    "cumulative_refunds_cannot_exceed_actual_collections": true,
+    "cumulative_refunds_exclude_cancelled_entries": true,
+    "cumulative_refunds_scoped_to_student_company_and_original_payment": true,
+    "no_automatic_proration_or_refund_entitlement": true,
+    "no_auto_payout_on_approval": true,
+    "preserve_denials_reversals_and_history": true,
+    "native_fees_credit_note_and_payment_entry_path_requires_acceptance": true,
+    "live_workflow_is_not_enabled_by_this_preset": true
+  },
+  "policy_revision": {
+    "approved_history_immutable": true,
+    "owner_ui": "Edit active policy fields, compare differences, choose effective date, save as NEW version",
+    "never_erase_grading_scale_link_on_blank_edit": true,
+    "production_ui_still_requires_testing": true
+  },
+  "approval_state": {
+    "owner_confirmed_2026_10_28": [
+      "course_names_as_supplied_pending_license_confirmation",
+      "individual_registered_business",
+      "GE_EAP_continuous_40_final_60",
+      "pass_minimum_60",
+      "one_retake_after_7_days",
+      "placement_fee_100_per_attempt",
+      "late_join_pays_full_tuition",
+      "flexible_installments",
+      "same_level_class_transfer_allowed",
+      "refund_manager_approves_finance_executes",
+      "discount_approval_tiers_and_eligible_family",
+      "per_class_capacity_15_to_30",
+      "individual_anniversary_based_online_month",
+      "case_by_case_refund_GM_approval_Finance_payout_cap_actual_collected",
+      "official_english_name_The_TOEFL_House"
+    ],
+    "engineering_proposals_pending_runtime_acceptance": [
+      "alphabetic_grade_thresholds",
+      "best_governing_retake_attempt",
+      "general_class_capacity_20",
+      "month_end_anniversary_short_month_policy",
+      "specialist_progress_only_reporting"
+    ],
+    "not_activated_without_release_approval": true
+  }
+}

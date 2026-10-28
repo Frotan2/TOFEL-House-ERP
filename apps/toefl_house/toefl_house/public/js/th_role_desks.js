@@ -705,6 +705,13 @@ frappe.provide("toefl_house.role_desks");
 		{ fieldname: "recovery_quorum", label: "Recovery quorum", fieldtype: "Int", reqd: 1 },
 	];
 	const ACTION_FIELDS = Object.freeze({
+		"toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale": [
+			{ fieldname: "grading_scale_name", label: "New grading scale version name", fieldtype: "Data", reqd: 1,
+				description: "Use a new unique name for a later version. Historical scales are not overwritten." },
+			{ fieldname: "intervals", label: "Grade thresholds (prefilled JSON; grade_code and threshold)", fieldtype: "Small Text", reqd: 1,
+				description: "A grade must exist at threshold 0. Every threshold and grade code must be unique." },
+			{ fieldname: "reason", label: "Reason for this grading scale", fieldtype: "Small Text", reqd: 1 },
+		],
 		"toefl_house.finance.collections.record_reception_collection": [
 			{ fieldname: "fees", label: "Tuition bill", fieldtype: "Data", read_only: 1, reqd: 1 },
 			{ fieldname: "amount", label: "Cash received", fieldtype: "Currency", reqd: 1, description: "Issue only after counting the cash. The student's balance falls immediately." },
@@ -1475,6 +1482,110 @@ frappe.provide("toefl_house.role_desks");
 		});
 	}
 
+	/* The first-run review never issues a configuration mutation.  Existing
+	 * data, alternate level codes and release blockers must remain visible. */
+	function mountOwnerSetupPreview(page) {
+		const section = $("<section class='th-section th-setup-preview'></section>").appendTo(page.body);
+		$("<h2 class='th-section-title'></h2>").text(text("Review first-run setup")).appendTo(section);
+		const body = $("<div class='th-section-body'></div>").appendTo(section);
+		$("<p></p>").text(text(
+			"Compare the proposed course setup with this site's existing configuration. " +
+			"This is a read-only check: nothing is installed, changed, billed or approved."
+		)).appendTo(body);
+		const actions = $("<div class='th-setup-actions'></div>").appendTo(body);
+		const button = $("<button type='button' class='btn btn-primary btn-sm'></button>")
+			.text(text("Check TOEFL House setup")).appendTo(actions);
+		const output = $("<div class='th-setup-result' aria-live='polite'></div>").appendTo(body);
+		button.on("click", () => {
+			button.prop("disabled", true);
+			output.empty();
+			$("<p></p>").text(text("Checking current configuration…")).appendTo(output);
+			frappe.call({
+				method: "toefl_house.setup_presets.api.preview_owner_initial_setup",
+				callback(response) {
+					button.prop("disabled", false);
+					output.empty();
+					const data = response.message || {};
+					if (data.mode !== "READ_ONLY_PREVIEW" || data.ready_to_apply !== false ||
+						!data.counts || !Array.isArray(data.actions)) {
+						$("<p class='text-danger'></p>").text(text(
+							"Setup preview returned an unexpected response. No configuration was changed."
+						)).appendTo(output);
+						return;
+					}
+					$("<h3></h3>").text(text("Proposed configuration — review only")).appendTo(output);
+					$("<p></p>").text(
+						text("Missing") + ": " + Number(data.counts.create || 0) + "  ·  " +
+						text("Already matches") + ": " + Number(data.counts.match || 0) + "  ·  " +
+						text("Needs review") + ": " + Number(data.counts.review || 0)
+					).appendTo(output);
+					const scale = data.grading_scale_suggestion;
+					if (scale && typeof scale.grading_scale_name === "string" &&
+						typeof scale.intervals === "string" && scale.intervals.length < 4096) {
+						const status = scale.exists ? text("Existing scale found") :
+							text("Native grading scale is not yet created");
+						$("<p></p>").text(status + ": " + scale.grading_scale_name).appendTo(output);
+						$("<button type='button' class='btn btn-secondary btn-sm'></button>")
+							.text(text("Create a new native grading scale version"))
+							.on("click", () => openGuidedAction({
+								label: "Create new grading scale",
+								endpoint: "toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale",
+								args: {
+									grading_scale_name: scale.exists ? "" : scale.grading_scale_name,
+									intervals: scale.intervals,
+								},
+							}))
+							.appendTo(output);
+						$("<p></p>").text(text(
+							"Creating a scale submits a new native document with an audit trail. " +
+							"Link it to the assessment policy in a separately reviewed policy version."
+						)).appendTo(output);
+					}
+					if (Number.isInteger(data.planned_actions_count) &&
+						data.planned_actions_count >= 0 && data.counts.review === 0) {
+						$("<p></p>").text(text("First-run actions proposed, not executed") +
+							": " + data.planned_actions_count).appendTo(output);
+						const operations = data.planned_operation_counts || {};
+						const list = $("<ul></ul>").appendTo(output);
+						Object.entries(operations).slice(0, 20).forEach(([name, count]) => {
+							$("<li></li>").text(String(name) + ": " + Number(count || 0)).appendTo(list);
+						});
+					}
+					const table = $("<table class='table table-bordered table-condensed'></table>").appendTo(output);
+					const head = $("<thead><tr></tr></thead>").appendTo(table).find("tr");
+					[text("Area"), text("Code"), text("Status"), text("Next step")].forEach(
+						(label) => $("<th></th>").text(label).appendTo(head)
+					);
+					const tbody = $("<tbody></tbody>").appendTo(table);
+					data.actions.slice(0, 100).forEach((item) => {
+						const tr = $("<tr></tr>").appendTo(tbody);
+						[item.kind, item.code, item.status, item.details].forEach(
+							(value) => $("<td></td>").text(String(value || "")).appendTo(tr)
+						);
+					});
+					if (Array.isArray(data.pending_decisions) && data.pending_decisions.length) {
+						$("<h4></h4>").text(text("Still requires Owner review")).appendTo(output);
+						const list = $("<ul></ul>").appendTo(output);
+						data.pending_decisions.slice(0, 30).forEach(
+							(value) => $("<li></li>").text(String(value || "")).appendTo(list)
+						);
+					}
+					$("<p class='text-warning'></p>").text(text(
+						"This site has not been initialized by the preview. " +
+						"Do not use live student or finance records until release acceptance is complete."
+					)).appendTo(output);
+				},
+				error() {
+					button.prop("disabled", false);
+					output.empty();
+					$("<p class='text-danger'></p>").text(text(
+						"Setup inspection was denied or unavailable; no data was changed."
+					)).appendTo(output);
+				},
+			});
+		});
+	}
+
 	Object.entries(SURFACES).forEach(([slug, surface]) => {
 		// Native Page creates its DOM wrapper BEFORE evaluating page_js.
 		// Never create placeholders for unopened pages: pageview.show treats
@@ -1492,6 +1603,7 @@ frappe.provide("toefl_house.role_desks");
 				},
 			});
 			mountSearch(page, surface);
+			if (slug === "th-academic-setup") mountOwnerSetupPreview(page);
 			loadDesk(page, surface, slug);
 		};
 	});
