@@ -49,6 +49,14 @@ class ReleaseImageTriggerContract(unittest.TestCase):
     def test_native_integration_separately_covers_native_checker_changes(self):
         self.assertIn("tools/native/**", push_paths("native-lifecycle.yml"))
 
+    def test_advisory_changes_trigger_full_release_qualification(self):
+        patterns = ("docs/engineering/evidence/sec-deps-01/**", "tests/security/**")
+        names = ("foundation-runtime.yml", "native-lifecycle.yml",
+                 "product-image.yml", "windows-customer-package.yml")
+        for name in names:
+            with self.subTest(workflow=name):
+                self.assertTrue(set(patterns).issubset(push_paths(name)))
+
     def test_product_image_keeps_exact_sha_release_gates(self):
         workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
         self.assertIn("python3 tools/release/verify_ci_gates.py --ensure-started", workflow)
