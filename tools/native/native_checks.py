@@ -7996,8 +7996,51 @@ def main():
                 as_user(label,refused_read)
             frappe.set_user('Administrator')
             assert frappe.db.get_value(dt,name,'status')=='Requested'
+            original_payments=frappe.db.count('Payment Entry')
+            original_gl=frappe.db.count('GL Entry')
+            approval=as_user('general_manager',lambda:
+                tuition_refund_cmd.approve_tuition_refund(
+                    'native_refund_gm_approval_0001',name,
+                    'Independent synthetic General Manager approval'))
+            assert approval['status']=='Approved',approval
+            events=frappe.db.get_all('TH Placement Audit Event',
+                filters={'target':name},fields=['action','before_hash','after_hash'])
+            assert len(events)==2,('Request and approval must both be audited',events)
+            assert {row.action for row in events}=={
+                'request_tuition_refund','approve_tuition_refund'},events
+            assert all(row.after_hash and len(row.after_hash)==64 for row in events)
+            assert any(row.action=='approve_tuition_refund' and row.before_hash
+                       for row in events),events
+            # A permitted and independently approved refund still must NOT
+            # create a native payout against Education Fees on this stack.
+            payout=denied(lambda:as_user('finance_manager',lambda:
+                tuition_refund_cmd.pay_tuition_refund(
+                    'native_refund_payout_hold_0001',name)))
+            assert payout['denied']=='ValidationError',payout
+            assert frappe.db.get_value(dt,name,'status')=='Approved'
+            alternate=as_user('finance_officer',lambda:
+                tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_denial_case_0001',original.student,
+                    original.company,fee,'20.00',
+                    'Second synthetic independent review case',
+                    'Synthetic collection and rejection evidence'))
+            rejected=as_user('general_manager',lambda:
+                tuition_refund_cmd.deny_tuition_refund(
+                    'native_refund_gm_deny_000001',alternate['name']))
+            assert rejected['status']=='Denied'
+            denied_events=frappe.db.get_all('TH Placement Audit Event',
+                filters={'target':alternate['name']},
+                fields=['action','after_hash','before_hash'])
+            assert len(denied_events)==2,denied_events
+            assert all(row.after_hash and len(row.after_hash)==64
+                       for row in denied_events),denied_events
+            assert frappe.db.count('Payment Entry')==original_payments
+            assert frappe.db.count('GL Entry')==original_gl
             return {'request':name,'allowed_role_count':len(allowed),
-                    'unauthorized_roles_denied':2,'no_refund_payout':True}
+                    'unauthorized_roles_denied':2,
+                    'gm_approved':approval['status']=='Approved',
+                    'separate_case_denied':rejected['status']=='Denied',
+                    'audit_events_verified':4,'no_refund_payout':True}
         check('native-tuition-refund-list-document-role-parity',traced(tuition_refund_read_list_parity))
         def native_unequal_solar_installments():
             # Keep this positive native posting test at the END: it appends a

@@ -414,6 +414,26 @@ class NativeRefundControllerBoundaryTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.check(original, denied, "approve_tuition_refund")
 
+    def test_frappe_currency_zero_default_allows_first_gm_approval_only(self):
+        # Pinned Frappe get_valid_dict converts empty Currency to 0.0 at
+        # SQL insert. A blank, never-approved amount must not freeze approval.
+        original = self.refund("Requested", approved_amount=0.0)
+        approved = self.refund(
+            "Approved", approved_by="general.manager@example.invalid",
+            approved_amount=100, approval_evidence="Reviewed withdrawal letter")
+        self.check(original, approved, "approve_tuition_refund")
+        # A prepopulated nonzero amount on a Requested record is suspicious,
+        # not an excuse to overwrite an existing or forged approval value.
+        with self.assertRaises(PermissionError):
+            self.check(self.refund("Requested", approved_amount=1.0),
+                       approved, "approve_tuition_refund")
+        with self.assertRaises(PermissionError):
+            self.check(self.refund("Approved", approved_amount=100,
+                                  approved_by="general.manager@example.invalid"),
+                       self.refund("Paid", approved_amount=50,
+                                   approved_by="general.manager@example.invalid"),
+                       "pay_tuition_refund")
+
     def test_paid_transition_is_blocked_even_with_valid_command_context(self):
         approved = self.refund(
             "Approved", approved_by="general.manager@example.invalid",

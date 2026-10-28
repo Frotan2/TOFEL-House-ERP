@@ -175,8 +175,16 @@ class ProtectedRecord(Document):
                       "reason", "evidence", "requested_by"):
             if before.get(field) != self.get(field):
                 raise frappe.PermissionError("Tuition refund request facts are immutable")
-        if (before.get("approved_amount") is not None
-                and before.approved_amount != self.approved_amount):
+        previous_amount = before.get("approved_amount")
+        if before.status == "Requested":
+            # Frappe v16 persists an empty Currency field as 0.0 when it
+            # sanitizes a new document for SQL. That numeric default is NOT
+            # a previously approved amount: allow its one-time GM approval,
+            # but refuse a Requested row with any prefilled positive amount.
+            if previous_amount not in (None, "", 0, 0.0):
+                raise frappe.PermissionError(
+                    "Unapproved tuition refund carries an unexpected approved amount")
+        elif previous_amount != self.approved_amount:
             raise frappe.PermissionError("Tuition refund approved amount is immutable")
         if (before.get("approval_evidence")
                 and before.approval_evidence != self.approval_evidence):
