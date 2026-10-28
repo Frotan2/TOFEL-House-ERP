@@ -60,10 +60,12 @@ def _snapshot():
     levels = {}
     tuition = {}
     for row in level_rows:
-        duration_rows = _bounded_rows(
+        # Historical duration versions are expected. Fetch only the most
+        # recent row without treating older effective-dated history as an error.
+        duration_rows = frappe.db.get_all(
             "TH Level Duration", filters={"parent": row.name},
             fields=["duration_value", "duration_unit", "effective_from"],
-            order_by="effective_from desc", bound=1)
+            order_by="effective_from desc", limit_page_length=1)
         months = None
         if duration_rows:
             duration = duration_rows[0]
