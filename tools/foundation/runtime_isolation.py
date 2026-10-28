@@ -17,7 +17,7 @@ def main():
         raise SystemExit('Disposable Actions runner only')
     primary_site = os.environ.get('FOUNDATION_PRIMARY_SITE', 'foundation.localhost')
     secondary_site = os.environ.get('FOUNDATION_SECONDARY_SITE', 'restore.localhost')
-    allowed_sites = {'foundation.localhost', 'restore.localhost', 'recovery.localhost'}
+    allowed_sites = {'foundation.localhost', 'restore.localhost', 'restore-recovery.localhost'}
     if primary_site not in allowed_sites or secondary_site not in allowed_sites or primary_site == secondary_site:
         raise SystemExit('Only distinct disposable sites may be probed')
     records = json.loads(Path(os.environ['FOUNDATION_BUSINESS_REPORT']).read_text())['records']
