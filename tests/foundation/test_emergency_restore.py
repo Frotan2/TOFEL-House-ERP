@@ -300,6 +300,23 @@ class EmergencyRestoreTests(unittest.TestCase):
                             signature_2=sig2)
                 native.assert_not_called()
 
+    def test_staged_bytes_are_rechecked_against_signed_artifact_hashes(self):
+        # Source files can change between preflight and staging. The native
+        # restore must use the staged bytes and refuse changed content.
+        original = self.restore._verified_backup_paths(self.site, self.target_set)
+        expected = self.restore._artifact_hashes(original)
+        staged_dir = self.root / "staged"
+        staged_dir.mkdir()
+        staged = {}
+        for role, source in original.items():
+            target = staged_dir / source.name
+            target.write_bytes(source.read_bytes())
+            staged[role] = target
+        self.restore._verify_staged_restore_hashes(staged, expected)
+        staged["database"].write_bytes(b"altered-after-approval")
+        with self.assertRaises(self.restore.RestoreInputError):
+            self.restore._verify_staged_restore_hashes(staged, expected)
+
     def test_altered_backup_artifacts_invalidate_the_authorization(self):
         document, sig1, sig2 = self._authorization()
         backup_dir = self.sites / self.site / "private" / "backups"
