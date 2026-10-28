@@ -522,6 +522,19 @@ def _artifact_hashes(paths: dict[str, Path]) -> dict[str, str]:
             hashes[role] = _sha256_stream(stream)
     return hashes
 
+def _verify_staged_restore_hashes(staged_paths: dict[str, Path],
+                                  expected_hashes: dict[str, str] | None) -> None:
+    """Compare staged files with the signed pre-restore artifact digests.
+
+    The source may change after authorization but before the copy starts.
+    Rechecking the actual staged bytes before invoking Frappe closes that
+    time-of-check/time-of-use window for production recovery.
+    """
+    if expected_hashes is not None and _artifact_hashes(staged_paths) != expected_hashes:
+        raise RestoreInputError(
+            "restore artifact content changed after emergency authorization")
+
+
 
 def validate_emergency_authorization(document, signature_1_b64, signature_2_b64,
                                      *, site: str, backup_set: str,
@@ -820,7 +833,8 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
         try:
             _run_native_restore(site, backup_set, encryption_key,
                                 db_root_password, admin_password,
-                                context_writer=context_writer)
+                                context_writer=context_writer,
+                                expected_hashes=hashes)
         except Exception:
             _append_audit(state_dir, {**audit_base, "outcome": "failed"})
             raise
@@ -844,7 +858,8 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
 
 def _run_native_restore(site: str, backup_set: str, encryption_key: str,
                         db_root_password: str, admin_password: str,
-                        context_writer=None) -> None:
+                        context_writer=None,
+                        expected_hashes: dict[str, str] | None = None) -> None:
     backup_dir = SITES_DIR / site / "private" / "backups"
     paths = {
         role: backup_dir / f"{backup_set}{suffix}"
@@ -894,6 +909,7 @@ def _run_native_restore(site: str, backup_set: str, encryption_key: str,
                 prefix="toefl-house-native-restore-", dir="/tmp") as working_name:
             working_dir = Path(working_name)
             staged_paths = _stage_restore_artifacts(paths, working_dir)
+            _verify_staged_restore_hashes(staged_paths, expected_hashes)
             with safe_mariadb_credential_transport(frappe, working_dir):
                 with safe_gpg_transport(frappe, encryption_key):
                     if context_writer is not None:
