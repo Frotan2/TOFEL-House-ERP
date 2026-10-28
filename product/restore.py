@@ -458,7 +458,8 @@ def _load_restore_trust_store(path: Path) -> dict:
         if not isinstance(entry, dict):
             raise RestoreInputError("emergency restore trust store is invalid")
         key_id = entry.get("key_id")
-        if not isinstance(key_id, str) or not KEY_ID_PATTERN.fullmatch(key_id):
+        if (not isinstance(key_id, str) or not KEY_ID_PATTERN.fullmatch(key_id)
+                or key_id in parsed):
             raise RestoreInputError("emergency restore trust store is invalid")
         try:
             modulus = int.from_bytes(
