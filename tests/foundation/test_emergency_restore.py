@@ -260,6 +260,15 @@ class EmergencyRestoreTests(unittest.TestCase):
                     authorization=document, signature_1=sig1, signature_2=sig2)
         native.assert_not_called()
 
+    def test_duplicate_trust_store_key_identity_is_refused(self):
+        store = json.loads(self.trust_path.read_text(encoding="utf-8"))
+        store["keys"].append(dict(store["keys"][0]))
+        self.trust_path.write_text(json.dumps(store), encoding="utf-8")
+        with patch.object(self.restore, "_run_native_restore") as native:
+            with self.assertRaises(self.restore.RestoreInputError):
+                self._run_authorized()
+        native.assert_not_called()
+
     def test_wrong_purpose_key_is_refused(self):
         document, sig1, sig2 = self._authorization(
             approvals=[
