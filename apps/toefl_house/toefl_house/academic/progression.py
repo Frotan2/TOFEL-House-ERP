@@ -128,14 +128,88 @@ def _attempts_made(row):
     return len({int(attempt["attempt"] or 1) for attempt in attempts}) or 1
 
 
-def _last_attempt_on(row):
+def _best_published_attempt(student, level_name):
+    """The best valid published attempt for a student at a level, or None.
+
+    A read-time selection over current Published rows only (superseded,
+    draft and cancelled rows are never candidates). See
+    ``grading.select_best_attempt`` for the selection rule.
+    """
+    rows = frappe.get_all(RESULT,
+                          filters={"student": student, "level": level_name,
+                                   "status": "Published"},
+                          fields=["name", "student", "level", "status",
+                                  "outcome", "overall_percent", "published_on",
+                                  "attempt"])
+    return grading.select_best_attempt(rows)
+
+
+def _require_best_attempt(row):
+    """A progression decision must judge the best published attempt.
+
+    Refusal (not silent substitution) is the behaviour: judging a different
+    row than the one requested could surprise callers, and a promotion
+    based on a worse attempt must be impossible. The refusal names the best
+    attempt so the caller can decide on it instead.
+    """
+    best = _best_published_attempt(row.student, row.level)
+    if best is None:
+        raise frappe.ValidationError(
+            "No valid published attempt exists for this student and level; "
+            "progression cannot be decided")
+    best_name = best.get("name") if isinstance(best, dict) else best.name
+    if best_name != row.name:
+        percent = best.get("overall_percent") if isinstance(best, dict) else best.overall_percent
+        outcome = best.get("outcome") if isinstance(best, dict) else best.outcome
+        raise frappe.ValidationError(
+            "Progression must be decided on the best published attempt "
+            f"({best_name}, {percent}% {outcome}); this result is not the "
+            "best attempt and cannot be promoted, repeated or retaken")
+    return best
+
+
+def _prior_retake_approved(row):
+    """An Approved Retake decision already recorded for this attempt?
+
+    The check spans revisions: a correction supersedes the result row, but
+    it does not erase the retake authorization already granted for that
+    attempt, so a second Retake decision on the corrected revision is
+    still a duplicate retake.
+    """
+    attempt_rows = frappe.get_all(RESULT,
+                                  filters={"student": row.student,
+                                           "level": row.level,
+                                           "attempt": row.attempt},
+                                  fields=["name"])
+    names = [item.get("name") for item in attempt_rows]
+    if not names:
+        return False
+    decisions = frappe.get_all(DECISION,
+                               filters={"academic_result": ["in", names],
+                                        "decision": "Retake",
+                                        "status": "Approved"},
+                               fields=["name"])
+    return bool(decisions)
+
+
+def _retake_result_exists(row):
+    """A published retake attempt already exists for this student/level?"""
     published = frappe.get_all(RESULT,
-                               filters={"student": row.student, "level": row.level},
-                               fields=["published_on"], order_by="published_on desc",
-                               limit=1)
-    if not published or not published[0].get("published_on"):
-        return ""
-    return str(published[0]["published_on"])[:10]
+                               filters={"student": row.student,
+                                        "level": row.level,
+                                        "status": "Published"},
+                               fields=["attempt"])
+    try:
+        current = int(row.attempt or 1)
+    except (ValueError, TypeError):
+        current = 1
+    for item in published:
+        try:
+            if int(item.get("attempt") or 0) > current:
+                return True
+        except (ValueError, TypeError):
+            continue
+    return False
 
 
 def _eligibility(row, facets, roles):
@@ -178,6 +252,7 @@ def decide_progression(request_key, academic_result, decision, reason):
             raise frappe.ValidationError(
                 f"A progression decision ({existing.decision}) is already recorded "
                 "for this result; duplicate progression is refused")
+        _require_best_attempt(row)
         facets = _pinned_facets(row)
         roles = set(frappe.get_roles(actor))
         eligibility = _eligibility(row, facets, roles)
@@ -210,11 +285,20 @@ def decide_progression(request_key, academic_result, decision, reason):
                     raise frappe.ValidationError(
                         "The pinned policy version configures no retake rules; "
                         "retakes fail closed until the Course Owner defines them")
+                # The wait runs from this (original) result's own publication,
+                # not from the latest result at the level: the mission policy
+                # is "at least seven days after the original attempt's
+                # publication", and the mission's 7-day floor / one-retake
+                # cap are applied inside grading.retake_gate.
                 on_date = frappe.utils.today()
+                last_on = str(row.published_on or "")[:10]
                 try:
-                    state = grading.retake_state(
-                        retakes, attempts_made=_attempts_made(row),
-                        last_attempt_on=_last_attempt_on(row), on_date=on_date)
+                    state = grading.retake_gate(
+                        retakes, outcome=row.outcome,
+                        attempts_made=_attempts_made(row),
+                        last_attempt_on=last_on, on_date=on_date,
+                        prior_retake=_prior_retake_approved(row),
+                        retake_exists=_retake_result_exists(row))
                 except ValueError as exc:
                     raise frappe.ValidationError(str(exc)) from exc
                 if not state["allowed"]:
@@ -296,6 +380,9 @@ def override_progression(request_key, academic_result, decision, reason):
             raise frappe.ValidationError(
                 "A progression decision is already recorded for this result; "
                 "duplicate progression is refused")
+        # An override bypasses unmet eligibility, never the evidence
+        # itself: it too must judge the best published attempt.
+        _require_best_attempt(row)
         facets = _pinned_facets(row)
         roles = set(frappe.get_roles(actor))
         eligibility = _eligibility(row, facets, roles)
@@ -416,35 +503,68 @@ def next_level_eligibility(student, program):
         return {"required": False, "eligible": True, "level": level.name,
                 "from_level": predecessor.name,
                 "reasons": [f"This student has no enrollment at level {predecessor.code}"]}
+    # Eligibility follows the BEST valid published attempt at the
+    # predecessor level, not merely the latest decision: a later, worse
+    # attempt (or a decision recorded on a now-superseded result) cannot
+    # displace the best attempt's decision, and a Promote recorded on a
+    # non-best attempt cannot admit the student while the best attempt
+    # has no Promote.
+    best = _best_published_attempt(student_name, predecessor.name)
     decisions = frappe.get_all(DECISION,
                                filters={"student": student_name, "status": "Approved",
                                         "from_level": predecessor.name},
                                fields=["name", "decision", "to_level", "override_used",
                                        "academic_result"],
-                               order_by="decided_on desc", limit=1)
-    if not decisions:
+                               order_by="decided_on desc")
+    if best is None:
+        if decisions:
+            return {"required": True, "eligible": False, "level": level.name,
+                    "from_level": predecessor.name, "decision": decisions[0].name,
+                    "reasons": ["The prior progression evidence was superseded or "
+                                "is no longer a published academic result; a new "
+                                "approved decision is required"]}
         return {"required": True, "eligible": False, "level": level.name,
                 "from_level": predecessor.name, "decision": "",
                 "reasons": [f"No approved progression decision is recorded for level "
                             f"{predecessor.code}; enrollment into {level.code} is refused"]}
-    decision = decisions[0]
-    # A corrected result supersedes its prior decision evidence. No earlier
-    # approved Promote can admit a student when its linked result is no
-    # longer the current Published result (including post-correction).
-    evidence_status = frappe.db.get_value(
-        RESULT, decision.academic_result, "status") if decision.academic_result else None
-    if evidence_status != "Published":
+    best_name = best.get("name") if isinstance(best, dict) else best.name
+    best_percent = best.get("overall_percent") if isinstance(best, dict) else best.overall_percent
+    decision = frappe.db.get_value(DECISION,
+                                   {"student": student_name,
+                                    "academic_result": best_name,
+                                    "status": "Approved"},
+                                   ["name", "decision", "to_level", "override_used",
+                                    "academic_result"],
+                                   as_dict=True)
+    if not decision:
+        if decisions:
+            latest = decisions[0]
+            evidence_status = frappe.db.get_value(
+                RESULT, latest.academic_result, "status") if latest.academic_result else None
+            if evidence_status != "Published":
+                reason = (f"The approved {latest.decision} decision ({latest.name}) "
+                          "was recorded on a superseded result; the current best "
+                          f"published attempt ({best_name}, {best_percent}%) has no "
+                          "approved progression decision")
+            else:
+                reason = (f"The approved {latest.decision} decision ({latest.name}) "
+                          "is not recorded on the best published attempt "
+                          f"({best_name}, {best_percent}%); a new approved decision "
+                          "on the best attempt is required")
+            return {"required": True, "eligible": False, "level": level.name,
+                    "from_level": predecessor.name, "decision": latest.name,
+                    "reasons": [reason]}
         return {"required": True, "eligible": False, "level": level.name,
-                "from_level": predecessor.name, "decision": decision.name,
-                "reasons": ["The prior progression evidence was superseded or "
-                            "is no longer a published academic result; a new "
-                            "approved decision is required"]}
+                "from_level": predecessor.name, "decision": "",
+                "reasons": [f"No approved progression decision is recorded for level "
+                            f"{predecessor.code}; enrollment into {level.code} is refused"]}
     if decision.decision in ("Promote", "Complete") and decision.to_level == level.name:
         return {"required": True, "eligible": True, "level": level.name,
                 "from_level": predecessor.name, "decision": decision.name,
                 "override_used": bool(decision.override_used),
                 "reasons": [f"An approved {decision.decision} decision "
-                            f"({decision.name}) admits this level"]}
+                            f"({decision.name}) on the best published attempt "
+                            f"({best_name}) admits this level"]}
     return {"required": True, "eligible": False, "level": level.name,
             "from_level": predecessor.name, "decision": decision.name,
             "reasons": [f"The approved decision records {decision.decision} at level "
