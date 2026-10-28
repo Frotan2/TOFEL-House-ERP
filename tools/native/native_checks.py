@@ -5619,24 +5619,40 @@ def main():
             frappe.db.commit()
             return {'fs2':fs2.name,'tuition':25000,'books':5000}
         def odcp_seed_rules():
-            # Six Active rules + one immediate retirement:
+            # Six named draft rules, five explicitly activated + one left retired:
             # BIG broad 20% p5; TUI tuition 10% p9 (wins tuition);
             # TIE-A/TIE-B books 30% p7 (deterministic code tie-break -> TIE-B);
             # RET 50% p99 retired before any issuance (must be ignored);
             # EVE 9% p60 scoped to a family that never matches (must be ignored).
             frappe.set_user('Administrator')
             as_user('course_owner',lambda:acm.create_discount_rule(
-                'odcp-rule-big-00000001','SYN-DISC-BIG','SYN broad twenty',20,5,'',''))
+                'odcp-rule-big-00000001','SYN-DISC-BIG','SYN broad twenty',20,5,'','',
+                'Approved named synthetic case: tuition and books',odcp_learners['discount']['student']))
             as_user('course_owner',lambda:acm.create_discount_rule(
-                'odcp-rule-tui-00000001','SYN-DISC-TUI','SYN tuition ten',10,9,'SYN-Tuition',''))
+                'odcp-rule-tui-00000001','SYN-DISC-TUI','SYN tuition ten',10,9,'SYN-Tuition','',
+                'Approved named synthetic tuition scholarship',odcp_learners['discount']['student']))
             as_user('course_owner',lambda:acm.create_discount_rule(
-                'odcp-rule-tie-a-00001','SYN-DISC-TIE-A','SYN books tie A',30,7,'SYN-Books',''))
+                'odcp-rule-tie-a-00001','SYN-DISC-TIE-A','SYN books tie A',30,7,'SYN-Books','',
+                'Approved named synthetic book award A',odcp_learners['discount']['student']))
             as_user('course_owner',lambda:acm.create_discount_rule(
-                'odcp-rule-tie-b-00001','SYN-DISC-TIE-B','SYN books tie B',30,7,'SYN-Books',''))
+                'odcp-rule-tie-b-00001','SYN-DISC-TIE-B','SYN books tie B',30,7,'SYN-Books','',
+                'Approved named synthetic book award B',odcp_learners['discount']['student']))
             as_user('course_owner',lambda:acm.create_discount_rule(
-                'odcp-rule-ret-0000001','SYN-DISC-RET','SYN retired fifty',50,99,'',''))
+                'odcp-rule-ret-0000001','SYN-DISC-RET','SYN retired fifty',50,99,'','',
+                'An unapproved dormant refund-reduction example',odcp_learners['discount']['student']))
             as_user('course_owner',lambda:acm.create_discount_rule(
-                'odcp-rule-eve-0000001','SYN-DISC-EVE','SYN evening nine',9,60,'','SYN-PROG-EVENING'))
+                'odcp-rule-eve-0000001','SYN-DISC-EVE','SYN evening nine',9,60,'','SYN-PROG-EVENING',
+                'Approved named synthetic wrong-family scope',odcp_learners['discount']['student']))
+            # Newly defined discounts are inactive. Activate only the
+            # reviewed awards for the named student, with audit receipts.
+            for key,code in (
+                ('odcp-activate-big-000001','SYN-DISC-BIG'),
+                ('odcp-activate-tui-000001','SYN-DISC-TUI'),
+                ('odcp-activate-tie-a-001','SYN-DISC-TIE-A'),
+                ('odcp-activate-tie-b-001','SYN-DISC-TIE-B'),
+                ('odcp-activate-eve-000001','SYN-DISC-EVE')):
+                as_user('course_owner',lambda key=key,code=code:
+                    acm.set_discount_rule_status(key,code,1))
             as_user('course_owner',lambda:acm.set_discount_rule_status(
                 'odcp-rule-retire-ret-01','SYN-DISC-RET',0))
             frappe.db.commit()
@@ -5711,7 +5727,11 @@ def main():
             # higher precedence on both lines; earlier money facts stay frozen
             as_user('course_owner',lambda:acm.create_discount_rule(
                 'odcp-rule-gen-00000001','SYN-DISC-GEN','SYN general fifty',50,50,
-                '','SYN-PROGRAM-GENERAL'))
+                '','SYN-PROGRAM-GENERAL',
+                'Approved named synthetic second intake scholarship',
+                odcp_learners['scope']['student']))
+            as_user('course_owner',lambda:acm.set_discount_rule_status(
+                'odcp-activate-gen-000001','SYN-DISC-GEN',1))
             fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
                 'odcp-fee-scoped-live-01',odcp_learners['scope']['program_enrollment'],fsx['fs2'],
                 '2026-09-06','2026-10-06'))
