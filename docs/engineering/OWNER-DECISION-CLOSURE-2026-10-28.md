@@ -1,5 +1,16 @@
 # TOEFL House — decision closure packet (2026-10-28)
 
+## Final Owner closure — refund authority and legal name (2026-10-28)
+
+**Approved, with technical release gates still HOLD:**
+
+- The English name appearing on the course license, as explicitly reported by the Course Owner, is **The TOEFL House**; Dari is **خانه موفقیت**. Use this exact name in the proposed clean-install company setup. Independently compare the original license and the legal holder before live accounting/receipts; the name is owner-confirmed, not a document image independently inspected.
+- Withdrawal tuition refunds are **case by case**, never automatic/prorated or subject to an invented refund rate. A **General Manager** independently reviews the original payment, circumstances and reason, then approves a specific AFN amount. A **different Finance Manager** checks the valid approved amount, native documents and ledgers and separately posts/pays it. Owner approval is not routinely required.
+- A refund must be **positive** and cumulative completed refunds for the same student's company and original paid-fee evidence must **never exceed actually collected, submitted and not cancelled money**, excluding earlier refunds. No speculative balances, no cash payout on mere approval, no refund without original native receipt and auditable reason. Cash/book returns and native tuition Fees are separate accounting cases, not interchangeable.
+- Approval fixes the authorization process **but does not manufacture native ERPNext Fees credit/refund support**. The existing `finance/refunds.py` is scoped to Sales Invoice book returns and associated Payment Entries. The Fees tuition refund, dual-role approval and independent ledger reconciliation remain a release blocker pending explicit integration tests and Windows acceptance. Fail closed until that is present.
+
+**No further Owner input on the normal refund formula, discount percentages or legal English spelling is requested.** Technical and legal document checks remain engineering/acceptance work rather than new policy questions.
+
 ## Owner follow-up — decisions received on 2026-10-28 (authoritative addendum)
 
 The current Course Owner supplied and confirmed the following decisions after the original open-question review. They are saved as an immutable-facing `owner_policy_addenda_2026_10_28` in `docs/owner-decisions.json` and as source defaults in `setup_presets/toefl_house_afghanistan_1405.json`.
@@ -17,7 +28,7 @@ The current Course Owner supplied and confirmed the following decisions after th
 - One-to-one online fee is monthly from each student's actual start/renewal anniversary, not automatically at the start of an Afghan calendar month; teacher payroll remains separate.
 - The entity is registered in an **individual natural person's name** as a language teaching center. Owner supplied English text **The Tofel House** and Dari **خانه موفقیت**. Verify exact licensed company name and spelling before generating legal receipts or creating the live ERPNext Company. Tuition tax remains disabled pending current legal classification; not a tax-exemption declaration.
 
-**Outstanding questions now reduced to two consequential policy details:** (1) refund eligibility/amount formula and time window, (2) exact official English spelling as shown on the registered education license. A small additional month-end edge case is engineering configuration and can be set to the last valid date of a shorter month, unless the Owner objects.
+**Both previously outstanding Owner business decisions are now supplied.** The case-specific refund authorization and licensed English name are in the final closure above. The online month-end anniversary convention remains a configurable engineering edge case; actual Windows native accounting acceptance is still held.
 
 **Operational release remains HOLD.** Owner statements permit policy design, not unsafe bypass of D1/D5 runtime gates, historical edits, Company registration or live financial postings. Tests and a Windows-native release remain required.
 
