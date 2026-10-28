@@ -160,6 +160,7 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
     existing_levels = snapshot.get("levels") or {}
     existing_years = snapshot.get("years") or {}
     categories = set(snapshot.get("fee_categories") or [])
+    category_items = snapshot.get("fee_category_items")
     tuition = snapshot.get("tuition") or {}
     steps = []
     for year in preset["academic_years"]:
@@ -216,9 +217,12 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
                 steps.append(_action("tuition", level_code + "@" + year["name"],
                                      status, "AFN semester price; never modify posted Fees"))
     category = preset["fee_policy"]["category"]
-    steps.append(_action("fee_category", category,
-                         "match" if category in categories else "create",
-                         "Native Education Fee Category and Item required"))
+    category_status = ("match" if category in categories else "create")
+    if (category_status == "match" and category_items is not None
+            and not category_items.get(category)):
+        category_status = "review"
+    steps.append(_action("fee_category", category, category_status,
+                         "Native Education Fee Category and linked Item required"))
     counts = {state: sum(x["status"] == state for x in steps)
               for state in ("create", "match", "review")}
     return {
