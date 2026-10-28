@@ -8053,64 +8053,70 @@ def main():
             enrollment=odcp_learners['installment']['program_enrollment']
             assert not frappe.db.exists('Fees',
                 {'program_enrollment':enrollment,'docstatus':('!=',2)})
-            posting=frappe.utils.today()
-            version=as_user('course_owner',lambda:billp.set_billing_policy_version(
-                'native_solar_inst_policy_0001','SYN-BILLING',posting,
-                'SYN independently authorized 60/40 Solar-month finance fixture',
-                90,30,'any',1,2,0,'Solar Hijri Month',0,25,1))
-            assert int(version['governing_allow_unequal_installments'])==1,version
-            # Find the next contractual 25th; an already-past 25th in
-            # this Solar month is not a future first due date.
-            solar_month=solar.month_key(date.fromisoformat(posting))
-            candidate_dates=solar.monthly_due_dates(solar_month,3,0,25)
-            first_due=next(d for d in candidate_dates
-                           if d>=date.fromisoformat(posting))
-            expected_dates=solar.monthly_due_dates(
-                solar.month_key(first_due),2,0,25)
-            count_before=frappe.db.count('GL Entry')
-            result=as_user('finance_officer',lambda:fin_inst.issue_tuition_installment_plan(
-                'native_solar_6040_plan_00001',enrollment,fin['fee_structure'],
-                posting,str(first_due),2,shares=[60,40]))
-            rows=frappe.db.get_all('Fees',
-                filters={'program_enrollment':enrollment,'docstatus':1},
-                fields=['name','docstatus','grand_total','outstanding_amount',
-                        'due_date','th_installment_sequence','th_installment_count'],
-                order_by='th_installment_sequence asc')
-            assert len(rows)==2,('Expected exactly two submitted native Fees',rows)
-            amounts=[round(float(r.grand_total),2) for r in rows]
-            assert amounts==[15000.0,10000.0],(amounts,result)
-            assert round(sum(amounts),2)==25000.0,amounts
-            assert [str(r.due_date) for r in rows]==[str(d) for d in expected_dates],(rows,expected_dates)
-            assert [int(r.th_installment_sequence) for r in rows]==[1,2],rows
-            assert all(int(r.th_installment_count)==2 for r in rows),rows
-            assert all(round(float(r.outstanding_amount),2)==amount
-                       for r,amount in zip(rows,amounts)),rows
-            for row in rows:
-                gl=frappe.db.get_all('GL Entry',
-                    filters={'voucher_type':'Fees','voucher_no':row.name,
-                             'is_cancelled':0},
-                    fields=['debit','credit'])
-                assert len(gl)>0,(row.name,'No native GL posting')
-                debit=round(sum(float(x.debit) for x in gl),2)
-                credit=round(sum(float(x.credit) for x in gl),2)
-                assert debit==credit,(row.name,debit,credit)
-            assert frappe.db.count('GL Entry')>count_before
-            replay=as_user('finance_officer',lambda:fin_inst.issue_tuition_installment_plan(
-                'native_solar_6040_plan_00001',enrollment,fin['fee_structure'],
-                posting,str(first_due),2,shares=[60,40]))
-            assert replay==result,('Installment replay is not idempotent',replay,result)
-            assert frappe.db.count('Fees',{'program_enrollment':enrollment,
-                                           'docstatus':('!=',2)})==2
-            assert denied(lambda:as_user('finance_officer',
-                lambda:fin_inst.issue_tuition_installment_plan(
-                    'native_solar_6040_repeat_001',enrollment,fin['fee_structure'],
-                    posting,str(first_due),2,shares=[60,40])))
-            assert frappe.db.count('Fees',{'program_enrollment':enrollment,
-                                           'docstatus':('!=',2)})==2
-            return {'native_fees':[r.name for r in rows],'amounts_afn':amounts,
-                    'due_dates':expected_dates,'submitted':True,
-                    'gl_balanced':True,'same_key_replay':True,
-                    'different_key_duplicate_denied':True}
+            posting=frappe.utils.add_days(frappe.utils.today(),1)
+            # Governing versions are strictly monotone: the existing
+            # synthetic Finance journey already adds a version effective
+            # today. Exercise tomorrow's effective version under a test-only
+            # simulated tomorrow clock, never backdate/overwrite the policy.
+            # Both Owner command and issuance read this same mock site date.
+            with patch('frappe.utils.today',return_value=posting):
+                version=as_user('course_owner',lambda:billp.set_billing_policy_version(
+                    'native_solar_inst_policy_0001','SYN-BILLING',posting,
+                    'SYN independently authorized 60/40 Solar-month finance fixture',
+                    90,30,'any',1,2,0,'Solar Hijri Month',0,25,1))
+                assert int(version['governing_allow_unequal_installments'])==1,version
+                # Find the next contractual 25th; an already-past 25th in
+                # this Solar month is not a future first due date.
+                solar_month=solar.month_key(date.fromisoformat(posting))
+                candidate_dates=solar.monthly_due_dates(solar_month,3,0,25)
+                first_due=next(d for d in candidate_dates
+                               if d>=date.fromisoformat(posting))
+                expected_dates=solar.monthly_due_dates(
+                    solar.month_key(first_due),2,0,25)
+                count_before=frappe.db.count('GL Entry')
+                result=as_user('finance_officer',lambda:fin_inst.issue_tuition_installment_plan(
+                    'native_solar_6040_plan_00001',enrollment,fin['fee_structure'],
+                    posting,str(first_due),2,shares=[60,40]))
+                rows=frappe.db.get_all('Fees',
+                    filters={'program_enrollment':enrollment,'docstatus':1},
+                    fields=['name','docstatus','grand_total','outstanding_amount',
+                            'due_date','th_installment_sequence','th_installment_count'],
+                    order_by='th_installment_sequence asc')
+                assert len(rows)==2,('Expected exactly two submitted native Fees',rows)
+                amounts=[round(float(r.grand_total),2) for r in rows]
+                assert amounts==[15000.0,10000.0],(amounts,result)
+                assert round(sum(amounts),2)==25000.0,amounts
+                assert [str(r.due_date) for r in rows]==[str(d) for d in expected_dates],(rows,expected_dates)
+                assert [int(r.th_installment_sequence) for r in rows]==[1,2],rows
+                assert all(int(r.th_installment_count)==2 for r in rows),rows
+                assert all(round(float(r.outstanding_amount),2)==amount
+                           for r,amount in zip(rows,amounts)),rows
+                for row in rows:
+                    gl=frappe.db.get_all('GL Entry',
+                        filters={'voucher_type':'Fees','voucher_no':row.name,
+                                 'is_cancelled':0},
+                        fields=['debit','credit'])
+                    assert len(gl)>0,(row.name,'No native GL posting')
+                    debit=round(sum(float(x.debit) for x in gl),2)
+                    credit=round(sum(float(x.credit) for x in gl),2)
+                    assert debit==credit,(row.name,debit,credit)
+                assert frappe.db.count('GL Entry')>count_before
+                replay=as_user('finance_officer',lambda:fin_inst.issue_tuition_installment_plan(
+                    'native_solar_6040_plan_00001',enrollment,fin['fee_structure'],
+                    posting,str(first_due),2,shares=[60,40]))
+                assert replay==result,('Installment replay is not idempotent',replay,result)
+                assert frappe.db.count('Fees',{'program_enrollment':enrollment,
+                                               'docstatus':('!=',2)})==2
+                assert denied(lambda:as_user('finance_officer',
+                    lambda:fin_inst.issue_tuition_installment_plan(
+                        'native_solar_6040_repeat_001',enrollment,fin['fee_structure'],
+                        posting,str(first_due),2,shares=[60,40])))
+                assert frappe.db.count('Fees',{'program_enrollment':enrollment,
+                                               'docstatus':('!=',2)})==2
+                return {'native_fees':[r.name for r in rows],'amounts_afn':amounts,
+                        'due_dates':expected_dates,'submitted':True,
+                        'gl_balanced':True,'same_key_replay':True,
+                        'different_key_duplicate_denied':True}
         check('native-finance-unequal-solar-installment-posting-and-gl',
               traced(native_unequal_solar_installments))
         report['status']='pass'

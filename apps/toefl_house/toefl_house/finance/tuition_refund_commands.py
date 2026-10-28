@@ -117,7 +117,14 @@ def _existing_requests(fees):
     if len(rows or []) > 1000:
         raise frappe.ValidationError(
             "Tuition refund request evidence exceeds the verified reporting limit")
-    return [dict(row) for row in (rows or [])]
+    # Native Frappe Currency fields arrive as Python floats from MariaDB.
+    # Pure refund rules intentionally forbid float input from callers: only
+    # this trusted DB-read boundary may convert stored amounts to text.
+    # Keep nulls empty so malformed rows still fail closed in _money().
+    return [dict(row, **{
+        field: (str(row.get(field)) if row.get(field) is not None else "")
+        for field in ("requested_amount", "approved_amount")
+    }) for row in (rows or [])]
 
 
 def _pending_request(name):

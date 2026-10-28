@@ -339,6 +339,29 @@ class RefundSourceCompletenessTests(unittest.TestCase):
                 existing_requests=rows,
                 collections=collections("300.00"), refunds=[])
 
+    def test_native_currency_floats_are_normalized_at_trusted_read_boundary(self):
+        class Stub:
+            def get_all(self, doctype, filters, fields, limit_page_length):
+                return [
+                    {"fees": "FEES-01", "status": "Approved",
+                     "requested_amount": 40.0, "approved_amount": 40.0},
+                    {"fees": "FEES-01", "status": "Denied",
+                     "requested_amount": 10.0, "approved_amount": 0.0},
+                ]
+        rows = self.load_query("_existing_requests", Stub())("FEES-01")
+        self.assertEqual(rows[0]["requested_amount"], "40.0")
+        self.assertEqual(rows[0]["approved_amount"], "40.0")
+        self.assertEqual(str(REFUNDS.open_amount(rows, fees="FEES-01")), "40.0")
+
+    def test_database_currency_normalization_does_not_accept_bad_precision(self):
+        class Stub:
+            def get_all(self, doctype, filters, fields, limit_page_length):
+                return [{"fees": "FEES-01", "status": "Requested",
+                         "requested_amount": 10.001, "approved_amount": 0.0}]
+        rows = self.load_query("_existing_requests", Stub())("FEES-01")
+        with self.assertRaises(RefundError):
+            REFUNDS.open_amount(rows, fees="FEES-01")
+
     def test_truncated_refund_claim_sources_fail_closed(self):
         class Stub:
             def get_all(self, doctype, filters, fields, limit_page_length):
