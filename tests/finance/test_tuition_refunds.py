@@ -362,6 +362,81 @@ class RefundSourceCompletenessTests(unittest.TestCase):
         self.assertEqual(db.limit, 1001)
 
 
+class NativeRefundControllerBoundaryTests(unittest.TestCase):
+    class Row(dict):
+        def __getattr__(self, key):
+            return self.get(key)
+
+    def check(self, before, after, kind, actor="general.manager@example.invalid"):
+        source_path = APP / "controllers.py"
+        source = ast.parse(source_path.read_text(encoding="utf-8"))
+        parent = next(node for node in source.body
+                      if isinstance(node, ast.ClassDef)
+                      and node.name == "ProtectedRecord")
+        fn = next(node for node in parent.body
+                  if isinstance(node, ast.FunctionDef)
+                  and node.name == "_validate_tuition_refund_request")
+        namespace = {
+            "frappe": types.SimpleNamespace(PermissionError=PermissionError),
+            "require_command": lambda doctype: (kind, actor),
+        }
+        exec(compile(ast.Module(body=[fn], type_ignores=[]),
+                     str(source_path), "exec"), namespace)
+        namespace[fn.name](after, before)
+
+    def refund(self, status, **changes):
+        base = {
+            "doctype": "TH Tuition Refund Request", "student": "STU-01",
+            "company": "TH-CO", "fees": "FEES-01",
+            "requested_amount": 100, "reason": "Withdrawal",
+            "evidence": "Original supporting letter",
+            "requested_by": "finance.officer@example.invalid",
+            "approved_amount": None, "approval_evidence": None,
+            "approved_by": None, "payment_entry": None,
+            "status": status,
+        }
+        base.update(changes)
+        return self.Row(base)
+
+    def test_only_matching_GM_command_can_approve_or_deny(self):
+        original = self.refund("Requested")
+        approved = self.refund(
+            "Approved", approved_by="general.manager@example.invalid",
+            approved_amount=100, approval_evidence="Reviewed withdrawal letter")
+        self.check(original, approved, "approve_tuition_refund")
+        with self.assertRaises(PermissionError):
+            self.check(original, approved, "request_tuition_refund")
+        with self.assertRaises(PermissionError):
+            self.check(original, approved, "deny_tuition_refund")
+        denied = self.refund(
+            "Denied", approved_by="general.manager@example.invalid")
+        self.check(original, denied, "deny_tuition_refund")
+        with self.assertRaises(PermissionError):
+            self.check(original, denied, "approve_tuition_refund")
+
+    def test_paid_transition_is_blocked_even_with_valid_command_context(self):
+        approved = self.refund(
+            "Approved", approved_by="general.manager@example.invalid",
+            approved_amount=100, approval_evidence="Approved")
+        paid = self.refund(
+            "Paid", approved_by="general.manager@example.invalid",
+            approved_amount=100, approval_evidence="Approved",
+            payment_entry="PE-0001")
+        for kind in ("pay_tuition_refund", "approve_tuition_refund"):
+            with self.subTest(kind=kind):
+                with self.assertRaises(PermissionError):
+                    self.check(approved, paid, kind)
+
+    def test_requester_evidence_cannot_be_overwritten_during_approval(self):
+        original = self.refund("Requested")
+        overwritten = self.refund(
+            "Approved", approved_by="general.manager@example.invalid",
+            approved_amount=100, approval_evidence="Reviewed",
+            evidence="Different supporting letter")
+        with self.assertRaises(PermissionError):
+            self.check(original, overwritten, "approve_tuition_refund")
+
+
 class NativeBlockerEvidenceTests(unittest.TestCase):
     def test_blocker_names_the_pinned_failure(self):
         self.assertIn("Payment", REFUNDS.NATIVE_BLOCKER)
