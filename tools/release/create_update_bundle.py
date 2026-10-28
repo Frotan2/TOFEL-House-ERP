@@ -11,7 +11,11 @@ provider half of the protocol:
   on the customer PC.
 * ``trust-store`` turns the provider public key into the trust anchor that is
   provisioned separately on a customer PC.
-* ``sign`` signs a site-specific Owner recovery/key-custody authorization.
+* ``sign`` signs one approval of a site-specific two-person recovery
+  authorization.  Each approver (Course Owner, then General Manager or
+  designated recovery authority) runs it separately with their own offline
+  key, over the identical document bytes, into a separate signature file;
+  the customer engine requires both signatures before any migration.
 
 Nothing here can invent authorization: the release status and the production
 authorization string are copied from the package manifest. A package that says
@@ -462,12 +466,33 @@ def command_sign(arguments: argparse.Namespace) -> int:
         raise fail(f"the document must be a {expected!r} document")
     now = datetime.now(timezone.utc).replace(microsecond=0)
     if arguments.document_type == "recovery-authorization":
-        for name in ("site", "scope", "issued_utc", "expires_utc", "owner_key_custody_verified",
-                     "rehearsal_restore_verified", "backup_receipt_sha256", "authorized_by", "attested_by"):
+        for name in ("site", "scope", "operation", "request_id", "issued_utc", "expires_utc",
+                     "owner_key_custody_verified", "rehearsal_restore_verified",
+                     "backup_receipt_sha256", "approvals"):
             if name not in parsed:
                 raise fail(f"the recovery authorization is missing {name}")
-        if parsed["authorized_by"] != "owner" or parsed["attested_by"] != "toefl-house-support":
-            raise fail("only an Owner + TOEFL House support authorization may be signed")
+        if parsed.get("schema_version") != engine.RECOVERY_AUTHORIZATION_SCHEMA_VERSION:
+            raise fail("only a schema-2 two-person recovery authorization may be signed")
+        if parsed["scope"] != "site-update" or parsed["operation"] != "site-update":
+            raise fail("a recovery authorization must be bound to a site-update operation")
+        if not isinstance(parsed["request_id"], str) \
+                or not engine.RECOVERY_REQUEST_ID.fullmatch(parsed["request_id"]):
+            raise fail("recovery request_id must be 32 lowercase hex characters")
+        approvals = parsed["approvals"]
+        if not isinstance(approvals, list) or len(approvals) != 2:
+            raise fail("recovery requires exactly two approvers")
+        roles = [entry.get("approver_role") for entry in approvals if isinstance(entry, dict)]
+        identities = [entry.get("approver_identity") for entry in approvals if isinstance(entry, dict)]
+        key_ids = [entry.get("key_id") for entry in approvals if isinstance(entry, dict)]
+        if len(roles) != 2 or len(set(roles)) != 2 or len(set(identities)) != 2 \
+                or len(set(key_ids)) != 2 or "course-owner" not in roles \
+                or not (set(roles) & {"general-manager", "recovery-authority"}):
+            raise fail("recovery requires one Course Owner and one independent "
+                       "General Manager or designated recovery authority, with distinct identities")
+        if key_id not in key_ids:
+            raise fail("the signing key must be one of the named recovery approvers; "
+                       "each approver signs the same document with their own key, "
+                       "into a separate signature file")
         if parsed["owner_key_custody_verified"] is not True or parsed["rehearsal_restore_verified"] is not True:
             raise fail("recovery authorization requires verified key custody and a verified rehearsal restore")
         if not isinstance(parsed["backup_receipt_sha256"], str) or not engine.HEX64.fullmatch(
@@ -493,9 +518,15 @@ def command_sign(arguments: argparse.Namespace) -> int:
             raise fail(f"the signing key is not usable: {error}") from None
         try:
             if arguments.document_type == "recovery-authorization":
-                engine.validate_recovery_authorization(
-                    document, out, store, site=parsed["site"],
-                    receipt_sha256=parsed["backup_receipt_sha256"], now=now, max_age_hours=720)
+                # This invocation produces only one of the two required
+                # approvals, so full two-person validation cannot pass here
+                # yet: the engine validates both signatures, the approver
+                # binding and the request id at preflight.  Verify only that
+                # this signature itself is valid for the signing key.
+                key = engine.select_key(store, key_id, "recovery-authorization", now=now)
+                if not engine.rsa_pkcs1v15_sha256_verify(key["modulus"], key["exponent"],
+                                                         payload, signature):
+                    raise fail("the produced recovery signature does not verify")
             else:
                 key = engine.select_key(store, key_id, "update-manifest", now=now)
                 if not engine.rsa_pkcs1v15_sha256_verify(key["modulus"], key["exponent"], payload, signature):

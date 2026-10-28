@@ -170,6 +170,7 @@ class UpdateFixture:
         self.recovery_required = recovery_required
         self.signing = RsaKey(base, "release-key")
         self.support = RsaKey(base, "support-key")
+        self.manager = RsaKey(base, "manager-key")
         self.trust_store_rel = "release/trusted-publisher-keys.json"
         self.channel_rel = "release/update-channels.json"
         self.write_trust_store()
@@ -187,7 +188,12 @@ class UpdateFixture:
             self.signing.trust_entry("release-2026a", ("update-manifest",)),
         ]
         if include_support and keys is None:
-            entries = list(entries) + [self.support.trust_entry("support-2026a", ("recovery-authorization",))]
+            entries = list(entries) + [
+                {**self.support.trust_entry("support-2026a", ("recovery-authorization",)),
+                 "approver_identity": "course-owner", "approver_role": "course-owner"},
+                {**self.manager.trust_entry("manager-2026a", ("recovery-authorization",)),
+                 "approver_identity": "general-manager", "approver_role": "general-manager"},
+            ]
         if key_override:
             entries = [{**entry, **key_override} for entry in entries]
         store = {
@@ -325,21 +331,29 @@ class UpdateFixture:
 
     def write_recovery_authorization(self, *, issued: datetime | None = None,
                                      expires: datetime | None = None, mutate: dict | None = None,
-                                     key: RsaKey | None = None, key_id: str = "support-2026a") -> None:
+                                     key: RsaKey | None = None, key_id: str = "support-2026a",
+                                     second_key: RsaKey | None = None,
+                                     second_key_id: str = "manager-2026a") -> None:
         issued = issued or (NOW - timedelta(hours=1))
         expires = expires or (NOW + timedelta(days=2))
         document = {
-            "schema_version": 1,
+            "schema_version": 2,
             "document_type": engine.DOCUMENT_RECOVERY,
             "site": engine.SITE_NAME,
             "scope": "site-update",
+            "operation": "site-update",
+            "request_id": "a" * 32,
             "issued_utc": iso(issued),
             "expires_utc": iso(expires),
             "owner_key_custody_verified": True,
             "rehearsal_restore_verified": True,
             "backup_receipt_sha256": self.receipt_sha256,
-            "authorized_by": "owner",
-            "attested_by": "toefl-house-support",
+            "approvals": [
+                {"approver_identity": "course-owner", "approver_role": "course-owner",
+                 "key_id": "support-2026a"},
+                {"approver_identity": "general-manager", "approver_role": "general-manager",
+                 "key_id": "manager-2026a"},
+            ],
         }
         if mutate:
             document.update(mutate)
@@ -351,6 +365,12 @@ class UpdateFixture:
         self.authorization_signature_rel = "data/update/evidence/recovery-authorization.json.sig"
         (self.product_root / self.authorization_signature_rel).write_text(
             json.dumps(envelope), encoding="utf-8")
+        second_signature = (second_key or self.manager).sign(raw)
+        second_envelope = signature_envelope(engine.DOCUMENT_RECOVERY_SIGNATURE,
+                                             second_key_id, second_signature)
+        self.authorization_signature_2_rel = "data/update/evidence/recovery-authorization-2.sig"
+        (self.product_root / self.authorization_signature_2_rel).write_text(
+            json.dumps(second_envelope), encoding="utf-8")
 
     # -- requests --------------------------------------------------------
     def installed(self, **overrides) -> dict:
@@ -426,6 +446,7 @@ class UpdateFixture:
             "backup_receipt": getattr(self, "receipt_rel", ""),
             "recovery_authorization": getattr(self, "authorization_rel", ""),
             "recovery_signature": getattr(self, "authorization_signature_rel", ""),
+            "recovery_signature_2": getattr(self, "authorization_signature_2_rel", ""),
             "installed": self.installed(),
             "journal_state": "idle",
             "host": self.host(),
@@ -823,8 +844,9 @@ class BackupEvidenceTests(UpdateEngineBase):
 class RecoveryAuthorizationTests(UpdateEngineBase):
     def test_missing_owner_authorization_refuses_the_update(self):
         fixture = self.fixture()
-        self.assertIn("preflight.recovery.authorization_missing",
-                      codes(fixture.preflight(recovery_authorization="", recovery_signature="")))
+        self.assertIn("preflight.recovery.approval_missing",
+                      codes(fixture.preflight(recovery_authorization="", recovery_signature="",
+                                              recovery_signature_2="")))
 
     def test_forged_authorization_signature_is_refused(self):
         fixture = self.fixture()
@@ -989,6 +1011,7 @@ class ApplyTests(UpdateEngineBase):
             "backup_dir": str(self.fixture.backup_dir.relative_to(self.fixture.product_root)),
             "recovery_authorization": self.fixture.authorization_rel,
             "recovery_signature": self.fixture.authorization_signature_rel,
+            "recovery_signature_2": self.fixture.authorization_signature_2_rel,
         }
         request.update(overrides)
         return request
@@ -1044,6 +1067,10 @@ class ApplyTests(UpdateEngineBase):
         report = self.apply()
         self.assertIn("apply.apps_missing", {item["code"] for item in report["blockers"]})
 
+        # The first apply consumed the recovery request id by design: a
+        # second update attempt needs fresh approvals from both approvers,
+        # not a replay of the first authorization.
+        self.fixture.write_recovery_authorization(mutate={"request_id": "e" * 32})
         self.state["apps"] = list(engine.REQUIRED_APPS)
         self.state["pages"] = list(engine.ROLE_DESK_PAGES[:-1])
         self.write_state()

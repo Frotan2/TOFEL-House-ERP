@@ -135,13 +135,25 @@ If an update stops, the window explains the state in both languages:
    the update server).
 4. Set `product/updates/channel.json` to `"enabled": true` and the real
    provider host, then re-issue the customer package.
-5. Record the Owner recovery authorization for the current verified backup:
+5. Record the two-person recovery authorization for the current verified backup.
+   The document is schema 2 and must name one Course Owner and one General
+   Manager or designated recovery authority, with a single-use `request_id`.
+   Each approver signs the identical document with their own offline key,
+   into a separate signature file; a single signature is refused:
 
    ```bash
    python3 tools/release/create_update_bundle.py sign \
-     --document recovery-authorization.json --private-key <offline-key>.pem \
-     --key-id <key-id> --document-type recovery --out recovery-authorization.sig
+     --document recovery-authorization.json --private-key <owner-key>.pem \
+     --key-id <owner-key-id> --document-type recovery --out recovery-authorization.sig
+   python3 tools/release/create_update_bundle.py sign \
+     --document recovery-authorization.json --private-key <manager-key>.pem \
+     --key-id <manager-key-id> --document-type recovery --out recovery-authorization-2.sig
    ```
+
+   Both signature files, plus a trust store binding each key to its approver
+   identity and role, must be present on the customer PC before a migrating
+   update. A used `request_id` cannot be reused: a failed or interrupted
+   apply needs fresh approvals from both approvers.
 
 ## Never / هرگز
 
