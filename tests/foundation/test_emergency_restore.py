@@ -392,6 +392,34 @@ class EmergencyRestoreTests(unittest.TestCase):
         # A rejected competing request is still single-use, by design.
         self.assertTrue((self._state_dir() / ("b" * 32 + ".json")).exists())
 
+    def test_altered_audit_log_refuses_a_second_restore(self):
+        self._run_authorized()
+        audit = self._state_dir() / "audit.jsonl"
+        original = audit.read_text(encoding="utf-8")
+        audit.write_text(original.replace('"completed"', '"tampered"', 1),
+                         encoding="utf-8")
+        document, sig1, sig2 = self._authorization(request_id="b" * 32)
+        with patch.object(self.restore, "_run_native_restore") as native:
+            with self.assertRaises(self.restore.RestoreInputError):
+                self.restore._native_restore(
+                    self.site, self.target_set, SECRET_KEY, SECRET_DB,
+                    SECRET_ADMIN, target="production",
+                    pre_restore_backup_set=self.current_set,
+                    authorization=document, signature_1=sig1,
+                    signature_2=sig2)
+        native.assert_not_called()
+
+    def test_symlinked_restore_state_directory_is_refused(self):
+        self.state.mkdir(parents=True, exist_ok=True)
+        outside = self.root / "outside"
+        outside.mkdir()
+        (self.state / self.site).symlink_to(outside, target_is_directory=True)
+        with patch.object(self.restore, "_run_native_restore") as native:
+            with self.assertRaises(self.restore.RestoreInputError):
+                self._run_authorized()
+        native.assert_not_called()
+        self.assertEqual(list(outside.iterdir()), [])
+
     def test_disposable_restore_is_isolated_from_the_production_site(self):
         disposable = "placement-restore.localhost"
         self.restore.SITE_NAME = disposable
