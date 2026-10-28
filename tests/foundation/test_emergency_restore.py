@@ -370,7 +370,19 @@ class EmergencyRestoreTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self._run_authorized(mock=fail)
         self.assertTrue((self._state_dir() / ("a" * 32 + ".json")).exists())
-        self.assertFalse((self._state_dir() / "in-progress.json").exists())
+        self.assertTrue((self._state_dir() / "in-progress.json").exists())
+        # Failed native recovery can leave a partially restored site. A
+        # different, freshly approved restore still requires manual review.
+        document, sig1, sig2 = self._authorization(request_id="b" * 32)
+        with patch.object(self.restore, "_run_native_restore") as native:
+            with self.assertRaises(self.restore.RestoreInputError):
+                self.restore._native_restore(
+                    self.site, self.target_set, SECRET_KEY, SECRET_DB,
+                    SECRET_ADMIN, target="production",
+                    pre_restore_backup_set=self.current_set,
+                    authorization=document, signature_1=sig1,
+                    signature_2=sig2)
+        native.assert_not_called()
         audit = (self._state_dir() / "audit.jsonl").read_text()
         self.assertIn("failed", audit)
         for secret in (SECRET_KEY, SECRET_DB, SECRET_ADMIN):
