@@ -568,7 +568,12 @@
         "wait_days_min": 7,
         "governing_selection": "best",
         "original_and_retake_history_immutable": true,
-        "engine_requires_verified_best_attempt_selection": true
+        "engine_requires_verified_best_attempt_selection": true,
+        "selection_precedence": "Best valid published Pass first; among passing attempts choose the highest overall percentage, then earliest publication and lowest attempt ordinal. If no Pass exists, select highest valid published percentage; original records remain unchanged.",
+        "historical_eligibility": "A previously approved valid Pass/Promote remains effective when a different student in the class retakes. Never republish a passed classmate merely because of another student's retake.",
+        "book_scope": "Ordinary first assessment is class-wide. Each authorized retake is a separate book restricted to the named failed student only. No other student's marks or native assessment result may be written.",
+        "governing_compatibility": "New policy facets must use best; historic latest/first facet values remain readable but do not override this Owner-approved Pass-preserving progression choice.",
+        "abandoned_book_policy": "Never silently free/reuse a consumed retake or delete evidence; require separately authorized audited cancellation/replacement before a new retake book."
       },
       "specialist_programs": [
         "Special Speaking",
