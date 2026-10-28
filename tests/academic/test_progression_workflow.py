@@ -97,7 +97,7 @@ class DecisionTests(ProgressionCase):
         # does not promote.
         self.h.seed_policy("SYN-GEN-ENG", effective_from="2026-10-01",
                            retakes={"max_attempts": 3, "wait_days": 0,
-                                    "scope": "full", "governing": "latest"})
+                                    "scope": "full", "governing": "best"})
         result = self.fail_the_class(effective_from="2026-10-01")["SYN-STU-1"]
         self.h.today = "2026-10-31"
         decision = self.decide(result["name"], decision="Retake",
@@ -110,7 +110,7 @@ class DecisionTests(ProgressionCase):
     def test_retake_is_refused_while_the_wait_window_is_open(self):
         self.h.seed_policy("SYN-GEN-ENG", effective_from="2026-10-01",
                            retakes={"max_attempts": 2, "wait_days": 14,
-                                    "scope": "full", "governing": "latest"})
+                                    "scope": "full", "governing": "best"})
         result = self.fail_the_class(effective_from="2026-10-01")["SYN-STU-1"]
         with self.assertRaises(ValidationError) as ctx:
             self.decide(result["name"], decision="Retake", reason="Immediate retake")
