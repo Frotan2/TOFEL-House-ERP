@@ -79,17 +79,18 @@ class ConfigurationJourneyTests(AcademicCase):
         self.assertEqual(stored["grading_scale"], "SYN-SCALE")
         self.assertEqual(stored["opened_by"], MANAGER)
 
-    def test_the_policy_digest_changes_with_the_configured_facets(self):
+    def test_policy_change_does_not_open_duplicate_first_assessment(self):
         first = self.book(key="key-open-1")
+        original_digest = self.h.store.docs["TH Assessment Book"][first["name"]][
+            "policy_digest"]
         self.h.seed_policy("SYN-GEN-ENG", effective_from="2026-10-01",
                            weights=[{"component": "LISTENING", "weight": 50},
                                     {"component": "READING", "weight": 50}])
-        second = self.book(key="key-open-2", effective_from="2026-10-01")
-        self.assertEqual(first["policy_effective_from"], "2026-09-01")
-        self.assertEqual(second["policy_effective_from"], "2026-10-01")
-        self.assertNotEqual(
+        with self.assertRaises(ValidationError):
+            self.book(key="key-open-2", effective_from="2026-10-01")
+        self.assertEqual(
             self.h.store.docs["TH Assessment Book"][first["name"]]["policy_digest"],
-            self.h.store.docs["TH Assessment Book"][second["name"]]["policy_digest"])
+            original_digest)
 
     def test_unconfigured_weights_are_refused_with_the_owner_step_named(self):
         self.h.seed_policy("SYN-NO-WEIGHTS", effective_from="2026-09-01",
@@ -149,10 +150,11 @@ class ConfigurationJourneyTests(AcademicCase):
                           str(ctx.exception))
         self.assertEqual(self.h.store.docs["TH Assessment Book"], {})
 
-    def test_attempts_are_derived_never_chosen(self):
+    def test_an_unpublished_first_attempt_cannot_be_duplicated(self):
         first = self.book(key="key-open-1")
-        second = self.book(key="key-open-2")
-        self.assertEqual((first["attempt"], second["attempt"]), (1, 2))
+        self.assertEqual(first["attempt"], 1)
+        with self.assertRaises(ValidationError):
+            self.book(key="key-open-2")
 
 
 class MarkEntryTests(AcademicCase):
@@ -711,6 +713,21 @@ class ControllerImmutabilityTests(AcademicCase):
     def _controller(self, slug, class_name):
         module = _load_controller(slug)
         return getattr(module, class_name)
+
+    def test_retake_student_cannot_be_changed_after_book_opening(self):
+        controller = self._controller("th_assessment_book", "THAssessmentBook")
+        document = controller.__new__(controller)
+        values = {field: "unchanged" for field in controller.IMMUTABLE}
+        values["retake_student"] = "SYN-STU-2"
+        document.__dict__["_values"] = values
+        document.get = lambda field, default=None: values.get(field, default)
+        document.get_doc_before_save = lambda: types.SimpleNamespace(
+            get=lambda field, default=None: (
+                "SYN-STU-1" if field == "retake_student"
+                else values.get(field, default)))
+        with self.assertRaises(Exception) as ctx:
+            document.validate()
+        self.assertIn("immutable", str(ctx.exception).lower())
 
     def test_a_published_result_is_immutable(self):
         controller = self._controller("th_academic_result", "THAcademicResult")

@@ -16,6 +16,7 @@ class THAssessmentBook(ProtectedRecord):
     IMMUTABLE = (
         "student_group", "level", "policy", "policy_effective_from",
         "policy_digest", "grading_scale", "assessment_plan", "attempt",
+        "retake_student",
         "opened_by", "opened_on",
     )
 

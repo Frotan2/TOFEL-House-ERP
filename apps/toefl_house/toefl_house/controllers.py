@@ -50,6 +50,8 @@ class ProtectedRecord(Document):
             self._validate_correction_policy(before)
         if before and self.doctype == "TH Correction Request":
             self._validate_correction_request(before)
+        if before and self.doctype == "TH Tuition Refund Request":
+            self._validate_tuition_refund_request(before)
         if before and self.doctype in CONFIG_DOCTYPES:
             self._validate_config(before)
 
@@ -158,6 +160,52 @@ class ProtectedRecord(Document):
             raise frappe.PermissionError("Recorded decision actor is immutable")
         if before.credit_note and self.credit_note != before.credit_note:
             raise frappe.PermissionError("Posted credit note reference is immutable")
+
+    def _validate_tuition_refund_request(self, before):
+        """Refund request facts are immutable; the decision is one-shot.
+
+        Allowed transitions: Requested -> Approved, Requested -> Denied,
+        Approved -> Paid. Paid is set only by a successful native payout;
+        until a verified native Fees refund mechanism exists, pay refuses
+        and the request stays Approved. Identity, amount, reason and
+        evidence never change after insert, and the recorded approver
+        never changes.
+        """
+        for field in ("student", "company", "fees", "requested_amount",
+                      "reason", "evidence", "requested_by"):
+            if before.get(field) != self.get(field):
+                raise frappe.PermissionError("Tuition refund request facts are immutable")
+        if (before.get("approved_amount") is not None
+                and before.approved_amount != self.approved_amount):
+            raise frappe.PermissionError("Tuition refund approved amount is immutable")
+        if (before.get("approval_evidence")
+                and before.approval_evidence != self.approval_evidence):
+            raise frappe.PermissionError("General Manager approval evidence is immutable")
+        if before.status == self.status:
+            raise frappe.PermissionError("Tuition refund decisions are one-shot")
+        if (before.status == "Requested" and self.status == "Approved"
+                and (not self.approved_by or self.approved_amount is None
+                     or not self.approval_evidence)):
+            raise frappe.PermissionError("Tuition refund approval evidence is required")
+        transitions = {
+            ("Requested", "Approved"): "approve_tuition_refund",
+            ("Requested", "Denied"): "deny_tuition_refund",
+        }
+        required_command = transitions.get((before.status, self.status))
+        # The pinned native Education stack has no valid Fees payout. Until
+        # that accounting gap is independently resolved, even a command
+        # context must not mark a tuition refund Paid without real money.
+        if not required_command:
+            raise frappe.PermissionError(
+                "Illegal or unsupported tuition refund request transition")
+        active_kind, actor = require_command(self.doctype)
+        if active_kind != required_command or self.approved_by != actor:
+            raise frappe.PermissionError(
+                "Tuition refund transition requires its exact authorized decision")
+        if before.approved_by and self.approved_by != before.approved_by:
+            raise frappe.PermissionError("Recorded decision actor is immutable")
+        if before.payment_entry and self.payment_entry != before.payment_entry:
+            raise frappe.PermissionError("Posted refund payment reference is immutable")
 
     def _validate_config(self, before):
         if before.code != self.code or before.revision != self.revision or before.owner != self.owner:

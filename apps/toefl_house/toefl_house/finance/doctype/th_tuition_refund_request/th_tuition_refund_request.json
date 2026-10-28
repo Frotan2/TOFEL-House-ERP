@@ -1,0 +1,151 @@
+{
+  "allow_rename": 0,
+  "autoname": "hash",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "student",
+    "company",
+    "fees",
+    "requested_amount",
+    "approved_amount",
+    "reason",
+    "evidence",
+    "approval_evidence",
+    "status",
+    "requested_by",
+    "approved_by",
+    "paying_user",
+    "payment_entry",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "student",
+      "fieldtype": "Link",
+      "label": "Student",
+      "options": "Student",
+      "reqd": 1
+    },
+    {
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "label": "Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "fees",
+      "fieldtype": "Link",
+      "label": "Original Fees",
+      "options": "Fees",
+      "reqd": 1
+    },
+    {
+      "fieldname": "requested_amount",
+      "fieldtype": "Currency",
+      "label": "Requested Amount",
+      "reqd": 1
+    },
+    {
+      "description": "Set at General Manager approval to exactly the requested amount; it is never edited afterwards.",
+      "fieldname": "approved_amount",
+      "fieldtype": "Currency",
+      "label": "Approved Amount",
+      "read_only": 1
+    },
+    {
+      "fieldname": "reason",
+      "fieldtype": "Text",
+      "label": "Reason",
+      "reqd": 1
+    },
+    {
+      "description": "The General Manager's supporting evidence for the case, recorded before approval.",
+      "fieldname": "evidence",
+      "fieldtype": "Text",
+      "label": "Supporting Evidence",
+      "reqd": 1
+    },
+    {
+      "fieldname": "approval_evidence",
+      "fieldtype": "Text",
+      "label": "General Manager Approval Evidence",
+      "read_only": 1,
+      "description": "Recorded independently by the General Manager at approval; original requester evidence remains immutable."
+    },
+    {
+      "default": "Requested",
+      "description": "Requested -> Approved -> Paid, or Requested -> Denied. Paid is set only by a successful native payout; until a verified native Fees refund mechanism exists, pay refuses and the request stays Approved.",
+      "fieldname": "status",
+      "fieldtype": "Data",
+      "label": "Status",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "requested_by",
+      "fieldtype": "Link",
+      "label": "Requested By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "description": "The General Manager who approved; the paying Finance Manager must be a different user.",
+      "fieldname": "approved_by",
+      "fieldtype": "Link",
+      "label": "Approved By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "paying_user",
+      "fieldtype": "Link",
+      "label": "Paying User",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "description": "The native refund Payment Entry, once a verified native mechanism exists. Empty while payout is blocked.",
+      "fieldname": "payment_entry",
+      "fieldtype": "Link",
+      "label": "Payment Entry",
+      "options": "Payment Entry",
+      "read_only": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "synthetic",
+      "fieldtype": "Check",
+      "label": "Synthetic",
+      "read_only": 1
+    }
+  ],
+  "module": "Finance",
+  "name": "TH Tuition Refund Request",
+  "permissions": [
+    {
+      "read": 1,
+      "role": "Finance Officer",
+      "select": 1
+    },
+    {
+      "read": 1,
+      "role": "Finance Auditor",
+      "select": 1
+    },
+    {
+      "read": 1,
+      "role": "General Manager",
+      "select": 1
+    },
+    {
+      "read": 1,
+      "role": "Finance Manager",
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC",
+  "track_changes": 0
+}

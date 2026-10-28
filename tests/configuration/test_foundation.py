@@ -943,19 +943,21 @@ class D1FacetValidationTests(unittest.TestCase):
         import json
         stored = academic_rules.canonical_facet(
             "retakes", {"max_attempts": 2, "wait_days": 7,
-                        "scope": "full", "governing": "latest"})
+                        "scope": "full", "governing": "best"})
         self.assertEqual(json.loads(stored)["wait_days"], 7)
         unlimited = academic_rules.canonical_facet(
             "retakes", {"max_attempts": None, "wait_days": 0,
                         "scope": "partial", "governing": "best"})
         self.assertIsNone(json.loads(unlimited)["max_attempts"])
         base = {"max_attempts": 2, "wait_days": 7, "scope": "full",
-                "governing": "latest"}
+                "governing": "best"}
         for key in base:
             partial = {other: base[other] for other in base if other != key}
             with self.assertRaises(ValueError, msg=key):
                 academic_rules.canonical_facet("retakes", partial)
-        for bad in (dict(base, max_attempts=0),
+        for bad in (dict(base, governing="latest"),
+                    dict(base, governing="first"),
+                    dict(base, max_attempts=0),
                     dict(base, wait_days=-1),
                     dict(base, wait_days=1.5),
                     dict(base, scope="sometimes"),

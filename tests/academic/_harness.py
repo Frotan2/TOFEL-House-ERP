@@ -659,11 +659,13 @@ class Harness:
 
     # --- convenience ----------------------------------------------------
     def open_book(self, *, policy="SYN-GEN-ENG", plan="", key=None,
-                  actor="academic.manager@example.test", effective_from="2026-09-01"):
+                  actor="academic.manager@example.test", effective_from="2026-09-01",
+                  retake_student=""):
         self.acting_as(actor)
         return self.assessment.open_assessment_book(
             key or f"key-open-{policy}", "SYN-GRP-1", policy,
-            effective_from=effective_from, assessment_plan=plan)
+            effective_from=effective_from, assessment_plan=plan,
+            retake_student=retake_student)
 
     def record(self, book, marks, *, actor="instructor.one@example.test", key=None):
         self.acting_as(actor)
