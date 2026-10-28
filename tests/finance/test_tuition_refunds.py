@@ -286,70 +286,23 @@ class TuitionRefundWorkflowTests(unittest.TestCase):
                 refunds=cancelled_refs)
 
 
-class StudentPayGuardExceptionTests(unittest.TestCase):
-    def payment(self, **overrides):
-        doc = {
-            "payment_type": "Pay", "party_type": "Student", "party": "STU-01",
-            "company": "TH-CO", "paid_amount": "150.00",
-            "references": [{"reference_doctype": "Fees", "reference_name": "FEES-01",
-                            "allocated_amount": "150.00"}],
-        }
-        doc.update(overrides)
-        return doc
-
-    def test_direct_student_pay_outside_any_command_is_still_denied(self):
-        for method in (None, "validate", "before_submit", "before_update_after_submit", ""):
+class StudentPayGuardHoldTests(unittest.TestCase):
+    def test_every_new_student_payout_is_denied(self):
+        for method in (None, "validate", "before_submit",
+                       "before_update_after_submit", ""):
             with self.subTest(method=method):
                 self.assertFalse(POLICY.student_pay_write_allowed(
-                    "Pay", "Student", method, payment=self.payment()))
+                    "Pay", "Student", method))
 
-    def test_cancellation_of_a_legacy_student_pay_is_still_allowed(self):
+    def test_cancellation_of_legacy_student_payout_is_permitted(self):
         self.assertTrue(POLICY.student_pay_write_allowed(
-            "Pay", "Student", "before_cancel", payment=self.payment()))
+            "Pay", "Student", "before_cancel"))
 
-    def test_receipts_and_non_student_payments_unaffected(self):
-        self.assertTrue(POLICY.student_pay_write_allowed("Receive", "Student", "validate"))
-        self.assertTrue(POLICY.student_pay_write_allowed("Pay", "Customer", None))
-
-    def test_narrow_exception_matches_only_the_exact_live_request(self):
-        context = {"student": "STU-01", "company": "TH-CO", "fees": "FEES-01",
-                   "amount": "150.00"}
-        with POLICY.refund_payment_context(context):
-            self.assertTrue(POLICY.student_pay_write_allowed(
-                "Pay", "Student", "validate", payment=self.payment()))
-            for bad in (
-                    self.payment(party="STU-99"),
-                    self.payment(company="OTHER-CO"),
-                    self.payment(paid_amount="150.01"),
-                    self.payment(references=[{"reference_doctype": "Fees",
-                                             "reference_name": "FEES-99",
-                                             "allocated_amount": "150.00"}]),
-                    self.payment(references=[]),
-                    self.payment(references=[
-                        {"reference_doctype": "Fees", "reference_name": "FEES-01",
-                         "allocated_amount": "150.00"},
-                        {"reference_doctype": "Fees", "reference_name": "FEES-01",
-                         "allocated_amount": "0.00"}]),
-            ):
-                with self.subTest(bad=bad):
-                    self.assertFalse(POLICY.student_pay_write_allowed(
-                        "Pay", "Student", "validate", payment=bad))
-        # Context is cleared: the same payment is denied again afterwards.
-        self.assertFalse(POLICY.student_pay_write_allowed(
-            "Pay", "Student", "validate", payment=self.payment()))
-
-    def test_refund_payment_matches_predicate_agrees_with_guard(self):
-        approved = REFUNDS.approve_request(
-            REFUNDS.create_request(
-                student="STU-01", company="TH-CO", fees="FEES-01",
-                requested_amount="150.00", reason="Withdrawal",
-                evidence="Letter", requested_by="fin.off@example.invalid",
-                existing_requests=[], collections=collections("500.00"),
-                refunds=[]),
-            approver="gm@example.invalid", approver_roles=["General Manager"])
-        self.assertTrue(REFUNDS.refund_payment_matches(self.payment(), approved))
-        self.assertFalse(REFUNDS.refund_payment_matches(
-            self.payment(paid_amount="200.00"), approved))
+    def test_native_receipts_and_non_student_payments_are_unaffected(self):
+        self.assertTrue(POLICY.student_pay_write_allowed(
+            "Receive", "Student", "validate"))
+        self.assertTrue(POLICY.student_pay_write_allowed(
+            "Pay", "Customer", None))
 
 
 class NativeBlockerEvidenceTests(unittest.TestCase):
@@ -373,7 +326,8 @@ class NativeBlockerEvidenceTests(unittest.TestCase):
                               / "th_tuition_refund_request.json").read_text())
         fields = {field["fieldname"] for field in doctype["fields"]}
         for expected in ("student", "company", "fees", "requested_amount",
-                         "approved_amount", "reason", "evidence", "status",
+                         "approved_amount", "reason", "evidence", "approval_evidence",
+                         "status",
                          "requested_by", "approved_by", "paying_user",
                          "payment_entry", "synthetic"):
             self.assertIn(expected, fields)
