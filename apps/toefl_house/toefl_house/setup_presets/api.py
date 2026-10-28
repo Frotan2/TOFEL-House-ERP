@@ -126,8 +126,18 @@ def preview_owner_initial_setup():
     snapshot = _snapshot()
     preview = preview_catalog(snapshot)
     if preview["counts"]["review"] == 0:
+        from toefl_house.setup_presets.catalog_plan import prepare_catalog_plan
         from toefl_house.setup_presets.installer import preview_digest
+        planned = prepare_catalog_plan(snapshot)
         preview["plan_hash"] = preview_digest(snapshot)
+        operations = {}
+        for action in planned["actions"]:
+            kind = action["operation"]
+            operations[kind] = operations.get(kind, 0) + 1
+        preview["planned_actions_count"] = planned["count"]
+        preview["planned_operation_counts"] = operations
     else:
         preview["plan_hash"] = None
+        preview["planned_actions_count"] = None
+        preview["planned_operation_counts"] = {}
     return preview
