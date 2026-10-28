@@ -41,8 +41,9 @@ class DeepmergeAdvisoryDeltaTests(unittest.TestCase):
         self.assertIn("advisory-delta-2026-10-28", loaded["deltas"])
         for aid in (1243505, "GHSA-gcqx-w48m-w2h4", "CVE-2026-93753"):
             with self.subTest(advisory=aid):
-                finding = {"id": aid, "url": "https://github.com/advisories/"
-                           "GHSA-gcqx-w48m-w2h4", "severity": "low"}
+                # No GHSA-bearing URL fallback: the submitted identifier
+                # alone must resolve to this exact package record.
+                finding = {"id": aid, "url": "", "severity": "low"}
                 result = triage.triage_npm({"deepmerge": [finding]}, loaded)
                 self.assertEqual(result["untriaged"], [])
                 self.assertEqual(result["closed"], 1)
