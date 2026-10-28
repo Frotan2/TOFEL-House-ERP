@@ -405,6 +405,14 @@ def open_assessment_book(request_key, student_group, policy, effective_from="",
         existing = _attempt_rows(group_name, level.name)
         next_attempt = (max(int(row["attempt"] or 0) for row in existing) + 1
                         if existing else 1)
+        # Even unopened/unpublished books reserve an ordinal. Never create
+        # a third mark book before the first two are published: an abandoned
+        # second book must be handled by an explicit authorized lifecycle,
+        # not by silently opening further attempts.
+        if next_attempt > grading.MISSION_MAX_TOTAL_ATTEMPTS:
+            raise frappe.ValidationError(
+                "The class and level already have the maximum two assessment "
+                "book attempts; a third attempt is not authorized")
         # A further book for a class+level that already has published
         # results is a retake: it needs a live retake authorization, not
         # just an academic role. A second book while nothing is published
