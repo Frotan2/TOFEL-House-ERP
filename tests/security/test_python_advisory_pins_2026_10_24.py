@@ -8,7 +8,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-REMEDIATED_PINS = ("filelock==3.20.3",)
+REMEDIATED_PINS = ("filelock==4.2.4",)
 
 
 class PythonAdvisoryPinTests(unittest.TestCase):
