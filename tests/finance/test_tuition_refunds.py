@@ -140,6 +140,42 @@ class TuitionRefundWorkflowTests(unittest.TestCase):
                 existing_requests=[approved], collections=self.cols,
                 refunds=self.refs)
 
+    def test_open_refund_reservations_reject_inconsistent_approval(self):
+        approved = self.approve()
+        self.assertEqual(
+            REFUNDS.open_amount([approved], fees="FEES-01"),
+            REFUNDS._money("150.00", "expected"))
+        forged = dict(approved, approved_amount="250.00")
+        with self.assertRaisesRegex(RefundError, "differs from requested"):
+            REFUNDS.open_amount([forged], fees="FEES-01")
+        with self.assertRaisesRegex(RefundError, "differs from requested"):
+            REFUNDS.create_request(
+                student="STU-01", company="TH-CO", fees="FEES-01",
+                requested_amount="1.00", reason="Must reject corrupt ledger",
+                evidence="Evidence", requested_by="fin.off@example.invalid",
+                existing_requests=[forged], collections=self.cols,
+                refunds=self.refs)
+
+    def test_unknown_refund_reservation_state_refused(self):
+        unknown = dict(self.request, status="Unknown")
+        with self.assertRaisesRegex(RefundError, "Unknown refund request status"):
+            REFUNDS.open_amount([unknown], fees="FEES-01")
+
+    def test_refund_payment_match_refuses_malformed_stored_approval(self):
+        approved = self.approve()
+        payment = {
+            "payment_type": "Pay", "party_type": "Student",
+            "party": "STU-01", "company": "TH-CO", "paid_amount": "150.00",
+            "references": [{"reference_doctype": "Fees",
+                            "reference_name": "FEES-01",
+                            "allocated_amount": "150.00"}],
+        }
+        self.assertTrue(REFUNDS.refund_payment_matches(payment, approved))
+        for bad in ("NaN", "", None, "150.001"):
+            with self.subTest(approved_amount=bad):
+                self.assertFalse(REFUNDS.refund_payment_matches(
+                    payment, dict(approved, approved_amount=bad)))
+
     def test_draft_and_cancelled_rows_do_not_raise_the_ceiling(self):
         cols = self.cols + [{"payment_entry": "IN-99", "student": "STU-01",
                              "company": "TH-CO", "fees": "FEES-01",
