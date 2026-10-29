@@ -7976,6 +7976,55 @@ def main():
             name=created['name']
             assert created['status']=='Requested'
             dt='TH Tuition Refund Request'
+            # Native adversarial replay and financial-ceiling checks.
+            # These are true Frappe DB commands, not a text-only policy stub.
+            refund_events_before=frappe.db.count('TH Placement Audit Event')
+            replay=as_user('finance_officer',lambda:tuition_refund_cmd.request_tuition_refund(
+                'native_refund_visibility_0001',original.student,original.company,
+                fee,'50.00','SYN native refund visibility case',
+                'Synthetic paid Fees allocation and documented review reason'))
+            assert replay==created,('Same request key did not replay exactly',replay,created)
+            assert frappe.db.count('TH Placement Audit Event')==refund_events_before
+            assert denied(lambda:as_user('finance_officer',
+                lambda:tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_visibility_0001',original.student,original.company,
+                    fee,'60.00','SYN native refund visibility case',
+                    'Synthetic paid Fees allocation and documented review reason')))
+            assert denied(lambda:as_user('publisher',
+                lambda:tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_wrong_role_0001',original.student,original.company,
+                    fee,'1.00','Unauthorized creation attempt',
+                    'Synthetic evidence only')))
+            assert denied(lambda:as_user('general_manager',
+                lambda:tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_wrong_actor_0001',original.student,original.company,
+                    fee,'1.00','Wrong command authority',
+                    'Synthetic evidence only')))
+            assert denied(lambda:as_user('finance_officer',
+                lambda:tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_wrong_company_001',original.student,
+                    'SYN-UNRELATED-COMPANY',fee,'1.00',
+                    'Company mismatch refused','Synthetic evidence only')))
+            assert denied(lambda:as_user('finance_officer',
+                lambda:tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_wrong_student_001','SYN-UNRELATED-STUDENT',
+                    original.company,fee,'1.00',
+                    'Student mismatch refused','Synthetic evidence only')))
+            assert denied(lambda:as_user('finance_officer',
+                lambda:tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_over_ceiling_0001',original.student,
+                    original.company,fee,'999999.00',
+                    'Ceiling excess refused','Synthetic evidence only')))
+            assert denied(lambda:as_user('finance_manager',
+                lambda:tuition_refund_cmd.approve_tuition_refund(
+                    'native_refund_wrong_approver_1',name,
+                    'Not a General Manager decision')))
+            assert denied(lambda:as_user('finance_officer',
+                lambda:tuition_refund_cmd.approve_tuition_refund(
+                    'native_refund_self_approve_001',name,
+                    'Requester is not General Manager')))
+            assert frappe.db.count('TH Tuition Refund Request',
+                                   {'name':name,'status':'Requested'})==1
             allowed=('finance_officer','finance_auditor','general_manager','finance_manager')
             for label in allowed:
                 def allowed_read():
@@ -7996,6 +8045,28 @@ def main():
                 as_user(label,refused_read)
             frappe.set_user('Administrator')
             assert frappe.db.get_value(dt,name,'status')=='Requested'
+            # Branch-scoped Finance Auditor must see neither list nor detail
+            # for a student without a roster in this unrelated test Branch.
+            # Use and remove real Frappe User Permission, never edit a role.
+            unrelated='SYN-UNRELATED-REFUND-BRANCH'
+            if not frappe.db.exists('Branch',unrelated):
+                frappe.get_doc(dict(doctype='Branch',branch=unrelated)).insert()
+            scoped_user=users['finance_auditor']
+            permit=frappe.get_doc(dict(doctype='User Permission',user=scoped_user,
+                allow='Branch',for_value=unrelated)).insert()
+            frappe.db.commit()
+            frappe.clear_cache()
+            try:
+                def branch_refused():
+                    assert not frappe.get_doc(dt,name).has_permission('read')
+                    assert not frappe.get_list(dt,filters={'name':name},
+                                               fields=['name'])
+                as_user('finance_auditor',branch_refused)
+            finally:
+                frappe.set_user('Administrator')
+                frappe.delete_doc('User Permission',permit.name)
+                frappe.db.commit()
+                frappe.clear_cache()
             original_payments=frappe.db.count('Payment Entry')
             original_gl=frappe.db.count('GL Entry')
             approval=as_user('general_manager',lambda:
@@ -8038,6 +8109,9 @@ def main():
             assert frappe.db.count('GL Entry')==original_gl
             return {'request':name,'allowed_role_count':len(allowed),
                     'unauthorized_roles_denied':2,
+                    'adversarial_command_denials':9,
+                    'idempotent_same_key_replay':True,
+                    'branch_scoped_document_and_list_denied':True,
                     'gm_approved':approval['status']=='Approved',
                     'separate_case_denied':rejected['status']=='Denied',
                     'audit_events_verified':4,'no_refund_payout':True}
