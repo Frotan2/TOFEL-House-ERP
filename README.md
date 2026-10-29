@@ -36,39 +36,44 @@ capacities are entered by the owner as configuration and are never coded in.
 
 ## Release status
 
-**NO-GO / production authorization REJECT.** The consolidated native-first
-engineering candidate is defined by the
-[v1.0.0-rc.1 release notes](docs/engineering/RELEASE-CANDIDATE.md),
-[integration contracts](docs/engineering/INTEGRATION-CONTRACTS.md), and
-[four-state acceptance matrix](docs/engineering/ACCEPTANCE-MATRIX.md).
-The source on `main` now includes integrated academic assessment/progression
-mechanisms, scheduling and class-operations commands, notification/portal
-mechanisms, and role-desk analytics. **Having code is not Owner authorization
-to operate it.** D1/D4/D5/D7 remain deferred unless explicitly superseded.
-Class transfer request/approval is hard-refused despite any `allow_transfers`
-business-policy toggle (D5). Retention percentage and inferred
-waiting-for-class KPI remain unavailable (D7); incomplete or denied sources
-must not become false-zero values. Portals, external channels, online payments
-and production release are not automatically enabled.
+**NO-GO / production authorization REJECT.** The current integration and
+code-review branch is `work`, proposed in [draft PR #120](https://github.com/Frotan2/TOFEL-House-ERP/pull/120).
+Do **not** assume `main` is equivalent: on 2026-10-29, the two histories
+were divergent, and release integration still requires explicit review.
+The [current work-branch source and release checkpoint](docs/engineering/WORK-READINESS-2026-10-29.md)
+separates live code facts, observed GitHub CI, old evidence and unresolved
+release gates. The [acceptance matrix](docs/engineering/ACCEPTANCE-MATRIX.md)
+defines the original evidence vocabulary and physical acceptance blockers;
+its pinned baseline is historical, **not** a qualification of the present
+`work` head.
 
-This README distinguishes today's source integration from the historical
-`v1.0.0-rc.1` candidate evidence. No actual customer release/package has
-been published merely by merging source.
+The owner-approved 2026-10-28 scope allows only separately guarded,
+same-level, same-program, same-branch, same-term class transfers when the
+effective policy and approval/capacity checks permit them. Cross-program,
+cross-branch and other advanced transfers remain held. Assessment/retake
+and other implemented mechanisms are **not** made production-operational
+merely because source code exists. Unapproved portals, external channels,
+online payment gateways, derived retention KPIs and live release remain
+deferred or blocked as recorded by their governing decisions.
 
-Verified snapshot revision `9c9ec48a6ead45dc802117eecb4f423e9b64f99d` has
-exact-SHA hosted successes for Owned, Native, Foundation, Product-image and
-Windows customer-package workflows. Its image-inclusive test package is
-available from the [Product-image run](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40173457925/artifacts/12593015016).
-See the [current delivery checkpoint](docs/engineering/DELIVERY-READINESS-2026-10-25.md)
-for the full source identity, artifact digest, evidence boundaries and remaining
-acceptance gates. This is **TEST PACKAGE - NO REAL DATA**; no GitHub Release
-was published at that checkpoint. Those are engineering results only. The candidate
-package pipeline requires all four canonical gate receipts on its exact full
-SHA, embeds them with checksums in the customer ZIP, attests the prebuilt
-Linux/amd64 image package, and publishes only an existing reviewed `v*` tag.
-See [Releases](https://github.com/Frotan2/TOFEL-House-ERP/releases) for an
-actually published version; this source document does not assert that a tag or
-download exists before the workflow creates it.
+**Tuition refund warning (Issue #115):** request and General Manager
+approval are implemented; actual *Fees* refund payout is deliberately
+blocked on the pinned native accounting stack. Do not use direct Student
+Pay, a book-return credit note, or an ad-hoc Journal Entry to work around
+this safety block. Book refunds follow a separate Sales Invoice return
+workflow. See `finance/tuition_refunds.py` and the current checkpoint.
+
+**Historical engineering package only:** snapshot
+`9c9ec48a6ead45dc802117eecb4f423e9b64f99d` previously passed five
+hosted workflows and produced an
+[image-inclusive synthetic package](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40173457925/artifacts/12593015016).
+The [2026-10-25 delivery record](docs/engineering/DELIVERY-READINESS-2026-10-25.md)
+states that snapshot's limits. This is **TEST PACKAGE — NO REAL DATA**;
+it is **not** an attested release of the current work head or permission
+to install over an Owner site. The release pipeline requires same-candidate
+gate receipts, hashes and provenance before a reviewed versioned release.
+See [Releases](https://github.com/Frotan2/TOFEL-House-ERP/releases) for
+any actually published build.
 
 Real Owner Windows/recovery/staff acceptance, cashier/book-stock acceptance,
 independent download/install, and the held safe updater remain open in
