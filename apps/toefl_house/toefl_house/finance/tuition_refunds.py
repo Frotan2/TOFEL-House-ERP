@@ -176,9 +176,16 @@ def open_amount(requests, *, fees):
             raise RefundError("Refund requests must be records")
         if request.get("fees") != fees:
             continue
-        if request.get("status") in ("Requested", "Approved"):
-            total += _money(request.get("requested_amount")
-                            or request.get("approved_amount"), "Request amount")
+        status = request.get("status")
+        if status not in STATUSES:
+            raise RefundError("Unknown refund request status in reservation ledger")
+        if status in ("Requested", "Approved"):
+            requested = _money(request.get("requested_amount"), "Request amount")
+            if status == "Approved":
+                approved = _money(request.get("approved_amount"), "Approved amount")
+                if approved != requested:
+                    raise RefundError("Approved refund differs from requested amount")
+            total += requested
     return total
 
 
@@ -342,7 +349,11 @@ def refund_payment_matches(payment, request):
         amount = _money(get(payment, "paid_amount"), "Payment amount")
     except RefundError:
         return False
-    if amount != _money(request.get("approved_amount"), "Approved amount"):
+    try:
+        approved_amount = _money(request.get("approved_amount"), "Approved amount")
+    except RefundError:
+        return False
+    if amount != approved_amount:
         return False
     references = get(payment, "references") or []
     if len(references) != 1:
