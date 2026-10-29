@@ -40,6 +40,28 @@ The preceding code head `ab7a0209` had observed **success** for Owned Suite, Nat
 
 After the focused changes, the GitHub runs for `d559db3` were **in progress** (Owned `40805643005`, `40805639041`; Product Image `40805639149`) when observed. Native and Foundation runs initiated against the intermediate `7158ba2` do **not** qualify `d559db3`. All final code-head gates must be rechecked before release; statuses here are a timestamped observation, **not claims about future completion**.
 
+## 29-Oct source hardening addendum — filelock advisories
+
+Review of the actual failed Foundation job
+[40801322291](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40801322291)
+identified the precise fail-closed cause:
+`STACK-ADVISORY-UNTRIAGED` for `filelock@3.20.3` advisories
+`GHSA-69hj-f68j-2879` and `GHSA-8mx5-7m5m-r77g`. Both are fixed
+upstream starting in `filelock 4.2.1`. This candidate now pins
+`filelock==4.2.4` across Native, Foundation and the customer app image,
+and extends the SHA-256-verified pinned Frappe dependency overlay from
+four to **five** requirements so the pinned Frappe's old `~=3.20.1`
+metadata cannot disagree with the installed package. The regression
+suite was updated; no untriaged advisory was waived.
+
+Details and mandatory compatibility/CI tests:
+[SEC-DEPS-01 filelock remediation](evidence/sec-deps-01/filelock-2026-10-29/README.md).
+**This is a committed source remediation, not a successful CI qualification.**
+Do not call the Foundation or Product Image gates green until their exact
+subsequent runs complete with success. Revalidate all roles, installed
+versions, `pip check`, application APIs and the image. The native tuition
+refund and Owner-machine recovery holds are unchanged.
+
 ## Unresolved production blockers
 
 1. **Native tuition Fees partial refund accounting:** request approval exists; safe actual payout does not. Never replace the refusal with a direct Student Payment Entry or unreviewed Journal Entry. A valid native credit/reversal and GL/Fees/outstanding reconciliation must be designed, independently audited and tested before enabling.
