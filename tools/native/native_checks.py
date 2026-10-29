@@ -8109,7 +8109,7 @@ def main():
             assert frappe.db.count('GL Entry')==original_gl
             return {'request':name,'allowed_role_count':len(allowed),
                     'unauthorized_roles_denied':2,
-                    'adversarial_command_denials':9,
+                    'adversarial_command_denials':8,
                     'idempotent_same_key_replay':True,
                     'branch_scoped_document_and_list_denied':True,
                     'gm_approved':approval['status']=='Approved',
