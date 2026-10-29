@@ -120,6 +120,8 @@ COPY tools/foundation/banking-locks /product/banking-locks
 # see docs/engineering/evidence/sec-deps-01/realtime-socketio-2026-10-18/README.md.
 COPY tools/foundation/secure_realtime.py /product/secure_realtime.py
 COPY tools/foundation/secure_markdown.py /product/secure_markdown.py
+COPY tools/foundation/secure_deepmerge.py /product/secure_deepmerge.py
+COPY tools/foundation/deepmerge-hashes.json /product/deepmerge-hashes.json
 COPY tools/foundation/fix_setup_sidebar.py /product/fix_setup_sidebar.py
 COPY tools/foundation/realtime-locks /product/realtime-locks
 # The performance baseline (finding 9) runs inside the deployed image:
@@ -197,9 +199,12 @@ RUN python3 /product/secure_weasyprint.py /home/frappe/bench/apps/frappe \
 RUN python3 /product/secure_realtime.py /home/frappe/bench/apps/frappe
 RUN python3 /product/secure_markdown.py /home/frappe/bench/apps/frappe
 RUN python3 /product/fix_setup_sidebar.py /home/frappe/bench/apps/frappe
+RUN cd /home/frappe/bench/apps/education/frontend && yarn install --frozen-lockfile --non-interactive
+RUN python3 /product/secure_deepmerge.py /home/frappe/bench/apps --apps
 # Compile all browser bundles on the provider. Customer startup restores this
 # seed and verifies the manifest; it never invokes a frontend compiler.
 RUN cd /home/frappe/bench && bench build \
+    && python3 /product/secure_deepmerge.py /home/frappe/bench/apps --apps --verify --assets --report /build/deepmerge-distribution.json \
     && /home/frappe/bench/env/bin/python -c 'import sys; sys.path.insert(0, "/product"); from bootstrap import export_prebuilt_assets; export_prebuilt_assets()' \
     && yarn cache clean && rm -rf /home/frappe/.cache
 
@@ -213,6 +218,7 @@ COPY --from=builder --chown=frappe:frappe /home/frappe/bench /home/frappe/bench
 COPY --from=builder /product /product
 COPY --from=builder /build/sites-seed /build/sites-seed
 COPY --from=builder /build/assets-seed /build/assets-seed
+COPY --from=builder /build/deepmerge-distribution.json /build/deepmerge-distribution.json
 # Pillow/WeasyPrint must never reach Ghostscript (GHSA-r543-q48m-4c9j).
 # Check the shipped stage AFTER its installs and every cross-stage copy.
 RUN if command -v gs >/dev/null 2>&1; then echo "ghostscript present on PATH: GHSA-r543-q48m-4c9j precondition violated" >&2; exit 1; fi

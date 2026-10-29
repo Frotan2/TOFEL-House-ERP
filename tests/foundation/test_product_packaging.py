@@ -467,6 +467,7 @@ class LineEndingContract(unittest.TestCase):
             "tools/foundation/secure_realtime.py", "tools/foundation/realtime-locks",
             # Desk markdown input cap (showdown GHSA-rmmh-p597-ppvv), reviewed 2026-10-19.
             "tools/foundation/secure_markdown.py",
+              "tools/foundation/secure_deepmerge.py", "tools/foundation/deepmerge-hashes.json",
             # Setup wizard lacks sidebar DOM until native setup completes.
             "tools/foundation/fix_setup_sidebar.py",
         }

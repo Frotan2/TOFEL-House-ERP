@@ -1,5 +1,11 @@
 # Consolidated acceptance matrix
 
+Current continuation: [29 October reconciliation](READINESS-2026-10-29.md) and
+[preserved historical Windows acceptance](WINDOWS-ACCEPTANCE-PRESERVED-2026-10-29.md).
+The supplementary deepmerge overlay requires its own exact-head hosted gates;
+historical Owner-image checks do not certify a later candidate. Production
+remains REJECT and issue #115 Fees payout remains blocked.
+
 > **Historical baseline matrix — current qualification on work differs.**
 > This matrix's evidence SHA `c22b997...`, its feature deferrals and its
 > candidate-PR exclusions are a record of that older release scope; they are

@@ -236,6 +236,8 @@ def main():
         run('fix-setup-sidebar-lifecycle',[benchdir/'env/bin/python',ROOT/'tools/foundation/fix_setup_sidebar.py',benchdir/'apps/frappe'])
         run('patch-hrms-editor-dependencies',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_hrms.py',benchdir/'apps/hrms'])
         run('lock-banking-dependencies',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_hrms.py',benchdir/'apps/erpnext','--banking'])
+        run('install-education-frontend-frozen',['yarn','install','--frozen-lockfile','--non-interactive'],cwd=benchdir/'apps/education/frontend')
+        run('secure-deepmerge-installed-sources',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_deepmerge.py',benchdir/'apps','--apps'])
         run('pip-check',[lab/'tools/bin/uv','pip','check','--python',benchdir/'env/bin/python'])
         for site in ('placement-test.localhost','placement-second.localhost'):
             create_site('new-'+site,site,dbpw)
@@ -538,6 +540,7 @@ def main():
                 assert not changed, (name,changed)
         run('verify-final-hrms-editor',[benchdir/'env/bin/python',
             ROOT/'tools/foundation/secure_hrms.py',benchdir/'apps/hrms','--verify'])
+        run('verify-final-deepmerge-sources',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_deepmerge.py',benchdir/'apps','--apps','--verify','--report',evidence/'deepmerge-distribution.json'])
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']=redact(str(exc));print(report['failure'],flush=True)

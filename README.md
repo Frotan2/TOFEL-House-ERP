@@ -47,6 +47,12 @@ defines the original evidence vocabulary and physical acceptance blockers;
 its pinned baseline is historical, **not** a qualification of the present
 `work` head.
 
+The [29 October local-to-work reconciliation](docs/engineering/READINESS-2026-10-29.md)
+records the supplementary deepmerge overlay, preserved historical Windows
+acceptance and remaining release blockers. Exact-head results belong to
+[PR #120](https://github.com/Frotan2/TOFEL-House-ERP/pull/120); a successful older
+work revision does not qualify later uncommitted or pushed changes.
+
 The owner-approved 2026-10-28 scope allows only separately guarded,
 same-level, same-program, same-branch, same-term class transfers when the
 effective policy and approval/capacity checks permit them. Cross-program,

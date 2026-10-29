@@ -39,6 +39,8 @@ tools/foundation/*
 !tools/foundation/realtime-locks/
 !tools/foundation/realtime-locks/**
 !tools/foundation/secure_markdown.py
+!tools/foundation/secure_deepmerge.py
+!tools/foundation/deepmerge-hashes.json
 !tools/foundation/fix_setup_sidebar.py
 **/__pycache__
 **/*.pyc

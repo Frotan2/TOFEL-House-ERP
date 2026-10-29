@@ -689,7 +689,12 @@ def main() -> int:
             raise RuntimeError("Native site encryption key was not initialized before the first backup")
         report["site_encryption_key_initialized"] = True
         report["site_encryption_key_sha256"] = initialize_result["checks"][0]["observation"]["sha256"]
+        run("secure-deepmerge-before-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_deepmerge.py", bench_dir / "apps", "--apps"])
         bench("asset-build", "build", timeout=1800)
+        run("verify-deepmerge-after-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_deepmerge.py", bench_dir / "apps", "--apps", "--verify", "--assets",
+            "--report", evidence / "deepmerge-distribution.json"])
         run("verify-hrms-editor-after-build", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/hrms", "--verify"])
         run("verify-banking-after-build", [bench_dir / "env/bin/python",

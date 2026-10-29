@@ -2,6 +2,13 @@
 
 **Decision: HOLD / NOT AUTHORIZED FOR PRODUCTION.** This checkpoint describes the *work* branch. It does not replace a successful test run, independent review, Owner acceptance, or the real customer release package.
 
+**Later 29 October reconciliation:** remote `23dde16f94df49403f9c941b08d0a406cf3fe1a9`
+subsequently passed all five canonical hosted gates. The supplementary local
+deepmerge overlay is integrated on top of that baseline and requires new
+same-revision gates. See [the continuation checkpoint](READINESS-2026-10-29.md)
+and [preserved Windows evidence summary](WINDOWS-ACCEPTANCE-PRESERVED-2026-10-29.md).
+The earlier pending statements below retain their original chronology.
+
 ## Repository and evidence pins
 
 - Repository: `Frotan2/TOFEL-House-ERP`; delivery PR [#120](https://github.com/Frotan2/TOFEL-House-ERP/pull/120), targeting `main` from `work`.

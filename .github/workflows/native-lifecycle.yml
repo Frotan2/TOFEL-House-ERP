@@ -21,6 +21,8 @@ on:
       - apps/foundation_security/**
       # The native installer executes both security patch helpers before build.
       - tools/foundation/secure_hrms.py
+      - tools/foundation/secure_deepmerge.py
+      - tools/foundation/deepmerge-hashes.json
       - tools/foundation/hrms-locks/**
       - tools/foundation/banking-locks/**
       - tools/foundation/secure_weasyprint.py

@@ -85,6 +85,8 @@ on:
       - tools/foundation/realtime-locks/**
       # Desk markdown input cap (showdown GHSA-rmmh-p597-ppvv), executed in the image build.
       - tools/foundation/secure_markdown.py
+      - tools/foundation/secure_deepmerge.py
+      - tools/foundation/deepmerge-hashes.json
       - tools/foundation/fix_setup_sidebar.py
       - product/**
       - apps/**
@@ -220,6 +222,27 @@ jobs:
           label=$(docker image inspect --format '{{index .Config.Labels "org.toefl-house.source-eol"}}' toefl-house-erp-app:ci)
           test "$label" = "lf-v1"
           echo "::notice title=Image EOL contract::entrypoint/Python shebangs, copied text inputs, and source-eol label verified in the built image"
+      - name: Verify shipped deepmerge distributions and emitted asset identities
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint python3 toefl-house-erp-app:ci -c '
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0, "/product")
+          from secure_deepmerge import secure, receipt
+          root = Path("/home/frappe/bench/apps")
+          secure(root, verify_only=True, apps=True)
+          actual = receipt(root, assets=True)
+          expected = json.loads(Path("/build/deepmerge-distribution.json").read_text())
+          assert actual == expected, "Shipped code/assets differ from the pre-export build receipt"
+          print(json.dumps(actual, indent=2))
+          ' > "$RUNNER_TEMP/deepmerge-distribution-image.json"
+      - name: Keep shipped dependency identity evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: deepmerge-distribution-image
+          path: ${{ runner.temp }}/deepmerge-distribution-image.json
+          if-no-files-found: error
       - name: Report image footprint
         run: |
           set -euo pipefail
