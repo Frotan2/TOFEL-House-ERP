@@ -13,9 +13,10 @@ import secure_frappe_python as security  # noqa: E402
 
 
 class FrappePythonSecurityOverlayUnitTests(unittest.TestCase):
-    def test_reviewed_pyproject_changes_only_the_four_reviewed_requirements(self):
+    def test_reviewed_pyproject_changes_only_the_five_reviewed_requirements(self):
         source = (
             b'[project]\ndependencies = [\n'
+            b'    "filelock~=3.20.1",\n'
             b'    "GitPython~=3.1.45",\n'
             b'    "Pillow~=12.3.0",\n'
             b'    "PyJWT~=2.13.0",\n'
@@ -29,6 +30,7 @@ class FrappePythonSecurityOverlayUnitTests(unittest.TestCase):
             updated,
             (
                 b'[project]\ndependencies = [\n'
+                b'    "filelock~=4.2.4",\n'
                 b'    "GitPython~=3.2.1",\n'
                 b'    "Pillow~=13.0.0",\n'
                 b'    "PyJWT~=2.15.1",\n'
@@ -56,6 +58,7 @@ class FrappePythonSecurityOverlayUnitTests(unittest.TestCase):
                 "Pillow": "13.0.0",
                 "PyJWT": "2.15.1",
                 "pypdf": "6.21.2",
+                "filelock": "4.2.4",
             },
         )
 
@@ -72,6 +75,7 @@ class FrappePythonSecurityOverlayWiringTests(unittest.TestCase):
                 "Pillow==13.0.0",
                 "PyJWT==2.15.1",
                 "pypdf==6.21.2",
+                "filelock==4.2.4",
             ):
                 self.assertIn(package, source)
             self.assertIn("--reinstall", source)
