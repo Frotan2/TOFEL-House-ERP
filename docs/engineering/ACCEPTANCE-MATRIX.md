@@ -1,5 +1,16 @@
 # Consolidated acceptance matrix
 
+> **Historical baseline matrix — current qualification on work differs.**
+> This matrix's evidence SHA `c22b997...`, its feature deferrals and its
+> candidate-PR exclusions are a record of that older release scope; they are
+> **not** an assertion about `work` in October 2026. The Owner's
+> 2026-10-28 decisions narrowly supersede the same-level Class transfer
+> deferral; source now includes guarded assessment/retake mechanisms, but
+> unreviewed activation remains held. Tuition refund requests can be approved
+> while native Fees payouts remain blocked. Read
+> [WORK-READINESS-2026-10-29.md](WORK-READINESS-2026-10-29.md) and the actual
+> exact-head CI before using any row as release evidence. **Production HOLD.**
+
 Baseline evidence SHA: `c22b9979542c88a2cd179e179a91829d07a79a3a`
 
 Candidate scope: native-first engineering release candidate
