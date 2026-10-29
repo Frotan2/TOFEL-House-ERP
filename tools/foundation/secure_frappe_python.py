@@ -2,7 +2,7 @@
 """Apply the reviewed Python dependency security uplift to pinned Frappe.
 
 The product remains commit-pinned to Frappe
-988e54f3c4c291e2077a83809663f123731abe76. This helper changes only four
+988e54f3c4c291e2077a83809663f123731abe76. This helper changes only five
 dependency declarations in that exact checkout, then the installers replace the
 resolved packages with reviewed patched releases and reinstall Frappe metadata.
 
@@ -15,6 +15,9 @@ Reviewed uplifts:
   with the newer upstream Frappe line.
 - pypdf 6.21.2: includes the October 2026 parser/resource fixes through
   6.21.2, including the 6.21.1 DCT/JPEG validation fix.
+- filelock 4.2.4: includes the 4.2.1 fix for GHSA-69hj-f68j-2879 and
+  GHSA-8mx5-7m5m-r77g; pinned Frappe 3.x dependency metadata must be
+  overlaid together with the installed package (never bypass pip check).
 
 The committed pyproject bytes and Frappe commit must match the reviewed pin.
 Verification reconstructs the exact expected patched bytes from git HEAD, so an
@@ -36,6 +39,7 @@ REQUIREMENT_UPGRADES = (
     (b'    "Pillow~=12.3.0",\n', b'    "Pillow~=13.0.0",\n'),
     (b'    "PyJWT~=2.13.0",\n', b'    "PyJWT~=2.15.1",\n'),
     (b'    "pypdf==6.15.0",\n', b'    "pypdf==6.21.2",\n'),
+    (b'    "filelock~=3.20.1",\n', b'    "filelock~=4.2.4",\n'),
 )
 
 REQUIRED_RUNTIME_VERSIONS = {
@@ -43,6 +47,7 @@ REQUIRED_RUNTIME_VERSIONS = {
     "Pillow": "13.0.0",
     "PyJWT": "2.15.1",
     "pypdf": "6.21.2",
+    "filelock": "4.2.4",
 }
 
 
