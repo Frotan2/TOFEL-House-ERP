@@ -72,6 +72,28 @@ class DeepmergeSecurityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             secure(self.root)
 
+    def test_native_public_alias_is_allowed_only_to_the_audited_root(self):
+        target = self.root / "frappe/node_modules"
+        target.mkdir(parents=True)
+        alias = self.root / "frappe/frappe/public/node_modules"
+        alias.parent.mkdir(parents=True)
+        try:
+            alias.symlink_to(target, target_is_directory=True)
+        except OSError:
+            self.skipTest("Windows account lacks symlink privilege; hosted Linux executes this case")
+        self.assertEqual(secure(self.root), 1)
+        # The canonical target is scanned, rather than trusting the alias.
+        shutil.copytree(FIXTURE, target / "deepmerge")
+        self.assertEqual(secure(self.root), 2)
+        self.assertEqual(secure(self.root, verify_only=True), 2)
+        (target / "deepmerge/dist/cjs.js").write_text("tampered")
+        with self.assertRaises(ValueError):
+            secure(self.root, verify_only=True)
+        alias.unlink()
+        alias.symlink_to(self.package.parent, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            secure(self.root)
+
     @unittest.skipUnless(shutil.which("node"), "Node required")
     def test_receipt_probes_actual_resolved_distributions(self):
         secure(self.root)

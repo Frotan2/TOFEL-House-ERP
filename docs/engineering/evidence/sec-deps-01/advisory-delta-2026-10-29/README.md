@@ -62,3 +62,13 @@ integrity-verified publisher archive. This is source review, not Owner signoff.
 Required next: independent source review and exact-revision Foundation/Product
 image qualification, authenticated rebuilt kit, then final installed-image
 acceptance. Local tests do not satisfy these release gates or authorize launch.
+
+The first integrated candidate 4fafae3 passed Owned (2,894 tests, 23 Windows
+skips) and Windows Smoke. Product then exposed the native post-build
+`frappe/frappe/public/node_modules` alias. The walker now accepts only that
+exact alias pointing to the regular `frappe/node_modules` tree it independently
+audits; arbitrary linked consumers remain refused. A Linux regression checks
+valid alias, tampered canonical code and redirected alias refusal. Foundation
+40897652555 stopped earlier on an npm publisher HTTP 502 fetching the unchanged
+Firebase archive, not an advisory waiver or overlay failure. New final-head
+gates are required after the native-alias correction.

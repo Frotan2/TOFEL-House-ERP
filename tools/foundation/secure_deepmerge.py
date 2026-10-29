@@ -33,6 +33,16 @@ def _copies(root: Path):
             if name in (".git", ".bin", "__pycache__"):
                 dirs.remove(name)
             elif _linked(child):
+                # bench build creates this public alias to the same root
+                # dependency tree that the walk audits separately. Accept
+                # only the exact native alias and exact regular target.
+                native_alias = root / "frappe/frappe/public/node_modules"
+                native_target = root / "frappe/node_modules"
+                if (child == native_alias and native_target.is_dir()
+                        and not any(_linked(p) for p in (native_target, *native_target.parents))
+                        and child.resolve(strict=True) == native_target.resolve(strict=True)):
+                    dirs.remove(name)
+                    continue
                 # Yarn's .bin links are launchers, never dependency roots.
                 # Reject links that could hide copies from a non-following walk.
                 if "node_modules" in child.relative_to(root).parts:
