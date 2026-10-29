@@ -13,6 +13,7 @@ import subprocess
 
 HASHES = json.loads(Path(__file__).with_name("deepmerge-hashes.json").read_text())
 REQUIRED_CONSUMERS = ("education/frontend", "hrms/frontend")
+SHIPPED_APPS = ("frappe", "erpnext", "education", "payments", "hrms", "foundation_security", "toefl_house")
 # The reviewed Tiptap overlay removes Education's trailing-node dependency.
 # Absence is allowed only for this exact reviewed dependency graph.
 EDUCATION_WITHOUT_DEEPMERGE = "0b43016c9285f967f6602fbaba989fb864c7f3712bd0ad7ae02d80497d97b998"
@@ -23,6 +24,10 @@ def _linked(path: Path) -> bool:
 
 
 def _copies(root: Path):
+    # Pinned frappe/build.py generate_assets_map creates exactly these
+    # public aliases for installed apps with root dependency directories.
+    native_aliases = {root / app / app / "public/node_modules": root / app / "node_modules" for app in SHIPPED_APPS}
+
     def fail(error):
         raise error
 
@@ -36,9 +41,8 @@ def _copies(root: Path):
                 # bench build creates this public alias to the same root
                 # dependency tree that the walk audits separately. Accept
                 # only the exact native alias and exact regular target.
-                native_alias = root / "frappe/frappe/public/node_modules"
-                native_target = root / "frappe/node_modules"
-                if (child == native_alias and native_target.is_dir()
+                native_target = native_aliases.get(child)
+                if (native_target is not None and native_target.is_dir()
                         and not any(_linked(p) for p in (native_target, *native_target.parents))
                         and child.resolve(strict=True) == native_target.resolve(strict=True)):
                     dirs.remove(name)

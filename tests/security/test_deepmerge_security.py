@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import unittest
 
-from tools.foundation.secure_deepmerge import secure, receipt, EDUCATION_WITHOUT_DEEPMERGE
+from tools.foundation.secure_deepmerge import secure, receipt, EDUCATION_WITHOUT_DEEPMERGE, SHIPPED_APPS
 
 FIXTURE = Path(__file__).parent / "fixtures/deepmerge-4.3.1"
 
@@ -73,15 +73,18 @@ class DeepmergeSecurityTests(unittest.TestCase):
             secure(self.root)
 
     def test_native_public_alias_is_allowed_only_to_the_audited_root(self):
-        target = self.root / "frappe/node_modules"
-        target.mkdir(parents=True)
-        alias = self.root / "frappe/frappe/public/node_modules"
-        alias.parent.mkdir(parents=True)
-        try:
-            alias.symlink_to(target, target_is_directory=True)
-        except OSError:
-            self.skipTest("Windows account lacks symlink privilege; hosted Linux executes this case")
+        for app in SHIPPED_APPS:
+            target = self.root / app / "node_modules"
+            target.mkdir(parents=True)
+            alias = self.root / app / app / "public/node_modules"
+            alias.parent.mkdir(parents=True)
+            try:
+                alias.symlink_to(target, target_is_directory=True)
+            except OSError:
+                self.skipTest("Windows account lacks symlink privilege; hosted Linux executes this case")
         self.assertEqual(secure(self.root), 1)
+        target = self.root / "education/node_modules"
+        alias = self.root / "education/education/public/node_modules"
         # The canonical target is scanned, rather than trusting the alias.
         shutil.copytree(FIXTURE, target / "deepmerge")
         self.assertEqual(secure(self.root), 2)

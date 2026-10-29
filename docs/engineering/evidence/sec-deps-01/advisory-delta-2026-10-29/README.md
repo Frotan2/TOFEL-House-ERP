@@ -64,11 +64,15 @@ image qualification, authenticated rebuilt kit, then final installed-image
 acceptance. Local tests do not satisfy these release gates or authorize launch.
 
 The first integrated candidate 4fafae3 passed Owned (2,894 tests, 23 Windows
-skips) and Windows Smoke. Product then exposed the native post-build
-`frappe/frappe/public/node_modules` alias. The walker now accepts only that
-exact alias pointing to the regular `frappe/node_modules` tree it independently
-audits; arbitrary linked consumers remain refused. A Linux regression checks
-valid alias, tampered canonical code and redirected alias refusal. Foundation
+skips) and Windows Smoke. Product then exposed native post-build public
+dependency aliases; the next candidate confirmed the same pattern for Education.
+Pinned [Frappe generate_assets_map](https://github.com/frappe/frappe/blob/988e54f3/frappe/build.py#L297-L327)
+creates these aliases for every installed app with root node_modules.
+The walker accepts only the finite seven shipped app names, each exact
+`<app>/<app>/public/node_modules` alias pointing to that app's regular
+`<app>/node_modules` tree it independently audits; arbitrary linked consumers
+remain refused. A Linux regression checks all seven valid aliases,
+tampered canonical code and redirected alias refusal. Foundation
 40897652555 stopped earlier on an npm publisher HTTP 502 fetching the unchanged
 Firebase archive, not an advisory waiver or overlay failure. New final-head
 gates are required after the native-alias correction.
