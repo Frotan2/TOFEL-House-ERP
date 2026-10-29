@@ -89,9 +89,10 @@ class DeepmergeSecurityTests(unittest.TestCase):
         (target / "deepmerge/dist/cjs.js").write_text("tampered")
         with self.assertRaises(ValueError):
             secure(self.root, verify_only=True)
+        shutil.copyfile(self.package / "dist/cjs.js", target / "deepmerge/dist/cjs.js")
         alias.unlink()
         alias.symlink_to(self.package.parent, target_is_directory=True)
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, "Linked dependency directory"):
             secure(self.root)
 
     @unittest.skipUnless(shutil.which("node"), "Node required")
