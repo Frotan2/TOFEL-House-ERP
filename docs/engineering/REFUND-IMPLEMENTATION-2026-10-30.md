@@ -77,6 +77,25 @@ verified both GL rows and every original dimension, then rolled back; original
 Journal Entry/Payment Entry/GL counts were unchanged. This targeted diagnostic
 does not qualify the entire paired command or replace its hosted Native gate.
 
+The subsequent real Windows backend command test passed on the existing
+synthetic recovery site: 100 AFN billed, 60 collected, independent request and
+General Manager approval, then 1 AFN paired credit/payout with 40 outstanding
+preserved. Actual controller submissions were followed by injected failures
+after the credit and after the payout, caught without an outside rollback;
+all command-local financial/operation/audit counts returned to their baselines.
+Successful payout replayed exactly with the same key, a different key was
+refused, and both individual artifact cancellations were refused. Finally the
+outer synthetic test transaction rolled back and all eight business table
+hashes matched their pre-test values. Only the additive refund DocType schema
+import persisted on that synthetic recovery site. No Owner site was initialized.
+
+The hosted negative-role fixture needs an Officer-only control because its
+existing `finance_officer` intentionally also holds Finance Manager. The
+post-submit failure test must patch each concrete native controller because
+Journal Entry overrides `Document.submit`; patching the base class cannot
+exercise that stage. Both corrections retain their original negative assertions
+and execute real accounting before fault injection. Hosted rerun is required.
+
 The earlier checklist below remains the full completion scope; it is not a
 claim that the new owned paired command has passed its first database gate.
 

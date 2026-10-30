@@ -480,6 +480,7 @@ def main():
            'attendance_recorder':'synthetic-attendance-recorder@example.test',
            'teaching_auditor':'synthetic-teaching-auditor@example.test',
            'finance_officer':'synthetic-finance-officer@example.test',
+           'refund_officer':'synthetic-refund-officer@example.test',
            'finance_auditor':'synthetic-finance-auditor@example.test',
            'containment_probe':'synthetic-containment-probe@example.test',
            'course_owner':'synthetic-course-owner@example.test',
@@ -582,6 +583,9 @@ def main():
                          # Finance Officer acting role, so the desk's guided
                          # compensation actions are server-embeddable.
                          'finance_officer':['Finance Officer','Accounts User','Finance Manager'],
+                         # Distinct least-privilege negative control: the desk
+                         # fixture above legitimately holds payout authority.
+                         'refund_officer':['Finance Officer'],
                          'finance_auditor':['Finance Auditor'],
                           'book_seller':['Finance Officer','Accounts User','Finance Manager'],
                           'book_unauthorized':['Accounts User'],
@@ -8109,7 +8113,8 @@ def main():
             assert any(row.action=='approve_tuition_refund' and row.before_hash
                        for row in events),events
             assert 'Finance Officer' not in frappe.get_roles(users['finance_manager'])
-            for label in ('finance_officer','general_manager','publisher'):
+            assert 'Finance Manager' not in frappe.get_roles(users['refund_officer'])
+            for label in ('refund_officer','general_manager','publisher'):
                 assert denied(lambda label=label:as_user(label,lambda:tuition_refund_cmd.pay_tuition_refund(
                     'native_refund_wrong_payer_'+label,name)))['denied']=='PermissionError'
             # Give the original approving actor the payer role temporarily:
@@ -8157,11 +8162,15 @@ def main():
             # submit. Catch WITHOUT an outside rollback: command-local atomic
             # rollback must remove real native journals/payments/GL and its
             # operation receipt, leaving the same approval reusable.
-            from frappe.model.document import Document
+            from frappe.model.base_document import get_controller
             from toefl_house.security import active_command_kind
-            actual_submit=Document.submit
             fault_stages=[]
             for phase in ('Journal Entry','Payment Entry'):
+                # Journal Entry overrides Document.submit. Patch the actual
+                # controller entry point and call it first, preserving native
+                # accounting and checking its GL before the injected failure.
+                controller=get_controller(phase)
+                actual_submit=controller.submit
                 key='native_refund_actual_failure_'+phase.replace(' ','_')
                 before_counts={item:frappe.db.count(item) for item in (
                     'Journal Entry','Payment Entry','GL Entry','TH Placement Operation','TH Placement Audit Event')}
@@ -8174,7 +8183,7 @@ def main():
                         entered.append(document.name)
                         raise frappe.ValidationError('SYN controlled failure after actual '+phase)
                     return result
-                with patch.object(Document,'submit',fail_after_real_submit):
+                with patch.object(controller,'submit',fail_after_real_submit):
                     try:
                         as_user('finance_manager',lambda:tuition_refund_cmd.pay_tuition_refund(key,name))
                     except frappe.ValidationError as exc:
