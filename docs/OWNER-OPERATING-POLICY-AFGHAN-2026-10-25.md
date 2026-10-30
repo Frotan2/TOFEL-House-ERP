@@ -1,8 +1,11 @@
 # TOEFL House — confirmed Afghan operating policy (Owner, 2026-10-25)
 
 **Business decisions: APPROVED.** **Product release: NO-GO.**
-This is the single current owner decision record; earlier unconfirmed
-questions in `FINANCE-POLICY-APPROVAL.md` are superseded where contradicted.
+This document is a **dated approved policy snapshot**, not the final
+source of current tuition or program durations. Later explicit Owner addenda
+in `docs/owner-decisions.json` (including the 30 October 2026 initial-setup
+clarification) prevail wherever values differ. Earlier questions in
+`FINANCE-POLICY-APPROVAL.md` also have no authority over those addenda.
 Accountant and Owner must still supply opening balances and identify the
 supported contractual payroll and financial recognition method.
 
