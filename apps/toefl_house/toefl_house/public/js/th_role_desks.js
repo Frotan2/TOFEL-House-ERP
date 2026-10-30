@@ -1607,6 +1607,52 @@ frappe.provide("toefl_house.role_desks");
 							$("<li></li>").text(String(name) + ": " + Number(count || 0)).appendTo(list);
 						});
 					}
+					// Fresh installs do not have prior course records. This control
+					// only appears when the SERVER has verified the two release
+					// switches, clean-site guard, finance prerequisites and plan.
+					// The POST independently rechecks all of them under a lock.
+					const fresh = data.fresh_installation || {};
+					if (fresh.profile === "FRESH_SITE_NO_PRIOR_COURSE_HISTORY") {
+						$("<p></p>").text(text(fresh.message || "")).appendTo(output);
+					}
+					if (fresh.can_initialize === true &&
+						fresh.profile === "FRESH_SITE_NO_PRIOR_COURSE_HISTORY" &&
+						data.counts.review === 0 && data.planned_actions_count > 0 &&
+						typeof data.plan_hash === "string" && data.plan_hash.length > 0) {
+						const apply = $("<button type='button' class='btn btn-primary btn-sm'></button>")
+							.text(text("Initialize new course catalog")).appendTo(output);
+						apply.on("click", () => {
+							frappe.confirm(
+								text("Create the approved TOEFL House course catalog and draft fees on this fresh, empty site? No students, receipts or payments will be created."),
+								() => {
+									apply.prop("disabled", true);
+									frappe.call({
+										method: "toefl_house.setup_presets.installer.initialize_owner_catalog",
+										type: "POST",
+										args: {
+											expected_plan_hash: data.plan_hash,
+											confirmation: "APPLY_TO_NEW_COURSE_SITE",
+										},
+										callback(response) {
+											const result = response.message || {};
+											if (result.status !== "CATALOG_DRAFTS_INITIALIZED" &&
+												result.status !== "ALREADY_MATCHED") {
+												apply.prop("disabled", false);
+												frappe.msgprint(text("Catalog setup did not confirm success. Review the configuration before retrying."));
+												return;
+											}
+											frappe.msgprint(text("Approved course catalog initialized. Refreshing configuration review."));
+											button.trigger("click");
+										},
+										error() {
+											apply.prop("disabled", false);
+											frappe.msgprint(text("Catalog initialization was denied or failed. No production use is authorized."));
+										},
+									});
+								}
+							);
+						});
+					}
 					const table = $("<table class='table table-bordered table-condensed'></table>").appendTo(output);
 					const head = $("<thead><tr></tr></thead>").appendTo(table).find("tr");
 					[text("Area"), text("Code"), text("Status"), text("Next step")].forEach(
