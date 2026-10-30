@@ -1540,7 +1540,10 @@ frappe.provide("toefl_house.role_desks");
 						["drawer_name_", "drawer_expected_", "drawer_counted_", "drawer_note_"].forEach(
 							(key) => delete args[key + index]);
 					}
-					args.counts = counts;
+					// Frappe form transport uses a JSON string for complex arrays.
+					// The guarded POST parses it with bounds and rechecks every
+					// account and variance against the native ledger.
+					args.counts = JSON.stringify(counts);
 					delete args.drawers;
 				}
 				if (teachingContractForm) {
