@@ -1431,9 +1431,11 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                              "the map desk configures nothing")
         self.assertIn("never decided here",
                       items["ASM-EFF"]["stage_definition"])
-        self.assertIn("No runtime grading, assessment or student-progression consumer",
+        self.assertIn("Guarded assessment and progression commands",
                       items["ASM-EFF"]["stage_definition"])
-        self.assertIn("D1 remains deferred",
+        self.assertIn("require complete approved policies",
+                      items["ASM-EFF"]["stage_definition"])
+        self.assertIn("does not publish student results",
                       items["ASM-EFF"]["stage_definition"])
         self.assertIn("this desk status is not runtime activation",
                       items["ASM-EFF"]["next"])
