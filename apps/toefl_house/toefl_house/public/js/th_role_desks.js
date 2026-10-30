@@ -1436,9 +1436,12 @@ frappe.provide("toefl_house.role_desks");
 		const contextFacts = contextKeys.filter((key) => action.args && action.args[key] !== undefined)
 			.map((key) => `<dt>${escapeText(key.replace(/_/g, " "))}</dt><dd style="white-space:pre-wrap">${escapeText(action.args[key])}</dd>`).join("");
 		const contextFields = contextFacts ? [{ fieldname: "cash_context", fieldtype: "HTML", options: `<dl>${contextFacts}</dl>` }] : [];
+		// One key per opened form, reused on a retry; do not rely on
+		// hidden Frappe inputs appearing in get_values().
+		const requestKey = newRequestKey();
 		const dialog = new frappe.ui.Dialog({
 			title: text(action.label),
-			fields: [{ fieldname: "request_key", label: text("Request reference"), fieldtype: "Data", hidden: 1, reqd: 1, read_only: 1, default: newRequestKey() }, ...contextFields, ...fields],
+			fields: [{ fieldname: "request_key", label: text("Request reference"), fieldtype: "Data", hidden: 1, read_only: 1, default: requestKey }, ...contextFields, ...fields],
 			primary_action_label: text(action.label),
 			primary_action(values) {
 				const guard = ACTION_GUARDS[action.endpoint];
@@ -1449,7 +1452,7 @@ frappe.provide("toefl_house.role_desks");
 						return;
 					}
 				}
-				const args = { request_key: values.request_key };
+				const args = { request_key: requestKey };
 				fields.forEach((field) => {
 					if (field.fieldname) args[field.fieldname] = values[field.fieldname];
 				});
