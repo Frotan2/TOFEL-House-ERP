@@ -1378,6 +1378,8 @@ frappe.provide("toefl_house.role_desks");
 					{ fieldname: "skill_unit_" + index, label: "Skill " + index + " — payment unit (e.g. Class)", fieldtype: "Data" },
 					{ fieldname: "skill_rate_" + index, label: "Skill " + index + " — AFN per unit", fieldtype: "Currency" },
 					{ fieldname: "skill_quantity_" + index, label: "Skill " + index + " — units payable", fieldtype: "Float" },
+					{ fieldname: "skill_min_" + index, label: "Skill " + index + " — minimum AFN (optional)", fieldtype: "Currency" },
+					{ fieldname: "skill_max_" + index, label: "Skill " + index + " — maximum AFN (optional)", fieldtype: "Currency" },
 				]);
 			}
 			for (let index = 1; index <= 2; index += 1) {
@@ -1496,6 +1498,10 @@ frappe.provide("toefl_house.role_desks");
 						const unit = String(values["skill_unit_" + index] || "").trim();
 						const rate = values["skill_rate_" + index];
 						const quantity = values["skill_quantity_" + index];
+						const minimum = values["skill_min_" + index];
+						const maximum = values["skill_max_" + index];
+						const hasMin = minimum !== undefined && minimum !== null && minimum !== "";
+						const hasMax = maximum !== undefined && maximum !== null && maximum !== "";
 						const hasRate = rate !== undefined && rate !== null && rate !== "";
 						const hasQuantity = quantity !== undefined && quantity !== null && quantity !== "";
 						if (skill || unit || hasRate || hasQuantity) {
@@ -1505,10 +1511,20 @@ frappe.provide("toefl_house.role_desks");
 								frappe.msgprint(text("For each paid skill, choose the skill, payment unit, positive AFN rate and positive quantity."));
 								return;
 							}
-							terms.push({ skill, unit_of_payment: unit, rate: Number(rate),
-								payable_quantity: Number(quantity) });
+							if ((hasMin && (!Number.isFinite(Number(minimum)) || Number(minimum) < 0)) ||
+								(hasMax && (!Number.isFinite(Number(maximum)) || Number(maximum) < 0)) ||
+								(hasMin && hasMax && Number(minimum) > Number(maximum))) {
+								frappe.msgprint(text("Skill minimum/maximum must be valid AFN amounts, with minimum not greater than maximum."));
+								return;
+							}
+							const term = { skill, unit_of_payment: unit,
+								rate: Number(rate), payable_quantity: Number(quantity) };
+							if (hasMin) term.minimum_amount = Number(minimum);
+							if (hasMax) term.maximum_amount = Number(maximum);
+							terms.push(term);
 						}
-						["skill_", "skill_unit_", "skill_rate_", "skill_quantity_"].forEach((name) =>
+						["skill_", "skill_unit_", "skill_rate_", "skill_quantity_",
+							"skill_min_", "skill_max_"].forEach((name) =>
 							delete args[name + index]);
 					}
 					if (new Set(terms.map((row) => row.skill)).size !== terms.length) {
@@ -1686,6 +1702,10 @@ frappe.provide("toefl_house.role_desks");
 				values["skill_unit_" + i] = row.unit_of_payment;
 				values["skill_rate_" + i] = row.rate;
 				values["skill_quantity_" + i] = row.payable_quantity;
+				if (row.minimum_amount !== undefined && row.minimum_amount !== null)
+					values["skill_min_" + i] = row.minimum_amount;
+				if (row.maximum_amount !== undefined && row.maximum_amount !== null)
+					values["skill_max_" + i] = row.maximum_amount;
 			});
 			contract.adjustments.forEach((row, index) => {
 				const i = index + 1;
