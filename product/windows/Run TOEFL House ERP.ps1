@@ -72,7 +72,17 @@ if ($Action -eq 'Install' -or $Action -eq 'Prepare') {
         & docker info *> $null
         $engineReady = $LASTEXITCODE -eq 0
     }
-    if (-not $engineReady) {
+    # An installed but stopped Docker Desktop is not a missing prerequisite.
+    # The Install CMD launcher starts it and waits for a responding engine.
+    # Do not request Windows administrator privileges just to open Docker.
+    $desktopInstalled = [bool](@(
+        @("$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
+          "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe") |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+    ).Count -gt 0)
+    if ($Action -eq 'Install' -and -not $engineReady -and $desktopInstalled) {
+        Write-Output '[TH_STAGE] Docker Desktop is installed; checking its engine without changing Windows prerequisites...'
+    } elseif (-not $engineReady) {
         $preparePath = Join-Path $PSScriptRoot 'Prepare This PC.ps1'
         try {
             Write-Output '[TH_STAGE] Preparing Windows from the included offline installers...'
