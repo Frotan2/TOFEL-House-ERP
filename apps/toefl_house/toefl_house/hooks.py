@@ -186,6 +186,10 @@ permission_query_conditions["Student Group"] = "toefl_house.permissions.branch_q
 permission_query_conditions["Student Applicant"] = "toefl_house.permissions.branch_query_student_applicant"
 permission_query_conditions["Program Enrollment"] = "toefl_house.permissions.branch_query_program_enrollment"
 override_whitelisted_methods = {
+    "toefl_house.finance.tuition_refund_reversal_commands.request_tuition_refund_reversal": "toefl_house.finance.refund_feature_gate.disabled_paid_recovery",
+    "toefl_house.finance.tuition_refund_reversal_commands.approve_tuition_refund_reversal": "toefl_house.finance.refund_feature_gate.disabled_paid_recovery",
+    "toefl_house.finance.tuition_refund_reversal_commands.deny_tuition_refund_reversal": "toefl_house.finance.refund_feature_gate.disabled_paid_recovery",
+    "toefl_house.finance.tuition_refund_reversal_commands.reverse_tuition_refund": "toefl_house.finance.refund_feature_gate.disabled_paid_recovery",
     "frappe.integrations.oauth2_logins.login_via_office365": "toefl_house.social_login.login_via_office365",
     "education.education.api.enroll_student": "toefl_house.admission.deny_enroll_student",
     # The pinned renderer constructor is guarded for *all* paths by the

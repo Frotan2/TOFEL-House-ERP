@@ -52,6 +52,18 @@ def run():
         for allow, value in (("Company", company.name), ("Branch", branch.name)):
             frappe.get_doc(dict(doctype="User Permission", user=name, allow=allow, for_value=value)).insert()
     assert "Finance Officer" not in frappe.get_roles(actors["payer"])
+    # A fresh CI bench has no customer onboarding defaults. Supply explicit
+    # native synthetic catalog scaffolding; never change Education Settings
+    # or rely on the Windows installation's configured default UOM.
+    for doctype, name, values in (
+        ("UOM", "Nos", dict(uom_name="Nos")),
+        ("Item Group", "All Item Groups", dict(item_group_name="All Item Groups", is_group=1)),
+        ("Item Group", "Fee Component", dict(item_group_name="Fee Component", parent_item_group="All Item Groups")),
+    ):
+        if not frappe.db.exists(doctype, name):
+            frappe.get_doc(dict(doctype=doctype, **values)).insert()
+    frappe.get_doc(dict(doctype="Item", item_code=prefix, item_name=prefix, item_group="Fee Component",
+        stock_uom="Nos", is_stock_item=0, is_sales_item=1)).insert()
     category = frappe.get_doc(dict(doctype="Fee Category", category_name=prefix)).insert()
     structure = frappe.get_doc(dict(doctype="Fee Structure", program=template.program,
         academic_year=template.academic_year, company=company.name,

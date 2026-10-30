@@ -8470,6 +8470,26 @@ def main():
         # synthetic Company as reproducible concurrent accounting evidence.
         from tuition_refund_races import run as qualify_refund_races
         check('native-tuition-refund-real-concurrent-transactions', traced(qualify_refund_races))
+        def deferred_refund_recovery_server_gate():
+            before={dt:frappe.db.count(dt) for dt in ('Journal Entry','Payment Entry','GL Entry','TH Placement Operation','TH Placement Audit Event')}
+            methods=('request_tuition_refund_reversal','approve_tuition_refund_reversal',
+                     'deny_tuition_refund_reversal','reverse_tuition_refund')
+            refused=0
+            for label in ('receptionist','finance_manager','general_manager','teacher_one','course_owner'):
+                session=login(label)
+                try:
+                    for method in methods:
+                        response=session.post(base+'/api/method/toefl_house.finance.tuition_refund_reversal_commands.'+method,
+                            json={'enable':True,'ignore_permissions':True},timeout=40)
+                        assert response.status_code==403,(label,method,response.status_code)
+                        assert response.json().get('exc_type')=='PermissionError'
+                        assert 'Paid refund recovery is not available in this release' in response.text
+                        refused+=1
+                finally:session.close()
+            frappe.db.rollback()
+            assert before=={dt:frappe.db.count(dt) for dt in before}
+            return dict(five_role_http_refusals=refused,business_records_unchanged=True,client_flags_cannot_enable=True)
+        check('native-deferred-refund-recovery-server-gate',traced(deferred_refund_recovery_server_gate))
         report['status']='pass'
 
     except Exception as exc:

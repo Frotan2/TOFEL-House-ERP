@@ -1,5 +1,23 @@
 # Tuition refund implementation — 30 October 2026
 
+## Owner priority and release boundary — 30 October 2026
+
+The Owner has explicitly prioritized configured daily ERP operation over further
+refund expansion. Native paired payout, independent management/Finance authority,
+unpaid approval withdrawal and the real concurrency gate remain in the release.
+Paid-refund cash-return recovery is **deferred and unavailable**. Its experimental
+source and Windows evidence are preserved outside the shipping application for
+the next version; it is not signed off for delivery. All four former recovery
+API paths map to an unconditional server refusal before database access. No
+client flag, staff role or site setting can enable them. Individual cancellation
+of the existing payout or tuition credit remains server-blocked. Customers must
+not use manual Student journals or independent cancellation as a workaround.
+
+The current concurrency gate's fresh-CI catalog prerequisite now explicitly
+creates its own native test Item/UOM, rather than relying on the existing Windows
+installation's onboarding defaults. This changes test scaffolding only and does
+not weaken any financial assertion. All previous evidence below remains history.
+
 **Engineering in progress. Production REJECT. Existing Owner installation and
 all historical acceptance evidence remain preserved.** Baseline:
 `bdf6260db783cab1566233c2bf684d542b6c5d43`, PR #120.
