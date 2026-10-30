@@ -112,6 +112,17 @@ class SnapshotSafetyTests(unittest.TestCase):
         with self.assertRaisesRegex(Refused, "duplicate level code"):
             actual_snapshot_functions(db)["_snapshot"]()
 
+    def test_distinct_level_codes_cannot_share_one_native_program(self):
+        rows = [
+            Row(name="L-1", code="PREP-1", title="Prep 1", family="F-1",
+                native_program="N-1", next_level="", status="Active"),
+            Row(name="L-2", code="PREP-2", title="Prep 2", family="F-1",
+                native_program="N-1", next_level="", status="Active"),
+        ]
+        db = FakeDB({"TH Program Level": rows})
+        with self.assertRaisesRegex(Refused, "Two levels use native Program N-1"):
+            actual_snapshot_functions(db)["_snapshot"]()
+
     def test_older_duration_versions_do_not_block_newer(self):
         db = FakeDB({
             "TH Academic Program": [Row(name="F-1", code="GE", title="GE",
