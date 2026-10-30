@@ -1040,6 +1040,14 @@ def set_assessment_policy_version(request_key, policy, effective_from,
                     "The proposed skill distribution must cover exactly "
                     "the 12 existing GE/EAP assessment components")
             try:
+                from decimal import Decimal, InvalidOperation
+                try:
+                    total = sum(Decimal(str(entry["weight"]))
+                                for entry in skill_weights)
+                except (KeyError, TypeError, InvalidOperation) as exc:
+                    raise ValueError("Every component needs a numeric weight") from exc
+                if total != 100:
+                    raise ValueError("Assessment weights must total exactly 100 percent")
                 carried["weights"] = rules.canonical_facet(
                     "weights", skill_weights, components)
                 rules.validate_policy_facets(carried)
