@@ -1,34 +1,14 @@
 name: Windows customer package smoke
 
+# This is an exact-source release gate, not a best-effort path-filtered smoke.
+# Product image requires Windows evidence on the same SHA; a source-only push
+# must never leave the required Windows check absent because it missed a filter.
 on:
   push:
-    paths:
-      - "TOEFL House ERP.vbs"
-      - "tools/release/Build Customer Installer.ps1"
-      - "tools/release/windows/**"
-      - "tests/foundation/test_customer_exe.ps1"
-      - "tests/foundation/test_offline_runtime.ps1"
-      - docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md
-      - "product/windows/**"
-      - "product/update_engine.py"
-      - "product/update_host.py"
-      - "tests/foundation/test_update_host.py"
-      - "tests/foundation/windows_update_failure_probe.ps1"
-      - "product/update_entrypoint.sh"
-      - "product/updates/**"
-      - "tests/foundation/test_update_engine.py"
-      - "tests/foundation/test_update_bundle.py"
-      - "tests/foundation/test_windows_update_path.py"
-      - "docs/CUSTOMER-UPDATES.md"
-      - "docs/engineering/SAFE-UPDATES.md"
-      - "tests/foundation/test_customer_install_package.py"
-      - "tests/foundation/test_windows_delivery_finalization.py"
-      - "tests/foundation/test_windows_pc_inventory.py"
-      - "tests/foundation/test_windows_service_readiness.ps1"
-      - ".github/workflows/windows-customer-package.yml"
-      # Exact-SHA release proof also covers newly triaged security advisories.
-      - "docs/engineering/evidence/sec-deps-01/**"
-      - "tests/security/**"
+    branches:
+      - main
+      - work
+      - 'fix/**'
   workflow_dispatch:
 
 permissions:
