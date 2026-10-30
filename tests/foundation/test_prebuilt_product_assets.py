@@ -158,6 +158,7 @@ class PrebuiltProductAssetsTests(unittest.TestCase):
             ("/build/sites-seed", "/build/sites-seed"),
             ("/build/assets-seed", "/build/assets-seed"),
             ("/build/deepmerge-distribution.json", "/build/deepmerge-distribution.json"),
+            ("/build/uri-decoder-distribution.json", "/build/uri-decoder-distribution.json"),
         ])
         self.assertNotIn("bench build", runtime)
         self.assertIn("bench build", dockerfile.split("FROM product-base AS runtime\n", 1)[0])
