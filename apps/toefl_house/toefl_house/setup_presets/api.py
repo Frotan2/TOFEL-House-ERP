@@ -77,6 +77,14 @@ def _snapshot():
                 "next_level", "status"])
     _unique_by(level_rows, "name", "level identifier")
     _unique_by(level_rows, "code", "level code")
+    native_anchors = {}
+    for row in level_rows:
+        if row.native_program:
+            if row.native_program in native_anchors:
+                raise frappe.ValidationError(
+                    f"Two levels use native Program {row.native_program}; "
+                    "review and correct the existing links before setup")
+            native_anchors[row.native_program] = row.code
     # An older/incomplete installation may contain the native Program or
     # Course that the new level factory would otherwise create, without a
     # matching TH Program Level. The read-only preview must catch these
