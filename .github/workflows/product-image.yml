@@ -1819,6 +1819,14 @@ jobs:
           docker tag toefl-house-erp-app:ci toefl-house-erp-app:local
           docker save --output "$image_archive" toefl-house-erp-app:local
           docker image inspect toefl-house-erp-app:ci --format '{{json .Config.Labels}}' > "$image_labels"
+          # A large offline EXE must not depend on the optional GitHub ZIP
+          # (<2 GiB). Preserve ZIP output only for the separate tagged legacy
+          # release path, which still fails if it exceeds that limit.
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            ZIP_OPTION=()
+          else
+            ZIP_OPTION=(--no-zip)
+          fi
           python3 tools/foundation/annotated_step.py "Customer package assembly" -- python3 tools/release/create_customer_package.py \
             --output "$package_root" \
             --image-archive "$image_archive" \
@@ -1826,8 +1834,11 @@ jobs:
             --version "$TOEFL_HOUSE_RELEASE_VERSION" \
             --source-revision "$GITHUB_SHA" \
             --gate-evidence "$RUNNER_TEMP/toefl-house-ci-gates.json" \
-            --provider-attestation "GitHub Actions artifact attestation"
-          test -s "$package_root"/*.zip
+            --provider-attestation "GitHub Actions artifact attestation" \
+            "${ZIP_OPTION[@]}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            test -s "$package_root"/*.zip
+          fi
           test -s "$package_root/TOEFL-House-ERP-Customer-$TOEFL_HOUSE_RELEASE_VERSION/product/release/ci-gates.json"
           echo "::notice title=Customer package::version $TOEFL_HOUSE_RELEASE_VERSION; image archive, checksum, manifest and allowlisted GUI included"
       - name: Export pinned offline database and cache images
@@ -1843,8 +1854,13 @@ jobs:
           path: ${{ runner.temp }}/toefl-house-offline-runtime/
           if-no-files-found: error
           compression-level: 0
-      - name: Attest customer package provenance
+      - name: Attest customer release manifest provenance
         if: success()
+        uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
+        with:
+          subject-path: '${{ runner.temp }}/toefl-house-customer-package/TOEFL-House-ERP-Customer-${{ env.TOEFL_HOUSE_RELEASE_VERSION }}/product/release/release-manifest.json'
+      - name: Attest tagged legacy ZIP provenance
+        if: success() && startsWith(github.ref, 'refs/tags/v')
         uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
         with:
           subject-path: '${{ runner.temp }}/toefl-house-customer-package/*.zip'
