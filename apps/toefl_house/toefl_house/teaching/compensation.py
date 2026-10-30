@@ -683,3 +683,52 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                     {"period_start": period_start, "period_end": period_end,
                      "company": company, "salary_component": salary_component,
                      "deduction_component": deduction_component or ""}, work)
+
+
+@frappe.whitelist(methods=["GET"])
+def get_contract_revision_form(contract):
+    """Read a single active contract for the authorized Finance user's form.
+
+    Native read permission AND Finance company scope are checked before
+    returning any private rates. This is not a Finance Desk bulk disclosure.
+    A contract exceeding the supported simple form cannot be silently
+    truncated and replaced.
+    """
+    contract_name = _bounded(contract, "Contract")
+    if not frappe.has_permission(CONTRACT, ptype="read", doc=contract_name):
+        raise frappe.PermissionError(
+            "Finance contract reading permission is required")
+    doc = frappe.get_doc(CONTRACT, contract_name)
+    from toefl_house.finance.company_scope import require_finance_company
+    company = frappe.db.get_value(EMPLOYEE, doc.employee, "company")
+    require_finance_company(company)
+    if doc.status != "Active":
+        raise frappe.ValidationError(
+            "Only an active instructor contract can be revised")
+    skills = list(doc.get("skill_terms") or [])
+    changes = list(doc.get("adjustments") or [])
+    if len(skills) > 6 or len(changes) > 2:
+        raise frappe.ValidationError(
+            "This contract contains more rows than the standard guided form "
+            "supports. Do not use a partial revision or lose approved pay terms")
+    return {
+        "contract": doc.name,
+        "compensation_model": doc.compensation_model,
+        "assignment_basis": doc.assignment_basis,
+        "payment_frequency": doc.payment_frequency,
+        "conditions": doc.conditions or "",
+        "earning_basis": doc.earning_basis or "One-off",
+        "effective_start": str(doc.effective_start),
+        "effective_end": str(doc.effective_end) if doc.effective_end else "",
+        "skill_terms": [
+            {"skill": row.skill, "unit_of_payment": row.unit_of_payment,
+             "rate": row.rate, "payable_quantity": row.payable_quantity}
+            for row in skills
+        ],
+        "adjustments": [
+            {"adjustment_type": row.adjustment_type, "amount": row.amount,
+             "effective_date": str(row.effective_date),
+             "approver": row.approver, "reason": row.reason}
+            for row in changes
+        ],
+    }
