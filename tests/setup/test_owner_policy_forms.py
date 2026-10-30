@@ -1,6 +1,7 @@
 """The Course Owner configures grades with numbers, not JSON or source edits."""
 import ast
 import copy
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 import sys
 import unittest
@@ -19,7 +20,8 @@ def build():
                  if isinstance(n, ast.FunctionDef)
                  and n.name in ("initial_assessment_values", "whole_number")]
     assert len(functions) == 2
-    context = {"load_preset": load_preset, "build_assessment_facets": build_assessment_facets}
+    context = {"load_preset": load_preset, "build_assessment_facets": build_assessment_facets,
+               "Decimal": Decimal, "InvalidOperation": InvalidOperation}
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(SOURCE), "exec"),
          context)
     return context["initial_assessment_values"]
@@ -45,7 +47,7 @@ class HumanAcademicSetupTests(unittest.TestCase):
 
     def test_new_owner_numbers_change_policy_not_source_code(self):
         create = build()
-        newer = create("GEN-ENG", "GEN-ENG-ASSESS-02", "65", "10")
+        newer = create("GEN-ENG", "GEN-ENG-ASSESS-02", "65.0", 10.0)
         self.assertEqual(newer["pass_rules"]["overall"]["value"], 65)
         self.assertEqual(newer["retakes"]["wait_days"], 10)
         old = create("GEN-ENG", "GEN-ENG-ASSESS-01", 60, 7)
@@ -67,7 +69,13 @@ class HumanAcademicSetupTests(unittest.TestCase):
         selected = [n for n in module.body if isinstance(n, ast.FunctionDef)
                     and n.name in ("whole_number", "numeric_skill_distribution")]
         self.assertEqual(len(selected), 2)
-        namespace = {}
+        namespace = {
+            "Decimal": Decimal, "InvalidOperation": InvalidOperation,
+            "SKILL_PREFIX": {
+                "speaking": "SPK", "listening": "LST", "writing": "WRT",
+                "reading": "RDG", "grammar": "GRM", "vocabulary": "VOC",
+            },
+        }
         exec(compile(ast.Module(body=selected, type_ignores=[]),
                      str(SOURCE), "exec"), namespace)
         calculate = namespace["numeric_skill_distribution"]
