@@ -794,10 +794,10 @@ def _assessment_actions(policy, readiness):
         return [primary] if primary else []
     version_action = guided_action(
         "Course Owner", "toefl_house.academic.set_assessment_policy_version",
-        "Add version", {"policy": code})
-    facet_actions = [guided_action("Course Owner", endpoint, label,
-                                   {"policy": code})
-                     for endpoint, label in FACET_ACTIONS]
+        "Change passing mark / retake wait", {"policy": code})
+    # JSON facet commands remain guarded server APIs, but are not exposed
+    # as raw schema editors in the nontechnical Owner workspace. Simple
+    # scalar revisions are appended in one version through the command above.
     retire_action = guided_action(
         "Course Owner", "toefl_house.academic.set_assessment_policy_status",
         "Retire policy", {"policy": code, "active": "0"})
@@ -813,8 +813,7 @@ def _assessment_actions(policy, readiness):
         validate_action = guided_action(
             "Course Owner", "toefl_house.academic.validate_assessment_policy",
             "Validate policy", {"policy": code})
-        ordered = ([validate_action, version_action] + facet_actions
-                   + [retire_action])
+        ordered = [validate_action, version_action, retire_action]
     else:
-        ordered = [version_action] + facet_actions + [retire_action]
+        ordered = [version_action, retire_action]
     return [action for action in ordered if action]
