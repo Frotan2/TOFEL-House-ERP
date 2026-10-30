@@ -569,16 +569,23 @@ def _managed_fee_structure(native_program, academic_year, company=""):
     the Owner's policy behind cancel/amend churn. More than one editable
     structure for the same key is a configuration conflict this refuses.
     """
+    # Submitted structures remain part of the active pricing identity.
+    # Ignoring them and selecting only drafts can create a second plan for
+    # the same native Program/academic year, later selectable at issuance.
     found = frappe.db.get_all(
         FEE_STRUCTURE,
         filters={"program": native_program, "academic_year": academic_year,
-                 "docstatus": 0},
-        fields=["name"], order_by="name asc", limit=2)
+                 "docstatus": ("!=", 2)},
+        fields=["name", "docstatus"], order_by="name asc", limit=2)
     if len(found) > 1:
         raise frappe.ValidationError(
-            f"More than one editable fee structure exists for {native_program} "
-            f"in {academic_year}; keep exactly one so billing is unambiguous")
+            f"More than one active fee structure exists for {native_program} "
+            f"in {academic_year}; resolve the duplicate before editing tuition")
     if found:
+        if int(found[0]["docstatus"]) != 0:
+            raise frappe.ValidationError(
+                f"Fee structure {found[0]['name']} is submitted; never create a "
+                "parallel draft or change this published tuition in place")
         structure = frappe.get_doc(FEE_STRUCTURE, found[0]["name"], for_update=True)
         # An explicit company must never silently edit another company's
         # already-created fee plan. A plan is keyed by program/year and its
