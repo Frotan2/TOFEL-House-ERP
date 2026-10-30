@@ -34,7 +34,6 @@ class FreshInstituteSetupTests(unittest.TestCase):
                              for level in family["levels"]))
 
     def test_any_nonzero_history_or_demo_import_is_rejected(self):
-        initial = self.preset["initial_operational_data"]
         for key in ("students", "student_applicants", "enrollments", "classes",
                     "attendance_records", "issued_fees", "payment_entries",
                     "salary_slips", "assessment_results"):
