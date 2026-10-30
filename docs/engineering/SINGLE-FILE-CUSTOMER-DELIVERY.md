@@ -51,8 +51,16 @@ compiler and avoids requiring another archiver on the customer's computer. The
 extractor validates paths before writing, refuses traversal and duplicate names,
 uses an atomic move after extraction, and refuses to overwrite an existing kit.
 Its footer reader supports the PE certificate table appended by Authenticode.
-Integrity checks are not a publisher signature. Sign and verify the final EXE
-using the provider's release-signing process before production delivery.
+Integrity checks are not a publisher signature. The provider-only builder
+now accepts `SigningCertificateThumbprint` and `TimestampServer` (a Windows
+Authenticode-compatible HTTP endpoint), signs the fully assembled temporary
+EXE and verifies the signer identity and timestamp before publication. An
+unsigned build is explicitly labelled **UNSIGNED TEST INSTALLER ONLY**. The
+actual temporary executable is run with `--verify-payload` after signing and
+before it is moved to the published output path. Traditional PE certificate
+table offsets are 32-bit; an assembled EXE that is too large for signing is
+rejected rather than passed off as signed. Real trusted certificate/signing
+and offline clean-Windows acceptance remain outstanding.
 
 The customer opens Setup, which extracts to the current user's local application
 folder and opens the GUI with Install selected. The worker verifies the app image
