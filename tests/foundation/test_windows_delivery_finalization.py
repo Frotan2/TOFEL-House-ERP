@@ -197,14 +197,14 @@ class UpdaterFailureSemanticsTests(unittest.TestCase):
         self.assertIn("never means safe automatic restart", UPDATE)
         self.assertIn("Never start the", UPDATE)
 
-    def test_recovery_catalogue_entries_are_bilingual(self):
+    def test_recovery_catalogue_entries_are_english_only(self):
         for key in ("updater.recovery_required", "updater.recovery_steps",
                     "updater.rollback_done", "updater.rollback_blocked",
                     "updater.completed", "updater.failed"):
             entry = CATALOG["launcher"][key]
+            self.assertEqual(set(entry), {"en"}, key)
             self.assertTrue(entry["en"].strip(), key)
-            self.assertTrue(entry["fa"].strip(), key)
-            self.assertRegex(entry["fa"], r"[\u0600-\u06FF\u200c]", key)
+            self.assertNotRegex(entry["en"], r"[\u0600-\u06FF\u200c]", key)
 
 
 if __name__ == "__main__":
