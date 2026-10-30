@@ -9,9 +9,11 @@ Owner-configured facet of an effective-dated assessment policy, or a record the
 native Education app already owns. An unconfigured policy is an explicit,
 explained refusal.
 
-Owner decision **D1** (grading policy deferred) is therefore *not* overridden
-here. What this slice adds is the machinery that consumes the policy the Owner
-configures; the policy itself is still the Owner's to supply. See
+The initial GE/EAP grading and retake parameters now have an
+Owner-approved numeric guided configuration path; a proposal is not an
+active version until the Owner confirms it and the native references pass
+validation. Existing guarded grading and progression commands are not
+proof of installed-site or production qualification. See
 [Remaining Owner inputs](#remaining-owner-inputs).
 
 ## Approved retake and best-result policy (28 October 2026)
