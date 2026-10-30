@@ -1329,7 +1329,10 @@ frappe.provide("toefl_house.role_desks");
 					indicator: "red" });
 				return;
 			}
-			fields = [...fields, ...students.map((item, index) => ({
+			// The legacy raw-status field is never shown or required.
+			// Only these per-student dropdowns produce the server payload.
+			fields = [...fields.filter((field) => field.fieldname !== "statuses"),
+				...students.map((item, index) => ({
 				fieldname: "mark_" + index,
 				label: text(item.name || item.student) + " (" + text(item.student) + ")",
 				fieldtype: "Select",
