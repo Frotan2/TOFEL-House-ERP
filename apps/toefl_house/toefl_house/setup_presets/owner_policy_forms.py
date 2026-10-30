@@ -6,6 +6,8 @@ transaction rollback. No policy is activated automatically at installation.
 """
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 import frappe
 
 from toefl_house import academic
@@ -15,13 +17,19 @@ from toefl_house.setup_presets.preset import load_preset
 
 
 def whole_number(value, label, minimum, maximum):
-    """Bound a normal numeric field without interpreting booleans or fractions."""
-    if isinstance(value, bool) or not str(value).strip().isdigit():
+    """Accept Frappe's 60/60.0 percent fields, never round a fraction."""
+    if (isinstance(value, bool) or not isinstance(value, (int, float, str, Decimal))
+            or len(str(value)) > 32):
         raise ValueError(f"{label} must be a whole number")
-    number = int(str(value).strip())
+    try:
+        number = Decimal(str(value).strip())
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be a whole number") from exc
+    if not number.is_finite() or number != number.to_integral_value():
+        raise ValueError(f"{label} must be a whole number")
     if not minimum <= number <= maximum:
         raise ValueError(f"{label} must be from {minimum} to {maximum}")
-    return number
+    return int(number)
 
 
 def initial_assessment_values(family, policy, passing_score, retake_wait_days):
