@@ -58,6 +58,45 @@ signed, independently verified Windows product. No production authorization.
 | Instructor contracts | Select skills, rates, units and adjustments in normal controls; client assembles validated native payload; revision requires full replacement confirmation | Real Finance/HRMS role/ledger acceptance; larger custom term editors |
 | Data protection | No migrated/test business records in initial package, explicit permission and audit gates | Independent real database backup and restore acceptance |
 
+## Verified design corrections in later source changes
+
+- **Duplicate writes:** Guided program creation serializes the first
+  creation and rejects different identifiers with the same business title.
+  Level creation refuses an already linked family/title, native Course
+  display title, native Education Program title or native abbreviation;
+  assessment policy shells also reject duplicate family/title. These
+  checks live server-side, not only in the preview.
+- **Scalar policy safety:** Passing mark and retake waiting days may be
+  revised independently. Blanks retain the current governed value.
+  A percentage field such as `60.0` is accepted as a whole number,
+  while 60.5, nonfinite values and out-of-range percentages are refused.
+- **Skills and exams:** Six subject weights plus continuous/final share
+  can be edited in the initial GE/EAP policy and in one later audited
+  version. The server refuses anything other than an exact 100% skill
+  distribution and preserves all other facets.
+- **Least-privilege selectors:** Submitted grading scales, academic
+  years, levels, program families, fee categories and legal Companies
+  are provided by one Course Owner-only, read-only and bounded server
+  endpoint. No broad native Accounts/Education Administrator rights are
+  granted merely to load UI choices. Invalid names and oversized lists
+  stop the form.
+- **Teacher attendance:** The raw attendance JSON field is excluded
+  when the teacher's own server-projected class roster is displayed.
+  The instructor selects Present/Absent/Leave for each authorized student,
+  and the application assembles the checked backend format. No student
+  defaults to Present.
+- **Finance instructor revisions:** The active contract is loaded only
+  after native Finance read permission AND company-scope approval.
+  Skill rates, quantities, units, pay bounds and approved adjustments
+  prefill the nontechnical form. Oversized contracts are rejected rather
+  than silently truncated. A new effective start is mandatory, and
+  the existing terms are not mutated when a successor is recorded.
+- **First-run page:** The normal customer sees readable setup counters,
+  navigation to five work areas and a qualified action. Internal code
+  names and technical plan operations are collapsed as optional detail.
+  One hidden idempotency key is retained per opened form and reused on a
+  retry even if Frappe omits hidden field values.
+
 ## Explicit incomplete work — never conceal from the customer
 
 - The seven low-level assessment facet commands can still accept structured
@@ -65,9 +104,12 @@ signed, independently verified Windows product. No production authorization.
   as raw JSON editors. A **general no-code editor for arbitrary rubric,
   weighting, criteria and progression changes** remains a separate release
   requirement, not a claim of completion.
-- Other highly specialized configuration surfaces (e.g., contractor models
-  exceeding the currently supported six skill rows or two adjustments) need
-  their own scalable row editor; never instruct the customer to paste JSON.
+- Other specialized configuration surfaces (including contractor models
+  exceeding the six-skill/two-adjustment guided form) still need scalable,
+  secure row editors. Current guided revisions **fail closed** for such
+  contracts; never truncate pay terms or instruct customers to paste JSON.
+  The Finance cash-day close form is not yet a fully qualified
+  nontechnical workflow; do not misrepresent raw counts input as finished.
 - Initial staff provisioning, native legal Company, real timetable/rooms,
   role-specific first-day work, tax classification and backup recovery remain
   separately gated. No external email or production data is invented.
