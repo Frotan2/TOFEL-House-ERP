@@ -23,9 +23,11 @@ No tested, owner-facing **Apply** button is shipped yet. The code path requires 
 | --- | --- | ---: | ---: |
 | General English | `PRE-STARTER` | 1 month | 500 |
 | General English | `STARTER`, `PREP-1`, `PREP-2`, `PREP-3` | 2 months each | 1,000 each |
-| English for Academic Purposes | `EAP-1` through `EAP-4` | 2 months each | 2,000 each |
+| English for Academic Purposes | `EAP-1` through `EAP-4` | 2 months each | 1,000 each (AFN 500/month) |
 | Special Speaking | `SPECIAL-SPEAKING-2M` | 2 months | 2,000 |
-| TOEFL Preparation | `TOEFL-PREP-4M` | 4 months | 7,000 |
+| TOEFL Preparation | `TOEFL-PREP-2M` (`TOEFL-PREP-4M` existing-site alias) | 2 months | 7,000 **legacy proposal — not Owner-confirmed** |
+
+**Daily billing authority:** The Course Owner's later instruction is AFN 500 per calendar month for both on-site General English and EAP. A two-month GE/EAP level is AFN 1,000 total, split into two monthly dues or paid in advance. These are *semester totals*, not monthly bills to duplicate. The specialist-program tuition examples in this historical preset are NOT confirmed current commercial prices: Finance and Course Owner must verify Special Speaking and TOEFL Preparation prices independently before issuing any live Fee Structure or Fees. The two-month TOEFL duration is Owner-approved; preserving the older 4M code as an alias prevents silent duplication on existing sites. This correction does not authorize installer activation or editing an existing student's bills.
 
 The real test PC uses at least `PREP-ONE` and `PREP-TWO` codes; never rename or duplicate these silently. The clean-install canonical codes are a **proposal**, and the wizard must show an explicit mapping/review against any existing site.
 
