@@ -25,7 +25,7 @@ class TestSetupCatalogPlanner(unittest.TestCase):
         self.assertEqual(snapshot, before)
         self.assertFalse(plan["permitted_to_execute"])
         self.assertEqual(plan["mode"], "REQUIRES_EXPLICIT_OWNER_AUTHORIZATION")
-        self.assertEqual(plan["count"], 35)
+        self.assertEqual(plan["count"], 33)
         actions = plan["actions"]
         kinds = [x["operation"] for x in actions]
         self.assertEqual(kinds.count("create_academic_year"), 1)
@@ -33,7 +33,7 @@ class TestSetupCatalogPlanner(unittest.TestCase):
         self.assertEqual(kinds.count("create_level"), 11)
         self.assertEqual(kinds.count("set_next_level"), 7)
         self.assertEqual(kinds.count("create_fee_type"), 1)
-        self.assertEqual(kinds.count("set_level_fee_component"), 11)
+        self.assertEqual(kinds.count("set_level_fee_component"), 9)
         self.assertLess(kinds.index("create_program"), kinds.index("create_level"))
         self.assertLess(kinds.index("create_level"), kinds.index("set_next_level"))
         self.assertLess(kinds.index("create_fee_type"), kinds.index("set_level_fee_component"))
@@ -53,10 +53,24 @@ class TestSetupCatalogPlanner(unittest.TestCase):
                       for y in p["academic_years"]},
             "fee_categories": [p["fee_policy"]["category"]],
             "tuition": {l["code"]: {y["name"]: l["semester_tuition_afn"]}
-                        for f in p["programs"] for l in f["levels"]
-                        for y in p["academic_years"]},
+                        for f in p["programs"] if f["code"] in ("GEN-ENG", "EAP")
+                        for l in f["levels"] for y in p["academic_years"]},
         }
         self.assertEqual(prepare_catalog_plan(snapshot, p)["actions"], [])
+
+    def test_unapproved_specialist_prices_never_become_auto_setup_actions(self):
+        plan = prepare_catalog_plan({"programs": {}, "levels": {}, "years": {},
+                                     "fee_categories": [], "tuition": {}}, self.preset)
+        generated = {action.get("level") for action in plan["actions"]
+                     if action["operation"] == "set_level_fee_component"}
+        self.assertNotIn("TOEFL-PREP-2M", generated)
+        self.assertNotIn("SPECIAL-SPEAKING-2M", generated)
+        self.assertEqual(plan["preview"]["counts"]["deferred"], 2)
+        # Any historical preset Fee Structure for an unapproved specialist
+        # needs an explicit Owner/Finance review rather than silent reuse.
+        with self.assertRaisesRegex(ValueError, "conflicts"):
+            prepare_catalog_plan({"tuition": {"TOEFL-PREP-2M": {"1405": 7000}}},
+                                 self.preset)
 
     def test_mismatched_existing_fee_is_not_overwritten(self):
         snapshot = {"tuition": {"STARTER": {"1405": 1234}}}
