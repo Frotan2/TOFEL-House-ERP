@@ -29,15 +29,18 @@ def main():
         frappe.set_user("Administrator")
         today = frappe.utils.today()
         year = int(today[:4])
-        if not frappe.db.exists("Fiscal Year", str(year)):
-            frappe.get_doc(dict(doctype="Fiscal Year", year=str(year),
-                                year_start_date=f"{year}-01-01", year_end_date=f"{year}-12-31")).insert()
-        frappe.db.set_value("Currency", "AFN", "enabled", 1)
+        from frappe.desk.page.setup_wizard.setup_wizard import setup_complete
+
+        # Run the pinned onboarding stages, including warehouse/party presets.
+        # Installing apps alone does not create a usable native company catalog.
+        setup_complete({"language": "English", "timezone": "Asia/Kabul", "country": "Afghanistan",
+                        "currency": "AFN", "company_name": "SYN Refund Research", "company_abbr": "SRR",
+                        "chart_of_accounts": "Standard", "fy_start_date": f"{year}-01-01",
+                        "fy_end_date": f"{year}-12-31", "enable_telemetry": 0, "setup_demo": 0})
+        assert frappe.is_setup_complete() and frappe.db.exists("Warehouse Type", "Transit")
         if not frappe.db.exists("Party Type", "Student"):
             frappe.get_doc(dict(doctype="Party Type", party_type="Student", account_type="Receivable")).insert()
-        company = frappe.get_doc(dict(doctype="Company", company_name="SYN Refund Research", abbr="SRR",
-                                      country="Afghanistan", default_currency="AFN",
-                                      enable_perpetual_inventory=0)).insert()
+        company = frappe.get_doc("Company", "SYN Refund Research")
         cash = frappe.db.get_value("Account", {"company": company.name, "account_type": "Cash", "is_group": 0}, "name")
         assert cash and company.default_receivable_account and company.default_income_account and company.cost_center
         # Native setup-wizard catalog scaffolding; no business pricing policy.
