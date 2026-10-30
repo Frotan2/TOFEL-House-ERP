@@ -899,7 +899,8 @@ def create_assessment_policy(request_key, family, code, title,
 
 @frappe.whitelist(methods=["POST"])
 def set_assessment_policy_version(request_key, policy, effective_from,
-                                  reason, grading_scale="", initial_facets=None):
+                                  reason, grading_scale="", initial_facets=None,
+                                  passing_score=None, retake_wait_days=None):
     """Append an effective-dated assessment policy version (D1 configuration).
 
     The version carries the reusable native Grading Scale LINK plus the
@@ -957,6 +958,43 @@ def set_assessment_policy_version(request_key, policy, effective_from,
             except ValueError as exc:
                 raise frappe.ValidationError(str(exc)) from exc
             _validate_initial_assessment_references(carried, doc.family, effective_scale)
+        elif passing_score is not None or retake_wait_days is not None:
+            # Ordinary Owner revisions change scalar values in ONE new,
+            # effective-dated policy version. Never ask the owner to edit
+            # internal JSON or append multiple artificial same-day versions.
+            if not versions:
+                raise frappe.ValidationError(
+                    "Use the guided initial assessment form for a new policy")
+            if frappe.db.get_value(PROGRAM, doc.family, "code") not in ("GEN-ENG", "EAP"):
+                raise frappe.ValidationError(
+                    "Numeric pass/retake revision is for GE and EAP only")
+            from toefl_house.setup_presets.owner_policy_forms import whole_number
+            try:
+                if passing_score is not None:
+                    pass_rules = rules.parse_facet(
+                        "pass_rules", carried.get("pass_rules"))
+                    if not isinstance(pass_rules, dict) or not pass_rules.get("overall"):
+                        raise ValueError(
+                            "This policy has no pass rules to revise safely")
+                    pass_rules["overall"] = {
+                        "kind": "percent",
+                        "value": whole_number(passing_score, "Pass mark", 1, 100),
+                    }
+                    components = rules.parse_facet(
+                        "components", carried.get("components"))
+                    carried["pass_rules"] = rules.canonical_facet(
+                        "pass_rules", pass_rules, components)
+                if retake_wait_days is not None:
+                    retakes = rules.parse_facet("retakes", carried.get("retakes"))
+                    if not isinstance(retakes, dict) or not retakes.get("max_attempts"):
+                        raise ValueError(
+                            "This policy has no retake rules to revise safely")
+                    retakes["wait_days"] = whole_number(
+                        retake_wait_days, "Retake wait", 7, 365)
+                    carried["retakes"] = rules.canonical_facet("retakes", retakes)
+                rules.validate_policy_facets(carried)
+            except ValueError as exc:
+                raise frappe.ValidationError(str(exc)) from exc
         before = configuration_audit.latest_after_hash(doc.name)
         row = {"effective_from": clean_from,
                "grading_scale": effective_scale or None,
@@ -984,6 +1022,10 @@ def set_assessment_policy_version(request_key, policy, effective_from,
     # Preserve the original payload shape for replay of pre-existing receipts.
     if initial_facets is not None:
         payload["initial_facets"] = initial_facets
+    if passing_score is not None:
+        payload["passing_score"] = passing_score
+    if retake_wait_days is not None:
+        payload["retake_wait_days"] = retake_wait_days
     return configuration_audit.execute(
         "set_assessment_policy_version", request_key, payload, work)
 
