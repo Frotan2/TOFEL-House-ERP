@@ -1375,7 +1375,7 @@ frappe.provide("toefl_house.role_desks");
 			for (let index = 1; index <= 6; index += 1) {
 				fields = fields.concat([
 					{ fieldname: "skill_" + index, label: "Pay skill " + index + " — optional", fieldtype: "Link", options: "TH Skill" },
-					{ fieldname: "skill_unit_" + index, label: "Skill " + index + " — payment unit", fieldtype: "Select", options: "\nSkill\nClass\nSession" },
+					{ fieldname: "skill_unit_" + index, label: "Skill " + index + " — payment unit (e.g. Class)", fieldtype: "Data" },
 					{ fieldname: "skill_rate_" + index, label: "Skill " + index + " — AFN per unit", fieldtype: "Currency" },
 					{ fieldname: "skill_quantity_" + index, label: "Skill " + index + " — units payable", fieldtype: "Float" },
 				]);
@@ -1389,6 +1389,35 @@ frappe.provide("toefl_house.role_desks");
 					{ fieldname: "adjustment_reason_" + index, label: "Adjustment " + index + " — reason", fieldtype: "Small Text" },
 				]);
 			}
+		}
+		if (action.endpoint === "toefl_house.teaching.compensation.revise_teaching_contract" &&
+			!action._contract_prefill) {
+			const contract = action.args && action.args.contract;
+			if (typeof contract !== "string" || !contract || contract.length > 140) {
+				frappe.msgprint(text("Choose the active contract to revise."));
+				return;
+			}
+			frappe.call({
+				method: "toefl_house.teaching.compensation.get_contract_revision_form",
+				type: "GET",
+				args: { contract },
+				callback(response) {
+					const current = response.message;
+					if (!current || current.contract !== contract ||
+						!Array.isArray(current.skill_terms) ||
+						!Array.isArray(current.adjustments) ||
+						current.skill_terms.length > 6 ||
+						current.adjustments.length > 2) {
+						frappe.msgprint(text("The current contract cannot be safely loaded into the guided form. No terms were changed."));
+						return;
+					}
+					openGuidedAction(Object.assign({}, action, { _contract_prefill: current }));
+				},
+				error() {
+					frappe.msgprint(text("Current contract terms could not be loaded with your Finance permissions. Nothing was changed."));
+				},
+			});
+			return;
 		}
 		// Course Owner cannot be handed broad native Accounts/Education read
 		// permissions just to populate a dropdown. Resolve only approved
@@ -1642,6 +1671,31 @@ frappe.provide("toefl_house.role_desks");
 			},
 		});
 		const values = Object.assign({}, action.args || {});
+		if (teachingContractForm && action._contract_prefill) {
+			const contract = action._contract_prefill;
+			["compensation_model", "assignment_basis", "payment_frequency",
+				"conditions", "earning_basis", "effective_end"].forEach((key) => {
+				if (contract[key] !== undefined && contract[key] !== null)
+					values[key] = contract[key];
+			});
+			// A revised contract must have its own new effective start.
+			// Never silently reuse the previous contract's starting date.
+			contract.skill_terms.forEach((row, index) => {
+				const i = index + 1;
+				values["skill_" + i] = row.skill;
+				values["skill_unit_" + i] = row.unit_of_payment;
+				values["skill_rate_" + i] = row.rate;
+				values["skill_quantity_" + i] = row.payable_quantity;
+			});
+			contract.adjustments.forEach((row, index) => {
+				const i = index + 1;
+				values["adjustment_type_" + i] = row.adjustment_type;
+				values["adjustment_amount_" + i] = row.amount;
+				values["adjustment_date_" + i] = row.effective_date;
+				values["adjustment_approver_" + i] = row.approver;
+				values["adjustment_reason_" + i] = row.reason;
+			});
+		}
 		// The native grading API uses structured intervals, but the customer
 		// only sees four familiar numeric grades, never a JSON editor.
 		if (action.endpoint === "toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale" &&
