@@ -15,7 +15,7 @@
 # owns every trust decision.  A SHA-256 sidecar alone is never accepted as
 # publisher identity; only a manifest signed by a key in the provisioned trust
 # store can authorize an update.  When any precondition cannot be verified the
-# script stops before changing anything and explains why in English and Dari.
+# script stops before changing anything and explains why in English.
 param(
     [ValidateSet("Check", "Install")]
     [string]$Action = "Check",
@@ -91,7 +91,7 @@ $script:ActiveTransactionId = ""
 $script:EngineImage = ""
 
 # ---------------------------------------------------------------------------
-# Bilingual catalogue, result document and stage output
+# English message catalogue, result document and stage output
 # ---------------------------------------------------------------------------
 
 function Get-Catalog {
@@ -103,7 +103,8 @@ function Get-Catalog {
     $text = [System.IO.File]::ReadAllText($catalogPath, $encoding)
     $catalog = $text | ConvertFrom-Json -ErrorAction Stop
     if ($catalog.schema_version -ne 1 -or
-        $catalog.document_type -cne "toefl-house-erp-updater-strings") {
+        $catalog.document_type -cne "toefl-house-erp-updater-strings" -or
+        $catalog.language -cne "en" -or $catalog.fallback -cne "en") {
         throw "The update message catalogue is not supported."
     }
     $script:Catalog = $catalog
@@ -116,8 +117,7 @@ function Get-Text([string]$Section, [string]$Key) {
     if ($null -eq $entries) { return $null }
     $entry = $entries.$Key
     if ($null -eq $entry) { return $null }
-    if (-not ($entry.en -is [string]) -or -not ($entry.fa -is [string])) { return $null }
-    if (-not $entry.en -or -not $entry.fa) { return $null }
+    if (-not ($entry.en -is [string]) -or [string]::IsNullOrWhiteSpace($entry.en)) { return $null }
     return $entry
 }
 
@@ -128,17 +128,15 @@ function Write-Stage([string]$Key) {
         return
     }
     Write-Host ("[TH_STAGE] " + $entry.en)
-    Write-Host ("[TH_STAGE-FA] " + $entry.fa)
 }
 
-function Write-Bilingual([string]$Section, [string]$Key) {
+function Write-Message([string]$Section, [string]$Key) {
     $entry = Get-Text $Section $Key
     if ($null -eq $entry) {
         Write-Host ("[" + $Section + "] " + $Key)
         return
     }
     Write-Host $entry.en
-    Write-Host $entry.fa
 }
 
 function Save-Result {
@@ -184,11 +182,11 @@ function Stop-Update {
     )
     Save-Result -Status $Status -Section $Section -Key $Key -Version $Version -Blockers $Blockers
     Write-Host ""
-    Write-Bilingual $Section $Key
+    Write-Message $Section $Key
     if ($Blockers.Count -gt 0) {
         Write-Host ""
         foreach ($code in $Blockers) {
-            Write-Bilingual "messages" $code
+            Write-Message "messages" $code
         }
     }
     exit $Code
@@ -697,17 +695,17 @@ function Assert-EngineAllowed($Response, [string]$Version) {
     if ($onlyDowngrade) {
         Save-Result -Status "up-to-date" -Section "launcher" -Key "updater.up_to_date" -Version $Version
         Write-Host ""
-        Write-Bilingual "launcher" "updater.up_to_date"
+        Write-Message "launcher" "updater.up_to_date"
         exit $script:ExitAllowed
     }
     $primary = "updater.failed"
     if ($blockers.Count -gt 0 -and $null -ne (Get-Text "messages" $blockers[0])) { $primary = $blockers[0] }
     Save-Result -Status "refused" -Section "messages" -Key $primary -Version $Version -Blockers $blockers
     Write-Host ""
-    Write-Bilingual "messages" $primary
+    Write-Message "messages" $primary
     if ($blockers.Count -gt 1) {
         Write-Host ""
-        foreach ($code in $blockers) { Write-Bilingual "messages" $code }
+        foreach ($code in $blockers) { Write-Message "messages" $code }
     }
     exit $script:ExitRefused
 }
@@ -1157,10 +1155,10 @@ function Invoke-UpdateInstall($Check) {
         Save-Result -Status "recovery-required" -Section "launcher" -Key "updater.recovery_required" `
             -Version $Check.Version -Blockers $blockers
         Write-Host ""
-        Write-Bilingual "launcher" "updater.recovery_required"
-        Write-Bilingual "messages" $primary
+        Write-Message "launcher" "updater.recovery_required"
+        Write-Message "messages" $primary
         if ($blockers.Count -gt 1) {
-            foreach ($code in $blockers) { Write-Bilingual "messages" $code }
+            foreach ($code in $blockers) { Write-Message "messages" $code }
         }
         exit $script:ExitRecoveryRequired
     }
@@ -1170,20 +1168,20 @@ function Invoke-UpdateInstall($Check) {
         Set-JournalState "recovery-required" $Check.Version
         Save-Result -Status "recovery-required" -Section "launcher" -Key "updater.recovery_required" -Version $Check.Version
         Write-Host ""
-        Write-Bilingual "launcher" "updater.recovery_required"
+        Write-Message "launcher" "updater.recovery_required"
         exit $script:ExitRecoveryRequired
     }
     if (-not (Wait-ForApplication 180)) {
         Set-JournalState "recovery-required" $Check.Version
         Save-Result -Status "recovery-required" -Section "launcher" -Key "updater.recovery_required" -Version $Check.Version
         Write-Host ""
-        Write-Bilingual "launcher" "updater.recovery_required"
+        Write-Message "launcher" "updater.recovery_required"
         exit $script:ExitRecoveryRequired
     }
     Set-JournalState "completed" $Check.Version
     Save-Result -Status "completed" -Section "launcher" -Key "updater.completed" -Version $Check.Version
     Write-Host ""
-    Write-Bilingual "launcher" "updater.completed"
+    Write-Message "launcher" "updater.completed"
     return $true
 }
 
@@ -1301,7 +1299,7 @@ try {
     } else {
         Save-Result -Status "update-available" -Section "launcher" -Key "updater.available" -Version $check.Version
         Write-Stage "updater.available"
-        Write-Bilingual "launcher" "updater.available"
+        Write-Message "launcher" "updater.available"
         Write-Host ("Target version: " + $check.Version)
         exit $script:ExitAllowed
     }
