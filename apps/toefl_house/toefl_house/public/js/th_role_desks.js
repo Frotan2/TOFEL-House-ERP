@@ -1706,6 +1706,26 @@ frappe.provide("toefl_house.role_desks");
 			"Compare the proposed course setup with this site's existing configuration. " +
 			"This is a read-only check: nothing is installed, changed, billed or approved."
 		)).appendTo(body);
+		$("<h3></h3>").text(text("Start your course in simple steps")).appendTo(body);
+		const steps = [
+			["1. Courses and tuition", "Check the four programs, eleven levels and approved full-semester AFN prices.", "th-academic-setup"],
+			["2. Academic and billing rules", "Choose percentages, waiting days, billing options and approval roles using forms.", "th-configuration"],
+			["3. Rooms, teachers and timetables", "Enter verified capacity and staff assignments; review sessions before students join.", "th-academic-desk"],
+			["4. Finance and daily work", "Use guided receivables, collections and approved instructor contracts, never source files.", "th-finance-desk"],
+			["5. Review before opening", "Check each staff role, backup recovery and operational readiness with the Owner.", "th-owner-cockpit"],
+		];
+		const guide = $("<div class='th-route-group'></div>").appendTo(body);
+		steps.forEach(([label, description, route]) => {
+			const item = $("<div class='th-step'></div>").appendTo(guide);
+			$("<strong></strong>").text(text(label)).appendTo(item);
+			$("<p></p>").text(text(description)).appendTo(item);
+			$("<button type='button' class='btn btn-secondary btn-sm'></button>")
+				.text(text("Open")).on("click", () => routeToSource(route))
+				.appendTo(item);
+		});
+		$("<p class='text-muted'></p>").text(text(
+			"Some steps require a verified staff identity or release approval. A missing approval means Stop — it is never a request to edit JSON, scripts or database tables."
+		)).appendTo(body);
 		const actions = $("<div class='th-setup-actions'></div>").appendTo(body);
 		const button = $("<button type='button' class='btn btn-primary btn-sm'></button>")
 			.text(text("Check TOEFL House setup")).appendTo(actions);
