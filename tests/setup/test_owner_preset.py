@@ -180,7 +180,9 @@ class TestInitialSetupPreset(unittest.TestCase):
     def test_alias_conflict_is_invalid(self):
         changed = copy.deepcopy(self.preset)
         changed["programs"][0]["levels"][2]["existing_site_aliases"] = ["STARTER"]
-        with self.assertRaisesRegex(ValueError, "alias conflicts"):
+        # The per-alias check fails closed before the later conflict check.
+        # Assert the actual refusal rather than expecting an unreachable message.
+        with self.assertRaisesRegex(ValueError, "Invalid or duplicate existing-site level alias"):
             validate_preset(changed)
 
     def test_history_and_live_finance_are_not_updated(self):
