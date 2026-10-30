@@ -51,8 +51,8 @@ class TestInitialSetupPreset(unittest.TestCase):
                           all_levels["PRE-STARTER"]["semester_tuition_afn"]), (1, 500))
         self.assertEqual((all_levels["TOEFL-PREP-4M"]["duration_months"],
                           all_levels["TOEFL-PREP-4M"]["semester_tuition_afn"]), (4, 7000))
-        self.assertIn("TOEFL-PREP-2M",
-                      all_levels["TOEFL-PREP-4M"]["existing_site_aliases"])
+        self.assertFalse(any("existing_site_aliases" in level
+                             for p in self.preset["programs"] for level in p["levels"]))
         # Owner correction: GE is 500/month; EAP is 1,000/month.
         # Collection is per semester, never an additional monthly invoice.
         for program in self.preset["programs"]:
@@ -189,13 +189,13 @@ class TestInitialSetupPreset(unittest.TestCase):
                 self.assertIn("duplicate native curriculum", row["details"])
                 self.assertFalse(preview["ready_to_apply"])
 
-    def test_unmapped_legacy_native_program_abbreviation_requires_mapping(self):
-        snapshot = {"native_program_abbreviations": ["PREP-ONE"]}
-        preview = preview_catalog(snapshot, self.preset)
-        row = next(item for item in preview["actions"]
-                   if item["kind"] == "level" and item["code"] == "PREP-1")
-        self.assertEqual(row["status"], "review")
-        self.assertIn("duplicate native curriculum", row["details"])
+    def test_fresh_preset_only_uses_canonical_level_abbreviations(self):
+        codes = {level["code"] for p in self.preset["programs"]
+                 for level in p["levels"]}
+        self.assertIn("PREP-1", codes)
+        self.assertIn("TOEFL-PREP-4M", codes)
+        self.assertNotIn("PREP-ONE", codes)
+        self.assertNotIn("TOEFL-PREP-2M", codes)
 
     def test_existing_level_with_missing_native_curriculum_requires_review(self):
         snapshot = {"programs": {"GEN-ENG": {"title": "General English"}},
@@ -211,17 +211,12 @@ class TestInitialSetupPreset(unittest.TestCase):
         self.assertIn("Course curriculum", row["details"])
         self.assertFalse(preview["ready_to_apply"])
 
-    def test_legacy_level_code_never_leads_to_duplicate_program(self):
-        state = {"programs": {"GEN-ENG": {"title": "General English"}},
-                 "levels": {"PREP-ONE": {
-                     "title": "Prep 1", "family": "GEN-ENG",
-                     "duration_months": 2}},
-                 "tuition": {"PREP-ONE": {"1405": 1000}}}
+    def test_fresh_setup_with_native_course_collision_refuses_duplicate(self):
+        state = {"native_course_titles": ["General English — Prep 1"]}
         result = preview_catalog(state, self.preset)
-        steps = [row for row in result["actions"] if row["code"] in
-                 ("PREP-1", "PREP-1@1405")]
-        self.assertEqual({row["status"] for row in steps}, {"review"})
-        self.assertIn("PREP-ONE", steps[0]["details"])
+        row = next(action for action in result["actions"]
+                   if action["kind"] == "level" and action["code"] == "PREP-1")
+        self.assertEqual(row["status"], "review")
         self.assertFalse(result["ready_to_apply"])
 
     def test_wrong_native_next_level_blocks_automatic_setup(self):
@@ -253,12 +248,10 @@ class TestInitialSetupPreset(unittest.TestCase):
                        if row["kind"] == "program" and row["code"] == "GEN-ENG")
         self.assertEqual(problem["status"], "review")
 
-    def test_alias_conflict_is_invalid(self):
+    def test_fresh_setup_rejects_any_legacy_alias_configuration(self):
         changed = copy.deepcopy(self.preset)
-        changed["programs"][0]["levels"][2]["existing_site_aliases"] = ["STARTER"]
-        # The per-alias check fails closed before the later conflict check.
-        # Assert the actual refusal rather than expecting an unreachable message.
-        with self.assertRaisesRegex(ValueError, "Invalid or duplicate existing-site level alias"):
+        changed["programs"][0]["levels"][2]["existing_site_aliases"] = ["PREP-ONE"]
+        with self.assertRaisesRegex(ValueError, "Fresh installation cannot include legacy"):
             validate_preset(changed)
 
     def test_history_and_live_finance_are_not_updated(self):
