@@ -14,6 +14,16 @@ from toefl_house.setup_presets.api import _owner
 from toefl_house.setup_presets.preset import load_preset
 
 
+def whole_number(value, label, minimum, maximum):
+    """Bound a normal numeric field without interpreting booleans or fractions."""
+    if isinstance(value, bool) or not str(value).strip().isdigit():
+        raise ValueError(f"{label} must be a whole number")
+    number = int(str(value).strip())
+    if not minimum <= number <= maximum:
+        raise ValueError(f"{label} must be from {minimum} to {maximum}")
+    return number
+
+
 def initial_assessment_values(family, policy, passing_score, retake_wait_days):
     """Resolve the approved family template using only scalar Owner inputs."""
     preset = load_preset()
@@ -24,15 +34,8 @@ def initial_assessment_values(family, policy, passing_score, retake_wait_days):
             "Special Speaking and TOEFL Preparation use separate progress reports")
     if not isinstance(policy, str) or not policy.strip():
         raise ValueError("Choose an existing academic assessment policy first")
-    def whole(value, label, minimum, maximum):
-        if isinstance(value, bool) or not str(value).strip().isdigit():
-            raise ValueError(f"{label} must be a whole number")
-        number = int(str(value).strip())
-        if not minimum <= number <= maximum:
-            raise ValueError(f"{label} must be from {minimum} to {maximum}")
-        return number
-    pass_score = whole(passing_score, "Pass mark", 1, 100)
-    waiting = whole(retake_wait_days, "Retake wait", 7, 365)
+    pass_score = whole_number(passing_score, "Pass mark", 1, 100)
+    waiting = whole_number(retake_wait_days, "Retake wait", 7, 365)
 
     facets = build_assessment_facets(family, preset)
     if set(facets) != {
