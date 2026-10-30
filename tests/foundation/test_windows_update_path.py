@@ -330,9 +330,20 @@ class PackageMembershipTests(unittest.TestCase):
 
     def test_the_windows_workflow_reruns_when_the_update_path_changes(self):
         workflow = (ROOT / ".github" / "workflows" / "windows-customer-package.yml").read_text(encoding="utf-8")
-        for trigger in ("product/update_engine.py", "product/update_entrypoint.sh", "product/updates/**",
-                        "tests/foundation/test_windows_update_path.py"):
-            self.assertIn(trigger, workflow, f"{trigger} does not trigger the Windows update smoke")
+        push = workflow.partition("  workflow_dispatch:")[0]
+        self.assertIn("on:\n  push:\n", push)
+        if "    paths:\n" not in push:
+            # No file-path filtering: every update-engine or test change
+            # triggers Windows on both release branches. This is stronger
+            # than an explicit list of update paths.
+            self.assertIn("    branches:\n", push)
+            self.assertIn("      - main\n", push)
+            self.assertIn("      - work\n", push)
+            self.assertNotIn("    paths-ignore:", push)
+        else:
+            for trigger in ("product/update_engine.py", "product/update_entrypoint.sh",
+                            "product/updates/**", "tests/foundation/test_windows_update_path.py"):
+                self.assertIn(trigger, push, f"{trigger} does not trigger the Windows update smoke")
 
     def test_the_windows_workflow_parses_and_smoke_tests_the_updater(self):
         workflow = (ROOT / ".github" / "workflows" / "windows-customer-package.yml").read_text(encoding="utf-8")
