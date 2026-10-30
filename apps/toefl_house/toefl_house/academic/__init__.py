@@ -480,6 +480,11 @@ def set_level_fee_component(request_key, level, academic_year, fee_category, amo
                 f"Fee type {fee_category} does not exist yet; define it first")
         structure = _managed_fee_structure(level_doc.native_program, academic_year, company)
         rows = structure.get("components") or []
+        categories = [row.get("fees_category") for row in rows]
+        if any(not category for category in categories) or len(categories) != len(set(categories)):
+            raise frappe.ValidationError(
+                "The existing Fee Structure has missing or repeated fee categories; "
+                "Finance must review it before any tuition changes")
         for row in rows:
             if row.get("fees_category") == fee_category:
                 if float(row.get("amount") or 0) == float(clean_amount):
