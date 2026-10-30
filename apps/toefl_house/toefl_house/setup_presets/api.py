@@ -77,6 +77,14 @@ def _snapshot():
                 "next_level", "status"])
     _unique_by(level_rows, "name", "level identifier")
     _unique_by(level_rows, "code", "level code")
+    # An older/incomplete installation may contain the native Program or
+    # Course that the new level factory would otherwise create, without a
+    # matching TH Program Level. The read-only preview must catch these
+    # orphans before offering to create another native identity.
+    native_program_rows = _bounded_rows(
+        "Program", fields=["name", "program_name"])
+    native_course_rows = _bounded_rows(
+        "Course", fields=["name", "course_name"])
     levels = {}
     tuition = {}
     for row in level_rows:
@@ -145,7 +153,9 @@ def _snapshot():
         raise frappe.ValidationError("Duplicate native Fee Category; setup cannot continue")
     return {"programs": programs, "levels": levels, "years": years,
             "fee_categories": categories, "fee_category_items": category_items,
-            "tuition": tuition}
+            "tuition": tuition,
+            "native_program_titles": [p.get("program_name") for p in native_program_rows],
+            "native_course_titles": [c.get("course_name") for c in native_course_rows]}
 
 
 @frappe.whitelist(methods=["GET"])
