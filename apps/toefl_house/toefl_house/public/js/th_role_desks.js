@@ -1009,7 +1009,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
 		],
 		"toefl_house.academic.create_level": [
-			{ fieldname: "family", label: "Choose the program", fieldtype: "Link", options: "TH Academic Program", reqd: 1 },
+			{ fieldname: "family", label: "Choose the program", fieldtype: "Select", options: "__owner_choice:program__", reqd: 1 },
 			{ fieldname: "code", label: "Level code (stable, e.g. PREP-1)", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "title", label: "Title", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "sequence", label: "Position (1 = first)", fieldtype: "Int", reqd: 1 },
@@ -1045,7 +1045,7 @@ frappe.provide("toefl_house.role_desks");
 		],
 		"toefl_house.setup_presets.owner_policy_forms.configure_initial_assessment": [
 			{ fieldname: "policy", label: "Academic grading policy", fieldtype: "Data", read_only: 1, reqd: 1 },
-			{ fieldname: "grading_scale", label: "Grade scale (choose the A–F scale)", fieldtype: "Link", options: "Grading Scale", reqd: 1,
+			{ fieldname: "grading_scale", label: "Grade scale (choose the A–F scale)", fieldtype: "Select", options: "__owner_choice:grading_scale__", reqd: 1,
 				description: "First create your grading scale with the A, B, C and D numeric form." },
 			{ fieldname: "passing_score", label: "Minimum passing mark (%)", fieldtype: "Percent", default: 60, reqd: 1 },
 			{ fieldname: "retake_wait_days", label: "Minimum days before one failed-exam retake", fieldtype: "Int", default: 7, reqd: 1 },
@@ -1055,7 +1055,7 @@ frappe.provide("toefl_house.role_desks");
 				description: "One original exam and one retake are permitted. The higher valid score is retained. Academic Manager approves promotion." },
 		],
 		"toefl_house.academic.create_assessment_policy": [
-			{ fieldname: "family", label: "Program code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "family", label: "Choose an active program", fieldtype: "Select", options: "__owner_choice:program__", reqd: 1 },
 			{ fieldname: "code", label: "Policy code (stable)", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "title", label: "Title", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
@@ -1071,7 +1071,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "retake_wait_days", label: "New retake wait (days) — leave blank to keep current", fieldtype: "Int" },
 			{ fieldname: "effective_from", label: "Date when the revised values take effect", fieldtype: "Date", reqd: 1 },
 			{ fieldname: "reason", label: "Why the grading rule is changing", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "grading_scale", label: "New grade scale (optional; blank keeps the old one)", fieldtype: "Link", options: "Grading Scale" },
+			{ fieldname: "grading_scale", label: "New grade scale (optional; blank keeps the old one)", fieldtype: "Select", options: "__owner_choice:grading_scale__" },
 		],
 		"toefl_house.academic.set_assessment_components": [
 			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
@@ -1132,11 +1132,11 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
 		],
 		"toefl_house.academic.set_level_fee_component": [
-			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "academic_year", label: "Academic year", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "fee_category", label: "Choose the fee type", fieldtype: "Link", options: "Fee Category", reqd: 1 },
+			{ fieldname: "level", label: "Choose the level", fieldtype: "Select", options: "__owner_choice:level__", reqd: 1 },
+			{ fieldname: "academic_year", label: "Choose the academic year", fieldtype: "Select", options: "__owner_choice:academic_year__", reqd: 1 },
+			{ fieldname: "fee_category", label: "Choose the fee type", fieldtype: "Select", options: "__owner_choice:fee_category__", reqd: 1 },
 			{ fieldname: "amount", label: "Tuition amount (AFN)", fieldtype: "Currency", reqd: 1, description: "This is the full semester amount, not a second monthly bill. Changing it only affects future bills." },
-			{ fieldname: "company", label: "Company (only when several exist)", fieldtype: "Link", options: "Company" },
+			{ fieldname: "company", label: "Company (optional)", fieldtype: "Select", options: "__owner_choice:company__" },
 		],
 		"toefl_house.academic.remove_level_fee_component": [
 			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
