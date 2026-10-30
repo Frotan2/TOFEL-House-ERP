@@ -718,6 +718,10 @@ frappe.provide("toefl_house.role_desks");
 	]);
 
 	const ACTION_FIELDS = Object.freeze({
+		"toefl_house.finance.cashier.reconcile_cashier_day": [
+			{ fieldname: "company", label: "Company", fieldtype: "Data", read_only: 1, reqd: 1 },
+			{ fieldname: "date", label: "Business day", fieldtype: "Date", read_only: 1, reqd: 1 },
+		],
 		"toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale": [
 			{ fieldname: "grading_scale_name", label: "New grading scale version name", fieldtype: "Data", reqd: 1,
 				description: "Use a new unique name for a later version. Historical scales are not overwritten." },
@@ -1312,7 +1316,28 @@ frappe.provide("toefl_house.role_desks");
 			return;
 		}
 		const ownAttendance = action.endpoint === "toefl_house.teaching.record_instructor_attendance";
+		const cashClose = action.endpoint === "toefl_house.finance.cashier.reconcile_cashier_day";
 		let fields = ACTION_FIELDS[action.endpoint];
+		if (cashClose) {
+			const drawers = action.args && action.args.drawers;
+			const accounts = Array.isArray(drawers) ? drawers.map((row) => row && row.account) : [];
+			if (!accounts.length || accounts.length > 25 ||
+				accounts.some((name) => typeof name !== "string" || !name || name.length > 140) ||
+				new Set(accounts).size !== accounts.length) {
+				frappe.msgprint(text("Cash drawer list is invalid. Refresh the Finance Desk; no close was recorded."));
+				return;
+			}
+			fields = [...fields, ...drawers.flatMap((drawer, index) => [
+				{ fieldname: "drawer_name_" + index, label: "Count drawer " + (index + 1),
+					fieldtype: "Data", read_only: 1, default: drawer.account },
+				{ fieldname: "drawer_expected_" + index, label: "Native ledger balance (AFN, view only)",
+					fieldtype: "Currency", read_only: 1, default: drawer.expected },
+				{ fieldname: "drawer_counted_" + index, label: "Actual counted amount (AFN) — use 0 if empty",
+					fieldtype: "Currency", description: "Enter your own physical count, never an assumed ledger amount." },
+				{ fieldname: "drawer_note_" + index, label: "Explanation of a difference",
+					fieldtype: "Small Text" },
+			])];
+		}
 		if (ownAttendance) {
 			// The roster is a teacher-only server projection of the selected
 			// session. Never use it as authorization: the POST command
@@ -1490,6 +1515,34 @@ frappe.provide("toefl_house.role_desks");
 				fields.forEach((field) => {
 					if (field.fieldname) args[field.fieldname] = values[field.fieldname];
 				});
+				if (cashClose) {
+					const counts = [];
+					for (const [index, drawer] of action.args.drawers.entries()) {
+						const raw = values["drawer_counted_" + index];
+						if (raw === undefined || raw === null || raw === "" ||
+							!Number.isFinite(Number(raw)) || Number(raw) < 0 ||
+							!/^\\d+(?:\\.\\d{1,2})?$/.test(String(raw))) {
+							frappe.msgprint(text("Enter every physical count in AFN with at most two decimals; enter 0 for empty drawers."));
+							return;
+						}
+						const counted = Number(raw);
+						const expected = Number(drawer.expected);
+						const note = String(values["drawer_note_" + index] || "").trim();
+						if (!Number.isFinite(expected) || (Math.abs(counted - expected) > 0.005 && !note)) {
+							frappe.msgprint(text("Explain the difference between the physical count and the ledger balance."));
+							return;
+						}
+						if (note.length > 500) {
+							frappe.msgprint(text("The drawer explanation must not exceed 500 characters."));
+							return;
+						}
+						counts.push({ account: drawer.account, counted_amount: counted, note });
+						["drawer_name_", "drawer_expected_", "drawer_counted_", "drawer_note_"].forEach(
+							(key) => delete args[key + index]);
+					}
+					args.counts = counts;
+					delete args.drawers;
+				}
 				if (teachingContractForm) {
 					const terms = [];
 					const adjustments = [];
@@ -1675,7 +1728,11 @@ frappe.provide("toefl_house.role_desks");
 						frappe.msgprint({ title: text(action.label), message: escapeText(detail), indicator: "red" });
 					},
 				});
-				if (teachingContractForm) {
+				if (cashClose) {
+					frappe.confirm(text(
+						"Submit the actual counts and close this company's entire business day? This close cannot be edited; no payment or cash movement is created."
+					), submitAction);
+				} else if (teachingContractForm) {
 					frappe.confirm(text(
 						action.endpoint === "toefl_house.teaching.compensation.revise_teaching_contract"
 							? "This replaces the complete instructor contract from the new effective date. Re-enter ALL approved skills, rates, quantities and adjustments; omitted items will not carry over. Continue?"
