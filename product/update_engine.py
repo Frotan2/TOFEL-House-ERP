@@ -36,7 +36,7 @@ Machine protocol (no free-text log parsing):
   (or stdout).  Secrets are never echoed.
 * The Windows launcher only acts on ``decision == "allow"``.
 * Every human message is a stable code from :data:`MESSAGE_CODES`; the
-  bilingual English/Dari catalog lives in
+  English-language catalog lives in
   ``product/windows/updater-strings.json`` and is verified by tests.
 """
 from __future__ import annotations
