@@ -802,7 +802,13 @@ def _assessment_actions(policy, readiness):
         "Course Owner", "toefl_house.academic.set_assessment_policy_status",
         "Retire policy", {"policy": code, "active": "0"})
     if readiness == "incomplete":
-        ordered = [version_action] + facet_actions + [retire_action]
+        # A human-friendly numeric form constructs the initial seven
+        # academic facets on the server; never make the Owner type JSON.
+        guided_initial = guided_action(
+            "Course Owner",
+            "toefl_house.setup_presets.owner_policy_forms.configure_initial_assessment",
+            "Set up grading (simple form)", {"policy": code})
+        ordered = [guided_initial, retire_action]
     elif readiness == "configured":
         validate_action = guided_action(
             "Course Owner", "toefl_house.academic.validate_assessment_policy",
