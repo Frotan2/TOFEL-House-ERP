@@ -26,9 +26,12 @@ def isolated_guard(name, frappe):
     assert len(body) == 1
     body[0].decorator_list = []
     code = compile(ast.Module(body=body, type_ignores=[]), str(INSTALLER), "exec")
-    context = {"frappe": frappe, "_NO_LIVE_RECORDS": (
-        "Student", "Student Applicant", "Program Enrollment",
-        "Fees", "Payment Entry", "Sales Invoice", "Salary Slip")}
+    original_guard = next(
+        n.value for n in tree.body
+        if isinstance(n, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "_NO_LIVE_RECORDS"
+                for target in n.targets))
+    context = {"frappe": frappe, "_NO_LIVE_RECORDS": ast.literal_eval(original_guard)}
     exec(code, context)
     return context[name]
 
@@ -78,7 +81,10 @@ class InstallerGateTests(unittest.TestCase):
                 isolated_guard("_qualified_site", self.frappe(**args))()
 
     def test_existing_live_record_refused(self):
-        for kind in ("Student", "Fees", "Payment Entry", "Salary Slip"):
+        for kind in ("Student", "Fees", "Payment Entry", "Salary Slip",
+                     "Student Group", "Course Schedule", "Student Attendance",
+                     "TH Assessment Book", "TH Academic Result",
+                     "TH Tuition Refund Request", "Payroll Entry"):
             with self.subTest(kind=kind), self.assertRaisesRegex(Invalid, "preserve"):
                 guard = isolated_guard("_qualified_site", self.frappe(
                     True, True, FakeDatabase(counts={kind: 1})))
