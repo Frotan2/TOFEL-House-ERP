@@ -342,7 +342,6 @@ class CommandContractTests(unittest.TestCase):
                 '[{"account":"Cash - TH","counted_amount":1000,"note":""}]')
 
     def test_finance_desk_offers_counted_not_expected_amount_as_input(self):
-        from pathlib import Path
         desk = (APP / "desk" / "finance.py").read_text(encoding="utf-8")
         gui = (APP / "public" / "js" / "th_role_desks.js").read_text(encoding="utf-8")
         self.assertIn('"Close today\'s company cash drawers"', desk)
