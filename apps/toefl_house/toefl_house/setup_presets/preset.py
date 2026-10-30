@@ -29,6 +29,8 @@ def validate_preset(data: dict) -> dict:
         if code in codes:
             raise ValueError(f"Duplicate program code: {code}")
         codes.add(code)
+        if not isinstance(family.get("initial_tuition_approved", False), bool):
+            raise ValueError(f"Initial tuition approval must be an explicit boolean in {code}")
         policy_code = family.get("assessment_policy_code")
         if not isinstance(policy_code, str) or not policy_code.strip():
             raise ValueError(f"Missing assessment policy identity in {code}")
@@ -228,11 +230,10 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
             steps.append(_action("level", level_code, status, details))
             for year in preset["academic_years"]:
                 actual = (tuition.get(level_code) or {}).get(year["name"])
-                # Only GE/EAP on-site prices have a later explicit Owner
-                # approval (AFN 500/month). Historical specialist price
-                # examples must not become draft Fee Structures automatically.
-                # Finance may configure those separately after Owner approval.
-                approved_initial_tuition = family["code"] in ("GEN-ENG", "EAP")
+                # Approval is preset configuration, never inferred from a
+                # program name or code. Missing approval defers fee creation.
+                # Historical examples must not become draft prices by default.
+                approved_initial_tuition = family.get("initial_tuition_approved", False)
                 if aliases_found or (not approved_initial_tuition and actual is not None):
                     status = "review"
                 elif not approved_initial_tuition:
@@ -244,7 +245,7 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
                 details = ("Owner confirmation of specialist tuition required; "
                            "do not create or reuse an unapproved price"
                            if not approved_initial_tuition else
-                           "Approved GE/EAP AFN semester price; never modify posted Fees")
+                           "Approved on-site semester price; never modify posted Fees")
                 steps.append(_action("tuition", level_code + "@" + year["name"],
                                      status, details))
     category = preset["fee_policy"]["category"]

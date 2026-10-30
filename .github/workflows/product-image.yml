@@ -1833,7 +1833,7 @@ jobs:
       - name: Export pinned offline database and cache images
         if: success()
         run: |
-          python3 tools/release/export_offline_runtime.py --compose product/docker-compose.yml \
+          python3 tools/foundation/annotated_step.py "Offline runtime export" -- python3 tools/release/export_offline_runtime.py --compose product/docker-compose.yml \
             --output "$RUNNER_TEMP/toefl-house-offline-runtime" --source-revision "$GITHUB_SHA"
       - name: Publish provider runtime inputs
         if: success()

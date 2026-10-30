@@ -16,6 +16,30 @@ class TestInitialSetupPreset(unittest.TestCase):
     def setUp(self):
         self.preset = load_preset()
 
+    def test_initial_tuition_approval_is_explicit_configuration(self):
+        renamed = copy.deepcopy(self.preset)
+        for index, family in enumerate(renamed["programs"]):
+            family["code"] = f"RENAMED-{index}"
+        original = preview_catalog({}, self.preset)
+        changed = preview_catalog({}, renamed)
+        self.assertEqual(
+            [(row["code"], row["status"]) for row in original["actions"] if row["kind"] == "tuition"],
+            [(row["code"], row["status"]) for row in changed["actions"] if row["kind"] == "tuition"],
+        )
+
+    def test_missing_tuition_approval_defers_every_affected_level(self):
+        for family in self.preset["programs"]:
+            family.pop("initial_tuition_approved", None)
+        plan = preview_catalog({}, self.preset)
+        tuition = [row for row in plan["actions"] if row["kind"] == "tuition"]
+        self.assertTrue(tuition)
+        self.assertTrue(all(row["status"] == "deferred" for row in tuition))
+
+    def test_truthy_text_cannot_approve_initial_tuition(self):
+        self.preset["programs"][0]["initial_tuition_approved"] = "true"
+        with self.assertRaisesRegex(ValueError, "explicit boolean"):
+            validate_preset(self.preset)
+
     def test_has_four_programs_eleven_levels(self):
         self.assertEqual(len(self.preset["programs"]), 4)
         self.assertEqual(sum(len(p["levels"]) for p in self.preset["programs"]), 11)

@@ -101,7 +101,8 @@
         "reading": 15,
         "grammar": 10,
         "vocabulary": 10
-      }
+      },
+      "initial_tuition_approved": true
     },
     {
       "code": "EAP",
@@ -157,7 +158,8 @@
         "reading": 15,
         "grammar": 10,
         "vocabulary": 10
-      }
+      },
+      "initial_tuition_approved": true
     },
     {
       "code": "SPECIAL-SPEAKING",
@@ -175,7 +177,8 @@
       "assessment_policy_code": "SS-ASSESS-01",
       "assessment_skill_weights_percent": {
         "speaking": 100
-      }
+      },
+      "initial_tuition_approved": false
     },
     {
       "code": "TOEFL-PREP",
@@ -199,7 +202,8 @@
         "listening": 25,
         "writing": 25,
         "reading": 25
-      }
+      },
+      "initial_tuition_approved": false
     }
   ],
   "cross_program_transition": {
