@@ -907,6 +907,36 @@ def _cash_close_sections(day):
         }
         items.append(item)
 
+    # Offer ONE guarded company/day close, never independent row closes:
+    # the accounting command requires a real count of ALL enabled drawers
+    # for the company. Ledger expected amounts are read-only comparison
+    # hints and MUST NOT be submitted as cashier-count defaults.
+    for row in position:
+        company = row["company"]
+        company_drawers = row.get("drawers", [])
+        if (row.get("close") or company in drifted or not closing_window
+                or not company_drawers
+                or len(company_drawers) > cashier_money.MAX_DRAWERS):
+            continue
+        action = guided_action(
+            "Finance Officer", RECONCILE_ENDPOINT,
+            "Close today's company cash drawers",
+            {"company": company, "date": day,
+             "drawers": [{"account": d["account"],
+                          "expected": d["closing"]}
+                         for d in company_drawers]})
+        if not action:
+            continue
+        target = next((item for item in items
+                       if item["id"] == f"{company}:{company_drawers[0]['account']}"),
+                      None)
+        if target is not None:
+            target["action"] = action
+            target["next"] = (
+                "Count every enabled drawer for this company, then enter "
+                "actual physical amounts. The ERP compares them with the "
+                "native ledger; no expected amount is prefilled")
+
     cash = section("cash-close", "Cash close", "queue", items=items,
                    facts=facts,
                    empty_title="No cash drawer in scope",
