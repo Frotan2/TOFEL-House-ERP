@@ -1,6 +1,6 @@
 TOEFL HOUSE ERP - OWNER HANDBOOK
 ================================
-Engineering release candidate handbook - English with Dari safety summary
+Engineering release candidate handbook - English edition
 
 READ THIS FIRST
 ---------------
@@ -17,8 +17,8 @@ Never enter real student, guardian, staff, salary, payment, or financial data
 into this engineering candidate.
 
 The current candidate does not provide public student/guardian portals,
-automatic notification delivery, custom Assessment/Progression, or an approved
-automatic updater. Do not ask staff to imitate those functions in spreadsheets
+automatic notification delivery, production-qualified academic assessment
+or progression, or an approved automatic updater. Do not ask staff to imitate those functions in spreadsheets
 or unofficial records.
 
 1. WHAT YOU SHOULD RECEIVE
@@ -220,7 +220,7 @@ Updates use only the launcher's separate "Check for Updates" and
 signed release information, asks the safety engine whether this computer
 may update, and changes nothing. "Install Update" asks for confirmation,
 repeats every check, and only then installs the update. Every message is
-shown in English and Dari with the version number. No terminal, Git,
+shown in English with the version number. No terminal, Git,
 Docker command or database command is ever needed.
   The updater refuses before the first change unless the provider
 signature, exact version and upgrade path, existing site and database,
@@ -276,58 +276,3 @@ ZIP does not authorize production. Keep the decision at NO-GO until the real
 Owner Windows installation, recovery, staff-device, cashier/stock, configuration,
 payroll and package acceptance gates are completed and the Owner gives explicit
 written approval.
-
-
-خلاصهٔ مهم برای صاحب کورس / DARI SAFETY SUMMARY
-===============================================
-
-این بسته فقط برای آزمایش انجینری است. وضعیت استفادهٔ واقعی: NO-GO / REJECT.
-تا تأیید کتبی و جداگانهٔ صاحب کورس، هیچ معلومات واقعی شاگرد، سرپرست، کارمند،
-معاش، پرداخت یا حسابداری وارد نکنید؛ فقط نام و ارقام تمرینی استفاده کنید.
-
-۱. بسته را فقط از سازندهٔ مورد اعتماد و از صفحهٔ نسخهٔ مشخص GitHub بگیرید.
-نسخه، Source Revision و فایل‌های checksum باید همراه باشند. تست سبز GitHub
-به معنی تأیید کمپیوتر واقعی، بکاپ، بازیابی یا استفادهٔ عملیاتی نیست.
-
-۲. روی کمپیوتری که قبلاً معلومات TOEFL House داشته، Install، Repair، Restore،
-تغییر رمز، حذف Docker volume یا حذف product/data انجام ندهید. فقط
-Check This PC را اجرا کنید و با پشتیبانی مورد اعتماد تماس بگیرید.
-
-۳. روی کمپیوتر جداگانهٔ تمرینی، کل بسته را Extract کنید و
-TOEFL House ERP.vbs را باز کنید. نخست Check This PC، سپس در کمپیوتر کاملاً
-جدید Install و بعد Open / Start را انتخاب کنید. برای کار روزانه به Git،
-PowerShell، Python یا دستور دیتابیس ضرورت نیست.
-
-۴. پالیسی‌ها، شهریه، صنف‌ها، استادها و صلاحیت کارمندان را فقط از صفحات مجاز
-داخل سیستم تنظیم کنید. اگر یک قیمت، فیصدی، شرط قبولی، معاش یا قاعده مشخص
-نشده است، خودتان عدد یا قاعدهٔ موقتی نسازید. هر کارمند حساب جدا و فقط
-صلاحیت وظیفهٔ خودش را داشته باشد.
-
-۵. جریان تمرینی: Applicant، Placement، Admission، Enrollment، Schedule،
-Attendance و بعد Billing و Payment. Assessment/Progression سفارشی و پورتال
-شاگرد/سرپرست در این نسخه فعال نیست. ارسال Email/SMS نیز با داشتن
-TH Alerting Policy ثابت نمی‌شود.
-
-۶. فروش کتاب فقط با Books، Warehouse و Update Stock در اسناد اصلی ERPNext
-انجام شود. کتاب و شهریه را در فاکتور فروش کتاب یک‌جا نکنید. برای برگشت کتاب
-Sales Return / Credit Note لازم است؛ این سند به‌تنهایی برگشت پول نقد نیست
-و پرداخت برگشت جداگانه لازم دارد. همه فقط با پول تمرینی انجام شود.
-
-۷. Additional Salary یا محاسبهٔ تدریس به معنی پرداخت معاش نیست. معاش واقعی،
-مالیه، شرایط پرداخت و Payroll باید جداگانه تأیید و در سیستم اصلی HRMS بررسی
-شود. در این نسخه Payroll واقعی اجرا نکنید.
-
-۸. Stop و شروع دوباره، حفظ معلومات بعد از Restart و Repair فقط روی کمپیوتر
-تمرینی آزمایش شود. به‌روزرسانی فقط با دکمه‌های Check for Updates و
-Install Update انجام می‌شود؛ فعلاً کانال ارائه‌دهنده غیرفعال است و این
-دکمه‌ها هیچ چیزی را تغییر نمی‌دهند. در صورت توقف به‌روزرسانی، دوباره
-نصب نکنید و معلومات را حذف نکنید؛ با پشتیبانی مطمئن تماس بگیرید.
-بکاپ واقعی، کلید بازیابی و Restore روی کمپیوتر صاحب کورس هنوز HOLD است؛
-هیچ‌کدام را بدون پروسیجر جداگانه و اجازهٔ رسمی انجام ندهید.
-
-۹. برای پشتیبانی فقط Check This PC و Copy Safe Support Status را شریک کنید.
-رمز Administrator، db.env، کلید خصوصی، بکاپ خام، گزارش خام یا معلومات واقعی
-شاگردان و کارمندان را هرگز نفرستید.
-
-تصمیم نهایی تا تکمیل آزمایش واقعی Windows، بازیابی، دستگاه‌های کارمندان،
-فروش کتاب/صندوق، تنظیمات و تأیید کتبی صاحب کورس: NO-GO.
