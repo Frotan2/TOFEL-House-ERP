@@ -228,52 +228,37 @@ TEST PACKAGE - NO REAL DATA. Production authorization remains REJECT.
         $writer.Write([byte[]]$bytes)
         $writer.Flush()
     } finally { $stream.Dispose() }
-    # A finished customer installer needs publisher identity, not just its
-    # internal SHA-256 integrity footer. Unsigned EXEs are TEST artifacts only.
+    # Signed publisher identity is separate from the embedded payload hash.
+    # Uncertified artifacts can only be used as disposable engineering tests.
     if ($SigningCertificateThumbprint) {
-        if ($SigningCertificateThumbprint -notmatch '^[0-9a-fA-F]{40}
-    $partial = $null
-    Write-Output ('Built offline TEST installer: ' + $output)
-    Write-Output 'Windows clean-machine acceptance is still required. Production authorization: REJECT.'
-} finally {
-    if ($partial -and (Test-Path -LiteralPath $partial)) { Remove-Item -LiteralPath $partial -Force }
-    if ($staging -and (Test-Path -LiteralPath $staging)) { Remove-Item -LiteralPath $staging -Recurse -Force }
-}
- -or
-            $TimestampServer -notmatch '^https://[^/\s]+(/[^\s]*)?
-    $partial = $null
-    Write-Output ('Built offline TEST installer: ' + $output)
-    Write-Output 'Windows clean-machine acceptance is still required. Production authorization: REJECT.'
-} finally {
-    if ($partial -and (Test-Path -LiteralPath $partial)) { Remove-Item -LiteralPath $partial -Force }
-    if ($staging -and (Test-Path -LiteralPath $staging)) { Remove-Item -LiteralPath $staging -Recurse -Force }
-}
-) {
-            throw 'A code-signing certificate thumbprint and HTTPS timestamp server are required.'
+        if ($SigningCertificateThumbprint -notmatch '^[0-9a-fA-F]{40}$' -or
+            $TimestampServer -notmatch '^http://[A-Za-z0-9.-]+(?::[0-9]{2,5})?(/[^\s]*)?$') {
+            throw 'A code-signing certificate and Authenticode-compatible HTTP timestamp server are required.'
         }
-        # PE certificate-table offsets are 32-bit. Reject a file too large
-        # to Authenticode-sign safely instead of shipping an unverifiable EXE.
+        # PE certificate-table offsets are 32-bit; do not claim to sign a
+        # single-file installer that exceeds the supported address range.
         if ((Get-Item -LiteralPath $partial).Length -ge [int64]4294960000) {
-            throw 'The offline EXE is too large for a safe PE Authenticode signature; shrink the provider image.'
+            throw 'The offline EXE exceeds the safe PE Authenticode signing limit; shrink the provider image.'
         }
-        $certificate = @(Get-ChildItem 'Cert:\CurrentUser\My', 'Cert:\LocalMachine\My' -ErrorAction SilentlyContinue |
+        $certificates = @(Get-ChildItem 'Cert:\CurrentUser\My', 'Cert:\LocalMachine\My' -ErrorAction SilentlyContinue |
             Where-Object { $_.Thumbprint -ieq $SigningCertificateThumbprint })
-        if ($certificate.Count -ne 1 -or -not $certificate[0].HasPrivateKey -or
-            $certificate[0].NotBefore -gt [DateTime]::UtcNow -or
-            $certificate[0].NotAfter -le [DateTime]::UtcNow -or
-            -not @($certificate[0].EnhancedKeyUsageList |
+        if ($certificates.Count -ne 1 -or -not $certificates[0].HasPrivateKey -or
+            $certificates[0].NotBefore -gt [DateTime]::UtcNow -or
+            $certificates[0].NotAfter -le [DateTime]::UtcNow -or
+            -not @($certificates[0].EnhancedKeyUsageList |
                 Where-Object { $_.ObjectId -eq '1.3.6.1.5.5.7.3.3' }).Count) {
-            throw 'A single valid provider-owned code-signing certificate with private key is required.'
+            throw 'One currently valid code-signing certificate with a private key is required.'
         }
-        $signed = Set-AuthenticodeSignature -LiteralPath $partial -Certificate $certificate[0] -HashAlgorithm SHA256 -TimestampServer $TimestampServer
-        if ($signed.Status -ne 'Valid') { throw 'The offline installer was not validly signed.' }
+        $signed = Set-AuthenticodeSignature -LiteralPath $partial -Certificate $certificates[0] -HashAlgorithm SHA256 -TimestampServer $TimestampServer
+        if ($signed.Status -ne 'Valid') { throw 'Offline installer signing failed.' }
         $identity = Get-AuthenticodeSignature -LiteralPath $partial
         if ($identity.Status -ne 'Valid' -or
+            $null -eq $identity.TimeStamperCertificate -or
             $identity.SignerCertificate.Thumbprint -ine $SigningCertificateThumbprint) {
-            throw 'Final installer signature verification failed.'
+            throw 'Final installer signature or timestamp verification failed.'
         }
     } else {
-        Write-Warning 'UNSIGNED TEST INSTALLER ONLY. Do not distribute this EXE as a final customer product.'
+        Write-Warning 'UNSIGNED TEST INSTALLER ONLY. Not a signed customer deliverable.'
     }
     # No partial installer is published at the customer-facing filename.
     [IO.File]::Move($partial, $output)
