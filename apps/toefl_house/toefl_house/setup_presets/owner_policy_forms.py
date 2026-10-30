@@ -198,7 +198,7 @@ def owner_form_options():
         for row in rows:
             name = row.get("name") if isinstance(row, dict) else row.name
             if (not isinstance(name, str) or not name
-                    or len(name) > 140 or "\\n" in name or "\\r" in name):
+                    or len(name) > 140 or "\n" in name or "\r" in name):
                 raise frappe.ValidationError(
                     "An academic/finance option has an invalid name; "
                     "resolve the master record before editing settings")
