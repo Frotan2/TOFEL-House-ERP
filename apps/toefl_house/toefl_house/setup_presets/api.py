@@ -43,6 +43,26 @@ def _unique_by(rows, key, description):
     return result
 
 
+def _native_program_has_curriculum(native_program):
+    """Fail closed if an existing level cannot schedule a native Course.
+
+    Before the integrated Course factory fix, native Programs could exist
+    without any linked Course. They must be reviewed, not shown as a matched
+    first-run level or silently duplicated by an installer.
+    """
+    if not frappe.db.exists("Program", native_program):
+        return False
+    links = _bounded_rows(
+        "Program Course", bound=_MAX_COMPONENT_ROWS,
+        filters={"parent": native_program, "parenttype": "Program"},
+        fields=["course", "required"])
+    names = [link.get("course") for link in links]
+    if not names or any(not isinstance(name, str) or not name.strip()
+                        for name in names) or len(set(names)) != len(names):
+        return False
+    return all(frappe.db.exists("Course", name) for name in names)
+
+
 def _snapshot():
     families = _bounded_rows(
         "TH Academic Program", fields=["name", "code", "title", "status"])
@@ -79,6 +99,9 @@ def _snapshot():
             "duration_months": months,
             "status": row.status,
             "native_program": row.native_program or "",
+            "curriculum_ready": (
+                _native_program_has_curriculum(row.native_program)
+                if row.native_program else False),
             "next_level": row.next_level or "",
         }
         if row.native_program:
