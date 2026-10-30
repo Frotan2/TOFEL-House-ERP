@@ -97,6 +97,31 @@ signed, independently verified Windows product. No production authorization.
   One hidden idempotency key is retained per opened form and reused on a
   retry even if Frappe omits hidden field values.
 
+## Native-read integrity corrections on the current work branch
+
+- **Daily cash close drift:** The Finance dashboard re-reads native GL balances
+  for every originally closed Cash/Bank drawer and compares them with each
+  drawer's immutable TH Cashier Count expected amount. This detects historical
+  GL cancellations and offsetting cash-to-bank movements that a
+  "new active GL row after close" timestamp test misses. The timestamp check
+  remains an additional indicator of later backdated posting. No native
+  Payment Entry or GL Entry is posted by the close or drift check.
+  Seven offline regressions cover cancellation, offsetting movements,
+  missing/duplicate or invalid saved drawers, unchanged balances,
+  later backdated posting and no close.
+- **Academic duration history:** The Owner Setup desk projects the existing
+  native Program Enrollment.enrollment_date field, already present in its
+  bounded allowlist, when explaining which effective-dated level duration
+  governed a real enrollment. Previously the code attempted to count those
+  dates without requesting that column, so it silently hid the history.
+  New source tests distinguish a genuinely history-free fresh customer site
+  from later synthetic test enrollments across two duration versions.
+- **Qualification boundary:** These source and offline test additions do **not**
+  establish successful native Frappe/ERPNext execution, Windows acceptance,
+  account-scoped permission isolation or release readiness. Require exact
+  commit CI plus real-site negative and positive acceptance before changing
+  the release state.
+
 ## Explicit incomplete work — never conceal from the customer
 
 - The seven low-level assessment facet commands can still accept structured
