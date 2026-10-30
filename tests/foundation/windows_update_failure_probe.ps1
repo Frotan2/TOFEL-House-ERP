@@ -107,7 +107,7 @@ try {
     function Get-BlockerCodes { return @('apply.host_unsafe') }
     function Get-Text { return $null }
     function Save-Result { }
-    function Write-Bilingual { }
+    function Write-Message { }
     $ConfirmationAccepted = $true
     $imageTag = 'toefl-house-erp-app:local'
     $check = [pscustomobject]@{
