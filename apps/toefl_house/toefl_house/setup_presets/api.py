@@ -69,7 +69,8 @@ def _snapshot():
         months = None
         if duration_rows:
             duration = duration_rows[0]
-            if str(duration.duration_unit).lower() in ("month", "months"):
+            if str(duration.duration_unit).lower() in (
+                    "month", "months", "solar hijri month"):
                 value = float(duration.duration_value)
                 months = int(value) if value.is_integer() else None
         levels[row.code] = {

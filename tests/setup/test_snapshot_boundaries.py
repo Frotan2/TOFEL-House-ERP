@@ -127,6 +127,27 @@ class SnapshotSafetyTests(unittest.TestCase):
         self.assertEqual(state["levels"]["PRE-STARTER"]["duration_months"], 1)
         self.assertIn(("TH Level Duration", 1), db.calls)
 
+    def test_solar_hijri_duration_is_recognized_without_overwriting_history(self):
+        for unit, value, expected in (
+                ("Solar Hijri Month", 2, 2),
+                ("Solar Hijri Month", 1.5, None),
+                ("Day", 60, None)):
+            with self.subTest(unit=unit, value=value):
+                db = FakeDB({
+                    "TH Program Level": [Row(
+                        name="L-1", code="STARTER", title="Starter",
+                        family="F-1", native_program="N-1",
+                        next_level="", status="Active")],
+                    "TH Level Duration": [
+                        Row(parent="L-1", duration_value=value,
+                            duration_unit=unit, effective_from="2026-10-30"),
+                        Row(parent="L-1", duration_value=1,
+                            duration_unit="Month", effective_from="2026-03-21")],
+                })
+                state = actual_snapshot_functions(db)["_snapshot"]()
+                self.assertEqual(
+                    state["levels"]["STARTER"]["duration_months"], expected)
+
     def test_malformed_fee_plan_is_conflict_not_missing(self):
         db = FakeDB({
             "TH Program Level": [Row(name="L-1", code="PRE-STARTER",
