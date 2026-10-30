@@ -221,4 +221,26 @@ def preview_owner_initial_setup():
         preview["plan_hash"] = None
         preview["planned_actions_count"] = None
         preview["planned_operation_counts"] = {}
+    # This GET remains read-only. It can authorize displaying the Owner's
+    # explicit POST action, but can NEVER perform initialization.
+    preview["fresh_installation"] = {
+        "profile": preset["installation_profile"],
+        "initial_operational_data": preset["initial_operational_data"],
+        "can_initialize": False,
+        "message": "Catalog setup is not enabled or has unresolved prerequisites",
+    }
+    if preview["counts"]["review"] == 0 and preview["planned_actions_count"]:
+        from toefl_house.setup_presets.installer import (
+            _qualified_site, _finance_preconditions)
+        try:
+            _qualified_site()
+            _finance_preconditions()
+        except (frappe.PermissionError, frappe.ValidationError):
+            pass
+        else:
+            preview["fresh_installation"]["can_initialize"] = True
+            preview["fresh_installation"]["message"] = (
+                "Owner may explicitly initialize approved course masters and "
+                "draft fee structures on this empty site; no student or "
+                "financial transaction is created")
     return preview
