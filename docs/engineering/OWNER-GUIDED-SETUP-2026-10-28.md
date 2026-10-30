@@ -1,6 +1,6 @@
 # TOEFL House initial setup — customer-ready target and safe preset
 
-**Owner clarification (2026-10-28):** The current Windows PC is a disposable *testing* installation. The eventual course PC must receive a clean, prebuilt installation package and verified, structured policy defaults. Do **not** copy test students, money, passwords, keys, synthetic attendance or the personal-PC database to the course PC.
+**Owner's overriding clarification (2026-10-31):** TOEFL House has **no real prior ERP operational history**. Build a **fresh site**, not a legacy migration. The historical Windows evidence below describes an engineering TEST environment and must never be treated as existing institute students, bills, receipts, teaching sessions or approved production configuration. The customer package must include **no test database or demo business records**.
 
 ## What this branch actually implements
 
@@ -13,7 +13,7 @@ The Academic Setup Desk now offers **Check TOEFL House setup**, a read-only, Cou
 
 A guarded native **first-run catalog initializer** also exists internally under `toefl_house.setup_presets.installer.initialize_owner_catalog` (POST), but it is **disabled by default**. It requires BOTH site flags `toefl_house_customer_release_approved=true` and `toefl_house_owner_catalog_install_enabled=true`, a clean site with no student, admission, fees, payment, salary or sales records, Backup Control Off, exactly one Company with a default receivable account, the native Education Fee Component Item Group, an exact preflight plan hash and an explicit Owner confirmation. It calls only six guarded native academic commands, in one request transaction, creates **draft** fee structures and verifies the resulting catalog. It never posts an invoice or salary, approves a policy, enables tax/backup, or declares production ready. These flags must never be set to bypass the existing release HOLD; their eventual use requires separately qualified customer release and a clean-install acceptance.
 
-No tested, owner-facing **Apply** button is shipped yet. The code path requires real Frappe integration and Windows acceptance, including rollback and concurrent-request tests, before it can be exposed in the installer.
+A guarded Owner-facing **Initialize new course catalog** action is now coded in Academic Setup: it is visible only when the server's clean-site, finance, approval-switch and exact-plan preflight succeeds, and always requires Owner confirmation. Real Frappe/Windows acceptance is still required; this is not a production-ready installer.
 
 **This is a first engineering slice, not an installed wizard, activation, or production approval.** Existing release and Owner recovery holds remain in force. Never silently seed a live site.
 
@@ -25,11 +25,11 @@ No tested, owner-facing **Apply** button is shipped yet. The code path requires 
 | General English | `STARTER`, `PREP-1`, `PREP-2`, `PREP-3` | 2 months each | 1,000 each |
 | English for Academic Purposes | `EAP-1` through `EAP-4` | 2 months each | 2,000 each (AFN 1,000/month) |
 | Special Speaking | `SPECIAL-SPEAKING-2M` | One two-month semester | 2,000 per semester |
-| TOEFL Preparation | `TOEFL-PREP-4M` (`TOEFL-PREP-2M` existing-site alias) | 4 months per semester | 7,000 exactly |
+| TOEFL Preparation | `TOEFL-PREP-4M` | 4 months per semester | 7,000 exactly |
 
-**Daily billing authority (latest direct Owner correction, 2026-10-30):** GE is AFN 500 per month, collected per semester: Pre-Starter AFN 500 for one month; Starter and Prep 1–3 AFN 1,000 for two months. Each of EAP's four levels is AFN 2,000 for a two-month semester (AFN 1,000/month). Special Speaking has one two-month semester at AFN 2,000. TOEFL Preparation has a four-month semester at exactly AFN 7,000. These instructions supersede earlier combined GE/EAP AFN 500 and two-month TOEFL claims. Monthly installments, where independently authorized, divide the semester total and never add a second bill. Preserve existing level codes as reviewed aliases and all issued documents; this correction does not authorize production.
+**Daily billing authority (latest direct Owner correction, 2026-10-30):** GE is AFN 500 per month, collected per semester: Pre-Starter AFN 500 for one month; Starter and Prep 1–3 AFN 1,000 for two months. Each of EAP's four levels is AFN 2,000 for a two-month semester (AFN 1,000/month). Special Speaking has one two-month semester at AFN 2,000. TOEFL Preparation has a four-month semester at exactly AFN 7,000. These instructions supersede earlier combined GE/EAP AFN 500 and two-month TOEFL claims. Monthly installments, where independently authorized, divide the semester total and never add a second bill. The fresh setup has canonical codes only and no imported historical documents; this correction does not authorize production.
 
-The real test PC uses at least `PREP-ONE` and `PREP-TWO` codes; never rename or duplicate these silently. The clean-install canonical codes are a **proposal**, and the wizard must show an explicit mapping/review against any existing site.
+Previous engineering test fixtures may use alternative codes. They are **not** course history and will not be imported. The customer installer uses only the 11 fresh canonical level codes.
 
 The normal General English transition is Pre-Starter -> Starter -> Prep 1 -> Prep 2 -> Prep 3. Cross-family Prep 3 -> EAP 1 is a placement/admission decision, **not** `TH Program Level.next_level`: the current `set_next_level` is correctly same-family only. EAP levels progress sequentially. Special Speaking is independently enrollable alongside EAP or TOEFL Preparation, with independent attendance/Fees. TOEFL Preparation has its own admission/placement criteria; no automatic forced transition or duplicate billing.
 
@@ -92,7 +92,7 @@ The pure `setup_presets/tuition_refund_review.py` implements a **read-only, fail
 - Duplicate program and level codes refuse; inconsistent or multiple draft Fee Structures yield explicit conflict rather than a false missing tuition.
 - Historical level duration versions remain valid, with the latest version inspected. Missing native program anchors and wrong next-level links are flagged.
 - Offline synthetic snapshot tests cover more than 20 programs, over-limit/duplicate rows, malformed fee plans and superseded duration versions.
-- Course Owner site initialization is still disabled by default and has no live Apply button. This draft is not an authorized installer or finished academic/finance workflow.
+- Course Owner site initialization remains release-gated; the new guarded GUI button stays hidden until clean-install and finance preflight pass. This draft is not an authorized installer or finished academic/finance workflow.
 
 **Release decision remains HOLD / NO-GO.** Do not merge this draft PR into main as customer-ready, clear an existing backup hold, turn tax on, or use customer PII as test data.
 
@@ -105,30 +105,22 @@ python -m unittest discover -s tests/setup -p "test_*.py" -v
 Reference: `apps/toefl_house/toefl_house/academic/__init__.py`, `academic/rules.py`, `academic/assessment.py`, `academic/progression.py`, `finance/installments.py`, `finance/policies.py`, `operations/owner_configuration.py`, and `docs/engineering/LAUNCH-RUNBOOK.md`.
 
 
-## Preserved Windows Owner setup checkpoint — 2026-10-30
+## Test-only Windows checkpoint — not the institute database
 
-The existing inactive Owner database now has the approved GE catalog and four
-EAP levels. Its existing GE identifiers were retained. EAP's four unissued native
-Fee Structures were corrected in place to AFN 2,000 using the audited Owner
-command; no issued Fees, receipts, students or ledger entries existed or changed.
-Special Speaking has one two-month semester at AFN 2,000. TOEFL's existing level
-identifier is retained as the reviewed legacy 2M alias, with a new four-month
-Solar Hijri duration version effective **2026-10-31**. The initial same-date row
-was preserved; that level is temporarily retired until the corrected version
-governs and release acceptance permits reactivation. Its unissued fee plan is
-AFN 7,000. Do not create a duplicate 4M level on this installation.
+Prior engineering notes described a disposable test-site catalog, simulated
+staff accounts with reserved invalid identifiers and synthetic finance evidence.
+Those were **test fixture activities**, not TOEFL House operating history.
+The Owner confirmed the institute has **not operated this ERP yet**; do not
+copy, restore, migrate, or seed those test databases, staff samples, payments,
+students or receipts into the customer package.
 
-Five requested staff logins were staged with reserved `.invalid` local IDs,
-mail disabled and accounts disabled during release HOLD. The existing Owner
-account and credentials were preserved. The instructor record contains explicitly
-labelled Owner-authorized sample employment facts; no pay agreement, salary or
-teaching schedule was fabricated. Replace those samples before real payroll.
-Native database reads verified the eleven levels, approved fee totals and
-preserved aliases. These reads used a read-only source helper and are **not**
-acceptance of a newly installed image. The installed image lacks the newer Owner
-grading and billing setup commands, so those setup steps still require the
-qualified update. Backup remains Off. Production remains NO-GO.
-
+The clean release creates approved academic and financial **masters only**:
+4 programs, 11 levels, required native Course links, an academic year and
+draft tuition plans, after explicit Owner action on a qualified clean site.
+No imported legacy aliases. No starting student, enrollment, attendance,
+posted Fees, collection, payroll or assessment result.
+Both synthetic testing and future legitimate audit logs remain supported
+without inventing historical business transactions.
 
 ## Initial assessment configuration and latest timetable — 2026-10-31
 
