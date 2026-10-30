@@ -1387,6 +1387,50 @@ frappe.provide("toefl_house.role_desks");
 				]);
 			}
 		}
+		// Course Owner cannot be handed broad native Accounts/Education read
+		// permissions just to populate a dropdown. Resolve only approved
+		// master names through a guarded read-only server projection.
+		const pickerFields = fields.filter((field) => typeof field.options === "string" &&
+			/^__owner_choice:[a-z_]+__$/.test(field.options));
+		if (pickerFields.length) {
+			if (!action._owner_choices) {
+				frappe.call({
+					method: "toefl_house.setup_presets.owner_policy_forms.owner_form_options",
+					type: "GET",
+					callback(response) {
+						const options = response.message;
+						if (!options || typeof options !== "object") {
+							frappe.msgprint(text("Owner settings could not load the approved choices. Nothing was changed."));
+							return;
+						}
+						openGuidedAction(Object.assign({}, action, { _owner_choices: options }));
+					},
+					error() {
+						frappe.msgprint(text("The approved options could not be loaded with your current permissions. Nothing was changed."));
+					},
+				});
+				return;
+			}
+			for (const field of pickerFields) {
+				const kind = field.options.slice("__owner_choice:".length, -2);
+				const allowed = action._owner_choices[kind];
+				if (!Array.isArray(allowed) || allowed.length > 100 ||
+					allowed.some((name) => typeof name !== "string" ||
+						!name || name.length > 140 || /[\\r\\n]/.test(name))) {
+					frappe.msgprint(text("Approved master choices are invalid. No changes were submitted."));
+					return;
+				}
+			}
+			fields = fields.map((field) => {
+				if (typeof field.options !== "string" ||
+					!/^__owner_choice:[a-z_]+__$/.test(field.options)) return field;
+				const kind = field.options.slice("__owner_choice:".length, -2);
+				return Object.assign({}, field, {
+					fieldtype: "Select",
+					options: ["", ...action._owner_choices[kind]].join("\\n"),
+				});
+			});
+		}
 		const contextKeys = ["outstanding", "expected_amount", "currency", "receipt_list",
 			"recipient", "tuition_bill", "refund_amount", "refund_reason", "supporting_evidence", "approved_by", "approval_evidence"];
 		const contextFacts = contextKeys.filter((key) => action.args && action.args[key] !== undefined)
@@ -1394,7 +1438,7 @@ frappe.provide("toefl_house.role_desks");
 		const contextFields = contextFacts ? [{ fieldname: "cash_context", fieldtype: "HTML", options: `<dl>${contextFacts}</dl>` }] : [];
 		const dialog = new frappe.ui.Dialog({
 			title: text(action.label),
-			fields: [{ fieldname: "request_key", label: text("Request reference (filled in for you)"), fieldtype: "Data", reqd: 1, read_only: 1, default: newRequestKey(), description: text("Reuse this exact value if you must retry the same request after a connection error.") }, ...contextFields, ...fields],
+			fields: [{ fieldname: "request_key", label: text("Request reference"), fieldtype: "Data", hidden: 1, reqd: 1, read_only: 1, default: newRequestKey() }, ...contextFields, ...fields],
 			primary_action_label: text(action.label),
 			primary_action(values) {
 				const guard = ACTION_GUARDS[action.endpoint];
