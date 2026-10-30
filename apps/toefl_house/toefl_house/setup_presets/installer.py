@@ -61,10 +61,20 @@ def _finance_preconditions():
             "Exactly one approved legal Company must be configured before "
             "initializing draft fee plans")
     company = companies[0].name
-    if not frappe.db.get_value("Company", company, "default_receivable_account"):
+    if frappe.db.get_value("Company", company, "default_currency") != "AFN":
+        raise frappe.ValidationError(
+            "The approved TOEFL House Company must use AFN as its accounting "
+            "currency before any tuition plan is initialized")
+    receivable = frappe.db.get_value(
+        "Company", company, "default_receivable_account")
+    if not receivable:
         raise frappe.ValidationError(
             "Finance must configure the Company's default receivable account "
             "before initializing draft tuition plans")
+    if frappe.db.get_value("Account", receivable, "company") != company:
+        raise frappe.ValidationError(
+            "The Company's default receivable account is missing or belongs "
+            "to another company; Finance must correct it before setup")
 
 
 def preview_digest(snapshot):
