@@ -1853,11 +1853,11 @@ frappe.provide("toefl_house.role_desks");
 						)).appendTo(output);
 						return;
 					}
-					$("<h3></h3>").text(text("Proposed configuration — review only")).appendTo(output);
+					$("<h3></h3>").text(text("Your course setup status")).appendTo(output);
 					$("<p></p>").text(
-						text("Missing") + ": " + Number(data.counts.create || 0) + "  ·  " +
-						text("Already matches") + ": " + Number(data.counts.match || 0) + "  ·  " +
-						text("Needs review") + ": " + Number(data.counts.review || 0)
+						text("Still to set up") + ": " + Number(data.counts.create || 0) + "  ·  " +
+						text("Already correct") + ": " + Number(data.counts.match || 0) + "  ·  " +
+						text("Needs a decision") + ": " + Number(data.counts.review || 0)
 					).appendTo(output);
 					const timetable = data.daily_timetable;
 					if (timetable && timetable.status === "OWNER_CONFIRMED" &&
@@ -1903,12 +1903,15 @@ frappe.provide("toefl_house.role_desks");
 							"Link it to the assessment policy in a separately reviewed policy version."
 						)).appendTo(output);
 					}
+					// Keep internal record IDs and operation names optional.
+					const advanced = $("<details class='th-advanced-setup'></details>").appendTo(output);
+					$("<summary></summary>").text(text("Show technical setup details")).appendTo(advanced);
 					if (Number.isInteger(data.planned_actions_count) &&
 						data.planned_actions_count >= 0 && data.counts.review === 0) {
 						$("<p></p>").text(text("First-run actions proposed, not executed") +
 							": " + data.planned_actions_count).appendTo(output);
 						const operations = data.planned_operation_counts || {};
-						const list = $("<ul></ul>").appendTo(output);
+						const list = $("<ul></ul>").appendTo(advanced);
 						Object.entries(operations).slice(0, 20).forEach(([name, count]) => {
 							$("<li></li>").text(String(name) + ": " + Number(count || 0)).appendTo(list);
 						});
@@ -1959,7 +1962,7 @@ frappe.provide("toefl_house.role_desks");
 							);
 						});
 					}
-					const table = $("<table class='table table-bordered table-condensed'></table>").appendTo(output);
+					const table = $("<table class='table table-bordered table-condensed'></table>").appendTo(advanced);
 					const head = $("<thead><tr></tr></thead>").appendTo(table).find("tr");
 					[text("Area"), text("Code"), text("Status"), text("Next step")].forEach(
 						(label) => $("<th></th>").text(label).appendTo(head)
