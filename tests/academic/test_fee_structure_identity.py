@@ -81,6 +81,7 @@ class ExistingFeeComponentsTests(unittest.TestCase):
             latest_after_hash=lambda target: "")
         context = {
             "frappe": frappe,
+            "validate_request_key": lambda value: None,
             "rules": SimpleNamespace(
                 validate_code=lambda value: value,
                 validate_fee_amount=lambda value: value),
