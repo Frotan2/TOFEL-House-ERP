@@ -109,9 +109,11 @@ KIND_ROLES = {
     "approve_fees_correction": "Finance Officer",
     "deny_fees_correction": "Finance Officer",
     # Tuition refund authorities are distinct: the requester is Finance
-    # Officer, the approver is General Manager, and any future payer is
+    # Officer, the approver is General Manager, and the payer is
     # Finance Manager. No actor is required to hold another staff role.
-    # All native tuition payouts remain blocked until formally qualified.
+    # Native tuition payouts are permitted only through the atomic,
+    # independently authorized paired credit-and-payment command; direct
+    # Student Pay outside that pair remains blocked. Production remains HOLD.
     "request_tuition_refund": "Finance Officer",
     "approve_tuition_refund": "General Manager",
     "deny_tuition_refund": "General Manager",
