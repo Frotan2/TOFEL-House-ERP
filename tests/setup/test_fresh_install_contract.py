@@ -63,6 +63,16 @@ class FreshInstituteSetupTests(unittest.TestCase):
                           "Salary Slip", "Academic Result"):
             self.assertIn(forbidden, plan["excluded"])
 
+    def test_customer_packager_refuses_runtime_data_in_release(self):
+        packager = (ROOT / "product/windows/Prepare Customer Package.ps1").read_text(
+            encoding="utf-8")
+        builder = (ROOT / "tools/release/Build Customer Installer.ps1").read_text(
+            encoding="utf-8")
+        self.assertIn('Join-Path $packageRoot "product\\data"', packager)
+        self.assertIn('throw "The customer package unexpectedly contains product data."', packager)
+        self.assertIn("Join-Path $packageRoot 'product\\data'", builder)
+        self.assertIn("throw 'Customer data must never be packaged.'", builder)
+
     def test_owner_setup_apply_requires_verified_release_preflight_and_post(self):
         backend = (ROOT / "apps/toefl_house/toefl_house/setup_presets/api.py").read_text(
             encoding="utf-8")
