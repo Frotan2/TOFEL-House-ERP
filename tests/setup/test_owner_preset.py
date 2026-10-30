@@ -25,10 +25,19 @@ class TestInitialSetupPreset(unittest.TestCase):
                       for level in p["levels"]}
         self.assertEqual((all_levels["PRE-STARTER"]["duration_months"],
                           all_levels["PRE-STARTER"]["semester_tuition_afn"]), (1, 500))
-        self.assertEqual((all_levels["TOEFL-PREP-4M"]["duration_months"],
-                          all_levels["TOEFL-PREP-4M"]["semester_tuition_afn"]), (4, 7000))
-        self.assertEqual(all_levels["EAP-3"]["semester_tuition_afn"], 2000)
-        self.assertEqual(all_levels["PREP-2"]["semester_tuition_afn"], 1000)
+        self.assertEqual((all_levels["TOEFL-PREP-2M"]["duration_months"],
+                          all_levels["TOEFL-PREP-2M"]["semester_tuition_afn"]), (2, 7000))
+        self.assertIn("TOEFL-PREP-4M",
+                      all_levels["TOEFL-PREP-2M"]["existing_site_aliases"])
+        # Owner-approved on-site GE/EAP monthly tuition is AFN 500:
+        # 1-month Pre-Starter = 500; all other 2-month GE/EAP = 1,000.
+        for program in self.preset["programs"]:
+            if program["code"] not in {"GEN-ENG", "EAP"}:
+                continue
+            for level in program["levels"]:
+                with self.subTest(level=level["code"]):
+                    self.assertEqual(level["semester_tuition_afn"],
+                                     500 * level["duration_months"])
 
     def test_continuous_and_final_are_40_60(self):
         assessment = self.preset["assessment"]
