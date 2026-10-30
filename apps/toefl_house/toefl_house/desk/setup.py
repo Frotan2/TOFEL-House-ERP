@@ -786,6 +786,7 @@ def _assessment_actions(policy, readiness):
     so they are offered everywhere the version action is.
     """
     code = policy["code"]
+    graded = policy.get("family") in ("GEN-ENG", "EAP")
     retired = readiness == "retired"
     if retired:
         primary = guided_action(
@@ -795,6 +796,11 @@ def _assessment_actions(policy, readiness):
     version_action = guided_action(
         "Course Owner", "toefl_house.academic.set_assessment_policy_version",
         "Change passing mark / retake wait", {"policy": code})
+    weight_action = (guided_action(
+        "Course Owner",
+        "toefl_house.setup_presets.owner_policy_forms.revise_grading_weights",
+        "Change skill / exam weights", {"policy": code})
+        if graded else None)
     # JSON facet commands remain guarded server APIs, but are not exposed
     # as raw schema editors in the nontechnical Owner workspace. Simple
     # scalar revisions are appended in one version through the command above.
@@ -808,12 +814,16 @@ def _assessment_actions(policy, readiness):
             "Course Owner",
             "toefl_house.setup_presets.owner_policy_forms.configure_initial_assessment",
             "Set up grading (simple form)", {"policy": code})
-        ordered = [guided_initial, retire_action]
+        ordered = ([guided_initial, retire_action]
+                   if graded else [retire_action])
     elif readiness == "configured":
         validate_action = guided_action(
             "Course Owner", "toefl_house.academic.validate_assessment_policy",
             "Validate policy", {"policy": code})
-        ordered = [validate_action, version_action, retire_action]
+        ordered = ([validate_action, version_action, weight_action,
+                    retire_action] if graded else
+                   [validate_action, retire_action])
     else:
-        ordered = [version_action, retire_action]
+        ordered = ([version_action, weight_action, retire_action]
+                   if graded else [retire_action])
     return [action for action in ordered if action]
