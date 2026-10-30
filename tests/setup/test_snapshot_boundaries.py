@@ -46,7 +46,11 @@ class FakeDB:
 
         selected = [row for row in records if accepts(row)]
         if order_by:
-            key, direction = order_by.split()[:2]
+            # D2: the product passes single-token orders ("name") as
+            # well as "field desc"; the old unpack crashed on those.
+            # A single token means ascending, like native Frappe.
+            parts = order_by.split()
+            key, direction = parts[0], (parts[1] if len(parts) > 1 else "asc")
             selected.sort(key=lambda row: row.get(key) or "",
                           reverse=direction.lower() == "desc")
         return [Row(x) for x in selected[:limit_page_length]]
@@ -73,7 +77,11 @@ class SnapshotSafetyTests(unittest.TestCase):
         db = FakeDB({"TH Academic Program": rows})
         snapshot = actual_snapshot_functions(db)["_snapshot"]()
         self.assertEqual(len(snapshot["programs"]), 21)
-        self.assertIn("X-21", snapshot["programs"])
+        # D2: range(21) yields X-0..X-20 — the 21st program is X-20,
+        # not X-21. Asserting X-21 was an off-by-one in the test, not
+        # a truncation in the product (which returns all 21 rows,
+        # not Frappe's default first 20).
+        self.assertIn("X-20", snapshot["programs"])
         self.assertIn(("TH Academic Program", 501), db.calls)
 
     def test_over_limit_refuses_instead_of_partial_preview(self):
