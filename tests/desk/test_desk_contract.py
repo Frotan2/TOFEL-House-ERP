@@ -890,6 +890,8 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                                        ["request_key", "status"]),
         "toefl_house.finance.corrections.validate_correction_policy": ("finance/corrections.py",
                                                                        ["request_key"]),
+        "toefl_house.finance.cashier.reconcile_cashier_day": ("finance/cashier.py",
+                                                                   ["request_key", "company", "date", "counts"]),
         "toefl_house.teaching.create_student_group": ("teaching/__init__.py",
                                                        ["request_key", "group_name", "program",
                                                         "academic_year", "academic_term",
