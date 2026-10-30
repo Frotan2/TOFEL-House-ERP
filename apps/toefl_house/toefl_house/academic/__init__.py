@@ -924,7 +924,8 @@ def create_assessment_policy(request_key, family, code, title,
 @frappe.whitelist(methods=["POST"])
 def set_assessment_policy_version(request_key, policy, effective_from,
                                   reason, grading_scale="", initial_facets=None,
-                                  passing_score=None, retake_wait_days=None):
+                                  passing_score=None, retake_wait_days=None,
+                                  skill_weights=None):
     """Append an effective-dated assessment policy version (D1 configuration).
 
     The version carries the reusable native Grading Scale LINK plus the
@@ -1019,6 +1020,31 @@ def set_assessment_policy_version(request_key, policy, effective_from,
                 rules.validate_policy_facets(carried)
             except ValueError as exc:
                 raise frappe.ValidationError(str(exc)) from exc
+        if skill_weights is not None:
+            if initial_facets is not None or not versions:
+                raise frappe.ValidationError(
+                    "Change skill weights only on an existing GE/EAP grading "
+                    "policy; use the initial guided form for the first version")
+            if frappe.db.get_value(PROGRAM, doc.family, "code") not in ("GEN-ENG", "EAP"):
+                raise frappe.ValidationError(
+                    "Only GE/EAP grading policies support this weight editor")
+            components = rules.parse_facet("components", carried.get("components"))
+            old_weights = rules.parse_facet("weights", carried.get("weights"))
+            if (not isinstance(skill_weights, list) or len(skill_weights) != 12
+                    or not isinstance(old_weights, list)
+                    or not isinstance(components, list)
+                    or {entry.get("component") for entry in skill_weights
+                        if isinstance(entry, dict)}
+                    != {entry.get("component") for entry in old_weights}):
+                raise frappe.ValidationError(
+                    "The proposed skill distribution must cover exactly "
+                    "the 12 existing GE/EAP assessment components")
+            try:
+                carried["weights"] = rules.canonical_facet(
+                    "weights", skill_weights, components)
+                rules.validate_policy_facets(carried)
+            except ValueError as exc:
+                raise frappe.ValidationError(str(exc)) from exc
         before = configuration_audit.latest_after_hash(doc.name)
         row = {"effective_from": clean_from,
                "grading_scale": effective_scale or None,
@@ -1050,6 +1076,8 @@ def set_assessment_policy_version(request_key, policy, effective_from,
         payload["passing_score"] = passing_score
     if retake_wait_days is not None:
         payload["retake_wait_days"] = retake_wait_days
+    if skill_weights is not None:
+        payload["skill_weights"] = skill_weights
     return configuration_audit.execute(
         "set_assessment_policy_version", request_key, payload, work)
 
