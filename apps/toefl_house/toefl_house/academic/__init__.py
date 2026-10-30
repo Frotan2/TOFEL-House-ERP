@@ -74,6 +74,11 @@ def create_program(request_key, code, title, description=""):
             clean_description = rules.validate_reason(description)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
+        # The immutable DocType metadata row is a reliable transaction
+        # mutex even before the first Academic Program exists. Serialize
+        # distinct-code creates so two owners cannot race past the duplicate
+        # title check and create parallel program families.
+        frappe.db.get_value("DocType", PROGRAM, "name", for_update=True)
         if frappe.db.exists(PROGRAM, clean_code):
             raise frappe.ValidationError(f"Program {clean_code} already exists")
         if frappe.db.exists(PROGRAM, {"title": clean_title}):
