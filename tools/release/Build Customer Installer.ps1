@@ -5,7 +5,9 @@ param(
     [Parameter(Mandatory=$true)][string]$WslInstaller,
     [Parameter(Mandatory=$true)][string]$DockerInstaller,
     [Parameter(Mandatory=$true)][string]$OutputExe,
-    [string]$RuntimeBundle = ""
+    [string]$RuntimeBundle = "",
+    [string]$SigningCertificateThumbprint = "",
+    [string]$TimestampServer = ""
 )
 $ErrorActionPreference = 'Stop'
 $staging = $null
@@ -211,7 +213,7 @@ TEST PACKAGE - NO REAL DATA. Production authorization remains REJECT.
     $stub = Join-Path $staging 'stub.exe'
     & $compiler /nologo /target:winexe /platform:x64 "/out:$stub" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll (Join-Path $PSScriptRoot 'windows\CustomerSetup.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Windows setup compilation failed.' }
-    $partial = $output + '.part-' + [guid]::NewGuid().ToString('N')
+    $partial = $output + '.part-' + [guid]::NewGuid().ToString('N') + '.exe'
     $stream = [IO.File]::Create($partial)
     try {
         foreach ($path in @($stub, $payload)) {
@@ -226,6 +228,53 @@ TEST PACKAGE - NO REAL DATA. Production authorization remains REJECT.
         $writer.Write([byte[]]$bytes)
         $writer.Flush()
     } finally { $stream.Dispose() }
+    # A finished customer installer needs publisher identity, not just its
+    # internal SHA-256 integrity footer. Unsigned EXEs are TEST artifacts only.
+    if ($SigningCertificateThumbprint) {
+        if ($SigningCertificateThumbprint -notmatch '^[0-9a-fA-F]{40}
+    $partial = $null
+    Write-Output ('Built offline TEST installer: ' + $output)
+    Write-Output 'Windows clean-machine acceptance is still required. Production authorization: REJECT.'
+} finally {
+    if ($partial -and (Test-Path -LiteralPath $partial)) { Remove-Item -LiteralPath $partial -Force }
+    if ($staging -and (Test-Path -LiteralPath $staging)) { Remove-Item -LiteralPath $staging -Recurse -Force }
+}
+ -or
+            $TimestampServer -notmatch '^https://[^/\s]+(/[^\s]*)?
+    $partial = $null
+    Write-Output ('Built offline TEST installer: ' + $output)
+    Write-Output 'Windows clean-machine acceptance is still required. Production authorization: REJECT.'
+} finally {
+    if ($partial -and (Test-Path -LiteralPath $partial)) { Remove-Item -LiteralPath $partial -Force }
+    if ($staging -and (Test-Path -LiteralPath $staging)) { Remove-Item -LiteralPath $staging -Recurse -Force }
+}
+) {
+            throw 'A code-signing certificate thumbprint and HTTPS timestamp server are required.'
+        }
+        # PE certificate-table offsets are 32-bit. Reject a file too large
+        # to Authenticode-sign safely instead of shipping an unverifiable EXE.
+        if ((Get-Item -LiteralPath $partial).Length -ge [int64]4294960000) {
+            throw 'The offline EXE is too large for a safe PE Authenticode signature; shrink the provider image.'
+        }
+        $certificate = @(Get-ChildItem 'Cert:\CurrentUser\My', 'Cert:\LocalMachine\My' -ErrorAction SilentlyContinue |
+            Where-Object { $_.Thumbprint -ieq $SigningCertificateThumbprint })
+        if ($certificate.Count -ne 1 -or -not $certificate[0].HasPrivateKey -or
+            $certificate[0].NotBefore -gt [DateTime]::UtcNow -or
+            $certificate[0].NotAfter -le [DateTime]::UtcNow -or
+            -not @($certificate[0].EnhancedKeyUsageList |
+                Where-Object { $_.ObjectId -eq '1.3.6.1.5.5.7.3.3' }).Count) {
+            throw 'A single valid provider-owned code-signing certificate with private key is required.'
+        }
+        $signed = Set-AuthenticodeSignature -LiteralPath $partial -Certificate $certificate[0] -HashAlgorithm SHA256 -TimestampServer $TimestampServer
+        if ($signed.Status -ne 'Valid') { throw 'The offline installer was not validly signed.' }
+        $identity = Get-AuthenticodeSignature -LiteralPath $partial
+        if ($identity.Status -ne 'Valid' -or
+            $identity.SignerCertificate.Thumbprint -ine $SigningCertificateThumbprint) {
+            throw 'Final installer signature verification failed.'
+        }
+    } else {
+        Write-Warning 'UNSIGNED TEST INSTALLER ONLY. Do not distribute this EXE as a final customer product.'
+    }
     # No partial installer is published at the customer-facing filename.
     [IO.File]::Move($partial, $output)
     $partial = $null
