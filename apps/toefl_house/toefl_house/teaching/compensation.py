@@ -722,7 +722,9 @@ def get_contract_revision_form(contract):
         "effective_end": str(doc.effective_end) if doc.effective_end else "",
         "skill_terms": [
             {"skill": row.skill, "unit_of_payment": row.unit_of_payment,
-             "rate": row.rate, "payable_quantity": row.payable_quantity}
+             "rate": row.rate, "payable_quantity": row.payable_quantity,
+             "minimum_amount": row.minimum_amount,
+             "maximum_amount": row.maximum_amount}
             for row in skills
         ],
         "adjustments": [
