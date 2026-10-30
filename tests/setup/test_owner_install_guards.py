@@ -38,12 +38,15 @@ def isolated_guard(name, frappe):
 
 class FakeDatabase:
     def __init__(self, counts=None, backup_enabled=0, companies=None,
-                 receivable="Receivable - TH", fee_group=True):
+                 receivable="Receivable - TH", fee_group=True,
+                 currency="AFN", receivable_company="TH"):
         self.counts = counts or {}
         self.backup_enabled = backup_enabled
         self.companies = companies if companies is not None else [types.SimpleNamespace(name="TH")]
         self.receivable = receivable
         self.fee_group = fee_group
+        self.currency = currency
+        self.receivable_company = receivable_company
 
     def count(self, doctype):
         return self.counts.get(doctype, 0)
@@ -60,7 +63,13 @@ class FakeDatabase:
         return self.companies
 
     def get_value(self, doctype, name, field):
-        return self.receivable if (doctype, field) == ("Company", "default_receivable_account") else None
+        if (doctype, field) == ("Company", "default_currency"):
+            return self.currency
+        if (doctype, field) == ("Company", "default_receivable_account"):
+            return self.receivable
+        if (doctype, field) == ("Account", "company"):
+            return self.receivable_company
+        return None
 
 
 class InstallerGateTests(unittest.TestCase):
@@ -103,7 +112,9 @@ class InstallerGateTests(unittest.TestCase):
                          FakeDatabase(companies=[]),
                          FakeDatabase(companies=[types.SimpleNamespace(name="A"),
                                                  types.SimpleNamespace(name="B")]),
-                         FakeDatabase(receivable="")):
+                         FakeDatabase(receivable=""),
+                         FakeDatabase(currency="USD"),
+                         FakeDatabase(receivable_company="Other Company")):
             with self.subTest(db=database), self.assertRaises(Invalid):
                 isolated_guard("_finance_preconditions",
                                self.frappe(True, True, database))()
