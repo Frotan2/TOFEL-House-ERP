@@ -15,9 +15,10 @@ the separate implementation/evidence/deferred/blocked states are in
 
 A Course Management ERP for the TOEFL House language institute. It supports
 intake, placement, admission, enrollment, teaching, tuition and compensation
-workflows. Academic grading and student progression decisions remain deferred
-by Owner decision D1: catalog level links exist, but no runtime grading or
-promotion rule is activated.
+workflows. Academic grading and progression are implemented as guarded workflows, but
+cannot operate without complete approved, effective-dated academic policies,
+correct native Education records and real-site acceptance. They are not
+automatically activated by the presence of a desk or a configuration record.
 
 **Foundation (native, authoritative, pinned, never patched):** Frappe,
 ERPNext, Education, Payments, HRMS. Exact commits and digests:
@@ -57,8 +58,8 @@ Applicant ─► Placement ─► Admission ─► Enrollment ─► Class / Sch
 | Teacher | Instructor, Employee | `TH Instructor Contract`, `TH Teaching Assignment`, `TH Skill` | Implemented |
 | Schedule | Course Schedule (native overlap validation) | `schedule_session`; timetable generation and make-up/postponement commands | Implemented — instructor/room/student conflicts and calendar closures are refused before any write; a later calendar change never rewrites a session that already exists |
 | Attendance | Student Attendance (submitted, native statuses) | `record_attendance`; `TH Attendance Correction Request` (+ policy) | Implemented |
-| Assessment | Assessment Plan / Result / Grading Scale | `TH Assessment Policy` stores Owner-entered reference facets; native Education records remain authoritative | Carrier and validation implemented only; no runtime grading/assessment consumer is qualified and D1 remains deferred |
-| Progression | Program Enrollment (next level) | `set_next_level` maintains a catalog link; assessment-policy progression facet stores reference terms | No automatic promotion or progression decision consumer is implemented; D1 remains deferred |
+| Assessment | Assessment Plan / Result / Grading Scale | `TH Assessment Policy` with effective-dated facets, `academic.assessment` books, marks, approval, publishing and correction | Guarded runtime implemented; requires complete policies, native integration and installed-role acceptance before real use |
+| Progression | Program Enrollment (next level) | `set_next_level` catalog links and `academic.progression` eligibility, retake and decision commands | Guarded eligibility and decision runtime implemented; no autonomous enrollment or approved production progression is implied |
 
 | Fees / Payments | Fee Structure, Fees, Sales Invoice, Payment Entry, Pricing Rule | `issue_tuition_fees`, `issue_placement_fee`, `TH Billing Policy`, `TH Discount Rule`, `TH Correction Request` (+ policy) | Implemented; prices are native configuration |
 | Teacher compensation | Additional Salary → Salary Slip / Payroll Entry | `calculate_teaching_compensation`, `TH Contract Adjustment`, `TH Adjustment Posting Policy` | Calculation implemented; posting gated by owner policy |
@@ -76,10 +77,10 @@ Business terms are never invented as silent defaults. Where a qualified
 consumer exists, values live in the canonical native record (for example,
 Fee Structure, Price List or HRMS terms) or the domain's versioned TOEFL
 House policy record; versions are append-only and changes use a guarded, receipted,
-hash-audited command. An unconfigured consumer fails closed. A carrier or
-effective-dated version is **not** proof of runtime activation: D1 academic
-grading/progression, advanced guardian/identity, transfer, tax, derived
-metrics, and calendar policy remain deferred or have no qualified consumer.
+hash-audited command. An unconfigured consumer fails closed. A carrier or effective-dated version is **not** proof of runtime activation:
+assessment/progression have guarded consumers but require qualification;
+advanced guardian/identity, unapproved transfers, tax and some derived
+metrics remain deferred, blocked or without a qualified consumer.
 Native ERPNext tax configuration remains authoritative; refund corrections use
 the separate `TH Correction Policy`. `TH Owner Operations Policy` terms
 outside the explicitly bound local backup consumer are decision inputs only.
