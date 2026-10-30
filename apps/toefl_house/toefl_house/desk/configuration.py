@@ -214,7 +214,7 @@ def work():
                                 guardian,
                                 guardian_by_policy, guardian_readiness),
                             empty_title="Nothing configured yet",
-                            empty_body="No assessment policy exists. Academic grading and progression remain deferred by D1; this readiness section reports configuration only, and nothing computes grades or promotion decisions."))
+                            empty_body="No assessment policy exists on this new site. Define and validate one in Academic Setup before using guarded grading or progression commands; configuration readiness alone does not publish results."))
     return {
         "desk": SLUG,
         "sections": sections,
@@ -578,9 +578,10 @@ def _readiness_items(policies, versions_by_policy, readiness_by_policy,
             "status": readiness.capitalize(),
             "stage": "Academic",
             "stage_definition": ("Computed configuration readiness only. "
-                                 "No runtime grading, assessment or student-"
-                                 "progression consumer is implemented/qualified; "
-                                 "Owner decision D1 remains deferred. "
+                                 "Guarded assessment and progression commands "
+                                 "exist but require complete approved policies "
+                                 "and native operational acceptance. This map "
+                                 "does not publish student results or decisions. "
                                  "Production readiness is separate and is "
                                  "never decided here."),
             "next": _readiness_next(policy, readiness, governing, rows),
