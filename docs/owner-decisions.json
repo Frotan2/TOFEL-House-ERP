@@ -677,5 +677,35 @@
       "turns_on_backup": false,
       "production_status": "HOLD_UNTIL_NATIVE_WINDOWS_FINANCE_RECOVERY_INDEPENDENT_ACCEPTANCE"
     }
+  },
+  "owner_policy_addenda_2026_10_30_daily_setup": {
+    "source": "Owner-confirmed operational details in TOEFL House ERP discussions through 2026-10-30",
+    "status": "OWNER_CONFIRMED_NOT_PRODUCTION_AUTHORIZATION",
+    "onsite_ge_eap": {
+      "monthly_fee_afn": 500,
+      "pre_starter_months": 1,
+      "other_ge_level_months": 2,
+      "eap_level_months": 2,
+      "two_month_total_afn": 1000,
+      "billing_rule": "Two independently tracked monthly dues; may be settled together or separately; never double invoice the semester total"
+    },
+    "specialist_courses": {
+      "special_speaking_months": 2,
+      "toefl_preparation_months": 2,
+      "tuition_status": "REQUIRES_OWNER_PRICE_VERIFICATION_BEFORE_LIVE_BILLING",
+      "legacy_toefl_4m_code": "EXISTING_SITE_ALIAS_ONLY_NEVER_SILENT_DUPLICATION"
+    },
+    "staff_accounts": {
+      "initial_login_count_including_existing_owner": 6,
+      "additional_owner_logins": false,
+      "official_emails_not_available": true,
+      "invent_real_email_addresses": false,
+      "send_unrequested_invitations": false,
+      "ownership_and_operational_roles_are_distinct": true
+    },
+    "delivery": {
+      "customer_target": "Single verified signed offline Windows Setup EXE, no code, registry downloads or nested ZIP extraction required of customer",
+      "production_state": "REJECT_UNTIL_EXACT_HEAD_CI_REAL_WINDOWS_INDEPENDENT_REVIEW_BACKUP_RECOVERY_ACCEPTANCE"
+    }
   }
 }
