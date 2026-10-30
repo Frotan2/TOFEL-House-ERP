@@ -64,6 +64,12 @@ on:
       # Changes to finance acceptance tests must also qualify the deliverable
       # that the customer is about to receive, not only the fast Owned suite.
       - tests/finance/**
+      # Initial course catalog/fee and Owner policy regressions must qualify
+      # the exact customer image, not only the quick Python test runner.
+      - tests/setup/**
+      # Release trigger contracts are themselves part of qualification.
+      - tests/foundation/test_release_workflow_triggers.py
+      - tests/foundation/test_windows_update_path.py
       # Security-triage deltas and their regression tests are release inputs.
       # A new advisory decision must qualify the actual customer image.
       - docs/engineering/evidence/sec-deps-01/**
