@@ -708,8 +708,11 @@ frappe.provide("toefl_house.role_desks");
 		"toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale": [
 			{ fieldname: "grading_scale_name", label: "New grading scale version name", fieldtype: "Data", reqd: 1,
 				description: "Use a new unique name for a later version. Historical scales are not overwritten." },
-			{ fieldname: "intervals", label: "Grade thresholds (prefilled JSON; grade_code and threshold)", fieldtype: "Small Text", reqd: 1,
-				description: "A grade must exist at threshold 0. Every threshold and grade code must be unique." },
+			{ fieldname: "grade_a", label: "A grade — minimum score (%)", fieldtype: "Percent", default: 90, reqd: 1 },
+			{ fieldname: "grade_b", label: "B grade — minimum score (%)", fieldtype: "Percent", default: 80, reqd: 1 },
+			{ fieldname: "grade_c", label: "C grade — minimum score (%)", fieldtype: "Percent", default: 70, reqd: 1 },
+			{ fieldname: "grade_d", label: "D grade / pass — minimum score (%)", fieldtype: "Percent", default: 60, reqd: 1,
+				description: "F is automatically assigned to scores below this minimum, down to zero." },
 			{ fieldname: "reason", label: "Reason for this grading scale", fieldtype: "Small Text", reqd: 1 },
 		],
 		"toefl_house.finance.collections.record_reception_collection": [
@@ -1331,6 +1334,19 @@ frappe.provide("toefl_house.role_desks");
 				}
 				const args = { request_key: values.request_key };
 				fields.forEach((field) => { args[field.fieldname] = values[field.fieldname]; });
+				if (action.endpoint === "toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale") {
+					const thresholds = ["grade_a", "grade_b", "grade_c", "grade_d"].map((key) =>
+						Number(values[key]));
+					if (thresholds.some((n) => !Number.isFinite(n) || n <= 0 || n > 100) ||
+						!thresholds.every((n, index) => index === 0 || thresholds[index - 1] > n)) {
+						frappe.msgprint(text("Enter four descending minimum scores: A > B > C > D > 0, each at most 100."));
+						return;
+					}
+					args.intervals = JSON.stringify(["A", "B", "C", "D", "F"].map((grade_code, index) => ({
+						grade_code, threshold: index === 4 ? 0 : thresholds[index],
+					})));
+					["grade_a", "grade_b", "grade_c", "grade_d"].forEach((key) => delete args[key]);
+				}
 				if (action.endpoint === "toefl_house.academic.set_assessment_policy_version" &&
 					!args.initial_facets) delete args.initial_facets;
 				if (ownAttendance) {
@@ -1371,7 +1387,23 @@ frappe.provide("toefl_house.role_desks");
 				});
 			},
 		});
-		const values = action.args || {};
+		const values = Object.assign({}, action.args || {});
+		// The native grading API uses structured intervals, but the customer
+		// only sees four familiar numeric grades, never a JSON editor.
+		if (action.endpoint === "toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale" &&
+			typeof values.intervals === "string") {
+			try {
+				const rows = JSON.parse(values.intervals);
+				if (Array.isArray(rows) && rows.length === 5 &&
+					["A", "B", "C", "D", "F"].every((grade, i) => rows[i] && rows[i].grade_code === grade)) {
+					["grade_a", "grade_b", "grade_c", "grade_d"].forEach((key, i) => {
+						if (Number.isFinite(Number(rows[i].threshold))) values[key] = Number(rows[i].threshold);
+					});
+				}
+			} catch (_error) {
+				// A malformed template cannot be a reason to expose raw JSON.
+			}
+		}
 		fields.forEach((field) => {
 			if (values[field.fieldname] !== undefined && values[field.fieldname] !== null && values[field.fieldname] !== "") {
 				dialog.set_value(field.fieldname, values[field.fieldname]);
