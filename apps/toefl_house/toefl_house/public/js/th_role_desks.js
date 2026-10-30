@@ -1046,11 +1046,12 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
 		],
 		"toefl_house.academic.set_assessment_policy_version": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "grading_scale", label: "Grading scale (native, optional)", fieldtype: "Data" },
-			{ fieldname: "initial_facets", label: "Initial assessment settings", fieldtype: "Small Text", hidden: 1, read_only: 1 },
+			{ fieldname: "policy", label: "Grading policy", fieldtype: "Data", read_only: 1, reqd: 1 },
+			{ fieldname: "passing_score", label: "New minimum passing mark (%)", fieldtype: "Percent", reqd: 1 },
+			{ fieldname: "retake_wait_days", label: "Minimum waiting days for one retake", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "effective_from", label: "Date when the revised values take effect", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Why the grading rule is changing", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "grading_scale", label: "New grade scale (optional; blank keeps the old one)", fieldtype: "Link", options: "Grading Scale" },
 		],
 		"toefl_house.academic.set_assessment_components": [
 			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
