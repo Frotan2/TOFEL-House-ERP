@@ -260,6 +260,12 @@ TEST PACKAGE - NO REAL DATA. Production authorization remains REJECT.
     } else {
         Write-Warning 'UNSIGNED TEST INSTALLER ONLY. Not a signed customer deliverable.'
     }
+    # Verify the ACTUAL assembled executable, including the signed footer
+    # layout and every ZIP payload byte, before publishing the output filename.
+    & $partial --verify-payload
+    if ($LASTEXITCODE -ne 0) {
+        throw 'The assembled Windows installer failed self-verification.'
+    }
     # No partial installer is published at the customer-facing filename.
     [IO.File]::Move($partial, $output)
     $partial = $null
