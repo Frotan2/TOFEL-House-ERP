@@ -1416,7 +1416,7 @@ frappe.provide("toefl_house.role_desks");
 				const allowed = action._owner_choices[kind];
 				if (!Array.isArray(allowed) || allowed.length > 100 ||
 					allowed.some((name) => typeof name !== "string" ||
-						!name || name.length > 140 || /[\\r\\n]/.test(name))) {
+						!name || name.length > 140 || /[\r\n]/.test(name))) {
 					frappe.msgprint(text("Approved master choices are invalid. No changes were submitted."));
 					return;
 				}
@@ -1427,7 +1427,7 @@ frappe.provide("toefl_house.role_desks");
 				const kind = field.options.slice("__owner_choice:".length, -2);
 				return Object.assign({}, field, {
 					fieldtype: "Select",
-					options: ["", ...action._owner_choices[kind]].join("\\n"),
+					options: ["", ...action._owner_choices[kind]].join("\n"),
 				});
 			});
 		}
