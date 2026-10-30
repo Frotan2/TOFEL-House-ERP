@@ -681,6 +681,18 @@
   "owner_policy_addenda_2026_10_30_daily_setup": {
     "source": "Latest direct Owner clarification in this chat on 2026-10-30 supersedes earlier GE/EAP combined pricing and two-month TOEFL statements.",
     "status": "OWNER_CONFIRMED_NOT_PRODUCTION_AUTHORIZATION",
+    "first_installation": {
+      "owner_confirmation_2026_10_31": "The institute has no previous operational history; this is a brand-new ERP installation, not a data migration",
+      "profile": "FRESH_SITE_NO_PRIOR_COURSE_HISTORY",
+      "legacy_data_migration": false,
+      "demo_data_in_customer_package": false,
+      "initial_students": 0,
+      "initial_attendance": 0,
+      "initial_receipts": 0,
+      "initial_posted_fees": 0,
+      "initial_assessment_results": 0,
+      "do_not_delete_future_audit_logs": true
+    },
     "onsite_ge_eap": {
       "ge_monthly_fee_afn": 500,
       "eap_monthly_fee_afn": 1000,
@@ -695,7 +707,6 @@
       "special_speaking_months": 2,
       "toefl_preparation_months": 4,
       "tuition_status": "OWNER_CONFIRMED_CONFIGURATION_ONLY_NOT_PRODUCTION_AUTHORIZATION",
-      "legacy_toefl_2m_code": "EXISTING_SITE_ALIAS_ONLY_NEVER_SILENT_DUPLICATION",
       "special_speaking_semester_count": 1,
       "special_speaking_semester_fee_afn": 2000,
       "special_speaking_semester_months_status": "OWNER_CONFIRMED",
