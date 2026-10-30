@@ -417,6 +417,39 @@ def _resolve_companies(companies):
             if row.get("name") and _company_permitted(row.get("name"))]
 
 
+def _balance_drift_after_close(snapshot, current):
+    """Compare each stored drawer with its current native GL balance.
+
+    A native cancellation may flip an existing GL Entry's is_cancelled flag
+    without inserting a newer active entry. Offset movements between drawers
+    can also leave the company total unchanged. Neither case is detected by
+    checking only post-close GL creation timestamps.
+    """
+    saved = {}
+    for row in snapshot:
+        account = row.get("account")
+        if not isinstance(account, str) or not account or account in saved:
+            return True
+        try:
+            saved[account] = _stored_money(
+                row.get("expected_amount"), f"Stored close amount for {account}")
+        except frappe.ValidationError:
+            return True
+    current_by_account = {row["account"]: row.get("closing") for row in current}
+    if (not saved or len(snapshot) != len(saved)
+            or len(current_by_account) != len(current)
+            or set(saved) != set(current_by_account)):
+        return True
+    try:
+        return any(
+            abs(saved[name] - _stored_money(
+                current_by_account[name], f"Current GL amount for {name}")) > TOLERANCE
+            for name in saved
+        )
+    except frappe.ValidationError:
+        return True
+
+
 def cashier_position(day=None, companies=None):
     """Read-only drawer position and close state, for the finance desk.
 
@@ -443,9 +476,19 @@ def cashier_position(day=None, companies=None):
         close = dict(closes[0]) if closes else None
         drift = False
         if close:
-            # A posting dated on or before the closed day but created after
-            # the close means the counted figures no longer match the books.
-            drift = bool(frappe.db.sql(
+            # Re-check every drawer against the immutable close snapshot.
+            # Cancelled historical postings may change balances without a
+            # later active GL row, and opposite movements may offset in total.
+            saved_rows = frappe.db.get_all(
+                COUNT,
+                filters={"parent": close["name"], "parenttype": DAY},
+                fields=["account", "expected_amount"],
+                limit_page_length=MAX_DRAWERS + 1,
+            )
+            drift = _balance_drift_after_close(saved_rows or [], balances)
+            # Preserve the separate audit signal for subsequent backdated GL
+            # postings, including balance-neutral postings.
+            drift = drift or bool(frappe.db.sql(
                 """select 1 from `tabGL Entry`
                    where company = %s and posting_date <= %s
                      and is_cancelled = 0 and creation > %s
