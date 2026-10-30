@@ -264,6 +264,21 @@ def reconcile_cashier_day(request_key, company, date, counts):
     ``counts`` is a list of ``{account, counted_amount, note}``. The expected
     amount is computed here from the ledger; the caller cannot supply it.
     """
+    # Frappe's HTTP form encoding may deliver an array as a serialized JSON
+    # string. Treat that as a transport detail, not a second public schema.
+    # Reject oversized payloads and non-lists before obtaining any locks.
+    if isinstance(counts, str):
+        if len(counts) > 20000:
+            raise frappe.ValidationError("Cash drawer count request is too large")
+        try:
+            import json
+            counts = json.loads(counts)
+        except (ValueError, TypeError) as exc:
+            raise frappe.ValidationError("Cash drawer counts are invalid") from exc
+    if not isinstance(counts, list):
+        raise frappe.ValidationError("Cash drawer counts must be a list")
+    if len(counts) > MAX_DRAWERS:
+        raise frappe.ValidationError("Too many cash drawers in this close")
     def work(actor):
         day = str(date or "").strip()
         try:
