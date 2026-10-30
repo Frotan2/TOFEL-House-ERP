@@ -667,15 +667,17 @@ def _grading_items(policies, versions, today):
         return [{
             "id": "grading-policy",
             "person": "Grading policy",
-            "detail": "No grading rules are configured.",
+            "detail": "This new site has no approved grading policy version yet.",
             "status": "Not decided",
             "stage": "Grading",
-            "stage_definition": ("Grade scales, cutoffs and result "
-                               "computation are owner decision D1, which "
-                               "has not been made. Nothing in the product "
-                               "computes or interprets grades."),
-            "next": ("The Course Owner decides the grading policy; until "
-                     "then desks show recorded scores only."),
+            "stage_definition": ("Grade scales, cutoffs and assessment components "
+                               "must be configured and approved for this site. "
+                               "The guarded grading and progression commands "
+                               "exist, but no missing policy is inferred and "
+                               "native operational acceptance remains required."),
+            "next": ("Create a graded GE/EAP assessment policy and complete "
+                     "the numeric Owner setup. Do not publish grades until "
+                     "the native plan, permissions and results are verified."),
             "next_role": "Course Owner",
             "waiting_since": None,
             "action": guided_action(
@@ -734,11 +736,11 @@ def _grading_items(policies, versions, today):
             "status": readiness.capitalize(),
             "stage": "Assessment policy",
             "stage_definition": ("Computed configuration readiness only. "
-                                 "Versions carry reference facets; no runtime "
-                                 "grading, assessment or student-progression "
-                                 "consumer is implemented/qualified, and D1 "
-                                 "remains deferred. Nothing here activates a "
-                                 "grade or promotion rule."),
+                                 "Guarded assessment and progression commands "
+                                 "exist, but require approved effective-dated "
+                                 "facets, native plans, permissions, and "
+                                 "real-site acceptance. Readiness here never "
+                                 "publishes grades or promotes a student."),
             "next": _assessment_next(policy, readiness, governing),
             "next_role": "Course Owner",
             "waiting_since": None,
