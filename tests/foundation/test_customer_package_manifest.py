@@ -147,6 +147,16 @@ class CustomerPackageManifestTests(unittest.TestCase):
         self.assertFalse((package / "product" / "data").exists())
         self.assertFalse((package / "apps").exists())
 
+    def test_offline_exe_provider_receives_verified_folder_without_legacy_zip(self):
+        package, archive, manifest = self.create(include_zip=False)
+        self.assertIsNone(archive)
+        self.assertTrue((package / "product/release/toefl-house-erp-app.tar").is_file())
+        self.assertTrue((package / "product/release/release-manifest.json").is_file())
+        self.assertTrue((package / "product/release/ci-gates.json").is_file())
+        self.assertEqual(manifest["source_revision"], self.revision)
+        self.assertFalse(list(package.parent.glob("*.zip")))
+        self.assertFalse(list(package.parent.glob("*.zip.sha256")))
+
     def test_delivered_zip_contains_the_working_backup_launcher_and_script(self):
         package, archive, _manifest = self.create()
         with zipfile.ZipFile(archive) as bundle:
