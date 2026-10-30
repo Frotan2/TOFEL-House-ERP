@@ -165,3 +165,43 @@ def revise_grading_weights(
         request_key=request_key, policy=policy.strip(),
         effective_from=effective_from, reason=reason,
         skill_weights=weights)
+
+
+@frappe.whitelist(methods=["GET"])
+def owner_form_options():
+    """Only safe academic/finance master names needed in nontechnical forms.
+
+    A Course Owner may configure these through guarded commands without being
+    granted broad native Education, Accounts or HRMS read/write permissions.
+    Values are bounded, read-only and restricted to explicit allowlisted types.
+    No student, staff private data, invoices or payment records are returned.
+    """
+    _owner()
+    choices = (
+        ("grading_scale", "Grading Scale", {"docstatus": 1}),
+        ("program", "TH Academic Program", {"status": "Active"}),
+        ("level", "TH Program Level", {"status": "Active"}),
+        ("academic_year", "Academic Year", {}),
+        ("fee_category", "Fee Category", {}),
+        ("company", "Company", {}),
+    )
+    result = {}
+    for key, doctype, filters in choices:
+        rows = frappe.db.get_all(
+            doctype, filters=filters, fields=["name"],
+            order_by="name asc", limit_page_length=101)
+        if len(rows) > 100:
+            raise frappe.ValidationError(
+                "Too many configuration choices to show safely; contact the "
+                "authorized Course Owner to review the master catalog")
+        names = []
+        for row in rows:
+            name = row.get("name") if isinstance(row, dict) else row.name
+            if (not isinstance(name, str) or not name
+                    or len(name) > 140 or "\\n" in name or "\\r" in name):
+                raise frappe.ValidationError(
+                    "An academic/finance option has an invalid name; "
+                    "resolve the master record before editing settings")
+            names.append(name)
+        result[key] = names
+    return result
