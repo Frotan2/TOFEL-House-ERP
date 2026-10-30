@@ -1327,6 +1327,19 @@ frappe.provide("toefl_house.role_desks");
 			});
 			return;
 		}
+		// New program and policy identifiers belong to the application, not
+		// to staff. If a short English label is necessary, the Owner supplies
+		// ordinary words; the ID is derived and validated before guarded POST.
+		const automaticCode = /^toefl_house\\..*\\.create_[a-z_]+$/.test(action.endpoint) &&
+			!(action.args && action.args.code) &&
+			fields.some((field) => field.fieldname === "code") &&
+			fields.some((field) => field.fieldname === "title");
+		if (automaticCode) {
+			fields = fields.filter((field) => field.fieldname !== "code").concat([{
+				fieldname: "short_name", label: "Short English name (only if the title is in Dari)",
+				fieldtype: "Data", description: "Optional. Use a simple English name such as SPEAKING or ACADEMIC. The system creates the internal ID.",
+			}]);
+		}
 		const contextKeys = ["outstanding", "expected_amount", "currency", "receipt_list",
 			"recipient", "tuition_bill", "refund_amount", "refund_reason", "supporting_evidence", "approved_by", "approval_evidence"];
 		const contextFacts = contextKeys.filter((key) => action.args && action.args[key] !== undefined)
@@ -1347,6 +1360,21 @@ frappe.provide("toefl_house.role_desks");
 				}
 				const args = { request_key: values.request_key };
 				fields.forEach((field) => { args[field.fieldname] = values[field.fieldname]; });
+				if (automaticCode) {
+					const source = String(values.short_name || values.title || "");
+					const slug = source.normalize("NFKD").toUpperCase()
+						.replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+					const family = action.endpoint === "toefl_house.academic.create_level"
+						? String(values.family || "").toUpperCase().replace(/[^A-Z0-9-]/g, "") + "-"
+						: "";
+					const code = (family + slug).slice(0, 32).replace(/-+$/g, "");
+					if (!/^[A-Z0-9][A-Z0-9-]{0,30}[A-Z0-9]$/.test(code) || code.includes("--")) {
+						frappe.msgprint(text("Enter a short English name for this program or policy; the system will generate its identifier."));
+						return;
+					}
+					args.code = code;
+					delete args.short_name;
+				}
 				if (action.endpoint === "toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale") {
 					const thresholds = ["grade_a", "grade_b", "grade_c", "grade_d"].map((key) =>
 						Number(values[key]));
