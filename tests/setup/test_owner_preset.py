@@ -175,6 +175,20 @@ class TestInitialSetupPreset(unittest.TestCase):
         self.assertIn("PRE-STARTER", issues)
         self.assertIn("PRE-STARTER@1405", issues)
 
+    def test_existing_level_with_missing_native_curriculum_requires_review(self):
+        snapshot = {"programs": {"GEN-ENG": {"title": "General English"}},
+                    "levels": {"STARTER": {
+                        "title": "Starter", "family": "GEN-ENG",
+                        "duration_months": 2, "native_program": "N-STARTER",
+                        "curriculum_ready": False, "next_level": "PREP-1",
+                        "status": "Active"}}}
+        preview = preview_catalog(snapshot, self.preset)
+        row = next(item for item in preview["actions"]
+                   if item["kind"] == "level" and item["code"] == "STARTER")
+        self.assertEqual(row["status"], "review")
+        self.assertIn("Course curriculum", row["details"])
+        self.assertFalse(preview["ready_to_apply"])
+
     def test_legacy_level_code_never_leads_to_duplicate_program(self):
         state = {"programs": {"GEN-ENG": {"title": "General English"}},
                  "levels": {"PREP-ONE": {
