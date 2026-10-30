@@ -542,6 +542,16 @@ def work():
         "action": guided_action("Course Owner", "toefl_house.academic.create_academic_year",
                                 "Define academic year", {}),
     }, {
+        "id": "new-room",
+        "person": "Define a teaching room",
+        "detail": "A native Room with an explicit seating limit.",
+        "status": "Ready", "stage": "Setup",
+        "stage_definition": "Room capacity is checked when scheduling a class.",
+        "next": "Enter the room name, seating limit and reason.",
+        "next_role": "Course Owner", "waiting_since": None,
+        "action": guided_action("Course Owner", "toefl_house.academic.create_room",
+                                "Define teaching room", {}),
+    }, {
         "id": "new-fee-type",
         "person": "Define a fee type",
         "detail": "A Fee Category record; Education creates its accounting Item.",

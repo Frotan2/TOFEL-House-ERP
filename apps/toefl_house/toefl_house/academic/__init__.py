@@ -134,10 +134,14 @@ def create_level(request_key, family, code, title, sequence,
                 family_of=lambda c: _family_of(c),
                 next_of=lambda c: _next_of(c))
 
+        native_title = f"{family_doc.title} — {clean_title}"
+        course = frappe.get_doc({"doctype": "Course", "course_name": native_title})
+        course.insert(ignore_permissions=True)
         native = frappe.get_doc({
             "doctype": NATIVE_PROGRAM,
-            "program_name": f"{family_doc.title} — {clean_title}",
+            "program_name": native_title,
             "program_abbreviation": clean_code,
+            "courses": [{"course": course.name, "required": 1}],
         })
         native.insert(ignore_permissions=True)
         doc = frappe.get_doc({
@@ -163,6 +167,33 @@ def create_level(request_key, family, code, title, sequence,
         {"family": family, "code": code, "title": title, "sequence": sequence,
          "duration_value": duration_value, "duration_unit": duration_unit,
          "effective_from": effective_from, "next_level": next_level}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def create_room(request_key, room_name, seating_capacity, reason):
+    """Create a new native teaching room without broad native write grants."""
+    def work(actor):
+        try:
+            clean_name = rules.validate_title(room_name, "Room name")
+            clean_capacity = rules.validate_room_capacity(seating_capacity)
+            clean_reason = configuration_rules.validate_change_reason(reason)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        # Native Room uses an internal naming series, not room_name as its
+        # identity. Serialize this narrow creation path before label lookup.
+        frappe.db.get_value("DocType", "Room", "name", for_update=True)
+        if frappe.db.exists("Room", {"room_name": clean_name}):
+            raise frappe.ValidationError("This room already exists; its capacity was not changed")
+        doc = frappe.get_doc({"doctype": "Room", "room_name": clean_name,
+                              "seating_capacity": clean_capacity})
+        doc.insert(ignore_permissions=True)
+        result = {"name": doc.name, "room_name": clean_name,
+                  "seating_capacity": clean_capacity, "reason": clean_reason}
+        return result, {"target": f"Room:{doc.name}", "before_hash": "",
+                        "after_hash": digest(result)}
+    return configuration_audit.execute(
+        "create_room", request_key,
+        {"room_name": room_name, "seating_capacity": seating_capacity, "reason": reason}, work)
 
 
 @frappe.whitelist(methods=["POST"])

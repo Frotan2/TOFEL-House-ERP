@@ -28,3 +28,21 @@ runs in the canonical Native gate via `tools/native/initial_assessment.py`.
 The existing Owner installation was not patched with this source helper. Apply
 its approved assessment configuration only after the replacement image and
 preserving update are qualified. Production remains NO-GO.
+
+
+## Required native course and room setup
+
+New levels now create a native integrated Course and the required Program Course
+link inside the same audited Owner creation command. A new Program with no
+Course could not schedule a lesson; existing Program identities and historical
+curricula are not changed by this factory correction.
+
+The Academic Setup desk now offers **Define teaching room**. The guarded Owner
+command creates a new native Room with an explicit positive seating capacity
+and change reason, without granting broad native write permissions. Room uses
+an internal naming series; duplicate checks use its room_name, serialized under
+the native Room DocType row lock. Duplicate names never overwrite capacity.
+Native qualification verifies real Course links, room creation/replay, duplicate
+preservation, invalid capacity refusal and non-Owner refusal, then rolls back
+all fixture records. The capacity ceiling is an engineering typo guard, not a
+new institute policy. Use the verified room-specific operating limit.

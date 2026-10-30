@@ -1025,6 +1025,11 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "title", label: "Title", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
 		],
+		"toefl_house.academic.create_room": [
+			{ fieldname: "room_name", label: "Room name", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "seating_capacity", label: "Maximum students", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+		],
 		"toefl_house.academic.set_assessment_policy_version": [
 			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },

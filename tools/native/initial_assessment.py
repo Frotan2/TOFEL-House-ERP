@@ -16,7 +16,7 @@ def run(owner_user, forbidden_user):
 
     assert site_mode() == SYNTHETIC and not frappe.conf.get("toefl_house_production_active")
     original_user = frappe.session.user
-    tables = ("TH Academic Program", "TH Program Level", "Program", "Grading Scale",
+    tables = ("TH Academic Program", "TH Program Level", "Program", "Program Course", "Course", "Room", "Grading Scale",
               "Grading Scale Interval", "TH Assessment Policy", "TH Assessment Policy Version",
               "TH Configuration Operation", "TH Configuration Audit Event", "Fees", "GL Entry")
 
@@ -43,6 +43,14 @@ def run(owner_user, forbidden_user):
         for code, parent in ((level, family), (foreign_level, foreign_family)):
             academic.create_level(key + code.lower(), parent, code, code, 1,
                                   2, "Solar Hijri Month", day)
+            native_program = frappe.db.get_value("TH Program Level", code, "native_program")
+            native = frappe.get_doc("Program", native_program)
+            assert len(native.courses) == 1 and native.courses[0].required
+            assert frappe.db.exists("Course", native.courses[0].course)
+        room_name = "Synthetic initial room " + token
+        room = academic.create_room(key + "room", room_name, 15, reason)
+        assert room == academic.create_room(key + "room", room_name, 15, reason)
+        assert int(frappe.db.get_value("Room", room["name"], "seating_capacity")) == 15
         create_owner_grading_scale(key + "scale", scale,
                                    [{"grade_code": "P", "threshold": 60},
                                     {"grade_code": "F", "threshold": 0}], reason)
@@ -82,6 +90,9 @@ def run(owner_user, forbidden_user):
                 frappe.db.rollback(save_point="initial_assessment_negative")
 
         next_day = (date.fromisoformat(day) + timedelta(days=1)).isoformat()
+        refused(lambda: academic.create_room(key + "room-duplicate", room_name, 30, reason))
+        assert int(frappe.db.get_value("Room", room["name"], "seating_capacity")) == 15
+        refused(lambda: academic.create_room(key + "room-zero", room_name + " zero", 0, reason))
         refused(lambda: academic.set_assessment_policy_version(
             key + "rewrite", policy, next_day, reason, scale, facets))
         assert len(frappe.get_doc("TH Assessment Policy", policy).versions) == 1
@@ -93,6 +104,8 @@ def run(owner_user, forbidden_user):
             key + "grade", bad_policy, day, reason, scale, bad_grade))
         assert not frappe.get_doc("TH Assessment Policy", bad_policy).versions
         frappe.set_user(forbidden_user)
+        refused(lambda: academic.create_room(key + "room-unauthorized", room_name + " denied", 15, reason),
+                frappe.PermissionError)
         refused(lambda: academic.set_assessment_policy_version(
             key + "unauthorized", bad_policy, day, reason, scale, facets), frappe.PermissionError)
         frappe.set_user(owner_user)
@@ -103,6 +116,9 @@ def run(owner_user, forbidden_user):
         assert frappe.db.get_value("TH Configuration Operation", operation, "input_hash") == request_digest(
             original_payload, frappe.conf.get("encryption_key"))
         return {"native_database": True, "one_complete_initial_version": True,
+                "new_levels_have_required_native_courses": True,
+                "native_room_creation_replay_and_duplicate_preservation": True,
+                "invalid_capacity_and_non_owner_room_creation_refused": True,
                 "same_key_replay": True, "historical_rewrite_refused": True,
                 "foreign_family_refused": True, "unknown_grade_refused": True,
                 "non_owner_refused": True, "old_receipt_payload_compatible": True,

@@ -456,6 +456,7 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "set_assessment_mapping": "business_policy",
             "create_program": "business_policy",
             "create_level": "business_policy",
+            "create_room": "business_policy",
             "set_level_duration": "business_policy",
             "set_next_level": "business_policy",
             "set_program_status": "business_policy",

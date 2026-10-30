@@ -83,6 +83,15 @@ def validate_sequence(value):
     return value
 
 
+def validate_room_capacity(value):
+    """Positive native room capacity; no unlimited or guessed seating."""
+    if isinstance(value, str) and value.strip().isdigit():
+        value = int(value.strip())
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 1000:
+        raise ValueError("Room capacity must be a whole number between 1 and 1000")
+    return value
+
+
 def validate_duration_value(value, unit):
     if isinstance(value, str):
         try:
