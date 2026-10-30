@@ -1034,7 +1034,8 @@ class SetupDeskWorldTests(unittest.TestCase):
     readiness for the current academic year.
     """
 
-    def _run(self, *, mismatch=False, no_year=False, no_fee_types=False):
+    def _run(self, *, mismatch=False, no_year=False, no_fee_types=False,
+             enrollment_history=False):
         world = {
             "TH Academic Program": [{
                 "name": "PROG-GEN", "code": "GEN-ENG", "title": "General English",
@@ -1101,6 +1102,21 @@ class SetupDeskWorldTests(unittest.TestCase):
             world["Academic Year"] = []
         if no_fee_types:
             world["Fee Category"] = []
+        if enrollment_history:
+            # Test-only synthetic course activity, never bundled for a customer.
+            world["TH Level Duration"].append({
+                "name": "DUR-2", "parent": "LVL-A1",
+                "parenttype": "TH Program Level",
+                "duration_value": 1, "duration_unit": "Month",
+                "effective_from": "2026-05-01", "superseded_on": None,
+                "reason": "updated duration", "set_by": "owner@example.com",
+            })
+            world["Program Enrollment"] = [
+                {"name": "ENR-OLD", "program": "NATIVE-A1",
+                 "enrollment_date": "2026-03-01", "docstatus": 1},
+                {"name": "ENR-NEW", "program": "NATIVE-A1",
+                 "enrollment_date": "2026-06-01", "docstatus": 1},
+            ]
 
         def world_get_all(doctype, filters=None, fields=None, order_by=None,
                           limit_start=None, limit_page_length=None, **kwargs):
@@ -1108,7 +1124,9 @@ class SetupDeskWorldTests(unittest.TestCase):
                                 list(fields or []) + list((filters or {}).keys()))
             rows = world.get(doctype, [])
             filters = filters or {}
-            return [dict(row) for row in rows
+            return [({key: row.get(key) for key in fields}
+                     if doctype == "Program Enrollment" and fields
+                     else dict(row)) for row in rows
                     if all(row.get(key) == value
                            for key, value in filters.items()
                            if key in row or value is not None)]
@@ -1126,6 +1144,19 @@ class SetupDeskWorldTests(unittest.TestCase):
     def _item(payload, sid, item_id):
         items = SetupDeskWorldTests._section(payload, sid)["items"]
         return next(item for item in items if item["id"] == item_id)
+
+    def test_duration_changes_preserve_enrollment_period_reporting(self):
+        payload = self._run(enrollment_history=True)
+        level = self._item(payload, "levels", "GEN-A1")
+        self.assertIn("History: 1 enrolled under 2 months (from 2026-01-01)",
+                      level["next"])
+        self.assertIn("1 enrolled under 1 month (from 2026-05-01)",
+                      level["next"])
+
+    def test_fresh_course_does_not_invent_enrollment_history(self):
+        # First-time customer sites must never contain fabricated activity.
+        level = self._item(self._run(), "levels", "GEN-A1")
+        self.assertNotIn("History:", level["next"])
 
     def test_progression_chain_reads_in_level_order(self):
         payload = self._run()
