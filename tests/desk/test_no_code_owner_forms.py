@@ -76,6 +76,31 @@ class NoCodeOwnerFormsTests(unittest.TestCase):
         self.assertIn('routeToSource(route)', self.gui)
         self.assertIn("never a request to edit JSON, scripts or database tables", self.gui)
 
+    def test_teacher_marks_attendance_only_through_student_dropdowns(self):
+        self.assertIn(
+            'fields.filter((field) => field.fieldname !== "statuses")',
+            self.gui)
+        self.assertIn('statuses[member.student] = values[key];', self.gui)
+        self.assertIn('args.statuses = JSON.stringify(statuses);', self.gui)
+        self.assertIn("new Set(ids).size !== ids.length", self.gui)
+
+    def test_no_code_weight_forms_are_shared_and_validated(self):
+        self.assertIn("const ACADEMIC_WEIGHT_FIELDS = Object.freeze(", self.gui)
+        self.assertIn("...ACADEMIC_WEIGHT_FIELDS", self.gui)
+        self.assertIn('fieldname: "continuous_percent"', self.gui)
+        self.assertIn('fieldname: "vocabulary"', self.gui)
+        self.assertIn("values_.reduce((sum, value) => sum + value, 0) !== 100",
+                      self.gui)
+        self.assertIn("Change skill / exam weights", self.setup)
+
+    def test_native_owner_master_choices_and_retries_remain_secure(self):
+        self.assertIn("owner_policy_forms.owner_form_options", self.gui)
+        self.assertIn('type: "GET"', self.gui)
+        self.assertIn("const requestKey = newRequestKey();", self.gui)
+        self.assertIn("const args = { request_key: requestKey };", self.gui)
+        self.assertIn("__owner_choice:grading_scale__", self.gui)
+        self.assertIn("__owner_choice:fee_category__", self.gui)
+
     def test_native_assessment_backend_still_validates_versioned_changes(self):
         source = ASSESSMENT.read_text(encoding="utf-8")
         self.assertIn("passing_score=None, retake_wait_days=None", source)
