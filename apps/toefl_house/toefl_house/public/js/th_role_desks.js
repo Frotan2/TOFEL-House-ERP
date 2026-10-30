@@ -1352,14 +1352,14 @@ frappe.provide("toefl_house.role_desks");
 			for (let index = 1; index <= 6; index += 1) {
 				fields = fields.concat([
 					{ fieldname: "skill_" + index, label: "Pay skill " + index + " — optional", fieldtype: "Link", options: "TH Skill" },
-					{ fieldname: "skill_unit_" + index, label: "Skill " + index + " — payment unit", fieldtype: "Select", options: "\\nSkill\\nClass\\nSession" },
+					{ fieldname: "skill_unit_" + index, label: "Skill " + index + " — payment unit", fieldtype: "Select", options: "\nSkill\nClass\nSession" },
 					{ fieldname: "skill_rate_" + index, label: "Skill " + index + " — AFN per unit", fieldtype: "Currency" },
 					{ fieldname: "skill_quantity_" + index, label: "Skill " + index + " — units payable", fieldtype: "Float" },
 				]);
 			}
 			for (let index = 1; index <= 2; index += 1) {
 				fields = fields.concat([
-					{ fieldname: "adjustment_type_" + index, label: "Adjustment " + index + " — optional", fieldtype: "Select", options: "\\nBonus\\nDeduction" },
+					{ fieldname: "adjustment_type_" + index, label: "Adjustment " + index + " — optional", fieldtype: "Select", options: "\nBonus\nDeduction" },
 					{ fieldname: "adjustment_amount_" + index, label: "Adjustment " + index + " — AFN", fieldtype: "Currency" },
 					{ fieldname: "adjustment_date_" + index, label: "Adjustment " + index + " — date", fieldtype: "Date" },
 					{ fieldname: "adjustment_approver_" + index, label: "Adjustment " + index + " — approved by", fieldtype: "Link", options: "User" },
