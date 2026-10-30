@@ -28,6 +28,11 @@ class FakeDB:
     def exists(self, doctype, name):
         return any(row.get("name") == name for row in self.datasets.get(doctype, []))
 
+    def get_value(self, doctype, name, field):
+        row = next((item for item in self.datasets.get(doctype, [])
+                    if item.get("name") == name), None)
+        return row.get(field) if row else None
+
     def get_all(self, doctype, *, fields=None, filters=None,
                 order_by=None, limit_page_length=None, **kwargs):
         self.calls.append((doctype, limit_page_length))
@@ -231,6 +236,28 @@ class SnapshotSafetyTests(unittest.TestCase):
         state = actual_snapshot_functions(db)["_snapshot"]()
         self.assertIn("1405", state["tuition"]["PRE-STARTER"])
         self.assertIsNone(state["tuition"]["PRE-STARTER"]["1405"])
+
+    def test_matching_tuition_requires_native_company_and_same_company_account(self):
+        records = {
+            "TH Program Level": [Row(name="L-1", code="STARTER",
+                title="Starter", family="F-1", native_program="N-1",
+                next_level="", status="Active")],
+            "Company": [Row(name="TOEFL House")],
+            "Account": [Row(name="Receivable - TH", company="TOEFL House")],
+            "Fee Structure": [Row(name="FS-1", program="N-1",
+                academic_year="1405", docstatus=0,
+                company="TOEFL House", receivable_account="Receivable - TH")],
+            "Fee Component": [Row(parent="FS-1", parenttype="Fee Structure",
+                fees_category="Semester Tuition Fee", amount=1000)],
+        }
+        state = actual_snapshot_functions(FakeDB(records))["_snapshot"]()
+        self.assertEqual(state["tuition"]["STARTER"]["1405"], 1000)
+        records["Account"][0]["company"] = "Other Company"
+        wrong = actual_snapshot_functions(FakeDB(records))["_snapshot"]()
+        self.assertIsNone(wrong["tuition"]["STARTER"]["1405"])
+        records["Fee Structure"][0]["receivable_account"] = "Missing Account"
+        missing = actual_snapshot_functions(FakeDB(records))["_snapshot"]()
+        self.assertIsNone(missing["tuition"]["STARTER"]["1405"])
 
     def test_submitted_fee_structure_is_conflict_not_missing(self):
         db = FakeDB({
