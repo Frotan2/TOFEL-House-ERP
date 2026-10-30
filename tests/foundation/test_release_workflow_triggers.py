@@ -45,6 +45,13 @@ class ReleaseImageTriggerContract(unittest.TestCase):
         self.assertIn("tools/native/native_checks.py", paths)
         self.assertIn("tests/finance/**", paths)
 
+    def test_owner_setup_policy_regressions_trigger_product_image(self):
+        paths = push_paths("product-image.yml")
+        self.assertIn("tests/setup/**", paths)
+        self.assertIn("docs/owner-decisions.json", paths)
+        self.assertIn("tests/foundation/test_release_workflow_triggers.py", paths)
+        self.assertIn("tests/foundation/test_windows_update_path.py", paths)
+
     def test_release_critical_fix_branches_and_observer_probe_are_qualified(self):
         workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
         self.assertIn("- 'fix/**'", workflow)
