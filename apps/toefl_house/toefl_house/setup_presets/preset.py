@@ -223,10 +223,19 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
                                       and existing.get("status", "Active") == "Active"
                                       and ("native_program" not in existing
                                            or bool(existing["native_program"]))
+                                      # The live snapshot explicitly verifies
+                                      # that an old native Program has Courses.
+                                      # Legacy pure planner fixtures without
+                                      # this optional fact remain compatible.
+                                      and existing.get("curriculum_ready", True) is True
                                       and ("next_level" not in existing
                                            or (existing["next_level"] or "") == expected_next))
                           else "review")
-                details = "Check family, name and effective-dated duration"
+                details = ("Existing native Program has no complete linked "
+                           "Course curriculum; review and repair the original "
+                           "Program without creating a duplicate"
+                           if existing and existing.get("curriculum_ready") is False
+                           else "Check family, name and effective-dated duration")
             steps.append(_action("level", level_code, status, details))
             for year in preset["academic_years"]:
                 actual = (tuition.get(level_code) or {}).get(year["name"])
