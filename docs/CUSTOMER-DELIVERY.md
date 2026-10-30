@@ -6,21 +6,31 @@ backup/restore and real-machine qualification holds take precedence over
 this packaging guide. This document describes the installation capability,
 not permission to operate real student, payroll or financial data.
 
-For the exact tested source, current image-inclusive Actions download and
-remaining acceptance gates, use the
-[2026-10-25 delivery checkpoint](engineering/DELIVERY-READINESS-2026-10-25.md).
-That download is a **TEST PACKAGE - NO REAL DATA**, not a published GitHub
-Release or permission to install over an existing Owner site.
+Dated delivery checkpoints and earlier GitHub Actions downloads are retained
+as engineering evidence only. No historic build qualifies the current source
+head. See [documentation authority](DOCUMENTATION.md) and the
+[single-file delivery contract](engineering/SINGLE-FILE-CUSTOMER-DELIVERY.md).
 
-## The customer experience
+## Final customer experience — mandatory, not yet qualified
 
-The customer receives a dedicated **TOEFL-House-ERP-Customer-...** folder
-prepared by the provider. The provider has already built the application
-image and included it in the delivery, so the customer does not use Git,
-clone a repository, type commands or build Frappe from source.
-The provider also compiles the browser bundles. Startup restores the compiled
-manifest and assets from the image; first boot still installs native database
-records and runs migrations, which must be timed during customer acceptance.
+The customer receives **one signed, offline Windows Setup EXE**, containing
+the qualified application image, pinned prerequisite installers, and one
+graphical installation and launcher experience. The provider prepares every
+dependency and performs source verification, signing, and image assembly.
+A customer must never build an image, use Git, enter PowerShell commands,
+download runtime installers or unpack nested ZIP folders.
+
+A clean-machine Windows acceptance, code-signing verification, real first
+boot, update/rollback and independent recovery rehearsal are still required
+before the provider may call this a finished release.
+
+## Engineering-only folder/launcher fallback
+
+The legacy image-inclusive folder and `TOEFL House ERP.vbs` described in
+the steps below may be used only for **provider-supervised testing on a clean
+disposable Windows PC**. They are not the accepted final delivery. Startup
+uses the precompiled application and still requires native database setup
+and migrations, which must be timed during real Windows acceptance.
 
 1. Use a compatible 64-bit Windows 10/11 computer with enough free disk space
    for Docker Desktop, the application image, the database and backups.
@@ -46,7 +56,7 @@ records and runs migrations, which must be timed during customer acceptance.
    native **Course Owner** account for normal administration. Do not email
    or photograph the credentials. Owner policies and real-operation mode
    remain subject to the documented release hold.
-5. Select **Owner Handbook** for the complete no-code English/Dari operating
+5. Select **Owner Handbook** for the complete no-code English operating
    and safety guide, and **Owner Readiness Guide** for a no-command, read-only
    first-check plus a separate synthetic Windows test checklist. Neither lifts
    the backup/restore hold or authorizes production.
