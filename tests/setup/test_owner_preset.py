@@ -112,8 +112,14 @@ class TestInitialSetupPreset(unittest.TestCase):
         result = preview_catalog(state, self.preset)
         self.assertEqual(state, copy_before)
         self.assertFalse(result["ready_to_apply"])
-        self.assertEqual(result["counts"]["create"], 28)
+        self.assertEqual(result["counts"]["create"], 26)
+        self.assertEqual(result["counts"]["deferred"], 2)
         self.assertEqual(result["counts"]["review"], 0)
+        deferred = {row["code"] for row in result["actions"]
+                    if row["status"] == "deferred"}
+        self.assertEqual(deferred, {"SPECIAL-SPEAKING-2M@1405", "TOEFL-PREP-2M@1405"})
+        self.assertTrue(any("Specialist tuition" in message for message
+                            in result["pending_decisions"]))
 
     def test_existing_fee_category_without_native_item_requires_review(self):
         snapshot = {"fee_categories": ["Semester Tuition Fee"],
