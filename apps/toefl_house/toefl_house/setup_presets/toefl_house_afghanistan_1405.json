@@ -114,7 +114,7 @@
           "title": "EAP Level 1",
           "sequence": 1,
           "duration_months": 2,
-          "semester_tuition_afn": 1000,
+          "semester_tuition_afn": 2000,
           "existing_site_aliases": [
             "EAP-ONE"
           ]
@@ -124,7 +124,7 @@
           "title": "EAP Level 2",
           "sequence": 2,
           "duration_months": 2,
-          "semester_tuition_afn": 1000,
+          "semester_tuition_afn": 2000,
           "existing_site_aliases": [
             "EAP-TWO"
           ]
@@ -134,7 +134,7 @@
           "title": "EAP Level 3",
           "sequence": 3,
           "duration_months": 2,
-          "semester_tuition_afn": 1000,
+          "semester_tuition_afn": 2000,
           "existing_site_aliases": [
             "EAP-THREE"
           ]
@@ -144,7 +144,7 @@
           "title": "EAP Level 4",
           "sequence": 4,
           "duration_months": 2,
-          "semester_tuition_afn": 1000,
+          "semester_tuition_afn": 2000,
           "existing_site_aliases": [
             "EAP-FOUR"
           ]
@@ -178,7 +178,7 @@
       "assessment_skill_weights_percent": {
         "speaking": 100
       },
-      "initial_tuition_approved": false
+      "initial_tuition_approved": true
     },
     {
       "code": "TOEFL-PREP",
@@ -186,13 +186,13 @@
       "progression_kind": "independent",
       "levels": [
         {
-          "code": "TOEFL-PREP-2M",
+          "code": "TOEFL-PREP-4M",
           "title": "TOEFL Preparation",
           "sequence": 1,
-          "duration_months": 2,
+          "duration_months": 4,
           "semester_tuition_afn": 7000,
           "existing_site_aliases": [
-            "TOEFL-PREP-4M"
+            "TOEFL-PREP-2M"
           ]
         }
       ],
@@ -203,7 +203,7 @@
         "writing": 25,
         "reading": 25
       },
-      "initial_tuition_approved": false
+      "initial_tuition_approved": true
     }
   ],
   "cross_program_transition": {

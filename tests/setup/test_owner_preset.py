@@ -49,19 +49,20 @@ class TestInitialSetupPreset(unittest.TestCase):
                       for level in p["levels"]}
         self.assertEqual((all_levels["PRE-STARTER"]["duration_months"],
                           all_levels["PRE-STARTER"]["semester_tuition_afn"]), (1, 500))
-        self.assertEqual((all_levels["TOEFL-PREP-2M"]["duration_months"],
-                          all_levels["TOEFL-PREP-2M"]["semester_tuition_afn"]), (2, 7000))
-        self.assertIn("TOEFL-PREP-4M",
-                      all_levels["TOEFL-PREP-2M"]["existing_site_aliases"])
-        # Owner-approved on-site GE/EAP monthly tuition is AFN 500:
-        # 1-month Pre-Starter = 500; all other 2-month GE/EAP = 1,000.
+        self.assertEqual((all_levels["TOEFL-PREP-4M"]["duration_months"],
+                          all_levels["TOEFL-PREP-4M"]["semester_tuition_afn"]), (4, 7000))
+        self.assertIn("TOEFL-PREP-2M",
+                      all_levels["TOEFL-PREP-4M"]["existing_site_aliases"])
+        # Owner correction: GE is 500/month; EAP is 1,000/month.
+        # Collection is per semester, never an additional monthly invoice.
         for program in self.preset["programs"]:
             if program["code"] not in {"GEN-ENG", "EAP"}:
                 continue
             for level in program["levels"]:
                 with self.subTest(level=level["code"]):
                     self.assertEqual(level["semester_tuition_afn"],
-                                     500 * level["duration_months"])
+                                     (500 if program["code"] == "GEN-ENG" else 1000)
+                                     * level["duration_months"])
 
     def test_continuous_and_final_are_40_60(self):
         assessment = self.preset["assessment"]
@@ -136,13 +137,13 @@ class TestInitialSetupPreset(unittest.TestCase):
         result = preview_catalog(state, self.preset)
         self.assertEqual(state, copy_before)
         self.assertFalse(result["ready_to_apply"])
-        self.assertEqual(result["counts"]["create"], 26)
-        self.assertEqual(result["counts"]["deferred"], 2)
+        self.assertEqual(result["counts"]["create"], 28)
+        self.assertEqual(result["counts"]["deferred"], 0)
         self.assertEqual(result["counts"]["review"], 0)
         deferred = {row["code"] for row in result["actions"]
                     if row["status"] == "deferred"}
-        self.assertEqual(deferred, {"SPECIAL-SPEAKING-2M@1405", "TOEFL-PREP-2M@1405"})
-        self.assertTrue(any("Specialist tuition" in message for message
+        self.assertEqual(deferred, set())
+        self.assertFalse(any("Specialist tuition" in message for message
                             in result["pending_decisions"]))
 
     def test_existing_fee_category_without_native_item_requires_review(self):

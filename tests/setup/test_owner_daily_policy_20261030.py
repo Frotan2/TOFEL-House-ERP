@@ -1,7 +1,7 @@
 """Owner-approved current daily setup contracts, not production activation.
 
 These offline checks prevent an old candidate preset from silently bringing
-back double EAP tuition or four-month TOEFL defaults. No staff account,
+back the superseded EAP tuition or two-month TOEFL defaults. No staff account,
 student data, or financial document is created here.
 """
 import json
@@ -21,17 +21,19 @@ class OwnerDailyPolicy(unittest.TestCase):
             encoding="utf-8"))["owner_policy_addenda_2026_10_30_daily_setup"]
         cls.preset = load_preset()
 
-    def test_ge_eap_monthly_500_never_charged_as_2000_semester(self):
+    def test_ge_and_eap_have_distinct_owner_confirmed_semester_fees(self):
         approved = self.policy["onsite_ge_eap"]
-        self.assertEqual(approved["monthly_fee_afn"], 500)
-        self.assertEqual(approved["two_month_total_afn"], 1000)
+        self.assertEqual(approved["ge_monthly_fee_afn"], 500)
+        self.assertEqual(approved["eap_monthly_fee_afn"], 1000)
+        self.assertEqual(approved["ge_two_month_total_afn"], 1000)
+        self.assertEqual(approved["eap_two_month_total_afn"], 2000)
         for program in self.preset["programs"]:
             if program["code"] not in ("GEN-ENG", "EAP"):
                 continue
             for level in program["levels"]:
                 with self.subTest(level=level["code"]):
                     self.assertEqual(level["semester_tuition_afn"],
-                                     approved["monthly_fee_afn"] * level["duration_months"])
+                                     approved["ge_monthly_fee_afn" if program["code"] == "GEN-ENG" else "eap_monthly_fee_afn"] * level["duration_months"])
                     self.assertIn(level["duration_months"], (1, 2))
 
     def test_specialist_duration_and_legacy_code_not_misrepresented(self):
@@ -39,13 +41,17 @@ class OwnerDailyPolicy(unittest.TestCase):
         programs = {item["code"]: item for item in self.preset["programs"]}
         self.assertEqual(programs["SPECIAL-SPEAKING"]["levels"][0]["duration_months"],
                          specialist["special_speaking_months"])
+        self.assertEqual(specialist["special_speaking_semester_count"], 1)
+        self.assertEqual(specialist["special_speaking_semester_fee_afn"], 2000)
+        self.assertEqual(specialist["toefl_semester_fee_afn"], 7000)
+        self.assertTrue(all(p["initial_tuition_approved"] for p in self.preset["programs"]))
         toefl = programs["TOEFL-PREP"]["levels"][0]
-        self.assertEqual(toefl["code"], "TOEFL-PREP-2M")
+        self.assertEqual(toefl["code"], "TOEFL-PREP-4M")
         self.assertEqual(toefl["duration_months"],
                          specialist["toefl_preparation_months"])
-        self.assertIn("TOEFL-PREP-4M", toefl["existing_site_aliases"])
+        self.assertIn("TOEFL-PREP-2M", toefl["existing_site_aliases"])
         self.assertEqual(specialist["tuition_status"],
-                         "REQUIRES_OWNER_PRICE_VERIFICATION_BEFORE_LIVE_BILLING")
+                         "OWNER_CONFIRMED_CONFIGURATION_ONLY_NOT_PRODUCTION_AUTHORIZATION")
 
     def test_initial_staff_and_production_are_not_silently_enabled(self):
         staff = self.policy["staff_accounts"]

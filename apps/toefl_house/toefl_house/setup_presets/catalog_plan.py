@@ -41,7 +41,7 @@ def prepare_catalog_plan(snapshot: dict, preset: dict | None = None) -> dict:
                                 "title": level["title"],
                                 "sequence": level["sequence"],
                                 "duration_value": level["duration_months"],
-                                "duration_unit": "Month",
+                                "duration_unit": "Solar Hijri Month",
                                 "next_level": ""})
     # Native next_level accepts successors in the same family only.
     # Linking happens after all levels have been created; this prevents

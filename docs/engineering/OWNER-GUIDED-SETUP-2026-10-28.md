@@ -23,11 +23,11 @@ No tested, owner-facing **Apply** button is shipped yet. The code path requires 
 | --- | --- | ---: | ---: |
 | General English | `PRE-STARTER` | 1 month | 500 |
 | General English | `STARTER`, `PREP-1`, `PREP-2`, `PREP-3` | 2 months each | 1,000 each |
-| English for Academic Purposes | `EAP-1` through `EAP-4` | 2 months each | 1,000 each (AFN 500/month) |
-| Special Speaking | `SPECIAL-SPEAKING-2M` | 2 months | 2,000 |
-| TOEFL Preparation | `TOEFL-PREP-2M` (`TOEFL-PREP-4M` existing-site alias) | 2 months | 7,000 **legacy proposal — not Owner-confirmed** |
+| English for Academic Purposes | `EAP-1` through `EAP-4` | 2 months each | 2,000 each (AFN 1,000/month) |
+| Special Speaking | `SPECIAL-SPEAKING-2M` | One two-month semester | 2,000 per semester |
+| TOEFL Preparation | `TOEFL-PREP-4M` (`TOEFL-PREP-2M` existing-site alias) | 4 months per semester | 7,000 exactly |
 
-**Daily billing authority:** The Course Owner's later instruction is AFN 500 per calendar month for both on-site General English and EAP. A two-month GE/EAP level is AFN 1,000 total, split into two monthly dues or paid in advance. These are *semester totals*, not monthly bills to duplicate. The specialist-program tuition examples in this historical preset are NOT confirmed current commercial prices: Finance and Course Owner must verify Special Speaking and TOEFL Preparation prices independently before issuing any live Fee Structure or Fees. The two-month TOEFL duration is Owner-approved; preserving the older 4M code as an alias prevents silent duplication on existing sites. This correction does not authorize installer activation or editing an existing student's bills.
+**Daily billing authority (latest direct Owner correction, 2026-10-30):** GE is AFN 500 per month, collected per semester: Pre-Starter AFN 500 for one month; Starter and Prep 1–3 AFN 1,000 for two months. Each of EAP's four levels is AFN 2,000 for a two-month semester (AFN 1,000/month). Special Speaking has one two-month semester at AFN 2,000. TOEFL Preparation has a four-month semester at exactly AFN 7,000. These instructions supersede earlier combined GE/EAP AFN 500 and two-month TOEFL claims. Monthly installments, where independently authorized, divide the semester total and never add a second bill. Preserve existing level codes as reviewed aliases and all issued documents; this correction does not authorize production.
 
 The real test PC uses at least `PREP-ONE` and `PREP-TWO` codes; never rename or duplicate these silently. The clean-install canonical codes are a **proposal**, and the wizard must show an explicit mapping/review against any existing site.
 
@@ -103,3 +103,28 @@ python -m unittest discover -s tests/setup -p "test_*.py" -v
 ```
 
 Reference: `apps/toefl_house/toefl_house/academic/__init__.py`, `academic/rules.py`, `academic/assessment.py`, `academic/progression.py`, `finance/installments.py`, `finance/policies.py`, `operations/owner_configuration.py`, and `docs/engineering/LAUNCH-RUNBOOK.md`.
+
+
+## Preserved Windows Owner setup checkpoint — 2026-10-30
+
+The existing inactive Owner database now has the approved GE catalog and four
+EAP levels. Its existing GE identifiers were retained. EAP's four unissued native
+Fee Structures were corrected in place to AFN 2,000 using the audited Owner
+command; no issued Fees, receipts, students or ledger entries existed or changed.
+Special Speaking has one two-month semester at AFN 2,000. TOEFL's existing level
+identifier is retained as the reviewed legacy 2M alias, with a new four-month
+Solar Hijri duration version effective **2026-10-31**. The initial same-date row
+was preserved; that level is temporarily retired until the corrected version
+governs and release acceptance permits reactivation. Its unissued fee plan is
+AFN 7,000. Do not create a duplicate 4M level on this installation.
+
+Five requested staff logins were staged with reserved `.invalid` local IDs,
+mail disabled and accounts disabled during release HOLD. The existing Owner
+account and credentials were preserved. The instructor record contains explicitly
+labelled Owner-authorized sample employment facts; no pay agreement, salary or
+teaching schedule was fabricated. Replace those samples before real payroll.
+Native database reads verified the eleven levels, approved fee totals and
+preserved aliases. These reads used a read-only source helper and are **not**
+acceptance of a newly installed image. The installed image lacks the newer Owner
+grading and billing setup commands, so those setup steps still require the
+qualified update. Backup remains Off. Production remains NO-GO.

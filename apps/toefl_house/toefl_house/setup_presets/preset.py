@@ -265,7 +265,9 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
         "ready_to_apply": False,
         "pending_decisions": [
             "Owner verification and auditable confirmation",
-            "Specialist tuition requires separate Owner price verification before live billing",
+            *(["Specialist tuition requires separate Owner price verification before live billing"]
+              if any(not family.get("initial_tuition_approved", False)
+                     for family in preset["programs"]) else []),
             "Legal tax classification; do not infer exemption",
             "Approve negotiated one-to-one monthly student tuition and named contract",
             "Approve instructor remuneration independently through HRMS/Payroll",

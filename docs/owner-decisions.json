@@ -679,21 +679,28 @@
     }
   },
   "owner_policy_addenda_2026_10_30_daily_setup": {
-    "source": "Owner-confirmed operational details in TOEFL House ERP discussions through 2026-10-30",
+    "source": "Latest direct Owner clarification in this chat on 2026-10-30 supersedes earlier GE/EAP combined pricing and two-month TOEFL statements.",
     "status": "OWNER_CONFIRMED_NOT_PRODUCTION_AUTHORIZATION",
     "onsite_ge_eap": {
-      "monthly_fee_afn": 500,
+      "ge_monthly_fee_afn": 500,
+      "eap_monthly_fee_afn": 1000,
       "pre_starter_months": 1,
       "other_ge_level_months": 2,
       "eap_level_months": 2,
-      "two_month_total_afn": 1000,
-      "billing_rule": "Two independently tracked monthly dues; may be settled together or separately; never double invoice the semester total"
+      "ge_two_month_total_afn": 1000,
+      "eap_two_month_total_afn": 2000,
+      "collection_basis": "Collect the full semester fee. Any authorized installment plan partitions that total; never bill monthly dues in addition to it."
     },
     "specialist_courses": {
       "special_speaking_months": 2,
-      "toefl_preparation_months": 2,
-      "tuition_status": "REQUIRES_OWNER_PRICE_VERIFICATION_BEFORE_LIVE_BILLING",
-      "legacy_toefl_4m_code": "EXISTING_SITE_ALIAS_ONLY_NEVER_SILENT_DUPLICATION"
+      "toefl_preparation_months": 4,
+      "tuition_status": "OWNER_CONFIRMED_CONFIGURATION_ONLY_NOT_PRODUCTION_AUTHORIZATION",
+      "legacy_toefl_2m_code": "EXISTING_SITE_ALIAS_ONLY_NEVER_SILENT_DUPLICATION",
+      "special_speaking_semester_count": 1,
+      "special_speaking_semester_fee_afn": 2000,
+      "special_speaking_semester_months_status": "OWNER_CONFIRMED",
+      "toefl_exact_fee_status": "OWNER_CONFIRMED_EXACT",
+      "toefl_semester_fee_afn": 7000
     },
     "staff_accounts": {
       "initial_login_count_including_existing_owner": 6,
