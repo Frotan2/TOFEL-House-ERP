@@ -122,6 +122,24 @@ Independent source review found no concrete defect. Simultaneous payout versus
 withdrawal still needs actual concurrent acceptance; locking review is not
 that evidence. Paid-case paired reversal remains a release requirement.
 
+The four concurrent cases subsequently passed on Windows through independent
+MariaDB connections with overlapping transaction intervals, using a new
+synthetic Company, Branch and role-specific staff (FM-only payer with explicit
+permitted Company and Branch). Same-key callers returned the same single native
+pair; different keys for one case produced one pair and one refusal; payout
+versus withdrawal produced exactly one valid final outcome. Two different Fees
+each proposing 40 against 60 shared Cash produced one payout, one insufficient
+funds refusal and 20 remaining Cash. All five original Fees balances remained
+50, original Company records were unchanged, and the payer's pre-existing
+DocShare rows were retained exactly with no temporary reference access left.
+
+`tools/native/tuition_refund_races.py` now runs these genuine concurrent commands
+at the end of Native acceptance. It creates synthetic records rather than
+altering existing Company settings, preserves its evidence and performs no
+production activation or deletion. Hosted exact-head qualification is still
+required. These checks do not substitute for paid-case reversal, printable
+payout evidence, net reporting or final installed browser acceptance.
+
 The earlier checklist below remains the full completion scope; it is not a
 claim that the new owned paired command has passed its first database gate.
 

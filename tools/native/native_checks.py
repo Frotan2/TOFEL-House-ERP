@@ -8466,6 +8466,10 @@ def main():
                         'different_key_duplicate_denied':True}
         check('native-finance-unequal-solar-installment-posting-and-gl',
               traced(native_unequal_solar_installments))
+        # Run last: preserve earlier acceptance baselines and retain the new
+        # synthetic Company as reproducible concurrent accounting evidence.
+        from tuition_refund_races import run as qualify_refund_races
+        check('native-tuition-refund-real-concurrent-transactions', traced(qualify_refund_races))
         report['status']='pass'
 
     except Exception as exc:
