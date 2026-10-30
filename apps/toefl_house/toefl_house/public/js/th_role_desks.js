@@ -1340,6 +1340,33 @@ frappe.provide("toefl_house.role_desks");
 				fieldtype: "Data", description: "Optional. Use a simple English name such as SPEAKING or ACADEMIC. The system creates the internal ID.",
 			}]);
 		}
+		// Finance enters instructor contracts as ordinary rows. The native
+		// contract API still receives its reviewed structure, assembled by
+		// the application only after every entered row passes basic checks.
+		const teachingContractForm = [
+			"toefl_house.teaching.compensation.create_teaching_contract",
+			"toefl_house.teaching.compensation.revise_teaching_contract",
+		].includes(action.endpoint);
+		if (teachingContractForm) {
+			fields = fields.filter((field) => !["skill_terms", "adjustments"].includes(field.fieldname));
+			for (let index = 1; index <= 6; index += 1) {
+				fields = fields.concat([
+					{ fieldname: "skill_" + index, label: "Pay skill " + index + " — optional", fieldtype: "Link", options: "TH Skill" },
+					{ fieldname: "skill_unit_" + index, label: "Skill " + index + " — payment unit", fieldtype: "Select", options: "\\nSkill\\nClass\\nSession" },
+					{ fieldname: "skill_rate_" + index, label: "Skill " + index + " — AFN per unit", fieldtype: "Currency" },
+					{ fieldname: "skill_quantity_" + index, label: "Skill " + index + " — units payable", fieldtype: "Float" },
+				]);
+			}
+			for (let index = 1; index <= 2; index += 1) {
+				fields = fields.concat([
+					{ fieldname: "adjustment_type_" + index, label: "Adjustment " + index + " — optional", fieldtype: "Select", options: "\\nBonus\\nDeduction" },
+					{ fieldname: "adjustment_amount_" + index, label: "Adjustment " + index + " — AFN", fieldtype: "Currency" },
+					{ fieldname: "adjustment_date_" + index, label: "Adjustment " + index + " — date", fieldtype: "Date" },
+					{ fieldname: "adjustment_approver_" + index, label: "Adjustment " + index + " — approved by", fieldtype: "Link", options: "User" },
+					{ fieldname: "adjustment_reason_" + index, label: "Adjustment " + index + " — reason", fieldtype: "Small Text" },
+				]);
+			}
+		}
 		const contextKeys = ["outstanding", "expected_amount", "currency", "receipt_list",
 			"recipient", "tuition_bill", "refund_amount", "refund_reason", "supporting_evidence", "approved_by", "approval_evidence"];
 		const contextFacts = contextKeys.filter((key) => action.args && action.args[key] !== undefined)
@@ -1359,7 +1386,65 @@ frappe.provide("toefl_house.role_desks");
 					}
 				}
 				const args = { request_key: values.request_key };
-				fields.forEach((field) => { args[field.fieldname] = values[field.fieldname]; });
+				fields.forEach((field) => {
+					if (field.fieldname) args[field.fieldname] = values[field.fieldname];
+				});
+				if (teachingContractForm) {
+					const terms = [];
+					const adjustments = [];
+					for (let index = 1; index <= 6; index += 1) {
+						const skill = String(values["skill_" + index] || "").trim();
+						const unit = String(values["skill_unit_" + index] || "").trim();
+						const rate = values["skill_rate_" + index];
+						const quantity = values["skill_quantity_" + index];
+						const hasRate = rate !== undefined && rate !== null && rate !== "";
+						const hasQuantity = quantity !== undefined && quantity !== null && quantity !== "";
+						if (skill || unit || hasRate || hasQuantity) {
+							if (!skill || !unit || !hasRate || !hasQuantity ||
+								!Number.isFinite(Number(rate)) || Number(rate) <= 0 ||
+								!Number.isFinite(Number(quantity)) || Number(quantity) <= 0) {
+								frappe.msgprint(text("For each paid skill, choose the skill, payment unit, positive AFN rate and positive quantity."));
+								return;
+							}
+							terms.push({ skill, unit_of_payment: unit, rate: Number(rate),
+								payable_quantity: Number(quantity) });
+						}
+						["skill_", "skill_unit_", "skill_rate_", "skill_quantity_"].forEach((name) =>
+							delete args[name + index]);
+					}
+					if (new Set(terms.map((row) => row.skill)).size !== terms.length) {
+						frappe.msgprint(text("The same skill was entered twice. Choose each skill only once."));
+						return;
+					}
+					if ((values.compensation_model === "Fixed Salary" && terms.length) ||
+						(values.compensation_model !== "Fixed Salary" && !terms.length)) {
+						frappe.msgprint(text("Fixed Salary must have no skill rates. Skill-Based and Hybrid contracts require at least one paid skill."));
+						return;
+					}
+					for (let index = 1; index <= 2; index += 1) {
+						const type = String(values["adjustment_type_" + index] || "").trim();
+						const amount = values["adjustment_amount_" + index];
+						const date = values["adjustment_date_" + index];
+						const approver = values["adjustment_approver_" + index];
+						const reason = values["adjustment_reason_" + index];
+						const filled = [type, amount, date, approver, reason]
+							.some((v) => v !== undefined && v !== null && v !== "");
+						if (filled) {
+							if (!["Bonus", "Deduction"].includes(type) || !Number.isFinite(Number(amount)) ||
+								Number(amount) <= 0 || !date || !approver || !String(reason || "").trim()) {
+								frappe.msgprint(text("A salary adjustment needs Bonus/Deduction, a positive AFN amount, date, approver and reason."));
+								return;
+							}
+							adjustments.push({ adjustment_type: type, amount: Number(amount),
+								effective_date: date, approver, reason: String(reason).trim() });
+						}
+						["adjustment_type_", "adjustment_amount_", "adjustment_date_",
+							"adjustment_approver_", "adjustment_reason_"].forEach((name) =>
+							delete args[name + index]);
+					}
+					args.skill_terms = JSON.stringify(terms);
+					args.adjustments = JSON.stringify(adjustments);
+				}
 				if (automaticCode) {
 					const source = String(values.short_name || values.title || "");
 					const slug = source.normalize("NFKD").toUpperCase()
