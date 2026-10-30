@@ -1,226 +1,137 @@
-# Customer delivery: Windows graphical setup and offline application image
+# Customer delivery — one offline Windows Setup EXE
 
-**Release status: engineering candidate only — DO NOT SHIP TO A CUSTOMER YET.**
-The current production authorization is **REJECT**. The Owner preservation,
-backup/restore and real-machine qualification holds take precedence over
-this packaging guide. This document describes the installation capability,
-not permission to operate real student, payroll or financial data.
+**Current release decision:** **REJECT / NO-GO — TEST PACKAGE, NO REAL DATA.**
+This is the target delivery contract and engineering integration path, not a
+claim that a completed, signed, independently accepted customer installer
+exists. Do not install over the preserved Owner installation.
 
-Dated delivery checkpoints and earlier GitHub Actions downloads are retained
-as engineering evidence only. No historic build qualifies the current source
-head. See [documentation authority](DOCUMENTATION.md) and the
-[single-file delivery contract](engineering/SINGLE-FILE-CUSTOMER-DELIVERY.md).
+## Accepted customer experience
 
-## Final customer experience — mandatory, not yet qualified
+The authorized provider supplies **one publisher-signed offline Windows Setup
+EXE** for a supported 64-bit Windows 10/11 computer. The Owner double-clicks
+the installer, follows graphical Windows administrator/license/restart prompts
+when necessary, and completes institute setup in **English**, left to right.
 
-The customer receives **one signed, offline Windows Setup EXE**, containing
-the qualified application image, pinned prerequisite installers, and one
-graphical installation and launcher experience. The provider prepares every
-dependency and performs source verification, signing, and image assembly.
-A customer must never build an image, use Git, enter PowerShell commands,
-download runtime installers or unpack nested ZIP folders.
+The customer must not:
+- Download Docker Desktop, WSL, Linux images or application dependencies;
+- Open a terminal or run PowerShell, Git, Python or database commands;
+- Extract a repository ZIP, nested ZIPs or source files, or compile anything;
+- Supply JSON policy values, invent staff email addresses, or initialize a
+  practice database that later becomes the institute's real database.
 
-A clean-machine Windows acceptance, code-signing verification, real first
-boot, update/rollback and independent recovery rehearsal are still required
-before the provider may call this a finished release.
+The signed installer bundles a prebuilt TOEFL House Linux/amd64 image,
+digest-pinned MariaDB and Redis images, compatible provider-verified Windows
+prerequisite installers, the graphical launcher, operating instructions,
+a release manifest and exact-source gate evidence. Its internal ZIP64 payload
+is extracted automatically; **there is no customer-managed nested archive**.
 
-## Engineering-only folder/launcher fallback
+A Windows feature source or firmware virtualization configuration that
+cannot be satisfied offline must trigger a clear refusal and provider remedy,
+not send the customer to a website. The user must accept any applicable
+third-party license themselves; the provider verifies Docker Desktop
+distribution and commercial licensing before release.
 
-The legacy image-inclusive folder and `TOEFL House ERP.vbs` described in
-the steps below may be used only for **provider-supervised testing on a clean
-disposable Windows PC**. They are not the accepted final delivery. Startup
-uses the precompiled application and still requires native database setup
-and migrations, which must be timed during real Windows acceptance.
+## First installation and safe re-opening
 
-1. Use a compatible 64-bit Windows 10/11 computer with enough free disk space
-   for Docker Desktop, the application image, the database and backups.
-   Install **Docker Desktop** using its official Windows installer. On some
-   computers it must also install or enable WSL 2, request administrator
-   approval, change virtualization settings, or restart Windows. This is a
-   third-party prerequisite, **not** an unattended single-click install.
-   Confirm that the customer's organization meets Docker Desktop's current
-   commercial license terms before supplying it.
-2. Copy or extract the entire customer folder onto the local main computer,
-   not a removable drive, cloud-synchronized folder or network share.
-   Double-click **TOEFL House ERP.vbs**. This opens the Windows GUI without
-   a terminal or PowerShell commands.
-3. Select **Install**. The launcher verifies the image checksum **before**
-   creating any local database credentials or application data. It generates a
-   private local database password for a genuinely fresh installation, imports
-   the verified prebuilt image, initializes the site and waits for health
-   checks. If previous Frappe site files exist under another site name, it
-   preserves them and refuses to create a replacement database password.
-   It then opens the ERP in the browser.
-4. Select **View Administrator Login** to open the local, private first-run
-   credentials file. Change the initial password and create a separate
-   native **Course Owner** account for normal administration. Do not email
-   or photograph the credentials. Owner policies and real-operation mode
-   remain subject to the documented release hold.
-5. Select **Owner Handbook** for the complete no-code English operating
-   and safety guide, and **Owner Readiness Guide** for a no-command, read-only
-   first-check plus a separate synthetic Windows test checklist. Neither lifts
-   the backup/restore hold or authorizes production.
-   Select **Check This PC** for a read-only technical report. The report
-   checks Windows, Docker availability, local disk space, possible fixed local
-   backup volumes, the presence (never contents) of database storage and its
-   credential file, and localhost reachability. It warns if a database/site
-   exists without its credential file. It never changes the existing site,
-   backup, secrets or Docker volumes. It does not qualify backup/recovery,
-   Tailscale, publisher trust or production use.
-6. On later days, open the same GUI and click **Open / Start**. Use **Stop**
-   to shut down services safely. **Do not use Install again** on an existing
-   site; the launcher now refuses a repeated installation. **Repair** is only
-   for a provider-authorized recovery attempt on an intact existing site, not
-   a data restore or a fix for a missing database. The window stays open
-   during active operations.
+1. Check the publisher's Authenticode signature, release identity, installer
+   digest and the full Git revision through the trusted provider.
+2. On a **new disposable acceptance PC only**, double-click the EXE. It
+   verifies its embedded payload before extraction and publishes the
+   extracted kit only after validation. The Windows setup step verifies
+   bundled prerequisite SHA-256 hashes and trusted Microsoft/Docker
+   publisher signatures.
+3. If Windows requests an authorized restart, perform it normally and reopen
+   the same Setup EXE. A repeated launch must **never** create a replacement
+   site, user or database. On a verified existing installation it opens the
+   normal GUI without attempting fresh installation.
+4. On a genuinely empty site, initialize native application services, then
+   authenticate locally (normally `http://127.0.0.1:8000/`). Protect the
+   initial Administrator credentials and configure the existing Course Owner
+   account without duplicating it.
+5. Complete the Owner's approved catalog, calendar, rooms, tuition and
+   role-specific staff setup with guarded forms. **No historical or synthetic
+   business data is shipped**: students, enrollments, attendance, assessment,
+   payroll, invoices, payment entries and demo records all start at zero.
+6. On later days, use the normal graphical **Open / Start**, **Stop** and
+   authorized support workflows. Ordinary customer actions must never
+   require developer tooling.
 
-**Preservation gate for existing installations:** Start and Repair now check
-that `db.env`, the Frappe site's `site_config.json`, and the exact named
-Docker database volume are present and accessible **before** running Compose.
-If anything is missing or unverifiable, they refuse to run rather than risk
-creating a new empty database volume. This is an existence check, **not**
-proof that records or backups are healthy. Do not replace credentials,
-reinstall, recreate a volume, or bypass the refusal. Use the GUI's
-**Check This PC → Copy Safe Support Status** to share only the fixed, safe
-summary with trusted support. Logs are kept locally under LocalAppData; do
-**not** email or zip entire raw logs, student records, secrets or backups.
+The current repository also has an image-inclusive **folder/VBS engineering
+fallback**. It can be used under provider supervision on a separate
+disposable test machine. It is **not** the accepted final customer delivery,
+and an old GitHub Actions ZIP is not proof of an approved EXE.
 
-**Important:** The customer cannot move an installed ERP merely by copying
-the delivery folder. The database lives in a Docker named volume while site
-files and local secrets live in product/data. Transfer and recovery require
-a separately verified backup/restore process, which is currently on HOLD.
-Do not erase volumes, delete product/data, or replace an existing database
-password just to repeat installation.
+## Provider-only building and verification
 
-## How the provider prepares the folder
+The provider first qualifies the exact source revision through the required
+Owned, Native, Foundation, Product-image and Windows package gates.
+The source image and native runtime images are exported from the pinned
+Linux/amd64 identities. The Windows packaging workstation then uses:
 
-From a verified source checkout with a built local image tagged
-toefl-house-erp-app:local, open
-product/windows/Prepare Customer Package.ps1 in Windows PowerShell, or run
-it with a chosen Destination path. This local preparer is for disposable
-engineering tests only; it is not the approved v1.0.0-rc.1 publication path.
-The versioned RC must come from the exact-SHA attested Product-image pipeline
-below. The provider-side utility:
+`tools/release/Build Customer Installer.ps1`
 
-- Confirms Docker is running and the image includes the Linux LF-source,
-  exact source-revision, and exact release-version labels.
-- Copies only the explicitly allowed Windows GUI, Owner Handbook, Owner
-  readiness/daily guides, lifecycle scripts and Compose configuration. It never copies source repositories, Docker data,
-  administrator credentials, active site files, activation receipts or backups.
-- Uses docker save to write product/release/toefl-house-erp-app.tar, and writes
-  an archive checksum, release manifest, dependency-matrix hash, and manifest
-  checksum. It verifies the bound archive before delivery.
-- Creates a new, versioned customer folder and an English quick-start readme.
-  It does not overwrite an existing package. An interrupted/failed package
-  must be discarded by the provider after inspection, not delivered.
+It takes a verified image-inclusive kit, the vetted WSL MSI and Docker
+Desktop EXE, a distinct output path, and optionally an exact-source
+`RuntimeBundle`. It independently checks the package image, prerequisite
+publishers, runtime manifest, hashes, native image identities and forbidden
+customer data/links; the resulting offline Compose override has
+`pull_policy: never`.
 
-The provider/CI implementation is also available as
-`tools/release/create_customer_package.py`. The Product image workflow uses
-it after the real image and all hosted qualification steps pass, creates a ZIP,
-attests that ZIP with GitHub's build-provenance service, uploads the versioned
-artifact, and publishes a GitHub Release asset only for an explicit `v*` tag.
-Before package assembly it requires successful Owned, native lifecycle,
-Foundation security/runtime, and Windows package workflows on the same source
-revision. The image workflow starts only missing checks after verifying its
-branch/tag still identifies that revision. Missing, failed, cancelled, or
-pending evidence cannot authorize an artifact upload. The successful four-gate
-receipt is written only after that check and is required by package assembly;
-it is embedded as `product/release/ci-gates.json` with its own SHA-256 sidecar
-and bound into the release manifest.
-The ZIP is the customer download; the included manifest binds the exact source
-revision, image labels, image hash, dependency matrix and four gate run URLs.
-Verify the attestation separately. A package that has only a bare tar/hash pair is not a
-verified customer release.
+For an actual publisher-signed artifact the provider additionally supplies
+`SigningCertificateThumbprint` and a Windows-compatible HTTP
+`TimestampServer`. The signer must hold a valid code-signing private key.
+The final EXE's signature, signer identity and timestamp must all verify
+**before** the artifact is published. An output created without these
+parameters is conspicuously an **UNSIGNED TEST INSTALLER ONLY**; it cannot
+satisfy the customer contract. The currently supported provider builder
+accepts only **REJECT**-classified test manifests; production packaging
+requires a separately reviewed, authorized release process.
 
-Both packagers require the selected checkout HEAD and clean customer inputs
-to match the requested revision. The saved archive, manifest, imported tag,
-and Compose image all use `toefl-house-erp-app:local`. Verification reads the
-actual archive config before import and checks the loaded image's identity
-before startup. The manifest checksum is mandatory. CI refuses a ZIP at or
-above GitHub's 2 GiB per-file release limit; the runtime image excludes build
-checkouts and intermediate build layers to keep the single download viable.
+The signing path is not yet independently Windows-qualified. A conventional
+PE Authenticode certificate-table offset is bounded; the provider must
+make the image bundle small enough to be signed and verified, rather than
+pretending that an oversized executable can be safely issued. A GitHub
+Release file-size limit is **not** waived by assembling an EXE. If a single
+signed file cannot fit the distribution/signing limits, customer handover
+remains blocked until a reviewed delivery architecture resolves this
+without extra customer downloads or manual archive extraction.
 
-The SHA-256 and manifest sidecars catch corruption and bind the package
-contents. They do **not** replace the provider/GitHub attestation: a malicious
-party able to replace both an archive and its local hash could otherwise
-replace the image. The Windows verifier checks the manifest and image hash
-before import; it never treats those checks alone as production approval.
+## Preserve previous installations and recovery material
 
-Backup is **Off by default** under Owner decision D18. Its audited Course Owner
-switch preserves existing backup files. Turning it On does not waive the
-complete policy, separate fixed local disk, recovery key or recovery acceptance.
-The customer GUI intentionally offers **no** Backup, Restore, Activate,
-Deactivate or production bypass controls while the relevant holds apply.
-The older specialized guarded scripts remain in the developer repository for
-future authorized workflows but are excluded from customer packages.
+Before any customer lifecycle operation, preserve the installed site,
+`product/data`, local credentials, named MariaDB volume, key custody and
+encrypted backup sets. The launcher and worker must **refuse** replacement
+database creation when existing site or credential/volume markers are
+missing or inconsistent. No one may use reinstall, Docker reset, volume
+deletion, update replay or live-site overwrite to bypass a failed check.
 
-## Verification: what has and has not been shown
+Only **Check This PC** and **Copy Safe Support Status** are supported
+read-only diagnosis paths during the existing Owner preservation hold.
+The safe support text must exclude student records, passwords, raw logs,
+invoices, keys and backup content. The update channel remains disabled
+pending independent authorization and two-person recovery acceptance.
+See [Customer updates](CUSTOMER-UPDATES.md) and
+[Windows validation](../product/windows/VALIDATION.md).
 
-| Capability | Verification boundary |
-| --- | --- |
-| Docker app image startup in disposable Linux CI | Product image workflow; not equivalent to customer Windows |
-| Windows script syntax, synthetic image packaging and tamper rejection | Windows customer package workflow |
-| Source installation, existing-site checks, no-discard lifecycle | Owned tests and source contract checks |
-| Isolated synthetic restore to a new site/database/site-data root + wrong-key failure + post-restart verification | **QUALIFIED IN HOSTED CI — run 39836321651; NOT OWNER-MACHINE AUTHORIZATION** |
-| Owner-policy persistence across a real hosted service restart | **QUALIFIED IN HOSTED CI FOR ALL EIGHT POLICIES** |
-| Real clean Windows installation with Docker Desktop and WSL 2 | **NOT YET QUALIFIED** |
-| Prebuilt multi-GB image import on a real customer PC | **NOT YET QUALIFIED** |
-| Administrator GUI interaction and login | **NOT YET QUALIFIED ON REAL WINDOWS** |
-| Local backup, encrypted restore and data persistence through device failure | **HOLD / NOT YET QUALIFIED** |
-| Multi-user Tailscale access on real devices | **NOT YET QUALIFIED** |
-| Production authorization for real student/financial data | **REJECT** |
+## Independent release acceptance — mandatory evidence
 
-### Required customer acceptance before any release
+| Gate | Required evidence | Present acceptance |
+| --- | --- | --- |
+| Exact source and supply chain | Same full SHA, five successful CI gates, verified provenance and pinned dependencies | Recheck latest `work` head |
+| Final customer artifact | One publisher-signed EXE; trusted timestamp, validated SHA-256, safe single-file extraction and size | **NOT QUALIFIED** |
+| Clean offline Windows | Fresh Windows installation without network/tool downloads, accurate UAC/license/reboot, local login, Stop/Start/repair and persistent state | **NOT QUALIFIED** |
+| Staff and native workflows | Six segregated roles; admissions, placement, scheduling, fees, cashier, books, refunds, grading and payroll with negative permission/replay tests | **NOT QUALIFIED ON FINAL INSTALLED IMAGE** |
+| Recovery and updates | External encrypted drive, distinct recovery approvers, isolated restore with matching records and guarded update/rollback | **HOLD / NOT QUALIFIED** |
+| Final approval | Independent security review, protected release branch, explicit written Owner production authorization | **REJECT** |
 
-On a disposable clean Windows PC, use **only synthetic data** and complete
-the following as one continuous test: obtain the prepared package, install
-Docker Desktop from the GUI link, complete WSL/reboot if requested, launch the
-ERP without a terminal, authenticate as Administrator, restart Windows and
-start again, create a synthetic course/student/enrollment/fee/attendance,
-verify persistent records, exercise stop/start and non-destructive repair,
-test separate backup and isolated restore after its hold is resolved,
-and verify access on an authorized Tailscale staff PC.
+Use synthetic data **only** in isolated acceptance, never on the Owner's
+preserved system. Record image and Windows versions, source SHA, installed
+config, privacy-safe test evidence, crash/restart recovery, package signature,
+role isolation and native ledger reconciliation. No individual green test,
+downloadable ZIP, successful local browser login or reported EXE build can
+override the final NO-GO decision.
 
-Record version, image identity, Windows edition, Docker version, elapsed
-time, screenshots, permission prompts, failure recovery and network boundary
-evidence. Only then consider releasing the package to real customers.
-
-### Common installer support issues
-
-- If Docker is missing, the GUI opens Docker's official download site.
-  Completing the vendor installation or WSL/reboot may need the customer's
-  authorized Windows administrator.
-- If a password file is missing but a database already exists, the product
-  **refuses to generate a replacement password**. Recover the original,
-  do not reinstall or delete data.
-- If the archive checksum fails, the installer **must not** import or start it.
-  Obtain an intact, trusted package from the provider.
-- If the user has a repository checkout or incomplete package, the GUI refuses
-  installation when the prebuilt archive is missing. Obtain the complete,
-  trusted image-inclusive package; there is no customer source-build fallback.
-- If Windows Script Host is disabled by policy, the Windows launcher may
-  not run. A signed Windows executable/installer and enterprise packaging
-  support are future distribution requirements; do not disable customer
-  security controls to bypass that restriction.
-
-For current policy/activation and recovery limitations see
-[PRODUCT.md](PRODUCT.md) and
-[engineering/LAUNCH-RUNBOOK.md](engineering/LAUNCH-RUNBOOK.md).
-
-## No-code staff help in the customer launcher
-
-The installed Windows GUI includes **Owner Handbook**, which opens the complete
-offline English/Dari **OWNER HANDBOOK.txt**, and **How to Use**, which opens the
-plain-English **DAILY USE GUIDE.txt** supplied in the allowlisted customer kit.
-It explains the Owner, Reception, Academic, Teacher and Finance routines and
-how the native ERPNext stock-book workflow works without developer commands.
-It does **not** grant access, activate production, or replace the separate
-Owner Readiness Guide and real Windows/customer recovery approval.
-
-### Safe support status for nontechnical users
-
-After the read-only **Check This PC** succeeds, the Windows launcher enables
-**Copy Safe Support Status**. This copies only whitelisted machine readiness
-status lines, not raw Docker/PowerShell logs, secrets or student records.
-It does not approve live use, authorize backup/restore or connect to a
-support service without the owner's direct action.
+For authoritative documentation precedence, see
+[Documentation and release authority](DOCUMENTATION.md). For provider
+technical details and retained earlier engineering evidence, see
+[Single-file delivery](engineering/SINGLE-FILE-CUSTOMER-DELIVERY.md).
