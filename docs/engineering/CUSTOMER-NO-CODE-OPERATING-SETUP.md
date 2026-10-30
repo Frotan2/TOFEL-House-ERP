@@ -108,8 +108,13 @@ signed, independently verified Windows product. No production authorization.
   exceeding the six-skill/two-adjustment guided form) still need scalable,
   secure row editors. Current guided revisions **fail closed** for such
   contracts; never truncate pay terms or instruct customers to paste JSON.
-  The Finance cash-day close form is not yet a fully qualified
-  nontechnical workflow; do not misrepresent raw counts input as finished.
+  A counted-amount cash-day close form is now implemented on the Finance Desk
+  as one guarded action per Company/Day: it shows every enabled native Cash/Bank
+  drawer, leaves every actual count **blank**, requires an explanation for a
+  difference, and submits through the existing audited Finance Officer
+  command. Frappe's JSON transport is handled internally. Actual native
+  Frappe/ledger/role/concurrency acceptance is still required before the
+  form can be called production-ready.
 - Initial staff provisioning, native legal Company, real timetable/rooms,
   role-specific first-day work, tax classification and backup recovery remain
   separately gated. No external email or production data is invented.
@@ -132,6 +137,14 @@ signed, independently verified Windows product. No production authorization.
   no salary was posted merely because a contract exists.
 - Reception/Finance/GM/Academic/Instructor each complete permitted work, with
   attempted unauthorized cross-role operations denied by the server.
+- Finance opens the Cash close section. For each Company, the single
+  **Close today's company cash drawers** form lists every enabled Cash/Bank
+  account with the native expected balance. Finance enters the actual cash
+  count or verified bank balance as AFN, including zero, and explains each
+  variance. Reject omitted drawers, unknown accounts, duplicate accounts,
+  more than two decimal places, empty variance explanations, a second close
+  and companies outside the Finance actor's scope. The close posts **no**
+  payment or GL entry; post-close ledger drift remains auditable.
 - Disconnect external recovery drive and simulate power failure; backup
   status must not invent success. Restore on separate clean PC must verify
   actual records and two distinct approvers.
