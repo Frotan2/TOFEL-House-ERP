@@ -31,7 +31,9 @@ class CatalogUniquenessTests(unittest.TestCase):
         def exists(doctype, name):
             queries.append((doctype, name))
             return doctype == doctype_and_query[0] and name == doctype_and_query[1]
-        db = SimpleNamespace(exists=exists, get_all=Mock(return_value=[]))
+        db = SimpleNamespace(
+            exists=exists, get_all=Mock(return_value=[]),
+            get_value=Mock(return_value="TH Academic Program"))
         get_doc = Mock(side_effect=AssertionError(
             "Cannot insert ANY record when a duplicate is detected"))
         frappe = SimpleNamespace(db=db, get_doc=get_doc, ValidationError=ValueError)
@@ -66,6 +68,8 @@ class CatalogUniquenessTests(unittest.TestCase):
             command("key", "NEW-GE", "General English", "")
         get_doc.assert_not_called()
         self.assertIn(("TH Academic Program", {"title": "General English"}), queries)
+        ctx["frappe"].db.get_value.assert_called_once_with(
+            "DocType", "TH Academic Program", "name", for_update=True)
 
     def test_level_duplicate_title_in_same_family_is_rejected(self):
         ctx, get_doc, queries = self.context(
