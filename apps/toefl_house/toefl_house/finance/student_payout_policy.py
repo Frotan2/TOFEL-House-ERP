@@ -18,3 +18,15 @@ def student_pay_write_allowed(payment_type, party_type, method=None):
     if payment_type != "Pay" or party_type != "Student":
         return True
     return method == "before_cancel"
+
+
+def student_journal_write_allowed(accounts, method=None):
+    """Contain Student/Fees journals until the paired refund is qualified.
+
+    Payment Entry containment alone cannot protect the same receivable/cash
+    accounts from native Journal Entry writes. Legacy cancellation remains
+    subject to native permissions; payroll and operating journals are unaffected.
+    """
+    protected = any(row.get("party_type") == "Student"
+                    or row.get("reference_type") == "Fees" for row in accounts)
+    return not protected or method == "before_cancel"

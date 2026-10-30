@@ -8116,6 +8116,39 @@ def main():
                     'separate_case_denied':rejected['status']=='Denied',
                     'audit_events_verified':4,'no_refund_payout':True}
         check('native-tuition-refund-list-document-role-parity',traced(tuition_refund_read_list_parity))
+        def student_journal_refund_bypass_denied():
+            frappe.set_user('Administrator')
+            fee=frappe.db.get_value('Payment Entry Reference',
+                {'parent':reception_proof['amended_receipt'],
+                 'reference_doctype':'Fees'},'reference_name')
+            original=frappe.get_doc('Fees',fee)
+            cash=frappe.get_doc('Payment Entry',reception_proof['amended_receipt']).paid_to
+            before={dt:frappe.db.count(dt) for dt in ('Journal Entry','GL Entry')}
+            attempts=0
+            for party_type, reference in (('Student',None),('Student','Fees'),(None,'Fees')):
+                frappe.db.savepoint('student_journal_containment')
+                try:
+                    journal=frappe.get_doc(dict(doctype='Journal Entry',
+                        voucher_type='Journal Entry',company=original.company,
+                        posting_date=original.posting_date,
+                        accounts=[dict(account=original.receivable_account,
+                            party_type=party_type,party=original.student if party_type else None,
+                            reference_type=reference,reference_name=fee if reference else None,
+                            debit_in_account_currency=1,cost_center=original.cost_center),
+                            dict(account=cash,credit_in_account_currency=1,
+                                 cost_center=original.cost_center)]))
+                    try:
+                        journal.insert(ignore_permissions=True)
+                    except frappe.ValidationError as exc:
+                        assert 'Student/Fees Journal Entries require' in str(exc),str(exc)
+                        attempts+=1
+                    else:
+                        raise AssertionError('Direct Student/Fees journal bypass accepted')
+                finally:
+                    frappe.db.rollback(save_point='student_journal_containment')
+            assert before=={dt:frappe.db.count(dt) for dt in before}
+            return {'real_native_insert_denials':attempts,'journal_and_gl_counts_unchanged':True}
+        check('native-student-journal-refund-bypass-denied',traced(student_journal_refund_bypass_denied))
         def native_unequal_solar_installments():
             # Keep this positive native posting test at the END: it appends a
             # new synthetic Owner billing-policy version, and must not change

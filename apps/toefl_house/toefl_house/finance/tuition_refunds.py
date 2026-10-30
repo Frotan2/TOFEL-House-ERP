@@ -27,15 +27,15 @@ wrong accounting:
   generically: outstanding = total - advance_paid. Fees has no
   advance_paid field, so the computed outstanding is the Fees grand_total,
   not its live outstanding_amount.
-- ``validate_allocated_amount`` (line ~368, generic branch for non
-  Customer/Supplier parties) throws when allocated_amount > outstanding.
-  A fully paid Fees has outstanding 0, so ANY positive refund allocation
-  against it throws at submit. A partially paid Fees (outstanding 400)
-  would accept a 300 allocation — but ``add_party_gl_entries`` (line 1368)
+- ``validate_allocated_amount`` compares against reference details, which
+  can be recomputed from the generic grand_total rather than live Fees
+  outstanding. A positive allocation is therefore not necessarily refused
+  even for fully paid Fees. Native acceptance alone does not prove safety.
+  ``add_party_gl_entries`` (line 1368)
   books a Pay as a DEBIT to the party (receivable) account, so the GL
   outstanding for the Fees (sum debit - sum credit against the voucher,
   ``gl_entry.py`` line ~410, Fees in ``OUTSTANDING_DOCTYPES``) INCREASES
-  from 400 to 700: the student appears to owe MORE after being refunded,
+  by the standalone payout: the student appears to owe MORE after being refunded,
   the Fees indicator flips back to Unpaid, and tuition income is never
   reversed. That is a new charge, not a refund.
 - Pinned Education 93bc707 ``fees.py`` has no refund, credit or reversal

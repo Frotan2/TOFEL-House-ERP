@@ -318,6 +318,12 @@ doc_events = {
         "before_update_after_submit": "toefl_house.finance.refunds.guard_payment_entry",
         "on_trash": "toefl_house.finance.collections.guard_collection_fields",
     },
+    "Journal Entry": {
+        "before_validate": "toefl_house.finance.student_journals.guard_student_journal",
+        "validate": "toefl_house.finance.student_journals.guard_student_journal",
+        "before_cancel": "toefl_house.finance.student_journals.guard_student_journal",
+        "before_update_after_submit": "toefl_house.finance.student_journals.guard_student_journal",
+    },
     # Book stock integrity (finance.books): receipts need a positive
     # purchase cost, issues/corrections are approved adjustments. Stock
     # documents with no Books lines pass untouched.

@@ -255,6 +255,16 @@ def main():
         run('security-site-acceptance',
             [benchdir/'env/bin/python',ROOT/'tools/native/security_acceptance.py'],benchdir/'sites')
         run('native-acceptance',[benchdir/'env/bin/python',ROOT/'tools/native/native_checks.py'],benchdir/'sites')
+        # Research native credit/payout semantics in its own NEW database with
+        # no owned app installed. Never relax the owned Student Pay/JE guards.
+        create_site('new-refund-accounting-research-site','refund-probe.localhost',dbpw)
+        for app in ('erpnext','education'):
+            bench('install-refund-probe-'+app,'--site','refund-probe.localhost','install-app',app)
+        for setting in ('allow_tests','toefl_house_synthetic_only'):
+            bench('guard-refund-probe-'+setting,'--site','refund-probe.localhost','set-config',setting,'1','--parse')
+        run('native-refund-accounting-research',
+            [benchdir/'env/bin/python',ROOT/'tools/native/tuition_refund_accounting_probe.py'],benchdir/'sites',
+            env_overrides={'TUITION_PROBE_REPORT':str(evidence/'tuition-refund-native-accounting.json')})
         # Assert the complete set of executed business receipts before treating
         # the native suite as product-facing hosted acceptance. CI still cannot
         # approve Owner Windows, backup/restore or real student operations.
