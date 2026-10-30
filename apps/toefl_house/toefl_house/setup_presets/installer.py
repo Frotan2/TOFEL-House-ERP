@@ -81,6 +81,12 @@ def initialize_owner_catalog(expected_plan_hash, confirmation):
     _qualified_site()
     if confirmation != "APPLY_TO_NEW_COURSE_SITE":
         raise frappe.ValidationError("Explicit first-run setup confirmation is required")
+    # Serialize two simultaneous first-run POSTs on one existing native row.
+    # Without a lock, both callers can preview the same missing catalog and
+    # independently attempt to create duplicate programs/fee structures.
+    # Rechecking AFTER acquiring the lock observes any committed first run.
+    frappe.db.get_value("DocType", "TH Academic Program", "name", for_update=True)
+    _qualified_site()
     snapshot = _snapshot()
     plan = prepare_catalog_plan(snapshot)
     if (not isinstance(expected_plan_hash, str)
