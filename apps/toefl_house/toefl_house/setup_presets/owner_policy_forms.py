@@ -92,3 +92,63 @@ def configure_initial_assessment(
         grading_scale=grading_scale,
         initial_facets=facets,
     )
+
+
+SKILL_PREFIX = {
+    "speaking": "SPK", "listening": "LST", "writing": "WRT",
+    "reading": "RDG", "grammar": "GRM", "vocabulary": "VOC",
+}
+
+
+def numeric_skill_distribution(
+        speaking, listening, writing, reading, grammar, vocabulary,
+        continuous_percent):
+    """Convert seven visible numbers to the native 12-component 100% weights.
+
+    One 100% distribution covers all six skills. Each subject's part is
+    split into Continuous and Final in the Owner-chosen proportions.
+    """
+    values = (speaking, listening, writing, reading, grammar, vocabulary)
+    shares = [whole_number(value, label, 0, 100)
+              for value, label in zip(values, SKILL_PREFIX)]
+    if sum(shares) != 100:
+        raise ValueError("The six skill percentages must total exactly 100")
+    ca = whole_number(continuous_percent, "Continuous assessment percentage", 1, 99)
+    result = []
+    for (_, prefix), share in zip(SKILL_PREFIX.items(), shares):
+        result.append({"component": prefix + "-CA",
+                       "weight": share * ca / 100})
+        result.append({"component": prefix + "-FINAL",
+                       "weight": share * (100 - ca) / 100})
+    return result
+
+
+@frappe.whitelist(methods=["POST"])
+def revise_grading_weights(
+        request_key, policy, effective_from, reason,
+        speaking, listening, writing, reading, grammar, vocabulary,
+        continuous_percent):
+    """Owner reviews seven numbers; all weighting changes become one version."""
+    _owner()
+    if not isinstance(policy, str) or not policy.strip():
+        raise frappe.ValidationError("Choose an existing academic policy")
+    record = frappe.db.get_value(
+        "TH Assessment Policy", {"code": policy.strip()},
+        ["family", "status"], as_dict=True)
+    if not record or record.status != "Active":
+        raise frappe.ValidationError("Choose an active GE or EAP assessment policy")
+    family = frappe.db.get_value("TH Academic Program", record.family, "code")
+    if family not in ("GEN-ENG", "EAP"):
+        raise frappe.ValidationError(
+            "Skill-weight form applies to GE/EAP only; specialist courses "
+            "have their own progress-report rules")
+    try:
+        weights = numeric_skill_distribution(
+            speaking, listening, writing, reading, grammar,
+            vocabulary, continuous_percent)
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
+    return academic.set_assessment_policy_version(
+        request_key=request_key, policy=policy.strip(),
+        effective_from=effective_from, reason=reason,
+        skill_weights=weights)
