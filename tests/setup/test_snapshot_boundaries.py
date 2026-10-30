@@ -199,6 +199,23 @@ class SnapshotSafetyTests(unittest.TestCase):
         self.assertFalse(actual_snapshot_functions(db)["_snapshot"]()
                          ["levels"]["STARTER"]["curriculum_ready"])
 
+    def test_dangling_fee_category_item_cannot_pass_owner_preview(self):
+        db = FakeDB({"Fee Category": [
+            Row(name="Semester Tuition Fee", item="Missing-Fee-Item")]})
+        snapshot = actual_snapshot_functions(db)["_snapshot"]()
+        self.assertEqual(snapshot["fee_category_items"]["Semester Tuition Fee"], "")
+        db.datasets["Item"] = [Row(name="Missing-Fee-Item")]
+        healthy = actual_snapshot_functions(db)["_snapshot"]()
+        self.assertEqual(healthy["fee_category_items"]["Semester Tuition Fee"],
+                         "Missing-Fee-Item")
+
+    def test_native_program_abbreviations_are_included_in_duplicate_scan(self):
+        db = FakeDB({"Program": [
+            Row(name="P-old", program_name="Old display name",
+                program_abbreviation="STARTER")]})
+        data = actual_snapshot_functions(db)["_snapshot"]()
+        self.assertIn("STARTER", data["native_program_abbreviations"])
+
     def test_malformed_fee_plan_is_conflict_not_missing(self):
         db = FakeDB({
             "TH Program Level": [Row(name="L-1", code="PRE-STARTER",
