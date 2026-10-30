@@ -30,6 +30,13 @@ customer to run it or obtain these inputs.
 
 The Product image workflow now exports the runtime inputs on Linux, then runs
 `offline-windows-installer` on Windows after the exact-source app gates pass.
+For the ordinary work/main engineering pipeline it uses the verified
+`create_customer_package.py --no-zip` folder output: a multi-gigabyte
+customer EXE no longer depends on first producing a duplicate ZIP below the
+legacy GitHub Release 2 GiB limit. Tagged legacy releases still request
+the ZIP separately and correctly refuse to publish when it exceeds that
+limit. The provider obtains the allowlisted folder automatically through
+the trusted CI artifact; the customer only receives the final EXE.
 That job downloads the original qualified kit and runtime exports from its own
 run, retrieves official WSL/Docker binaries using the committed version/URL/hash
 catalog, checks their publisher signatures, builds the actual offline TEST EXE,
