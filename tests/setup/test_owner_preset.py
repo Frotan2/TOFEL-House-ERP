@@ -189,6 +189,14 @@ class TestInitialSetupPreset(unittest.TestCase):
                 self.assertIn("duplicate native curriculum", row["details"])
                 self.assertFalse(preview["ready_to_apply"])
 
+    def test_unmapped_legacy_native_program_abbreviation_requires_mapping(self):
+        snapshot = {"native_program_abbreviations": ["PREP-ONE"]}
+        preview = preview_catalog(snapshot, self.preset)
+        row = next(item for item in preview["actions"]
+                   if item["kind"] == "level" and item["code"] == "PREP-1")
+        self.assertEqual(row["status"], "review")
+        self.assertIn("duplicate native curriculum", row["details"])
+
     def test_existing_level_with_missing_native_curriculum_requires_review(self):
         snapshot = {"programs": {"GEN-ENG": {"title": "General English"}},
                     "levels": {"STARTER": {
