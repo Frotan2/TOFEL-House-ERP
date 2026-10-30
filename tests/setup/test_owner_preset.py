@@ -175,6 +175,17 @@ class TestInitialSetupPreset(unittest.TestCase):
         self.assertIn("PRE-STARTER", issues)
         self.assertIn("PRE-STARTER@1405", issues)
 
+    def test_orphan_native_curriculum_never_creates_duplicate_level(self):
+        for native_kind in ("native_program_titles", "native_course_titles"):
+            with self.subTest(native_kind=native_kind):
+                snapshot = {native_kind: ["General English — Starter"]}
+                preview = preview_catalog(snapshot, self.preset)
+                row = next(item for item in preview["actions"]
+                           if item["kind"] == "level" and item["code"] == "STARTER")
+                self.assertEqual(row["status"], "review")
+                self.assertIn("duplicate native curriculum", row["details"])
+                self.assertFalse(preview["ready_to_apply"])
+
     def test_existing_level_with_missing_native_curriculum_requires_review(self):
         snapshot = {"programs": {"GEN-ENG": {"title": "General English"}},
                     "levels": {"STARTER": {
