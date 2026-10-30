@@ -185,6 +185,8 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
     category_items = snapshot.get("fee_category_items")
     tuition = snapshot.get("tuition") or {}
     native_program_titles = set(snapshot.get("native_program_titles") or [])
+    native_program_abbreviations = set(
+        snapshot.get("native_program_abbreviations") or [])
     native_course_titles = set(snapshot.get("native_course_titles") or [])
     steps = []
     for year in preset["academic_years"]:
@@ -214,7 +216,8 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
             native_title = f"{family['title']} — {level['title']}"
             orphan_native = (existing is None
                              and (native_title in native_program_titles
-                                  or native_title in native_course_titles))
+                                  or native_title in native_course_titles
+                                  or level_code in native_program_abbreviations))
             if aliases_found:
                 # Never silently introduce a second native Program for a level.
                 status = "review"
@@ -223,10 +226,11 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
                            "; map the current native Program explicitly")
             elif orphan_native:
                 status = "review"
-                details = ("An existing native Program or Course has this "
-                           "level's exact title but is not linked to a "
-                           "TH Program Level. Inspect and map it; do not "
-                           "create duplicate native curriculum records")
+                details = ("An existing native Program or Course already "
+                           "uses this level's title or Program abbreviation "
+                           "but is not linked to a TH Program Level. Inspect "
+                           "and map it; do not create duplicate native "
+                           "curriculum records")
             else:
                 status = ("create" if existing is None else
                           "match" if (existing.get("family") == code
