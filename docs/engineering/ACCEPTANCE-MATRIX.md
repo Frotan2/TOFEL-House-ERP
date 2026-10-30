@@ -1,3 +1,9 @@
+> **HISTORICAL BASELINE EVIDENCE.** This table is retained so prior acceptance
+> claims can be audited, but its dated issue/pr/check statuses do not describe
+> the current `work` head. Use [Documentation authority](../DOCUMENTATION.md)
+> and the [current release candidate contract](RELEASE-CANDIDATE.md) before
+> interpreting any release status. **Production remains REJECT / NO-GO.**
+>
 # Consolidated acceptance matrix
 
 Current continuation: [29 October reconciliation](READINESS-2026-10-29.md) and
