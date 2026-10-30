@@ -65,7 +65,9 @@ def initial_assessment_values(family, policy, passing_score, retake_wait_days):
 @frappe.whitelist(methods=["POST"])
 def configure_initial_assessment(
         request_key, policy, effective_from, reason, grading_scale,
-        passing_score=60, retake_wait_days=7):
+        passing_score=60, retake_wait_days=7,
+        speaking=25, listening=20, writing=20, reading=15,
+        grammar=10, vocabulary=10, continuous_percent=40):
     """Create one audited initial version from normal numeric form controls.
 
     The User interface never asks for a code, JSON object, schema or command.
@@ -90,6 +92,9 @@ def configure_initial_assessment(
     try:
         facets = initial_assessment_values(
             family, policy, passing_score, retake_wait_days)
+        facets["weights"] = numeric_skill_distribution(
+            speaking, listening, writing, reading, grammar,
+            vocabulary, continuous_percent)
     except ValueError as exc:
         raise frappe.ValidationError(str(exc)) from exc
     return academic.set_assessment_policy_version(
