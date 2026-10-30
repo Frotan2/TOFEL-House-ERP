@@ -90,7 +90,7 @@ def _snapshot():
     # matching TH Program Level. The read-only preview must catch these
     # orphans before offering to create another native identity.
     native_program_rows = _bounded_rows(
-        "Program", fields=["name", "program_name"])
+        "Program", fields=["name", "program_name", "program_abbreviation"])
     native_course_rows = _bounded_rows(
         "Course", fields=["name", "course_name"])
     levels = {}
@@ -156,13 +156,21 @@ def _snapshot():
     category_rows = _bounded_rows(
         "Fee Category", fields=["name", "item"])
     categories = [row.name for row in category_rows]
-    category_items = {row.name: row.item or "" for row in category_rows}
+    # A dangling native accounting Item is not a usable fee category.
+    # Refuse a false "matches" verdict without creating/replacing any Item.
+    category_items = {
+        row.name: (row.item if row.item and frappe.db.exists("Item", row.item) else "")
+        for row in category_rows
+    }
     if len(category_items) != len(categories):
         raise frappe.ValidationError("Duplicate native Fee Category; setup cannot continue")
     return {"programs": programs, "levels": levels, "years": years,
             "fee_categories": categories, "fee_category_items": category_items,
             "tuition": tuition,
             "native_program_titles": [p.get("program_name") for p in native_program_rows],
+            "native_program_abbreviations": [
+                p.get("program_abbreviation") for p in native_program_rows
+            ],
             "native_course_titles": [c.get("course_name") for c in native_course_rows]}
 
 
