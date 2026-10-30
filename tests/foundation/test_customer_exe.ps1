@@ -31,7 +31,14 @@ try {
     foreach ($names in @(
         @('good.txt', '../escape.txt'), @('good.txt', '/absolute.txt'),
         @('good.txt', 'C:\escape.txt'), @('good.txt', 'file:stream'),
-        @('same.txt', 'SAME.txt')
+        @('same.txt', 'SAME.txt'),
+        @('good.txt', 'level./child.txt'),
+        @('good.txt', 'level /child.txt'),
+        @('good.txt', 'CON.txt'),
+        @('good.txt', 'AUX'),
+        @('good.txt', 'COM1/child.txt'),
+        @('good.txt', 'LPT9.txt'),
+        @('good.txt', 'folder\child.txt')
     )) {
         $id = [guid]::NewGuid().ToString('N')
         $bad = Join-Path $temp ($id + '.zip')
@@ -41,6 +48,16 @@ try {
         try { [CustomerSetup]::ExtractPayload($bad, $destination) } catch { $refused = $true }
         if (-not $refused) { throw 'Unsafe installer payload was accepted.' }
         if (Test-Path -LiteralPath (Join-Path $destination 'good.txt')) { throw 'Extractor wrote files before validating the archive.' }
+    }
+    # A high file-count archive must fail before creating even the first file.
+    $many = Join-Path $temp 'many.zip'
+    $manyNames = @(1..4097 | ForEach-Object { ('entry-{0:d4}.txt' -f $_) })
+    Make-Zip $many $manyNames
+    $manyTarget = Join-Path $temp 'many'
+    $manyRejected = $false
+    try { [CustomerSetup]::ExtractPayload($many, $manyTarget) } catch { $manyRejected = $true }
+    if (-not $manyRejected -or (Test-Path -LiteralPath (Join-Path $manyTarget 'entry-0001.txt'))) {
+        throw 'Excessive archive entries were not refused before extraction.'
     }
     $footer = Join-Path $temp 'footer.bin'
     $bytes = New-Object byte[] 148
