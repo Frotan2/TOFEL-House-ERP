@@ -793,6 +793,31 @@ def canonical_facet(name, raw, components=None):
                       ensure_ascii=True)
 
 
+def canonical_initial_facets(raw):
+    """Validate an explicit initial snapshot without seven dated writes.
+
+    Every facet must be supplied, including deliberately absent ones. This
+    creates no defaults and cannot amend an existing policy version.
+    """
+    if isinstance(raw, str):
+        if len(raw) > 65536:
+            raise ValueError("Initial assessment configuration is too large")
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Initial assessment configuration must be an object") from exc
+    if not isinstance(raw, dict) or set(raw) != set(ASSESSMENT_FACETS):
+        raise ValueError("Initial assessment configuration must explicitly supply all seven facets")
+    if len(json.dumps(raw)) > 65536:
+        raise ValueError("Initial assessment configuration is too large")
+    result = {}
+    for name in ASSESSMENT_FACETS:
+        result[name] = canonical_facet(
+            name, raw[name], parse_facet("components", result.get("components")))
+    validate_policy_facets(result)
+    return result
+
+
 def validate_policy_facets(facets):
     """Validate every facet present on one version row, coherently.
 

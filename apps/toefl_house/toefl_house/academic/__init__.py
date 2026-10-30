@@ -856,7 +856,7 @@ def create_assessment_policy(request_key, family, code, title,
 
 @frappe.whitelist(methods=["POST"])
 def set_assessment_policy_version(request_key, policy, effective_from,
-                                  reason, grading_scale=""):
+                                  reason, grading_scale="", initial_facets=None):
     """Append an effective-dated assessment policy version (D1 configuration).
 
     The version carries the reusable native Grading Scale LINK plus the
@@ -865,7 +865,9 @@ def set_assessment_policy_version(request_key, policy, effective_from,
     Owner through the facet commands. Native per-group Assessment Plans
     are scheduled instances, not reusable policy, and are never referenced
     here (A-D1-1). Facets carry forward unchanged; a change reason is
-    mandatory; backdated or same-day versions are refused.
+    mandatory; backdated or same-day versions are refused. A NEW policy may
+    supply all seven initial facets in this same version, avoiding artificial
+    effective dates. Initialization cannot change an already versioned policy.
     """
     def work(actor):
         try:
@@ -903,6 +905,15 @@ def set_assessment_policy_version(request_key, policy, effective_from,
                 f"Grading scale {effective_scale} does not exist; define it "
                 "natively first")
         carried = _carried_facets(versions)
+        if initial_facets is not None:
+            if versions:
+                raise frappe.ValidationError(
+                    "Initial assessment configuration requires a new policy with no versions")
+            try:
+                carried = rules.canonical_initial_facets(initial_facets)
+            except ValueError as exc:
+                raise frappe.ValidationError(str(exc)) from exc
+            _validate_initial_assessment_references(carried, doc.family, effective_scale)
         before = configuration_audit.latest_after_hash(doc.name)
         row = {"effective_from": clean_from,
                "grading_scale": effective_scale or None,
@@ -927,8 +938,38 @@ def set_assessment_policy_version(request_key, policy, effective_from,
 
     payload = {"policy": policy, "effective_from": effective_from,
                "reason": reason, "grading_scale": grading_scale}
+    # Preserve the original payload shape for replay of pre-existing receipts.
+    if initial_facets is not None:
+        payload["initial_facets"] = initial_facets
     return configuration_audit.execute(
         "set_assessment_policy_version", request_key, payload, work)
+
+
+def _validate_initial_assessment_references(carried, family, scale):
+    """Apply the same native-reference checks as the individual facet actions."""
+    facets = rules.validate_policy_facets(carried)
+    for component in facets.get("components") or []:
+        criteria = component.get("criteria")
+        if criteria and not frappe.db.exists(ASSESSMENT_CRITERIA, criteria):
+            raise frappe.ValidationError(f"Assessment criteria {criteria} does not exist")
+    codes = _grade_codes_of_scale(scale)
+    if codes is not None:
+        _refuse_unknown_grade_codes(facets.get("pass_rules") or {}, codes, scale)
+    progression = facets.get("progression") or {}
+    target = progression.get("target")
+    levels = list((facets.get("level_mapping") or {}).get("levels") or [])
+    if target and target != rules.PROGRESSION_NEXT:
+        levels.append(target)
+    for code in levels:
+        if _level_doc(code).family != family:
+            raise frappe.ValidationError(f"Level {code} is outside the {family} program family")
+    for evidence in progression.get("requires") or []:
+        if evidence.get("kind") == "assessment_pass":
+            if not frappe.db.exists(ASSESSMENT_POLICY, {"code": evidence.get("policy")}):
+                raise frappe.ValidationError(f"Unknown assessment policy: {evidence.get('policy')}")
+        elif evidence.get("kind") == "approval":
+            if not frappe.db.exists("Role", evidence.get("role")):
+                raise frappe.ValidationError(f"Unknown role: {evidence.get('role')}")
 
 
 def _append_facet_version(doc, actor, clean_from, clean_reason, scale,

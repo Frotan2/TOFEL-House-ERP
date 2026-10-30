@@ -8474,6 +8474,9 @@ def main():
                         'different_key_duplicate_denied':True}
         check('native-finance-unequal-solar-installment-posting-and-gl',
               traced(native_unequal_solar_installments))
+        from initial_assessment import run as qualify_initial_assessment
+        check('native-owner-complete-initial-assessment-snapshot', traced(
+            lambda: qualify_initial_assessment(users['course_owner'], users['finance_manager'])))
         # Run last: preserve earlier acceptance baselines and retain the new
         # synthetic Company as reproducible concurrent accounting evidence.
         from tuition_refund_races import run as qualify_refund_races

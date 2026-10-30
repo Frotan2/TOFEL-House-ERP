@@ -539,7 +539,7 @@ class D1CommandContractTests(unittest.TestCase):
                                      "title", "description"],
         "set_assessment_policy_version": ["request_key", "policy",
                                           "effective_from", "reason",
-                                          "grading_scale"],
+                                          "grading_scale", "initial_facets"],
         "set_assessment_policy_status": ["request_key", "policy", "active"],
         "validate_assessment_policy": ["request_key", "policy"],
         "set_assessment_components": ["request_key", "policy",
@@ -779,6 +779,36 @@ class D1FacetValidationTests(unittest.TestCase):
          "criteria": "Speaking"},
         {"code": "WRT", "title": "Writing", "maximum_score": 25},
     ]
+
+    def test_initial_snapshot_resolves_components_in_the_same_version(self):
+        import json
+        facets = {name: "" for name in academic_rules.ASSESSMENT_FACETS}
+        facets.update(components=self.COMPONENTS,
+                      weights=[{"component": "SPK", "weight": 1}],
+                      pass_rules={"overall": {"kind": "percent", "value": 60}})
+        before = json.dumps(facets)
+        clean = academic_rules.canonical_initial_facets(facets)
+        self.assertEqual(academic_rules.canonical_initial_facets(before), clean)
+        self.assertEqual(json.dumps(facets), before)
+        self.assertEqual(json.loads(clean["weights"])[0]["component"], "SPK")
+
+    def test_initial_snapshot_rejects_missing_unknown_and_incoherent_facets(self):
+        facets = {name: "" for name in academic_rules.ASSESSMENT_FACETS}
+        for raw in ({}, dict(facets, unknown=""), "not json", " " * 65537):
+            with self.subTest(raw_type=type(raw).__name__):
+                with self.assertRaises(ValueError):
+                    academic_rules.canonical_initial_facets(raw)
+        facets.update(components=self.COMPONENTS,
+                      weights=[{"component": "UNKNOWN", "weight": 1}])
+        with self.assertRaises(ValueError):
+            academic_rules.canonical_initial_facets(facets)
+
+    def test_new_snapshot_does_not_reintroduce_legacy_retake_governing(self):
+        facets = {name: "" for name in academic_rules.ASSESSMENT_FACETS}
+        facets["retakes"] = {"max_attempts": 2, "wait_days": 7,
+                             "scope": "full", "governing": "latest"}
+        with self.assertRaises(ValueError):
+            academic_rules.canonical_initial_facets(facets)
 
     def test_components_shape_and_canonical_form(self):
         import json
