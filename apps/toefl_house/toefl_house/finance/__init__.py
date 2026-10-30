@@ -215,6 +215,20 @@ def resolved_billable_components(pe, fs_name):
     installment plan call this, so a split plan can never price a charge
     differently from the one-payment route.
     """
+    # A single enrollment must never choose arbitrarily between two live
+    # tuition plans for the same native Program/year. This guard is shared
+    # by one-bill AND Solar Hijri installment issuance, not just Owner Setup.
+    active_plans = frappe.db.get_all(
+        FEE_STRUCTURE,
+        filters={"program": pe.program, "academic_year": pe.academic_year,
+                 "docstatus": ("!=", 2)},
+        fields=["name"], limit_page_length=2)
+    if len(active_plans) != 1 or active_plans[0]["name"] != fs_name:
+        raise frappe.ValidationError(
+            "Tuition Fee Structure is missing, cancelled or ambiguous for "
+            "this program and academic year; Finance must review the catalog "
+            "before issuing any native Fees")
+
     components = frappe.db.get_all("Fee Component",
                                    filters={"parent": fs_name, "parenttype": FEE_STRUCTURE},
                                    fields=["fees_category", "amount"], order_by="idx")
@@ -222,6 +236,15 @@ def resolved_billable_components(pe, fs_name):
         raise frappe.ValidationError("Fee structure has no configured components")
 
     from toefl_house.academic import rules
+    try:
+        rules.validate_component_rows([
+            {"category": row.fees_category, "amount": row.amount}
+            for row in components
+        ])
+    except ValueError as exc:
+        raise frappe.ValidationError(
+            "Fee Structure has a duplicate, missing or invalid fee component; "
+            "resolve it before billing") from exc
     # "status" must be part of the fetched fields: resolve_charge_discount
     # re-checks each row's status and a row without the key is not
     # eligible (found by the first hosted odcp-discount run: the field
