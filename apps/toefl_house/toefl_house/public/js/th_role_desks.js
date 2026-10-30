@@ -928,7 +928,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "placement_decision", label: "Released placement decision", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "first_name", label: "First name", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "program", label: "Program", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "academic_year", label: "Academic year", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "academic_year", label: "Choose the academic year", fieldtype: "Link", options: "Academic Year", reqd: 1 },
 			{ fieldname: "branch", label: "Branch", fieldtype: "Data", description: "Blank: the recording officer's own branch." },
 		],
 		"toefl_house.enrollment.enroll_in_program": [
@@ -996,7 +996,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
 		],
 		"toefl_house.academic.create_level": [
-			{ fieldname: "family", label: "Program code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "family", label: "Choose the program", fieldtype: "Link", options: "TH Academic Program", reqd: 1 },
 			{ fieldname: "code", label: "Level code (stable, e.g. PREP-1)", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "title", label: "Title", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "sequence", label: "Position (1 = first)", fieldtype: "Int", reqd: 1 },
@@ -1006,7 +1006,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "next_level", label: "Next level code (optional)", fieldtype: "Data" },
 		],
 		"toefl_house.academic.set_level_duration": [
-			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "level", label: "Choose the level", fieldtype: "Link", options: "TH Program Level", reqd: 1 },
 			{ fieldname: "duration_value", label: "New duration", fieldtype: "Float", reqd: 1 },
 			{ fieldname: "duration_unit", label: "Unit", fieldtype: "Select", options: "Month\nWeek\nDay\nSolar Hijri Month", reqd: 1 },
 			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
@@ -1114,9 +1114,9 @@ frappe.provide("toefl_house.role_desks");
 		"toefl_house.academic.set_level_fee_component": [
 			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "academic_year", label: "Academic year", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "fee_category", label: "Fee type", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "amount", label: "Amount (upsert; same type replaces its amount)", fieldtype: "Float", reqd: 1 },
-			{ fieldname: "company", label: "Company (only when several exist)", fieldtype: "Data" },
+			{ fieldname: "fee_category", label: "Choose the fee type", fieldtype: "Link", options: "Fee Category", reqd: 1 },
+			{ fieldname: "amount", label: "Tuition amount (AFN)", fieldtype: "Currency", reqd: 1, description: "This is the full semester amount, not a second monthly bill. Changing it only affects future bills." },
+			{ fieldname: "company", label: "Company (only when several exist)", fieldtype: "Link", options: "Company" },
 		],
 		"toefl_house.academic.remove_level_fee_component": [
 			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
