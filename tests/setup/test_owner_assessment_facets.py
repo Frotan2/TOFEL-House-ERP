@@ -6,11 +6,24 @@ from pathlib import Path
 APP_ROOT = Path(__file__).resolve().parents[2] / "apps" / "toefl_house"
 sys.path.insert(0, str(APP_ROOT))
 
+# D2: academic/rules is pure, but the toefl_house.academic package
+# __init__ imports frappe. Register a stub academic package pointing
+# at the real directory so only rules loads, then restore the
+# previous entry (the imported module stays bound).
+import types as _types  # noqa: E402
+_previous_academic = sys.modules.get("toefl_house.academic")  # noqa: E402
+_academic = _types.ModuleType("toefl_house.academic")  # noqa: E402
+_academic.__path__ = [str(APP_ROOT / "toefl_house" / "academic")]
+sys.modules["toefl_house.academic"] = _academic
 from toefl_house.academic import rules  # noqa: E402
 from toefl_house.setup_presets.assessment_facets import (  # noqa: E402
     build_assessment_facets,
 )
 from toefl_house.setup_presets.preset import load_preset  # noqa: E402
+if _previous_academic is None:
+    sys.modules.pop("toefl_house.academic", None)
+else:
+    sys.modules["toefl_house.academic"] = _previous_academic
 
 
 class TestProposedAssessmentFacets(unittest.TestCase):
