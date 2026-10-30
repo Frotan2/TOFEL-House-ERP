@@ -43,6 +43,17 @@ class UpdateWorkflowTests(unittest.TestCase):
         # Both buttons must be disabled while any operation is running.
         self.assertIn("$copyStatusButton, $updateButton, $installUpdateButton", GUI)
 
+    def test_gui_update_messages_match_the_english_only_catalogue(self):
+        self.assertIn('function Get-UpdaterText', GUI)
+        self.assertIn('$catalog.language -cne "en"', GUI)
+        self.assertIn('$catalog.fallback -cne "en"', GUI)
+        self.assertIn('return [pscustomobject]@{ en = $entry.en;', GUI)
+        self.assertIn('$body = $result.en', GUI)
+        for removed in ("$entry.fa", "$result.fa", "TH_STAGE-FA", "$stagesFa"):
+            self.assertNotIn(removed, GUI)
+        self.assertEqual(CATALOG["language"], "en")
+        self.assertEqual(CATALOG["fallback"], "en")
+
     def test_the_worker_routes_updates_without_touching_lifecycle_commands(self):
         self.assertIn('"Install", "Start", "Repair", "Stop", "Check", "UpdateCheck", "UpdateInstall"', WORKER)
         self.assertIn('Join-Path $PSScriptRoot "Update TOEFL House ERP.ps1"', WORKER)
