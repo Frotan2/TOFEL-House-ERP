@@ -80,7 +80,8 @@ def work():
                             filters={"parenttype": LEVEL},
                             order_by="effective_from asc", limit=LIMIT_QUEUES * 4)
     active_enrollments = project_rows("setup", ENROLLMENT,
-                                      ["name", "program", "docstatus"],
+                                      ["name", "program", "enrollment_date",
+                                       "docstatus"],
                                       filters={"docstatus": 1}, limit=LIMIT_QUEUES * 4)
     years = project_rows("setup", YEAR, YEAR_FIELDS,
                          order_by="year_start_date asc", limit=LIMIT_QUEUES)
