@@ -34,7 +34,7 @@ def validate_preset(data: dict) -> dict:
     families = data.get("programs") or []
     if len(families) < 4:
         raise ValueError("The four in-person TOEFL House programs are required")
-    codes, levels, policy_codes, aliases = set(), set(), set(), set()
+    codes, levels, policy_codes = set(), set(), set()
     for family in families:
         code = family["code"]
         if code in codes:
@@ -66,11 +66,8 @@ def validate_preset(data: dict) -> dict:
             if level_code in levels:
                 raise ValueError(f"Duplicate level code: {level_code}")
             levels.add(level_code)
-            for alias in level.get("existing_site_aliases") or []:
-                if (not isinstance(alias, str) or not alias.strip()
-                        or alias == level_code or alias in levels or alias in aliases):
-                    raise ValueError(f"Invalid or duplicate existing-site level alias: {alias!r}")
-                aliases.add(alias)
+            if "existing_site_aliases" in level:
+                raise ValueError("Fresh installation cannot include legacy level aliases")
             position = level["sequence"]
             if position in positions:
                 raise ValueError(f"Duplicate position in {code}: {position}")
@@ -81,8 +78,6 @@ def validate_preset(data: dict) -> dict:
             if (not isinstance(level["semester_tuition_afn"], int)
                     or level["semester_tuition_afn"] < 1):
                 raise ValueError(f"Invalid fee for {level_code}")
-    if levels & aliases:
-        raise ValueError("An existing-site alias conflicts with a configured level")
     for family in families:
         count = len(family["levels"])
         if sorted(x["sequence"] for x in family["levels"]) != list(range(1, count + 1)):
@@ -222,22 +217,12 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
                              if family["progression_kind"] == "sequential"
                              and position + 1 < len(family["levels"]) else "")
             existing = existing_levels.get(level_code)
-            aliases_found = [alias for alias in level.get("existing_site_aliases", [])
-                             if alias in existing_levels]
             native_title = f"{family['title']} — {level['title']}"
             orphan_native = (existing is None
                              and (native_title in native_program_titles
                                   or native_title in native_course_titles
-                                  or level_code in native_program_abbreviations
-                                  or any(alias in native_program_abbreviations
-                                         for alias in level.get("existing_site_aliases", []))))
-            if aliases_found:
-                # Never silently introduce a second native Program for a level.
-                status = "review"
-                details = ("Existing site uses alternative code(s) " +
-                           ", ".join(aliases_found) +
-                           "; map the current native Program explicitly")
-            elif orphan_native:
+                                  or level_code in native_program_abbreviations))
+            if orphan_native:
                 status = "review"
                 details = ("An existing native Program or Course already "
                            "uses this level's title or Program abbreviation "
@@ -272,7 +257,7 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
                 # program name or code. Missing approval defers fee creation.
                 # Historical examples must not become draft prices by default.
                 approved_initial_tuition = family.get("initial_tuition_approved", False)
-                if aliases_found or (not approved_initial_tuition and actual is not None):
+                if not approved_initial_tuition and actual is not None:
                     status = "review"
                 elif not approved_initial_tuition:
                     status = "deferred"
