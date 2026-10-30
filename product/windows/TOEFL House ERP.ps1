@@ -133,7 +133,8 @@ function Get-UpdaterCatalog {
         return $null
     }
     if ($null -eq $catalog -or $catalog.schema_version -ne 1 -or
-        $catalog.document_type -cne "toefl-house-erp-updater-strings") {
+        $catalog.document_type -cne "toefl-house-erp-updater-strings" -or
+        $catalog.language -cne "en" -or $catalog.fallback -cne "en") {
         return $null
     }
     return $catalog
@@ -146,7 +147,7 @@ function Get-UpdaterText([string]$Section, [string]$Key) {
     if ($null -eq $entries) { return $null }
     $entry = $entries.$Key
     if ($null -eq $entry) { return $null }
-    if (-not ($entry.en -is [string]) -or -not ($entry.fa -is [string])) { return $null }
+    if (-not ($entry.en -is [string]) -or [string]::IsNullOrWhiteSpace($entry.en)) { return $null }
     return $entry
 }
 
@@ -170,13 +171,13 @@ function Get-UpdateResult {
     if ($null -eq $entry) { return $null }
     $version = ""
     if ([string]$result.version -match '^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$') { $version = [string]$result.version }
-    return [pscustomobject]@{ en = $entry.en; fa = $entry.fa; version = $version; status = [string]$result.status }
+    return [pscustomobject]@{ en = $entry.en; version = $version; status = [string]$result.status }
 }
 
 function Show-UpdateResult {
     $result = Get-UpdateResult
     if ($null -eq $result) { return "" }
-    $body = $result.en + [Environment]::NewLine + [Environment]::NewLine + $result.fa
+    $body = $result.en
     if ($result.version) {
         $body = $body + [Environment]::NewLine + [Environment]::NewLine + "Version: " + $result.version
     }
@@ -427,20 +428,144 @@ $timer.Add_Tick({
     if ($null -eq $script:process) { return }
     try {
         if (Test-Path -LiteralPath $script:stdoutPath -PathType Leaf) {
-            # The update worker writes the same progress line in English and in
-            # Dari. Show both, so a Dari-speaking owner never depends on the
-            # English line to know what the computer is doing.
+            # Display the latest English stage from the controlled worker.
             $tail = @(Get-Content -LiteralPath $script:stdoutPath -Tail 100 -ErrorAction SilentlyContinue)
-            $stages = @($tail | Where-Object { $_ -match '^\[TH_STAGE\]\s+(.+)$' })
-            $stagesFa = @($tail | Where-Object { $_ -match '^\[TH_STAGE-FA\]\s+(.+)$' })
-            if ($stages.Count -gt 0) {
-                $english = ($stages[-1] -replace '^\[TH_STAGE\]\s+', "")
-                if ($stagesFa.Count -gt 0) {
-                    $dari = ($stagesFa[-1] -replace '^\[TH_STAGE-FA\]\s+', "")
-                    $status.Text = $english + [Environment]::NewLine + $dari
-                } else {
-                    $status.Text = $english
+            $stages = @($tail | Where-Object { $_ -match '^\[TH_STAGE\]\s+(.+)
+        }
+        # Refresh the Copy button from the complete report itself, not only
+        # from process-exit timing. The copy handler enforces field allowlists.
+        if ($script:activeAction -eq "Check") {
+            $copyStatusButton.Enabled = [bool](Get-CompletedCheckPath)
+        }
+        $script:process.Refresh()
+        if (-not $script:process.HasExited) { return }
+        $exitCode = $script:process.ExitCode
+        $completedAction = $script:activeAction
+        $script:process.Dispose()
+        $script:process = $null
+        Set-Busy $false
+        if ($exitCode -eq 3010) {
+            $status.Text = "Windows setup needs a restart. Save your work, restart Windows, then reopen TOEFL House ERP and click Install."
+            [System.Windows.Forms.MessageBox]::Show($status.Text, "Restart required") | Out-Null
+        } elseif ($exitCode -eq 0) {
+            if ($completedAction -eq "Prepare") {
+                $status.Text = "Windows prerequisites are prepared. Select Install to continue."
+            } elseif ($completedAction -eq "Stop") {
+                $status.Text = "TOEFL House ERP has stopped safely. Your data remains stored."
+            } elseif ($completedAction -eq "Check") {
+                $script:lastCheckPath = $script:stdoutPath
+                Set-Busy $false
+                $status.Text = "Read-only PC check completed. This is not release approval. See View Details."
+                if (Test-Path -LiteralPath $script:stdoutPath -PathType Leaf) {
+                    Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $script:stdoutPath + '"')
                 }
+            } elseif ($completedAction -eq "UpdateCheck" -or $completedAction -eq "UpdateInstall") {
+                $summary = Show-UpdateResult
+                if (-not $summary) {
+                    $summary = "The update action finished. Select View Details for the recorded result."
+                }
+                $status.Text = $summary
+                if ($completedAction -eq "UpdateInstall") {
+                    [System.Diagnostics.Process]::Start("http://127.0.0.1:8000/") | Out-Null
+                }
+            } else {
+                if ($completedAction -eq "Install") {
+                    try {
+                        $shell = New-Object -ComObject WScript.Shell
+                        $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'TOEFL House ERP.lnk'))
+                        $shortcut.TargetPath = $powershellExe
+                        $shortcut.Arguments = '-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $guiPath + '" -AutoInstall'
+                        $shortcut.WorkingDirectory = $productRoot
+                        $shortcut.Save()
+                    } catch { # A restricted Desktop does not invalidate a successful installation.
+                    }
+                }
+                $status.Text = "TOEFL House ERP is ready. Opening in your browser."
+                [System.Diagnostics.Process]::Start("http://127.0.0.1:8000/") | Out-Null
+            }
+        } else {
+            if ($completedAction -eq "UpdateCheck" -or $completedAction -eq "UpdateInstall") {
+                $summary = Show-UpdateResult
+                if ($summary) { $status.Text = $summary } else { $status.Text = "The update stopped safely. Select View Details, or contact your support provider." }
+            } else {
+                $status.Text = "$completedAction could not finish safely. Nothing has been reset. Select View Details, or contact your support provider."
+            }
+        }
+    } catch {
+        $status.Text = "The launcher could not read the operation status. Check View Details."
+    }
+})
+$form.Add_FormClosing({
+    param($sender, $eventArgs)
+    if ($null -ne $script:process) {
+        $script:process.Refresh()
+        if (-not $script:process.HasExited) {
+            $eventArgs.Cancel = $true
+            [System.Windows.Forms.MessageBox]::Show(
+                "Setup is still running. Keep this window open until it finishes.",
+                "TOEFL House ERP", [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+        }
+    }
+})
+if ($SmokeTest) {
+    if ($install.Text -ne "Install" -or $open.Text -ne "Open / Start" -or
+        $repair.Text -ne "Repair" -or $stop.Text -ne "Stop" -or
+        $checkButton.Text -ne "Check This PC" -or
+        $updateButton.Text -ne "Check for Updates" -or
+        $installUpdateButton.Text -ne "Install Update" -or
+        $guideButton.Text -ne "Owner Readiness Guide" -or
+        $handbookButton.Text -ne "Owner Handbook" -or
+        $dailyGuideButton.Text -ne "How to Use" -or
+        $copyStatusButton.Text -ne "Copy Safe Support Status" -or
+        -not (Test-Path -LiteralPath $guideFile -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $handbookFile -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $dailyGuideFile -PathType Leaf)) {
+        throw "Graphical lifecycle actions were not initialized."
+    }
+    # Simulate the exact Owner case: check writes a full report while the
+    # wrapper still exists, then the GUI must allow safe copying. No real
+    # clipboard access, Docker use, site change or credentials in this test.
+    $syntheticCheck = [System.IO.Path]::GetTempFileName()
+    try {
+        $script:activeAction = "Check"
+        $script:stdoutPath = $syntheticCheck
+        $script:lastCheckPath = ""
+        Set-Content -LiteralPath $syntheticCheck -Value @(
+            "[TH_STAGE] Read-only PC check is running...",
+            "TOEFL HOUSE ERP - READ-ONLY TECHNICAL CHECK",
+            "Windows: 64-bit detected") -Encoding UTF8
+        Set-Busy $true
+        if ($copyStatusButton.Enabled) { throw "Copy activated before PC check completed." }
+        Add-Content -LiteralPath $syntheticCheck -Value "End of read-only PC check."
+        Set-Busy $true
+        if (-not $copyStatusButton.Enabled) { throw "Complete read-only PC check cannot be copied while wrapper is closing." }
+        Set-Busy $false
+        if (-not $copyStatusButton.Enabled) { throw "Copy disabled after completed PC check." }
+        $script:activeAction = "Start"
+        $script:lastCheckPath = ""
+        Set-Busy $false
+        if ($copyStatusButton.Enabled) { throw "Previous PC check leaked into a different lifecycle action." }
+    } finally {
+        Remove-Item -LiteralPath $syntheticCheck -ErrorAction SilentlyContinue
+    }
+    Write-Host "Windows GUI controls initialized; completed-report copy availability verified."
+    exit 0
+}
+Set-Busy $false
+if ($AutoInstall) {
+    $form.Add_Shown({
+        if (Test-Path -LiteralPath (Join-Path $productRoot 'data\secrets\db.env')) {
+            Start-LauncherAction "Start"
+        } else { Start-LauncherAction "Install" }
+    })
+}
+$timer.Start()
+[void]$form.ShowDialog()
+$timer.Stop()
+ })
+            if ($stages.Count -gt 0) {
+                $status.Text = ($stages[-1] -replace '^\[TH_STAGE\]\s+', "")
             }
         }
         # Refresh the Copy button from the complete report itself, not only
