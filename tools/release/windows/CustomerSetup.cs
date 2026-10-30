@@ -11,6 +11,8 @@ using System.Windows.Forms;
 
 public class CustomerSetup {
     const int FooterSize = 48;
+    const int MaxPayloadEntries = 4096;
+    const long MaxUnpackedBytes = 48L * 1024 * 1024 * 1024;
     [STAThread]
     static void Main(string[] args) {
         bool verifyOnly = args.Length == 1 && args[0] == "--verify-payload";
@@ -38,7 +40,9 @@ public class CustomerSetup {
                     string receipt = Path.Combine(target, ".payload-sha256");
                     if (!File.Exists(receipt) || File.ReadAllText(receipt).Trim() != digest)
                         throw new Exception("An existing installation was preserved. Use its TOEFL House ERP shortcut or the verified update workflow. This installer will not replace your records.");
-                    Launch(target, true);
+                    // Opening the same verified installer again is a launch,
+                    // never a second attempt to initialize the database.
+                    Launch(target, false);
                     return;
                 }
                 Directory.CreateDirectory(parent);
@@ -141,9 +145,24 @@ public class CustomerSetup {
         string prefix = Path.GetFullPath(extracted) + Path.DirectorySeparatorChar;
         HashSet<string> names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         using (ZipArchive archive = ZipFile.OpenRead(payload)) {
+            if (archive.Entries.Count > MaxPayloadEntries)
+                throw new Exception("Installer archive contains too many files.");
             // Validate the entire index before writing the first file.
+            // Reject Windows aliases such as "name.", "name " and device paths,
+            // as well as archive expansion beyond a bounded customer disk budget.
+            long expanded = 0;
             foreach (ZipArchiveEntry entry in archive.Entries) {
-                string name = entry.FullName.Replace('/', Path.DirectorySeparatorChar);
+                string raw = entry.FullName;
+                if (string.IsNullOrEmpty(raw) || raw.Contains("\\") ||
+                    entry.Length < 0 || entry.Length > MaxUnpackedBytes - expanded)
+                    throw new Exception("Unsafe installer archive.");
+                expanded += entry.Length;
+                foreach (string segment in raw.TrimEnd('/').Split('/')) {
+                    if (string.IsNullOrEmpty(segment) || segment == "." || segment == ".." ||
+                        segment.TrimEnd(' ', '.') != segment || IsDeviceName(segment))
+                        throw new Exception("Unsafe installer archive path.");
+                }
+                string name = raw.Replace('/', Path.DirectorySeparatorChar);
                 string path = Path.GetFullPath(Path.Combine(extracted, name));
                 if (Path.IsPathRooted(name) || name.Contains(":") || !path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
                     !names.Add(path) || ((entry.ExternalAttributes >> 16) & 0xF000) == 0xA000)
@@ -156,6 +175,15 @@ public class CustomerSetup {
                 Application.DoEvents();
             }
         }
+    }
+    static bool IsDeviceName(string segment) {
+        string stem = segment.Split('.')[0].ToUpperInvariant();
+        if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL")
+            return true;
+        if (stem.Length == 4 && (stem.StartsWith("COM") || stem.StartsWith("LPT")) &&
+            stem[3] >= '1' && stem[3] <= '9')
+            return true;
+        return false;
     }
     static void Launch(string target, bool install) {
         string script = Path.Combine(target, "product", "windows", "TOEFL House ERP.ps1");
