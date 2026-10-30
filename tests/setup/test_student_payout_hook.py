@@ -13,9 +13,24 @@ from pathlib import Path
 
 APP = Path(__file__).resolve().parents[2] / "apps" / "toefl_house"
 sys.path.insert(0, str(APP))
+# D2: same stub-package load as test_student_payout_hold — the guard
+# module is pure, but the finance package __init__ imports frappe.
+_previous = {name: sys.modules.get(name)
+             for name in ("toefl_house", "toefl_house.finance")}
+_root = types.ModuleType("toefl_house")
+_root.__path__ = [str(APP / "toefl_house")]
+_finance = types.ModuleType("toefl_house.finance")
+_finance.__path__ = [str(APP / "toefl_house" / "finance")]
+sys.modules["toefl_house"] = _root
+sys.modules["toefl_house.finance"] = _finance
 from toefl_house.finance.student_payout_policy import (  # noqa: E402
     student_pay_write_allowed,
 )
+for _name, _old in _previous.items():
+    if _old is None:
+        sys.modules.pop(_name, None)
+    else:
+        sys.modules[_name] = _old
 
 GUARD_SOURCE = APP / "toefl_house" / "finance" / "refunds.py"
 
@@ -47,12 +62,23 @@ def real_hook():
     security.require_operational = lambda: require_calls.append("operational")
     payout = types.ModuleType("toefl_house.finance.student_payout_policy")
     payout.student_pay_write_allowed = student_pay_write_allowed
+    # D2: since the native pair landed, guard_payment_entry also
+    # imports tuition_refund_native.guard_payment. A synthetic
+    # NativeDoc is by construction not a pair document, and the real
+    # guard_payment returns False for non-pair documents (after
+    # frappe.db checks this harness cannot run), so stub it as False
+    # and let the policy check decide — the pair path itself is
+    # covered by the finance native tests, not by this hook test.
+    native = types.ModuleType("toefl_house.finance.tuition_refund_native")
+    native.guard_payment = lambda doc, method=None: False
 
     def restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
         if name == "toefl_house.security":
             return security
         if name == "toefl_house.finance.student_payout_policy":
             return payout
+        if name == "toefl_house.finance.tuition_refund_native":
+            return native
         raise AssertionError(f"Unexpected dynamic import in finance guard: {name}")
 
     env = {
