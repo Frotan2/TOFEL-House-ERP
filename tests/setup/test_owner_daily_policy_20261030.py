@@ -36,7 +36,7 @@ class OwnerDailyPolicy(unittest.TestCase):
                                      approved["ge_monthly_fee_afn" if program["code"] == "GEN-ENG" else "eap_monthly_fee_afn"] * level["duration_months"])
                     self.assertIn(level["duration_months"], (1, 2))
 
-    def test_specialist_duration_and_legacy_code_not_misrepresented(self):
+    def test_specialist_duration_and_clean_level_codes(self):
         specialist = self.policy["specialist_courses"]
         programs = {item["code"]: item for item in self.preset["programs"]}
         self.assertEqual(programs["SPECIAL-SPEAKING"]["levels"][0]["duration_months"],
@@ -49,7 +49,15 @@ class OwnerDailyPolicy(unittest.TestCase):
         self.assertEqual(toefl["code"], "TOEFL-PREP-4M")
         self.assertEqual(toefl["duration_months"],
                          specialist["toefl_preparation_months"])
-        self.assertIn("TOEFL-PREP-2M", toefl["existing_site_aliases"])
+        self.assertNotIn("existing_site_aliases", toefl)
+        self.assertEqual(self.preset["installation_profile"],
+                         self.policy["first_installation"]["profile"])
+        self.assertFalse(self.policy["first_installation"]["legacy_data_migration"])
+        self.assertFalse(self.policy["first_installation"]["demo_data_in_customer_package"])
+        self.assertTrue(all(value == 0 for key, value in
+                            self.preset["initial_operational_data"].items()
+                            if key not in ("legacy_data_import_enabled",
+                                           "demo_data_in_customer_package")))
         self.assertEqual(specialist["tuition_status"],
                          "OWNER_CONFIRMED_CONFIGURATION_ONLY_NOT_PRODUCTION_AUTHORIZATION")
 
