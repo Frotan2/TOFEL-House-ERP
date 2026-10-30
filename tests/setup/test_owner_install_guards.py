@@ -103,6 +103,19 @@ class InstallerGateTests(unittest.TestCase):
                                self.frappe(True, True, database))()
         isolated_guard("_finance_preconditions", self.frappe(True, True))()
 
+    def test_first_run_serializes_and_rechecks_after_native_lock(self):
+        source = INSTALLER.read_text(encoding="utf-8")
+        begin = source.index("def initialize_owner_catalog(")
+        command = source[begin:]
+        lock = command.index('frappe.db.get_value("DocType", "TH Academic Program", "name", for_update=True)')
+        post_lock_guard = command.index("_qualified_site()", lock)
+        snapshot = command.index("snapshot = _snapshot()", post_lock_guard)
+        planning = command.index("plan = prepare_catalog_plan(snapshot)", snapshot)
+        self.assertLess(lock, post_lock_guard)
+        self.assertLess(post_lock_guard, snapshot)
+        self.assertLess(snapshot, planning)
+        self.assertLess(planning, command.index("for action in plan[\"actions\"]"))
+
     def test_post_only_and_no_manual_commits(self):
         source = INSTALLER.read_text(encoding="utf-8")
         self.assertIn('@frappe.whitelist(methods=["POST"])', source)
