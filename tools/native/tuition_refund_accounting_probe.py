@@ -41,6 +41,14 @@ def main():
         if not frappe.db.exists("Party Type", "Student"):
             frappe.get_doc(dict(doctype="Party Type", party_type="Student", account_type="Receivable")).insert()
         company = frappe.get_doc("Company", "SYN Refund Research")
+        # Pinned Education Fees fetches this missing Fee Structure column.
+        # Apply the same native Custom Field configuration shipped by the
+        # product, without installing its payout-containment hooks here.
+        from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+
+        create_custom_fields({"Fee Structure": [{"fieldname": "income_account", "label": "Income Account",
+            "fieldtype": "Link", "options": "Account", "insert_after": "receivable_account"}]})
+        report["schema_prerequisite"] = "Product Fee Structure income_account compatibility field; native Custom Field API"
         cash = frappe.db.get_value("Account", {"company": company.name, "account_type": "Cash", "is_group": 0}, "name")
         assert cash and company.default_receivable_account and company.default_income_account and company.cost_center
         # Native setup-wizard catalog scaffolding; no business pricing policy.
