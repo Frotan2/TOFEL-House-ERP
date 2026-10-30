@@ -3,7 +3,7 @@
 The Windows scripts cannot run on this Linux CI runner, so these tests pin the
 safety properties of the update path: a separate graphical workflow, explicit
 Owner confirmation, a read-only engine call, prebuilt-image-only installs, no
-destructive Docker command, bilingual messages and updater files inside the
+destructive Docker command, English messages and updater files inside the
 verified customer package. The real PowerShell smoke test runs on the Windows
 runner in .github/workflows/windows-customer-package.yml.
 """
@@ -198,15 +198,14 @@ class UpdateWorkflowTests(unittest.TestCase):
         for forbidden in ("docker ", "volume rm", "restore", "activate", "rm -rf", "prune"):
             self.assertNotIn(forbidden, ENTRYPOINT)
 
-    def test_every_customer_visible_message_is_english_and_dari(self):
+    def test_every_customer_visible_message_is_english_only(self):
         self.assertEqual(CATALOG["document_type"], "toefl-house-erp-updater-strings")
         for section in ("messages", "launcher", "ui"):
             self.assertIn(section, CATALOG)
             for key, entry in CATALOG[section].items():
-                self.assertEqual(set(entry), {"en", "fa"}, key)
+                self.assertEqual(set(entry), {"en"}, key)
                 self.assertTrue(entry["en"].strip(), key)
-                self.assertTrue(entry["fa"].strip(), key)
-                self.assertRegex(entry["fa"], r"[\u0600-\u06FF\u200c]", key)
+                self.assertNotRegex(entry["en"], r"[\u0600-\u06FF\u200c]", key)
         for key in ("updater.checking", "updater.available", "updater.up_to_date", "updater.completed",
                     "updater.failed", "updater.recovery_required", "updater.cancelled", "updater.not_installed",
                     "updater.installed_version_unknown", "updater.engine_failed", "updater.engine_missing",
@@ -308,7 +307,7 @@ class TwoPhaseProtocolTests(unittest.TestCase):
             self.assertNotIn(command, UPDATE)
         self.assertIn('Invoke-DockerVerbose @("load", "--input", $Check.Archive)', UPDATE)
 
-    def test_the_new_refusal_codes_are_translatable(self):
+    def test_the_new_refusal_codes_have_english_messages(self):
         for key in ("transaction.missing", "transaction.invalid", "transaction.expired",
                     "transaction.mismatch", "transaction.replayed", "transaction.unknown",
                     "transaction.tampered", "apply.archive_mismatch",
@@ -316,7 +315,8 @@ class TwoPhaseProtocolTests(unittest.TestCase):
                     "apply.host_unsafe", "apply.journal_unsafe"):
             self.assertIn(key, CATALOG["messages"])
             entry = CATALOG["messages"][key]
-            self.assertTrue(entry["en"].strip() and entry["fa"].strip(), key)
+            self.assertEqual(set(entry), {"en"}, key)
+            self.assertTrue(entry["en"].strip(), key)
 
 
 class PackageMembershipTests(unittest.TestCase):
