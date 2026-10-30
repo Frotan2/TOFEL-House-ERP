@@ -53,6 +53,37 @@ class OwnerDailyPolicy(unittest.TestCase):
         self.assertEqual(specialist["tuition_status"],
                          "OWNER_CONFIRMED_CONFIGURATION_ONLY_NOT_PRODUCTION_AUTHORIZATION")
 
+    def test_latest_timetable_and_retake_are_the_owner_confirmed_values(self):
+        timetable = self.policy["timetable"]
+        self.assertEqual(timetable, self.preset["daily_timetable"])
+        self.assertEqual(timetable["status"], "OWNER_CONFIRMED")
+        self.assertEqual(timetable["session_minutes"], 70)
+        self.assertEqual(timetable["normal_break_minutes"], 10)
+        self.assertEqual(timetable["break_after_first_morning_session_minutes"], 20)
+        self.assertEqual(self.preset["institution"]["working_hours_local"],
+                         {"start": "06:20", "end": "17:50"})
+        self.assertEqual(self.policy["assessment_retake_governing"]["value"], "best")
+        def minutes(clock):
+            h, m = map(int, clock.split(":"))
+            return h * 60 + m
+        sessions = timetable["sessions"]
+        self.assertEqual([r["code"] for r in sessions], [f"S{i:03d}" for i in range(1, 8)])
+        for track in ("male", "female"):
+            for index, row in enumerate(sessions):
+                window = row[track]
+                self.assertEqual(minutes(window["end"]) - minutes(window["start"]), 70)
+                self.assertFalse(minutes(window["start"]) < 13 * 60
+                                 and minutes(window["end"]) > 12 * 60)
+                if index in (1, 2, 3, 5, 6):
+                    self.assertEqual(minutes(window["start"]) - minutes(sessions[index - 1][track]["end"]),
+                                     20 if index == 1 else 10)
+        for index, row in enumerate(sessions):
+            self.assertEqual(minutes(row["female"]["start"]) - minutes(row["male"]["start"]),
+                             10 if index < 4 else -10)
+        self.assertEqual(sessions[-1]["male"]["end"], "17:50")
+        self.assertEqual(sessions[-1]["female"]["end"], "17:40")
+        self.assertEqual(self.policy["rooms"]["numbers"], list(range(2, 18)))
+
     def test_initial_staff_and_production_are_not_silently_enabled(self):
         staff = self.policy["staff_accounts"]
         self.assertEqual(staff["initial_login_count_including_existing_owner"], 6)

@@ -669,7 +669,7 @@ class ConfigurationNavigationTests(unittest.TestCase):
             "toefl_house.academic.create_assessment_policy":
                 ["family", "code", "title", "description"],
             "toefl_house.academic.set_assessment_policy_version":
-                ["policy", "effective_from", "reason", "grading_scale"],
+                ["policy", "effective_from", "reason", "grading_scale", "initial_facets"],
             "toefl_house.academic.set_assessment_policy_status":
                 ["policy", "active"],
             "toefl_house.academic.validate_assessment_policy": ["policy"],

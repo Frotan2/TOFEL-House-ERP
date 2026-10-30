@@ -133,7 +133,9 @@ def preview_owner_initial_setup():
     preview = preview_catalog(snapshot)
     from toefl_house.setup_presets.preset import load_preset
     import json
-    scale = load_preset()["assessment"]["grading_scale"]
+    preset = load_preset()
+    scale = preset["assessment"]["grading_scale"]
+    preview["daily_timetable"] = preset.get("daily_timetable")
     preview["grading_scale_suggestion"] = {
         "grading_scale_name": scale["name"],
         "intervals": json.dumps([

@@ -1030,6 +1030,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
 			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
 			{ fieldname: "grading_scale", label: "Grading scale (native, optional)", fieldtype: "Data" },
+			{ fieldname: "initial_facets", label: "Initial assessment settings", fieldtype: "Small Text", hidden: 1, read_only: 1 },
 		],
 		"toefl_house.academic.set_assessment_components": [
 			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
@@ -1325,6 +1326,8 @@ frappe.provide("toefl_house.role_desks");
 				}
 				const args = { request_key: values.request_key };
 				fields.forEach((field) => { args[field.fieldname] = values[field.fieldname]; });
+				if (action.endpoint === "toefl_house.academic.set_assessment_policy_version" &&
+					!args.initial_facets) delete args.initial_facets;
 				if (ownAttendance) {
 					const statuses = {};
 					action.args.roster.forEach((member, index) => {
@@ -1545,6 +1548,28 @@ frappe.provide("toefl_house.role_desks");
 						text("Already matches") + ": " + Number(data.counts.match || 0) + "  ·  " +
 						text("Needs review") + ": " + Number(data.counts.review || 0)
 					).appendTo(output);
+					const timetable = data.daily_timetable;
+					if (timetable && timetable.status === "OWNER_CONFIRMED" &&
+						Array.isArray(timetable.sessions) && timetable.sessions.length === 7) {
+						$("<h4></h4>").text(text("Daily sessions — Kabul time")).appendTo(output);
+						const periods = $("<table class='table table-bordered table-condensed'></table>").appendTo(output);
+						const headings = $("<thead><tr></tr></thead>").appendTo(periods).find("tr");
+						[text("Session"), text("Male classes"), text("Female classes")].forEach(
+							(label) => $("<th></th>").text(label).appendTo(headings)
+						);
+						const rows = $("<tbody></tbody>").appendTo(periods);
+						timetable.sessions.forEach((period) => {
+							const row = $("<tr></tr>").appendTo(rows);
+							$("<td></td>").text(String(period.code || "")).appendTo(row);
+							["male", "female"].forEach((track) => {
+								const window = period[track] || {};
+								$("<td></td>").text(String(window.start || "") + "–" + String(window.end || "")).appendTo(row);
+							});
+						});
+						$("<p></p>").text(text(
+							"Friday is the weekly day off. These periods do not assign classes, rooms or teachers."
+						)).appendTo(output);
+					}
 					const scale = data.grading_scale_suggestion;
 					if (scale && typeof scale.grading_scale_name === "string" &&
 						typeof scale.intervals === "string" && scale.intervals.length < 4096) {

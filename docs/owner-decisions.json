@@ -713,6 +713,134 @@
     "delivery": {
       "customer_target": "Single verified signed offline Windows Setup EXE, no code, registry downloads or nested ZIP extraction required of customer",
       "production_state": "REJECT_UNTIL_EXACT_HEAD_CI_REAL_WINDOWS_INDEPENDENT_REVIEW_BACKUP_RECOVERY_ACCEPTANCE"
+    },
+    "timetable": {
+      "status": "OWNER_CONFIRMED",
+      "confirmed_on": "2026-10-31",
+      "timezone": "Asia/Kabul",
+      "session_minutes": 70,
+      "normal_break_minutes": 10,
+      "break_after_first_morning_session_minutes": 20,
+      "friday_weekly_off": true,
+      "lunch": {
+        "start": "12:00",
+        "end": "13:00"
+      },
+      "sessions": [
+        {
+          "code": "S001",
+          "male": {
+            "start": "06:20",
+            "end": "07:30"
+          },
+          "female": {
+            "start": "06:30",
+            "end": "07:40"
+          }
+        },
+        {
+          "code": "S002",
+          "male": {
+            "start": "07:50",
+            "end": "09:00"
+          },
+          "female": {
+            "start": "08:00",
+            "end": "09:10"
+          }
+        },
+        {
+          "code": "S003",
+          "male": {
+            "start": "09:10",
+            "end": "10:20"
+          },
+          "female": {
+            "start": "09:20",
+            "end": "10:30"
+          }
+        },
+        {
+          "code": "S004",
+          "male": {
+            "start": "10:30",
+            "end": "11:40"
+          },
+          "female": {
+            "start": "10:40",
+            "end": "11:50"
+          }
+        },
+        {
+          "code": "S005",
+          "male": {
+            "start": "14:00",
+            "end": "15:10"
+          },
+          "female": {
+            "start": "13:50",
+            "end": "15:00"
+          }
+        },
+        {
+          "code": "S006",
+          "male": {
+            "start": "15:20",
+            "end": "16:30"
+          },
+          "female": {
+            "start": "15:10",
+            "end": "16:20"
+          }
+        },
+        {
+          "code": "S007",
+          "male": {
+            "start": "16:40",
+            "end": "17:50"
+          },
+          "female": {
+            "start": "16:30",
+            "end": "17:40"
+          }
+        }
+      ],
+      "morning_female_offset_minutes": 10,
+      "afternoon_female_offset_minutes": -10,
+      "unallocated_time_is_not_automatically_a_class": true,
+      "does_not_assign_classes_rooms_or_instructors": true
+    },
+    "assessment_retake_governing": {
+      "confirmed_on": "2026-10-31",
+      "value": "best",
+      "meaning": "Keep the higher score after an approved retake"
+    },
+    "rooms": {
+      "confirmed_on": "2026-10-31",
+      "numbers": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "owner_confirmed_capacity_range": [
+        15,
+        30
+      ],
+      "initial_conservative_operating_limit": 15,
+      "individual_measured_capacities_not_supplied": true
     }
   }
 }

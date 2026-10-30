@@ -927,7 +927,7 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
         "toefl_house.academic.set_assessment_policy_version": ("academic/__init__.py",
                                                               ["request_key", "policy",
                                                                "effective_from", "reason",
-                                                               "grading_scale"]),
+                                                               "grading_scale", "initial_facets"]),
         "toefl_house.academic.set_assessment_policy_status": ("academic/__init__.py",
                                                              ["request_key", "policy",
                                                               "active"]),

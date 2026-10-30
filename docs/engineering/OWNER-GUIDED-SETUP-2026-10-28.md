@@ -128,3 +128,48 @@ preserved aliases. These reads used a read-only source helper and are **not**
 acceptance of a newly installed image. The installed image lacks the newer Owner
 grading and billing setup commands, so those setup steps still require the
 qualified update. Backup remains Off. Production remains NO-GO.
+
+
+## Initial assessment configuration and latest timetable — 2026-10-31
+
+A new policy can now supply all seven explicit `initial_facets` to the existing
+`set_assessment_policy_version` command together with its native grading scale.
+This creates one effective-dated, audited version instead of requiring seven
+artificial dates. Existing policies cannot use this initialization path; their
+history and strict increasing effective dates remain unchanged. Calls without
+this optional argument retain their original audit payload and replay identity.
+Native criteria, scale grade codes, program-family level mapping, progression
+policy and approval-role references are validated before the version is saved.
+
+The real Windows MariaDB-backed synthetic qualification verified a complete
+initial version, same-key replay, non-Owner denial, foreign-family and unknown
+grade refusal, refusal to initialize an already versioned policy, and old audit
+payload compatibility. All fixture writes rolled back and exact table hashes
+matched. This source-helper evidence does not certify the installed candidate.
+The same qualification is now mandatory in Native CI.
+
+The Owner-confirmed timetable is below, in Asia/Kabul local time. Morning
+female classes start ten minutes after the male classes; afternoon female
+classes start ten minutes before. Each session is seventy minutes. The first
+morning break is twenty minutes; the remaining adjacent-session breaks are ten.
+Lunch is 12:00–13:00; other midday time stays unallocated.
+
+| Session | Male | Female |
+|---|---|---|
+| S001 | 06:20–07:30 | 06:30–07:40 |
+| S002 | 07:50–09:00 | 08:00–09:10 |
+| S003 | 09:10–10:20 | 09:20–10:30 |
+| S004 | 10:30–11:40 | 10:40–11:50 |
+| S005 | 14:00–15:10 | 13:50–15:00 |
+| S006 | 15:20–16:30 | 15:10–16:20 |
+| S007 | 16:40–17:50 | 16:30–17:40 |
+
+Friday remains the sole weekly holiday. These are institutional period patterns,
+not scheduled classes or instructor assignments. Overlapping male/female classes
+need distinct available instructors/rooms under the existing native conflict
+checks. Sixteen rooms numbered 2–17 were created with an explicitly documented
+conservative operating limit of fifteen, the lower bound of the Owner-confirmed
+15–30 range. Individual measured capacities were not supplied. Eleven existing
+native Programs now link to their native integrated Course; program identifiers
+and history were retained. No classes, sessions or financial documents were
+created. Approved retakes keep the higher score.
