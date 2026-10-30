@@ -25,8 +25,13 @@ _ALLOWED = {
     "create_fee_type": academic.create_fee_type,
     "set_level_fee_component": academic.set_level_fee_component,
 }
-_NO_LIVE_RECORDS = ("Student", "Student Applicant", "Program Enrollment",
-                    "Fees", "Payment Entry", "Sales Invoice", "Salary Slip")
+_NO_LIVE_RECORDS = (
+    "Student", "Student Applicant", "Program Enrollment",
+    "Student Group", "Course Schedule", "Student Attendance",
+    "TH Placement Attempt", "TH Assessment Book", "TH Academic Result",
+    "Fees", "Payment Entry", "Sales Invoice", "Salary Slip", "Payroll Entry",
+    "TH Tuition Refund Request",
+)
 
 
 def _qualified_site():
