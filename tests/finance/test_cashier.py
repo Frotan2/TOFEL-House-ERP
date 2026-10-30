@@ -349,7 +349,7 @@ class CommandContractTests(unittest.TestCase):
         self.assertIn('"toefl_house.finance.cashier.reconcile_cashier_day"', gui)
         self.assertIn('fieldname: "drawer_counted_" + index', gui)
         self.assertIn("args.counts = JSON.stringify(counts);", gui)
-        self.assertIn("No balance is assumed.", gui)
+        self.assertIn("never an assumed ledger amount.", gui)
         self.assertIn('No payment or cash movement is created.', gui)
 
     def test_package_date_class_is_not_shadowed_inside_the_command(self):
