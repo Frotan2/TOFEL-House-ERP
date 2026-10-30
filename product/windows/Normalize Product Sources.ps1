@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $utf8Strict = [System.Text.UTF8Encoding]::new($false, $true)
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 $textExtensions = @(
-    ".py", ".sh", ".js", ".json", ".css", ".md", ".txt", ".toml",
+    ".py", ".sh", ".js", ".cjs", ".json", ".css", ".md", ".txt", ".toml",
     ".yaml", ".yml", ".html", ".xml", ".csv", ".svg", ".jinja", ".jinja2"
 )
 

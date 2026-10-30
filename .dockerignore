@@ -41,6 +41,9 @@ tools/foundation/*
 !tools/foundation/secure_markdown.py
 !tools/foundation/secure_deepmerge.py
 !tools/foundation/deepmerge-hashes.json
+!tools/foundation/secure_uri_decoder.py
+!tools/foundation/decoder/
+!tools/foundation/decoder/**
 !tools/foundation/fix_setup_sidebar.py
 **/__pycache__
 **/*.pyc

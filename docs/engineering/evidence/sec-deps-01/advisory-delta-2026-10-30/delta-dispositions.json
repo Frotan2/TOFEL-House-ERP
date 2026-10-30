@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-30",
+  "kind": "additive_advisory_delta_no_register_mutation",
+  "basis": "Foundation run 40988559170 failed on npm decode-uri-component 1243857. The new high-severity advisory is remediated by an exact upstream 0.5.1 decoder backport with a pinned CommonJS compatibility adapter; no advisory or severity is suppressed.",
+  "packages": [
+    {
+      "package": "npm:decode-uri-component@0.2.2",
+      "advisories": [
+        {
+          "id": "GHSA-qr28-fpjm-wq7f",
+          "aliases": ["CVE-2026-118664", "1243857"],
+          "severity": "high",
+          "first_patched": "0.5.1",
+          "summary": "Quadratic percent-run replacement can exhaust the Node event loop.",
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "secure_uri_decoder.py rejects unknown publisher manifests and input bytes before any write, installs the exact upstream 0.5.1 decoder body from commit 58ed85f5adc7cfaee5e49e4d52b067f172d0bcb6, and preserves the pinned CommonJS API and plus-to-space behavior through a separate adapter. Foundation and Native verify all installed copies and execute both hostile input patterns; the image build applies the same backport before asset compilation, re-verifies after build, and independently replays its receipt in the final shipped image. Package manifests and lockfiles remain unchanged, so raw version matches remain visible. See README.md and exact-head artifacts; source implementation alone is not a passing release gate.",
+          "fix_path": "Retire the compatibility backport when a reviewed pinned dependency graph supports upstream ESM 0.5.1 or later; requalify every installed copy and build. New advisory IDs remain fail-closed."
+        }
+      ]
+    }
+  ]
+}

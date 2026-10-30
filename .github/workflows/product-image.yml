@@ -87,6 +87,9 @@ on:
       - tools/foundation/secure_markdown.py
       - tools/foundation/secure_deepmerge.py
       - tools/foundation/deepmerge-hashes.json
+      - tools/foundation/secure_uri_decoder.py
+      - tools/foundation/decoder/**
+      - tools/native/tuition_refund_accounting_probe.py
       - tools/foundation/fix_setup_sidebar.py
       - product/**
       - apps/**
@@ -242,6 +245,26 @@ jobs:
         with:
           name: deepmerge-distribution-image
           path: ${{ runner.temp }}/deepmerge-distribution-image.json
+          if-no-files-found: error
+      - name: Verify shipped URI decoder and hostile inputs
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint python3 toefl-house-erp-app:ci -c '
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0, "/product")
+          from secure_uri_decoder import secure, receipt
+          root = Path("/home/frappe/bench/apps")
+          actual = receipt(root, secure(root, verify=True))
+          expected = json.loads(Path("/build/uri-decoder-distribution.json").read_text())
+          assert actual == expected, "Shipped decoder differs from the pre-export receipt"
+          print(json.dumps(actual, indent=2))
+          ' > "$RUNNER_TEMP/uri-decoder-distribution-image.json"
+      - name: Keep shipped URI decoder evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: uri-decoder-distribution-image
+          path: ${{ runner.temp }}/uri-decoder-distribution-image.json
           if-no-files-found: error
       - name: Report image footprint
         run: |

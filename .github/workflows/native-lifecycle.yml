@@ -23,6 +23,8 @@ on:
       - tools/foundation/secure_hrms.py
       - tools/foundation/secure_deepmerge.py
       - tools/foundation/deepmerge-hashes.json
+      - tools/foundation/secure_uri_decoder.py
+      - tools/foundation/decoder/**
       - tools/foundation/hrms-locks/**
       - tools/foundation/banking-locks/**
       - tools/foundation/secure_weasyprint.py
