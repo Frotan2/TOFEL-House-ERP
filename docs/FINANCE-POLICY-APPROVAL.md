@@ -88,11 +88,12 @@ until then no unrestricted discretionary credit may be enabled.
 
 **Confirmed requirements**
 
-1. **Calendar:** Afghanistan's Solar Hijri / هجری شمسی calendar, using Afghan
-   month names (حمل، ثور، جوزا، سرطان، اسد، سنبله، میزان، عقرب، قوس، جدی،
-   دلو، حوت). Financial periods and reports group by these months, not by
-   Gregorian months or fixed 30-day approximations. The fiscal year runs
-   ۱ حمل to the last day of حوت; historical fiscal-year mappings are not
+1. **Calendar:** Afghanistan's Solar Hijri calendar, using the Afghan
+   month names Hamal, Saur, Jawza, Saratan, Asad, Sonbola, Mizan, Aqrab,
+   Qaws, Jadi, Dalw and Hoot. Financial periods and reports group by these
+   months, not Gregorian months or fixed 30-day approximations. The fiscal
+   year runs from 1 Hamal to the last day of Hoot; previously posted fiscal
+   period mappings are not
    altered without an approved migration. Operational timezone: Asia/Kabul.
    Native Frappe / ERPNext canonical accounting dates remain ISO dates
    internally; the conversion/display/reporting layer must be bijective
