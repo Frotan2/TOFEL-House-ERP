@@ -1024,6 +1024,20 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "active", label: "Active", fieldtype: "Select", options: "1\n0", reqd: 1, description: "0 retires the level; refused while submitted enrollments still run on it." },
 		],
+		"toefl_house.setup_presets.owner_policy_forms.revise_grading_weights": [
+			{ fieldname: "policy", label: "Academic grading policy", fieldtype: "Data", read_only: 1, reqd: 1 },
+			{ fieldname: "speaking", label: "Speaking share (%)", fieldtype: "Percent", default: 25, reqd: 1 },
+			{ fieldname: "listening", label: "Listening share (%)", fieldtype: "Percent", default: 20, reqd: 1 },
+			{ fieldname: "writing", label: "Writing share (%)", fieldtype: "Percent", default: 20, reqd: 1 },
+			{ fieldname: "reading", label: "Reading share (%)", fieldtype: "Percent", default: 15, reqd: 1 },
+			{ fieldname: "grammar", label: "Grammar share (%)", fieldtype: "Percent", default: 10, reqd: 1 },
+			{ fieldname: "vocabulary", label: "Vocabulary share (%)", fieldtype: "Percent", default: 10, reqd: 1,
+				description: "All six skill percentages must add up to exactly 100." },
+			{ fieldname: "continuous_percent", label: "Continuous assessment share (%)", fieldtype: "Percent", default: 40, reqd: 1,
+				description: "Final exam receives the remainder. For 40, the final is 60%. This changes future grading only." },
+			{ fieldname: "effective_from", label: "Effective date for these new weights", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason for changing skill shares", fieldtype: "Small Text", reqd: 1 },
+		],
 		"toefl_house.setup_presets.owner_policy_forms.configure_initial_assessment": [
 			{ fieldname: "policy", label: "Academic grading policy", fieldtype: "Data", read_only: 1, reqd: 1 },
 			{ fieldname: "grading_scale", label: "Grade scale (choose the A–F scale)", fieldtype: "Link", options: "Grading Scale", reqd: 1,
@@ -1472,6 +1486,19 @@ frappe.provide("toefl_house.role_desks");
 						grade_code, threshold: index === 4 ? 0 : thresholds[index],
 					})));
 					["grade_a", "grade_b", "grade_c", "grade_d"].forEach((key) => delete args[key]);
+				}
+				if (action.endpoint === "toefl_house.setup_presets.owner_policy_forms.revise_grading_weights") {
+					const keys = ["speaking", "listening", "writing",
+						"reading", "grammar", "vocabulary"];
+					const values_ = keys.map((key) => Number(values[key]));
+					const continuous = Number(values.continuous_percent);
+					if (values_.some((n) => !Number.isInteger(n) || n < 0 || n > 100) ||
+						values_.reduce((sum, value) => sum + value, 0) !== 100 ||
+						!Number.isInteger(continuous) || continuous < 1 || continuous > 99) {
+						frappe.msgprint(text(
+							"Enter six whole-number skill percentages totaling 100, plus a continuous assessment percentage between 1 and 99."));
+						return;
+					}
 				}
 				if (action.endpoint === "toefl_house.academic.set_assessment_policy_version") {
 					const scoreSet = values.passing_score !== undefined &&
