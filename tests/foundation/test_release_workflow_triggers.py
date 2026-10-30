@@ -23,7 +23,15 @@ def push_paths(workflow_name: str) -> set[str]:
     push_section = text.partition("  workflow_dispatch:")[0]
     self_section = push_section.partition("    paths:")[2]
     if not self_section:
-        raise AssertionError(f"{workflow_name}: missing push path filters")
+        # Running on every push to both release branches covers every path,
+        # including advisory inputs; it is stronger than a path allowlist.
+        if ("on:\n  push:\n" in push_section
+                and "    branches:\n" in push_section
+                and "      - main\n" in push_section
+                and "      - work\n" in push_section
+                and "    paths-ignore:" not in push_section):
+            return {"**"}
+        raise AssertionError(f"{workflow_name}: missing safe release push trigger")
     return {
         match.group(1).strip('"\'')
         for line in self_section.splitlines()
@@ -59,7 +67,9 @@ class ReleaseImageTriggerContract(unittest.TestCase):
                  "product-image.yml", "windows-customer-package.yml")
         for name in names:
             with self.subTest(workflow=name):
-                self.assertTrue(set(patterns).issubset(push_paths(name)))
+                watched = push_paths(name)
+                self.assertTrue("**" in watched or set(patterns).issubset(watched),
+                                f"{name}: advisory changes cannot reach this gate")
 
     def test_windows_only_package_manifest_suite_has_a_windows_runner(self):
         workflow = (WORKFLOWS / "windows-customer-package.yml").read_text(encoding="utf-8")
