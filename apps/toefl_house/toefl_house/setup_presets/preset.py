@@ -184,6 +184,8 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
     categories = set(snapshot.get("fee_categories") or [])
     category_items = snapshot.get("fee_category_items")
     tuition = snapshot.get("tuition") or {}
+    native_program_titles = set(snapshot.get("native_program_titles") or [])
+    native_course_titles = set(snapshot.get("native_course_titles") or [])
     steps = []
     for year in preset["academic_years"]:
         known = existing_years.get(year["name"])
@@ -209,12 +211,22 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
             existing = existing_levels.get(level_code)
             aliases_found = [alias for alias in level.get("existing_site_aliases", [])
                              if alias in existing_levels]
+            native_title = f"{family['title']} — {level['title']}"
+            orphan_native = (existing is None
+                             and (native_title in native_program_titles
+                                  or native_title in native_course_titles))
             if aliases_found:
                 # Never silently introduce a second native Program for a level.
                 status = "review"
                 details = ("Existing site uses alternative code(s) " +
                            ", ".join(aliases_found) +
                            "; map the current native Program explicitly")
+            elif orphan_native:
+                status = "review"
+                details = ("An existing native Program or Course has this "
+                           "level's exact title but is not linked to a "
+                           "TH Program Level. Inspect and map it; do not "
+                           "create duplicate native curriculum records")
             else:
                 status = ("create" if existing is None else
                           "match" if (existing.get("family") == code
