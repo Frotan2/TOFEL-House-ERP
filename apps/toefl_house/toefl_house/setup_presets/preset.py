@@ -19,6 +19,17 @@ def validate_preset(data: dict) -> dict:
         raise ValueError("Unsupported setup preset version")
     if data.get("status") != "PROPOSED_FOR_SYNTHETIC_TEST_ONLY":
         raise ValueError("Unreviewed preset cannot be declared production ready")
+    if data.get("installation_profile") != "FRESH_SITE_NO_PRIOR_COURSE_HISTORY":
+        raise ValueError("Initial TOEFL House setup requires a fresh, empty institute")
+    zero = data.get("initial_operational_data") or {}
+    required_zero = ("students", "student_applicants", "enrollments", "classes",
+                     "attendance_records", "issued_fees", "payment_entries",
+                     "salary_slips", "assessment_results")
+    if (any(type(zero.get(name)) is not int or zero[name] != 0
+            for name in required_zero)
+            or zero.get("legacy_data_import_enabled") is not False
+            or zero.get("demo_data_in_customer_package") is not False):
+        raise ValueError("Fresh installation must contain zero business history or demo data")
 
     families = data.get("programs") or []
     if len(families) < 4:
