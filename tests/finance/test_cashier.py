@@ -323,6 +323,36 @@ class CommandContractTests(unittest.TestCase):
                 [{"account": "Cash - TH", "counted_amount": 1}])
         self.assertIn("A valid business date is required", str(caught.exception))
 
+    def test_http_form_encoded_drawer_counts_are_bounded_and_parsed(self):
+        module = load_cashier(DRAWERS)
+        for invalid, message in (
+                ("not JSON", "counts are invalid"),
+                ('{"account":"Cash - TH"}', "must be a list"),
+                ("[" + " " * 20001 + "]", "request is too large"),
+                ('[{}]' * 26, "counts are invalid")):
+            with self.subTest(message=message), self.assertRaisesRegex(
+                    _ValidationError, message):
+                module.reconcile_cashier_day(
+                    "fin_cashier_transport_001", "TOEFL House",
+                    "2026-10-24", invalid)
+        with self.assertRaisesRegex(_ValidationError, "valid business date"):
+            module.reconcile_cashier_day(
+                "fin_cashier_transport_002", "TOEFL House",
+                "not-a-date",
+                '[{"account":"Cash - TH","counted_amount":1000,"note":""}]')
+
+    def test_finance_desk_offers_counted_not_expected_amount_as_input(self):
+        from pathlib import Path
+        desk = (APP / "desk" / "finance.py").read_text(encoding="utf-8")
+        gui = (APP / "public" / "js" / "th_role_desks.js").read_text(encoding="utf-8")
+        self.assertIn('"Close today\'s company cash drawers"', desk)
+        self.assertIn('"drawers": [{"account": d["account"]', desk)
+        self.assertIn('"toefl_house.finance.cashier.reconcile_cashier_day"', gui)
+        self.assertIn('fieldname: "drawer_counted_" + index', gui)
+        self.assertIn("args.counts = counts;", gui)
+        self.assertIn("args.counts = counts;", gui)
+        self.assertIn('No payment or cash movement is created.', gui)
+
     def test_package_date_class_is_not_shadowed_inside_the_command(self):
         import ast
         tree = ast.parse(self.source)
