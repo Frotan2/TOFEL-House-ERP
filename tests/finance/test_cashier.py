@@ -255,6 +255,84 @@ class DrawerTruthTests(unittest.TestCase):
         self.assertEqual(load_cashier().cash_drawers("TOEFL House"), [])
 
 
+class CloseDriftTests(unittest.TestCase):
+    """Never hide a cancelled old GL row or offsetting post-close movement."""
+
+    def setUp(self):
+        self.module = load_cashier(DRAWERS)
+        self.saved = [
+            {"account": "Cash - TH", "expected_amount": 100.0},
+            {"account": "Bank - TH", "expected_amount": 50.0},
+        ]
+        self.live = [
+            {"account": "Cash - TH", "opening": 100.0,
+             "movement": 0.0, "closing": 100.0},
+            {"account": "Bank - TH", "opening": 50.0,
+             "movement": 0.0, "closing": 50.0},
+        ]
+        self.after = False
+        self.closed = True
+        self.module.cash_drawers = lambda company: DRAWERS
+        self.module.drawer_balances = lambda company, accounts, day: self.live
+
+        def get_all(doctype, **kwargs):
+            if doctype == self.module.DAY:
+                return ([{"name": "TH-CASH-2026-01",
+                          "reconciled_on": "2026-10-24 18:00:00",
+                          "total_expected": 150.0}] if self.closed else [])
+            if doctype == self.module.COUNT:
+                self.assertEqual(kwargs["filters"]["parent"], "TH-CASH-2026-01")
+                self.assertEqual(kwargs["filters"]["parenttype"], self.module.DAY)
+                self.assertEqual(kwargs["limit_page_length"],
+                                 self.module.MAX_DRAWERS + 1)
+                return self.saved
+            self.fail("Unexpected accounting read: " + doctype)
+
+        self.module.frappe.db.get_all = get_all
+        self.module.frappe.db.sql = (
+            lambda *args, **kwargs: [{"name": "new posted GL"}] if self.after else [])
+
+    def position(self):
+        positions = self.module.cashier_position(
+            day="2026-10-24", companies=["TOEFL House"])
+        self.assertEqual(len(positions), 1)
+        return positions[0]
+
+    def test_exact_match_is_not_drift(self):
+        self.assertFalse(self.position()["drift"])
+
+    def test_cancelled_historical_entry_changed_balance_without_new_gl(self):
+        # No GL creation after close: native cancellation invalidated an
+        # earlier debit by marking its original GL Entry cancelled.
+        self.live[0]["closing"] = 80.0
+        self.assertTrue(self.position()["drift"])
+
+    def test_offsetting_movements_do_not_hide_drift(self):
+        # The combined company balance remains 150, but both drawers differ.
+        self.live[0]["closing"] = 80.0
+        self.live[1]["closing"] = 70.0
+        self.assertTrue(self.position()["drift"])
+
+    def test_missing_or_duplicated_closed_drawer_is_drift(self):
+        self.saved.pop()
+        self.assertTrue(self.position()["drift"])
+        self.saved.append({"account": "Cash - TH", "expected_amount": 100.0})
+        self.assertTrue(self.position()["drift"])
+
+    def test_new_backdated_gl_keeps_existing_audit_signal(self):
+        # A balance-neutral new posting still matters to a closed ledger.
+        self.after = True
+        self.assertTrue(self.position()["drift"])
+
+    def test_no_close_is_not_misreported_as_drift(self):
+        self.closed = False
+        self.assertFalse(self.position()["drift"])
+
+    def test_malformed_snapshot_never_looks_reconciled(self):
+        self.saved[0]["expected_amount"] = "Infinity"
+        self.assertTrue(self.position()["drift"])
+
+
 class CommandContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
