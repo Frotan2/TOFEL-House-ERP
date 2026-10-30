@@ -1172,18 +1172,18 @@ class ProtocolTests(UpdateEngineBase):
 
 
 class CatalogTests(unittest.TestCase):
-    def test_every_engine_message_has_english_and_dari_text(self):
+    def test_every_engine_message_has_english_text(self):
         catalog = json.loads((ROOT / "product/windows/updater-strings.json").read_text(encoding="utf-8"))
         self.assertEqual(catalog["schema_version"], 1)
         self.assertEqual(catalog["document_type"], "toefl-house-erp-updater-strings")
         messages = catalog["messages"]
         missing = sorted(engine.MESSAGE_CODES - set(messages))
-        self.assertEqual(missing, [], f"missing bilingual updater messages: {missing}")
+        self.assertEqual(missing, [], f"missing English updater messages: {missing}")
         for code, entry in messages.items():
             with self.subTest(code=code):
-                self.assertEqual(set(entry), {"en", "fa"}, code)
+                self.assertEqual(set(entry), {"en"}, code)
                 self.assertTrue(entry["en"].strip(), code)
-                self.assertTrue(entry["fa"].strip(), code)
+                self.assertNotRegex(entry["en"], r"[\u0600-\u06FF\u200c]", code)
                 self.assertNotIn("git ", entry["en"].lower(), code)
 
     def test_catalog_has_no_duplicate_or_unknown_codes(self):
