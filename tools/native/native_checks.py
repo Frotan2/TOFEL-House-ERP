@@ -8115,7 +8115,36 @@ def main():
                     'gm_approved':approval['status']=='Approved',
                     'separate_case_denied':rejected['status']=='Denied',
                     'audit_events_verified':4,'no_refund_payout':True}
-        check('native-tuition-refund-list-document-role-parity',traced(tuition_refund_read_list_parity))
+        refund_visibility_proof=check('native-tuition-refund-list-document-role-parity',traced(tuition_refund_read_list_parity))
+        def refund_atomic_failure_preserves_caller():
+            from toefl_house.atomic_commands import execute_atomic
+            frappe.set_user('Administrator')
+            prior=frappe.get_doc(dict(doctype='Note',title='SYN atomic refund prior caller write',public=0)).insert()
+            point_before={dt:frappe.db.count(dt) for dt in ('TH Placement Operation','TH Placement Audit Event','GL Entry','Payment Entry')}
+            key='native_refund_atomic_failure_0001'
+            attempted=[]
+            def failing_work(actor):
+                note=frappe.get_doc(dict(doctype='Note',title='SYN atomic refund failed command write',public=0)).insert(ignore_permissions=True)
+                attempted.append(note.name)
+                raise frappe.ValidationError('SYN controlled post-write failure')
+            try:
+                as_user('finance_manager',lambda:execute_atomic('pay_tuition_refund',key,
+                    {'request':refund_visibility_proof['request']},failing_work))
+            except frappe.ValidationError as exc:
+                assert str(exc)=='SYN controlled post-write failure',str(exc)
+            else:
+                raise AssertionError('Atomic failure probe unexpectedly succeeded')
+            # No outside rollback here: prove the helper itself restored its
+            # attempt while retaining a caller write from before its savepoint.
+            assert attempted and frappe.db.exists('Note',prior.name)
+            assert not frappe.db.exists('Note',attempted[0])
+            assert not frappe.db.exists('TH Placement Operation',digest(['pay_tuition_refund',key]))
+            assert point_before=={dt:frappe.db.count(dt) for dt in point_before}
+            frappe.set_user('Administrator')
+            frappe.delete_doc('Note',prior.name)
+            return {'real_database_failure_injected':True,'caller_write_preserved':True,
+                    'failed_write_operation_and_audit_rolled_back':True,'financial_counts_unchanged':True}
+        check('native-refund-atomic-failure-preserves-caller',traced(refund_atomic_failure_preserves_caller))
         def student_journal_refund_bypass_denied():
             frappe.set_user('Administrator')
             fee=frappe.db.get_value('Payment Entry Reference',
