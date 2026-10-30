@@ -86,6 +86,14 @@ class ReleaseImageTriggerContract(unittest.TestCase):
             workflow,
         )
 
+    def test_qualified_source_builds_are_not_cancelled_by_unrelated_new_commits(self):
+        for name in ("product-image.yml", "native-lifecycle.yml", "foundation-runtime.yml", "owned-suite.yml"):
+            with self.subTest(workflow=name):
+                workflow = (WORKFLOWS / name).read_text(encoding="utf-8")
+                group = next(line for line in workflow.splitlines() if line.startswith("  group: "))
+                self.assertIn("${{ github.ref }}", group)
+                self.assertIn("${{ github.sha }}", group)
+
     def test_product_image_keeps_exact_sha_release_gates(self):
         workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
         self.assertIn("python3 tools/release/verify_ci_gates.py --ensure-started", workflow)

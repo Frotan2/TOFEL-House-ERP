@@ -46,7 +46,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: native-lifecycle-${{ github.ref }}
+  group: native-lifecycle-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:

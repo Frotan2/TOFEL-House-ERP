@@ -128,7 +128,7 @@ permissions:
   attestations: write
 
 concurrency:
-  group: product-image-${{ github.ref }}
+  group: product-image-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:

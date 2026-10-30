@@ -31,7 +31,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: foundation-runtime-${{ github.ref }}
+  group: foundation-runtime-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
