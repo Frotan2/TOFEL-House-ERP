@@ -124,7 +124,8 @@ def _snapshot():
             structures = _bounded_rows(
                 "Fee Structure", filters={"program": row.native_program,
                                           "docstatus": ("!=", 2)},
-                fields=["name", "academic_year", "docstatus"],
+                fields=["name", "academic_year", "docstatus",
+                        "company", "receivable_account"],
                 order_by="name", bound=_MAX_COMPONENT_ROWS)
             for structure in structures:
                 component_rows = _bounded_rows(
@@ -136,7 +137,19 @@ def _snapshot():
                 # A draft with zero/multiple tuition components, unexpected
                 # extra components or a bad amount is a conflict, NOT absence.
                 price = None
-                if (structure.docstatus == 0
+                # A correct numeric price does not make a Fee Structure
+                # usable if its legal Company or receivable Account is
+                # missing or cross-company. Keep that existing structure
+                # visible as a conflict rather than silently "matching".
+                plan_company = structure.get("company")
+                receivable = structure.get("receivable_account")
+                company_account_valid = bool(
+                    plan_company and frappe.db.exists("Company", plan_company)
+                    and receivable
+                    and frappe.db.get_value("Account", receivable, "company")
+                    == plan_company)
+                if (int(structure.docstatus) == 0
+                        and company_account_valid
                         and len(charges) == 1 and len(component_rows) == 1):
                     try:
                         price = float(charges[0].amount)
