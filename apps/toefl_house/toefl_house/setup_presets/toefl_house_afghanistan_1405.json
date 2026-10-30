@@ -2,9 +2,22 @@
   "schema_version": 1,
   "preset_id": "TOEFL-HOUSE-AFG-1405",
   "status": "PROPOSED_FOR_SYNTHETIC_TEST_ONLY",
+  "installation_profile": "FRESH_SITE_NO_PRIOR_COURSE_HISTORY",
+  "initial_operational_data": {
+    "students": 0,
+    "student_applicants": 0,
+    "enrollments": 0,
+    "classes": 0,
+    "attendance_records": 0,
+    "issued_fees": 0,
+    "payment_entries": 0,
+    "salary_slips": 0,
+    "assessment_results": 0,
+    "legacy_data_import_enabled": false,
+    "demo_data_in_customer_package": false
+  },
   "purposes": [
-    "Clean customer site initialization",
-    "Existing test site non-destructive preview"
+    "Fresh TOEFL House customer installation with zero historical business records"
   ],
   "safety": {
     "prohibit_importing_personal_pc_test_data": true,
@@ -70,30 +83,21 @@
           "title": "Prep 1",
           "sequence": 3,
           "duration_months": 2,
-          "semester_tuition_afn": 1000,
-          "existing_site_aliases": [
-            "PREP-ONE"
-          ]
+          "semester_tuition_afn": 1000
         },
         {
           "code": "PREP-2",
           "title": "Prep 2",
           "sequence": 4,
           "duration_months": 2,
-          "semester_tuition_afn": 1000,
-          "existing_site_aliases": [
-            "PREP-TWO"
-          ]
+          "semester_tuition_afn": 1000
         },
         {
           "code": "PREP-3",
           "title": "Prep 3",
           "sequence": 5,
           "duration_months": 2,
-          "semester_tuition_afn": 1000,
-          "existing_site_aliases": [
-            "PREP-THREE"
-          ]
+          "semester_tuition_afn": 1000
         }
       ],
       "assessment_policy_code": "GEN-ENG-ASSESS-01",
@@ -117,40 +121,28 @@
           "title": "EAP Level 1",
           "sequence": 1,
           "duration_months": 2,
-          "semester_tuition_afn": 2000,
-          "existing_site_aliases": [
-            "EAP-ONE"
-          ]
+          "semester_tuition_afn": 2000
         },
         {
           "code": "EAP-2",
           "title": "EAP Level 2",
           "sequence": 2,
           "duration_months": 2,
-          "semester_tuition_afn": 2000,
-          "existing_site_aliases": [
-            "EAP-TWO"
-          ]
+          "semester_tuition_afn": 2000
         },
         {
           "code": "EAP-3",
           "title": "EAP Level 3",
           "sequence": 3,
           "duration_months": 2,
-          "semester_tuition_afn": 2000,
-          "existing_site_aliases": [
-            "EAP-THREE"
-          ]
+          "semester_tuition_afn": 2000
         },
         {
           "code": "EAP-4",
           "title": "EAP Level 4",
           "sequence": 4,
           "duration_months": 2,
-          "semester_tuition_afn": 2000,
-          "existing_site_aliases": [
-            "EAP-FOUR"
-          ]
+          "semester_tuition_afn": 2000
         }
       ],
       "assessment_policy_code": "EAP-ASSESS-01",
@@ -193,10 +185,7 @@
           "title": "TOEFL Preparation",
           "sequence": 1,
           "duration_months": 4,
-          "semester_tuition_afn": 7000,
-          "existing_site_aliases": [
-            "TOEFL-PREP-2M"
-          ]
+          "semester_tuition_afn": 7000
         }
       ],
       "assessment_policy_code": "TOEFL-ASSESS-01",
