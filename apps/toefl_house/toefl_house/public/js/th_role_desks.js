@@ -1359,6 +1359,19 @@ frappe.provide("toefl_house.role_desks");
 					})));
 					["grade_a", "grade_b", "grade_c", "grade_d"].forEach((key) => delete args[key]);
 				}
+				if (action.endpoint === "toefl_house.finance.policies.set_billing_policy_version") {
+					const monthly = values.installment_cadence === "Solar Hijri Month";
+					const due = Number(values.installment_due_day);
+					if (monthly && ![1, 25].includes(due)) {
+						frappe.msgprint(text("Choose the first or 25th day of the Afghan month."));
+						return;
+					}
+					// Day-based schedules have no Afghan-month grace or due-day
+					// semantics. Do not submit these month-only fields to that mode.
+					args.installment_due_day = monthly ? due : 0;
+					args.payment_grace_days = monthly ? Number(values.payment_grace_days) : 0;
+					args.installment_interval_days = monthly ? 0 : Number(values.installment_interval_days);
+				}
 				if (action.endpoint === "toefl_house.academic.set_assessment_policy_version" &&
 					!args.initial_facets) delete args.initial_facets;
 				if (ownAttendance) {
