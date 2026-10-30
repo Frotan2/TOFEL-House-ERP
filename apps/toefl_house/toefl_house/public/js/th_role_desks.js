@@ -704,6 +704,19 @@ frappe.provide("toefl_house.role_desks");
 		{ fieldname: "custody_requirement", label: "Key custody requirement", fieldtype: "Small Text", reqd: 1 },
 		{ fieldname: "recovery_quorum", label: "Recovery quorum", fieldtype: "Int", reqd: 1 },
 	];
+	// Same reviewed numeric weights for first setup and later revisions.
+	const ACADEMIC_WEIGHT_FIELDS = Object.freeze([
+		{ fieldname: "speaking", label: "Speaking share (%)", fieldtype: "Percent", default: 25, reqd: 1 },
+		{ fieldname: "listening", label: "Listening share (%)", fieldtype: "Percent", default: 20, reqd: 1 },
+		{ fieldname: "writing", label: "Writing share (%)", fieldtype: "Percent", default: 20, reqd: 1 },
+		{ fieldname: "reading", label: "Reading share (%)", fieldtype: "Percent", default: 15, reqd: 1 },
+		{ fieldname: "grammar", label: "Grammar share (%)", fieldtype: "Percent", default: 10, reqd: 1 },
+		{ fieldname: "vocabulary", label: "Vocabulary share (%)", fieldtype: "Percent", default: 10, reqd: 1,
+			description: "All six skill percentages must add up to exactly 100." },
+		{ fieldname: "continuous_percent", label: "Continuous assessment share (%)", fieldtype: "Percent", default: 40, reqd: 1,
+			description: "Final exam receives the remainder. For 40, the final is 60%. This changes future grading only." },
+	]);
+
 	const ACTION_FIELDS = Object.freeze({
 		"toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale": [
 			{ fieldname: "grading_scale_name", label: "New grading scale version name", fieldtype: "Data", reqd: 1,
@@ -1026,15 +1039,7 @@ frappe.provide("toefl_house.role_desks");
 		],
 		"toefl_house.setup_presets.owner_policy_forms.revise_grading_weights": [
 			{ fieldname: "policy", label: "Academic grading policy", fieldtype: "Data", read_only: 1, reqd: 1 },
-			{ fieldname: "speaking", label: "Speaking share (%)", fieldtype: "Percent", default: 25, reqd: 1 },
-			{ fieldname: "listening", label: "Listening share (%)", fieldtype: "Percent", default: 20, reqd: 1 },
-			{ fieldname: "writing", label: "Writing share (%)", fieldtype: "Percent", default: 20, reqd: 1 },
-			{ fieldname: "reading", label: "Reading share (%)", fieldtype: "Percent", default: 15, reqd: 1 },
-			{ fieldname: "grammar", label: "Grammar share (%)", fieldtype: "Percent", default: 10, reqd: 1 },
-			{ fieldname: "vocabulary", label: "Vocabulary share (%)", fieldtype: "Percent", default: 10, reqd: 1,
-				description: "All six skill percentages must add up to exactly 100." },
-			{ fieldname: "continuous_percent", label: "Continuous assessment share (%)", fieldtype: "Percent", default: 40, reqd: 1,
-				description: "Final exam receives the remainder. For 40, the final is 60%. This changes future grading only." },
+			...ACADEMIC_WEIGHT_FIELDS,
 			{ fieldname: "effective_from", label: "Effective date for these new weights", fieldtype: "Date", reqd: 1 },
 			{ fieldname: "reason", label: "Reason for changing skill shares", fieldtype: "Small Text", reqd: 1 },
 		],
@@ -1044,6 +1049,7 @@ frappe.provide("toefl_house.role_desks");
 				description: "First create your grading scale with the A, B, C and D numeric form." },
 			{ fieldname: "passing_score", label: "Minimum passing mark (%)", fieldtype: "Percent", default: 60, reqd: 1 },
 			{ fieldname: "retake_wait_days", label: "Minimum days before one failed-exam retake", fieldtype: "Int", default: 7, reqd: 1 },
+			...ACADEMIC_WEIGHT_FIELDS,
 			{ fieldname: "effective_from", label: "Start date for this policy", fieldtype: "Date", reqd: 1 },
 			{ fieldname: "reason", label: "Why this policy is being approved", fieldtype: "Small Text", reqd: 1,
 				description: "One original exam and one retake are permitted. The higher valid score is retained. Academic Manager approves promotion." },
@@ -1487,7 +1493,8 @@ frappe.provide("toefl_house.role_desks");
 					})));
 					["grade_a", "grade_b", "grade_c", "grade_d"].forEach((key) => delete args[key]);
 				}
-				if (action.endpoint === "toefl_house.setup_presets.owner_policy_forms.revise_grading_weights") {
+				if (["toefl_house.setup_presets.owner_policy_forms.revise_grading_weights",
+					"toefl_house.setup_presets.owner_policy_forms.configure_initial_assessment"].includes(action.endpoint)) {
 					const keys = ["speaking", "listening", "writing",
 						"reading", "grammar", "vocabulary"];
 					const values_ = keys.map((key) => Number(values[key]));
