@@ -67,6 +67,15 @@ class NoCodeOwnerFormsTests(unittest.TestCase):
         self.assertIn("args.adjustments = JSON.stringify(adjustments);", self.gui)
         self.assertIn("Re-enter ALL approved skills", self.gui)
 
+    def test_setup_home_has_real_navigation_and_no_command_line_steps(self):
+        self.assertIn("Start your course in simple steps", self.gui)
+        for label in ("1. Courses and tuition", "2. Academic and billing rules",
+                      "3. Rooms, teachers and timetables",
+                      "4. Finance and daily work", "5. Review before opening"):
+            self.assertIn(label, self.gui)
+        self.assertIn('routeToSource(route)', self.gui)
+        self.assertIn("never a request to edit JSON, scripts or database tables", self.gui)
+
     def test_native_assessment_backend_still_validates_versioned_changes(self):
         source = ASSESSMENT.read_text(encoding="utf-8")
         self.assertIn("passing_score=None, retake_wait_days=None", source)
