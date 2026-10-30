@@ -1330,7 +1330,7 @@ frappe.provide("toefl_house.role_desks");
 		// New program and policy identifiers belong to the application, not
 		// to staff. If a short English label is necessary, the Owner supplies
 		// ordinary words; the ID is derived and validated before guarded POST.
-		const automaticCode = /^toefl_house\\..*\\.create_[a-z_]+$/.test(action.endpoint) &&
+		const automaticCode = /^toefl_house\..*\.create_[a-z_]+$/.test(action.endpoint) &&
 			!(action.args && action.args.code) &&
 			fields.some((field) => field.fieldname === "code") &&
 			fields.some((field) => field.fieldname === "title");
@@ -1368,7 +1368,7 @@ frappe.provide("toefl_house.role_desks");
 						? String(values.family || "").toUpperCase().replace(/[^A-Z0-9-]/g, "") + "-"
 						: "";
 					const code = (family + slug).slice(0, 32).replace(/-+$/g, "");
-					if (!/^[A-Z0-9][A-Z0-9-]{0,30}[A-Z0-9]$/.test(code) || code.includes("--")) {
+					if (slug.length < 2 || !/^[A-Z0-9][A-Z0-9-]{0,30}[A-Z0-9]$/.test(code) || code.includes("--")) {
 						frappe.msgprint(text("Enter a short English name for this program or policy; the system will generate its identifier."));
 						return;
 					}
