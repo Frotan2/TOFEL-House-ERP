@@ -83,18 +83,20 @@ class TestSetupCatalogPlanner(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "conflicts"):
             prepare_catalog_plan(snapshot, self.preset)
 
-    def test_legacy_native_program_requires_explicit_mapping(self):
-        snapshot = {"levels": {"PREP-ONE": {
-            "family": "GEN-ENG", "title": "Prep 1", "duration_months": 2}}}
-        with self.assertRaisesRegex(ValueError, "mapping"):
-            prepare_catalog_plan(snapshot, self.preset)
+    def test_orphan_native_course_cannot_be_duplicated_on_fresh_site(self):
+        for title in ("General English — Prep 1",
+                      "TOEFL Preparation — TOEFL Preparation"):
+            with self.subTest(title=title):
+                with self.assertRaisesRegex(ValueError, "conflicts"):
+                    prepare_catalog_plan({"native_course_titles": [title]},
+                                         self.preset)
 
-    def test_existing_two_month_toefl_is_reviewed_never_duplicated(self):
-        snapshot = {"levels": {"TOEFL-PREP-2M": {
-            "family": "TOEFL-PREP", "title": "TOEFL Preparation",
-            "duration_months": 2}}}
-        with self.assertRaisesRegex(ValueError, "mapping"):
-            prepare_catalog_plan(snapshot, self.preset)
+    def test_initial_preset_has_no_legacy_migration_aliases(self):
+        self.assertEqual(self.preset["installation_profile"],
+                         "FRESH_SITE_NO_PRIOR_COURSE_HISTORY")
+        self.assertFalse(any("existing_site_aliases" in level
+                             for p in self.preset["programs"] for level in p["levels"]))
+        self.assertFalse(self.preset["initial_operational_data"]["legacy_data_import_enabled"])
 
     def test_stable_bounded_idempotency_keys(self):
         action = {"operation": "create_academic_year", "name": "1405",
