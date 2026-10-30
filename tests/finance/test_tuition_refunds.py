@@ -2,9 +2,9 @@
 
 Tests load the pure modules by file path with stubbed parent packages,
 following tests/finance/test_refund_guards.py. No Frappe, no database, no
-native posting is attempted anywhere here: the pinned native Fees refund
-mechanism does not exist, so pay_preflight must refuse at the posting
-step with NativeRefundBlocked and leave the request Approved.
+native posting is attempted here. The legacy standalone pay_preflight must
+still refuse; the separate exact paired command is qualified by actual
+database-backed Native and Windows tests, not by this pure policy suite.
 """
 import ast
 import importlib.util
@@ -516,6 +516,41 @@ class NativeRefundControllerBoundaryTests(unittest.TestCase):
             evidence="Different supporting letter")
         with self.assertRaises(PermissionError):
             self.check(original, overwritten, "approve_tuition_refund")
+
+    def test_unpaid_approval_can_be_withdrawn_without_rewriting_its_approver(self):
+        approved = self.refund("Approved", approved_by="original.manager@example.invalid",
+                               approved_amount=100, approval_evidence="Original approval")
+        voided = self.Row(approved, status="Voided", voided_by="general.manager@example.invalid",
+                          void_reason="Documented withdrawal", voided_on="2026-10-30 12:00:00")
+        self.check(approved, voided, "void_tuition_refund")
+        for field, value in (("void_reason", ""), ("voided_by", "other@example.invalid"),
+                             ("payment_entry", "POSTED"), ("approved_by", "changed@example.invalid")):
+            with self.subTest(field=field), self.assertRaises(PermissionError):
+                self.check(approved, self.Row(voided, **{field: value}), "void_tuition_refund")
+        with self.assertRaises(PermissionError):
+            self.check(approved, voided, "deny_tuition_refund")
+
+
+class ApprovalWithdrawalTests(unittest.TestCase):
+    def test_void_releases_reservation_and_preserves_original_approval(self):
+        approved = dict(status="Approved", fees="FEE", approved_by="original.manager",
+                        requested_amount="50", approved_amount="50", approval_evidence="Original decision")
+        result = REFUNDS.void_approval(approved, actor="second.manager", roles=["General Manager"], reason="Case withdrawn")
+        self.assertEqual(result["approved_by"], "original.manager")
+        self.assertEqual(result["approval_evidence"], "Original decision")
+        self.assertEqual(result["voided_by"], "second.manager")
+        self.assertEqual(REFUNDS.open_amount([result], fees="FEE"), 0)
+        self.assertEqual(approved["status"], "Approved")
+
+    def test_wrong_role_state_posted_artifact_or_empty_evidence_cannot_void(self):
+        for changes, roles, reason in (({}, ["Finance Manager"], "Reason"),
+            ({"status": "Paid"}, ["General Manager"], "Reason"),
+            ({"payment_entry": "PAY"}, ["General Manager"], "Reason"),
+            ({"credit_journal": "CREDIT"}, ["General Manager"], "Reason"),
+            ({}, ["General Manager"], " ")):
+            with self.subTest(changes=changes, roles=roles), self.assertRaises(RefundError):
+                REFUNDS.void_approval(dict(status="Approved", **changes) if "status" not in changes else changes,
+                    actor="manager", roles=roles, reason=reason)
 
 
 class NativeBlockerEvidenceTests(unittest.TestCase):

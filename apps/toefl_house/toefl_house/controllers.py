@@ -165,7 +165,7 @@ class ProtectedRecord(Document):
         """Refund request facts are immutable; the decision is one-shot.
 
         Allowed transitions: Requested -> Approved, Requested -> Denied,
-        Approved -> Paid. Paid requires a reconciled native credit/payment
+        Approved -> Paid or Voided. Paid requires a reconciled native credit/payment
         pair owned by the authenticated payout command. Identity, amount, reason and
         evidence never change after insert, and the recorded approver
         never changes.
@@ -198,6 +198,7 @@ class ProtectedRecord(Document):
             ("Requested", "Approved"): "approve_tuition_refund",
             ("Requested", "Denied"): "deny_tuition_refund",
             ("Approved", "Paid"): "pay_tuition_refund",
+            ("Approved", "Voided"): "void_tuition_refund",
         }
         required_command = transitions.get((before.status, self.status))
         if not required_command:
@@ -214,8 +215,15 @@ class ProtectedRecord(Document):
             from toefl_house.finance.tuition_refund_native import assert_paid_transition
 
             assert_paid_transition(self)
+        elif self.status == "Voided":
+            if (self.get("voided_by") != actor or not isinstance(self.get("void_reason"), str)
+                    or not self.void_reason.strip() or len(self.void_reason) > 1000 or not self.get("voided_on")
+                    or self.payment_entry or self.get("credit_journal") or self.get("paying_user")):
+                raise frappe.PermissionError("Voiding requires management evidence and an unpaid approval")
         elif self.approved_by != actor or self.payment_entry or self.get("credit_journal") or self.get("paying_user"):
             raise frappe.PermissionError("Only the General Manager may decide an unpaid refund request")
+        if self.status != "Voided" and any(self.get(field) for field in ("voided_by", "void_reason", "voided_on")):
+            raise frappe.PermissionError("Approval withdrawal evidence requires its exact void transition")
         if before.approved_by and self.approved_by != before.approved_by:
             raise frappe.PermissionError("Recorded decision actor is immutable")
         if before.payment_entry and self.payment_entry != before.payment_entry:

@@ -18,6 +18,9 @@
     "paying_user",
     "credit_journal",
     "payment_entry",
+    "voided_by",
+    "void_reason",
+    "voided_on",
     "synthetic"
   ],
   "fields": [
@@ -78,7 +81,7 @@
     },
     {
       "default": "Requested",
-      "description": "Requested -> Approved -> Paid, or Requested -> Denied. Paid requires reconciled native credit and payout under independent Finance authority.",
+      "description": "Requested -> Approved -> Paid, Requested -> Denied, or Approved -> Voided before posting. Paid requires a reconciled native credit/payout pair; withdrawal retains its original approval and recorded reason.",
       "fieldname": "status",
       "fieldtype": "Data",
       "label": "Status",
@@ -124,6 +127,25 @@
       "options": "Payment Entry",
       "read_only": 1,
       "unique": 1
+    },
+    {
+      "fieldname": "voided_by",
+      "fieldtype": "Link",
+      "label": "Approval Withdrawn By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "void_reason",
+      "fieldtype": "Text",
+      "label": "Approval Withdrawal Reason",
+      "read_only": 1
+    },
+    {
+      "fieldname": "voided_on",
+      "fieldtype": "Datetime",
+      "label": "Approval Withdrawn On",
+      "read_only": 1
     },
     {
       "default": "1",

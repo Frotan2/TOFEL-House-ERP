@@ -109,6 +109,19 @@ after the synthetic rollback. The full and partial payment source tests both
 passed previously; the minimal-payer change still requires exact-head hosted
 qualification and final candidate browser acceptance.
 
+Unpaid approval withdrawal now has a separate General Manager command:
+Approved -> Voided, retaining original approver/amount/evidence and recording
+withdrawal actor, reason and time. It locks Fees before the request to serialize
+with payout, removes only the unused reservation, and refuses Paid or linked
+native accounting cases. The staff queue offers the withdrawal separately from
+payout. Real Windows synthetic tests passed wrong-role refusal, exact replay,
+retained original decision, released capacity for a new request, refused payment
+of the voided case, refused withdrawal of a Paid case and unchanged native
+financial counts; the outer transaction restored all thirteen table hashes.
+Independent source review found no concrete defect. Simultaneous payout versus
+withdrawal still needs actual concurrent acceptance; locking review is not
+that evidence. Paid-case paired reversal remains a release requirement.
+
 The earlier checklist below remains the full completion scope; it is not a
 claim that the new owned paired command has passed its first database gate.
 

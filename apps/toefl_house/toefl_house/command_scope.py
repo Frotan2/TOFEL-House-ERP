@@ -40,7 +40,7 @@ CORRECTION_COMMANDS = frozenset({
 # Issue #115 tuition refunds: approve/deny/pay resolve their Company through
 # the refund request's Fees document, exactly like correction approvals.
 REFUND_COMMANDS = frozenset({
-    "approve_tuition_refund", "deny_tuition_refund", "pay_tuition_refund",
+    "approve_tuition_refund", "deny_tuition_refund", "pay_tuition_refund", "void_tuition_refund",
 })
 
 

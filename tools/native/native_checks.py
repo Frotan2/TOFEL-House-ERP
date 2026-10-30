@@ -8288,6 +8288,45 @@ def main():
                     'staff_refund_desk_actions_context_links_and_branch_denial':True,
                     'source_receipt_cancel_cost_center_allocation_frozen':frozen_stages}
         refund_visibility_proof=check('native-tuition-refund-list-document-role-parity',traced(tuition_refund_read_list_parity))
+        def refund_unpaid_approval_withdrawal():
+            from toefl_house.finance import tuition_refund_commands as cmd
+            original=frappe.get_doc('TH Tuition Refund Request',refund_visibility_proof['request'])
+            counts={dt:frappe.db.count(dt) for dt in ('Journal Entry','Payment Entry','GL Entry','Payment Ledger Entry','DocShare')}
+            created=as_user('refund_officer',lambda:cmd.request_tuition_refund(
+                'native_void_request_0001',original.student,original.company,original.fees,'40.00',
+                'SYN approval withdrawal qualification','SYN documentary evidence'))
+            name=created['name']
+            as_user('general_manager',lambda:cmd.approve_tuition_refund('native_void_approve_0001',name,'SYN original approval evidence'))
+            assert denied(lambda:as_user('refund_officer',lambda:cmd.request_tuition_refund(
+                'native_void_reserved_ceiling',original.student,original.company,original.fees,'11.00',
+                'SYN reserved ceiling check','SYN evidence')))
+            assert denied(lambda:as_user('finance_manager',lambda:cmd.void_tuition_refund(
+                'native_void_wrong_role_0001',name,'SYN wrong-role withdrawal')))['denied']=='PermissionError'
+            assert denied(lambda:as_user('general_manager',lambda:cmd.void_tuition_refund(
+                'native_void_empty_reason_0001',name,' ')))
+            withdrawn=as_user('general_manager',lambda:cmd.void_tuition_refund(
+                'native_void_success_0001',name,'SYN case withdrawn before any cash payout'))
+            assert withdrawn['status']=='Voided'
+            assert as_user('general_manager',lambda:cmd.void_tuition_refund(
+                'native_void_success_0001',name,'SYN case withdrawn before any cash payout'))==withdrawn
+            row=frappe.get_doc('TH Tuition Refund Request',name)
+            assert row.approved_by==users['general_manager'] and float(row.approved_amount)==40
+            assert row.approval_evidence=='SYN original approval evidence'
+            assert row.voided_by==users['general_manager'] and row.void_reason and row.voided_on
+            assert denied(lambda:as_user('finance_manager',lambda:cmd.pay_tuition_refund('native_void_pay_denied_0001',name)))
+            assert denied(lambda:as_user('general_manager',lambda:cmd.void_tuition_refund(
+                'native_void_paid_denied_0001',original.name,'A Paid case cannot be voided')))
+            replacement=as_user('refund_officer',lambda:cmd.request_tuition_refund(
+                'native_void_released_ceiling',original.student,original.company,original.fees,'50.00',
+                'SYN released reservation check','SYN new independently documented case'))
+            as_user('general_manager',lambda:cmd.deny_tuition_refund('native_void_replacement_deny',replacement['name']))
+            events=frappe.get_all('TH Placement Audit Event',filters={'target':name},fields=['action','before_hash','after_hash'])
+            assert {row.action for row in events}=={'request_tuition_refund','approve_tuition_refund','void_tuition_refund'}
+            assert len(events)==3 and all(row.after_hash for row in events)
+            assert counts=={dt:frappe.db.count(dt) for dt in counts}
+            return dict(request=name,status='Voided',approval_history_preserved=True,reservation_released=True,
+                paid_case_refused=True,wrong_role_refused=True,exact_replay=True,audit_events=3,native_financial_counts_unchanged=True)
+        check('native-tuition-refund-unpaid-approval-withdrawal',traced(refund_unpaid_approval_withdrawal))
         def refund_atomic_failure_preserves_caller():
             from toefl_house.atomic_commands import execute_atomic
             frappe.set_user('Administrator')

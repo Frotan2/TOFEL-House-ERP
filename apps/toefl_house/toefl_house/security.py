@@ -115,6 +115,7 @@ KIND_ROLES = {
     "request_tuition_refund": "Finance Officer",
     "approve_tuition_refund": "General Manager",
     "deny_tuition_refund": "General Manager",
+    "void_tuition_refund": "General Manager",
     "pay_tuition_refund": "Finance Manager",
     # Assessment commands require authorized academic / teaching roles.
     "open_assessment_book": "Academic Manager",

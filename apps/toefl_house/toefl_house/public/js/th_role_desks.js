@@ -976,6 +976,10 @@ frappe.provide("toefl_house.role_desks");
 		"toefl_house.finance.tuition_refund_commands.pay_tuition_refund": [
 			{ fieldname: "request", label: "Approved refund case", fieldtype: "Data", reqd: 1, read_only: 1 },
 		],
+		"toefl_house.finance.tuition_refund_commands.void_tuition_refund": [
+			{ fieldname: "request", label: "Unpaid approved refund case", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "reason", label: "Reason for withdrawing this approval", fieldtype: "Small Text", reqd: 1 },
+		],
 		"toefl_house.finance.corrections.request_fees_correction": [
 			{ fieldname: "fees", label: "Fees", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "reason", label: "Reason", fieldtype: "Data", reqd: 1 },

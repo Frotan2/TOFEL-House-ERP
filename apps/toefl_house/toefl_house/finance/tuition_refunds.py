@@ -19,7 +19,7 @@ from decimal import Decimal, InvalidOperation
 from toefl_house.setup_presets.tuition_refund_review import inspect_case_refund
 
 CENT = Decimal("0.01")
-STATUSES = ("Requested", "Approved", "Denied", "Paid")
+STATUSES = ("Requested", "Approved", "Denied", "Paid", "Voided")
 APPROVER_ROLE = "General Manager"
 PAYER_ROLE = "Finance Manager"
 REQUESTER_ROLE = "Finance Officer"
@@ -128,7 +128,7 @@ def open_amount(requests, *, fees):
     """Sum of Requested + Approved amounts for one Fees document.
 
     Paid requests are already in the refunds ledger rows, so counting them
-    here would double-count. Denied requests count for nothing.
+    here would double-count. Denied and Voided requests reserve nothing.
     """
     total = Decimal("0")
     for request in requests or []:
@@ -222,6 +222,19 @@ def deny_request(request, *, approver, approver_roles):
     denied["status"] = "Denied"
     denied["approved_by"] = approver
     return denied
+
+
+def void_approval(request, *, actor, roles, reason):
+    """Revoke an unpaid approval without changing its recorded decision facts."""
+    if not isinstance(request, dict) or request.get("status") != "Approved":
+        raise RefundError("Only an Approved unpaid refund may be voided")
+    if APPROVER_ROLE not in (roles or []):
+        raise RefundError("Only a General Manager may void a tuition refund approval")
+    actor = _id(actor, "Voiding General Manager")
+    reason = _text(reason, "Approval withdrawal reason", 1000)
+    if request.get("payment_entry") or request.get("credit_journal") or request.get("paying_user"):
+        raise RefundError("A posted refund requires an independently authorized paired reversal")
+    return dict(request, status="Voided", voided_by=actor, void_reason=reason)
 
 
 def validate_payment_authority(request, *, payer, payer_roles, collections, refunds):

@@ -5,7 +5,7 @@ from toefl_house.desk import LIMIT_QUEUES, guided_action, refund_case_rows, sect
 
 FIELDS = ["name", "student", "company", "fees", "requested_amount", "approved_amount",
           "reason", "evidence", "approval_evidence", "status", "requested_by", "approved_by",
-          "paying_user", "credit_journal", "payment_entry", "modified"]
+          "paying_user", "credit_journal", "payment_entry", "modified", "voided_by", "void_reason", "voided_on"]
 PREFIX = "toefl_house.finance.tuition_refund_commands."
 
 
@@ -40,6 +40,9 @@ def refund_sections(desk):
             if deny:
                 item["actions"] = [deny]
         elif status == "Approved":
+            withdraw = guided_action("General Manager", PREFIX + "void_tuition_refund", "Withdraw unpaid approval", args)
+            if withdraw:
+                item["actions"] = [withdraw]
             item["detail"] += (f' · Approved {row["approved_amount"]} AFN by {row["approved_by"]}'
                                f' · Approval evidence: {row["approval_evidence"]}')
             item.update(next="Independent Finance Manager: verify the recipient and amount, then record the cash payout from main Cash.", next_role="Finance Manager")
@@ -53,6 +56,9 @@ def refund_sections(desk):
             item.update(next="Retain the linked accounting evidence. An individual credit or payout cannot be cancelled separately.", next_role=None)
         elif status == "Denied":
             item.update(next="No cash was returned for this denied case. A different case requires a new documented request.", next_role=None)
+        elif status == "Voided":
+            item["detail"] += f' · Approval withdrawn by {row["voided_by"]} on {row["voided_on"]} · {row["void_reason"]}'
+            item.update(next="This unpaid approval was withdrawn. Its original approval is retained; no cash was returned.", next_role=None)
         else:
             item.update(next="Ask Finance to investigate this unsupported case status before taking any action.", next_role=None)
         items.append(item)

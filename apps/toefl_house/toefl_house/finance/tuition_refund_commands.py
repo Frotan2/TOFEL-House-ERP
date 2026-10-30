@@ -41,6 +41,9 @@ def _audit_hash(req):
         "paying_user": req.get("paying_user"),
         "payment_entry": req.get("payment_entry"),
         "credit_journal": req.get("credit_journal"),
+        "voided_by": req.get("voided_by"),
+        "void_reason": req.get("void_reason"),
+        "voided_on": str(req.get("voided_on") or ""),
     })
 
 
@@ -222,6 +225,34 @@ def deny_tuition_refund(request_key, request):
 
     return _execute("deny_tuition_refund", request_key,
                     {"request": request}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def void_tuition_refund(request_key, request, reason):
+    """General Manager withdraws an unpaid approval; its history is retained."""
+    def work(actor):
+        _require_role(actor, tuition_refunds.APPROVER_ROLE)
+        name = _name(request, "Tuition refund request")
+        fees = frappe.db.get_value(REQUEST, name, "fees")
+        if not fees:
+            raise frappe.ValidationError("Unknown tuition refund request")
+        # Payout takes Fees before the request; preserve that order so voiding
+        # cannot race a payout into a partial or contradictory state.
+        frappe.db.sql("select name from `tabFees` where name=%s for update", (fees,))
+        req = _pending_request(name)
+        _require_target_company(req.fees)
+        try:
+            result = tuition_refunds.void_approval(req.as_dict(), actor=actor,
+                                                  roles=frappe.get_roles(actor), reason=reason)
+        except tuition_refunds.RefundError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        before_hash = _audit_hash(req)
+        req.status, req.voided_by, req.void_reason = result["status"], result["voided_by"], result["void_reason"]
+        req.voided_on = frappe.utils.now_datetime()
+        req.flags.ignore_permissions = True
+        req.save(ignore_permissions=True)
+        return {"name": name, "status": "Voided"}, dict(target=name, before_hash=before_hash, after_hash=_audit_hash(req))
+    return _execute("void_tuition_refund", request_key, {"request": request, "reason": reason}, work)
 
 
 def _require_target_company(fees):

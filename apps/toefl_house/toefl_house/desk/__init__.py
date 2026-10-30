@@ -84,12 +84,12 @@ PROJECTION_FIELDS = {
     ("finance", "TH Tuition Refund Request"): [
         "name", "student", "company", "fees", "requested_amount", "approved_amount",
         "reason", "evidence", "approval_evidence", "status", "requested_by",
-        "approved_by", "paying_user", "credit_journal", "payment_entry", "modified",
+        "approved_by", "paying_user", "credit_journal", "payment_entry", "modified", "voided_by", "void_reason", "voided_on",
     ],
     ("management", "TH Tuition Refund Request"): [
         "name", "student", "company", "fees", "requested_amount", "approved_amount",
         "reason", "evidence", "approval_evidence", "status", "requested_by",
-        "approved_by", "paying_user", "credit_journal", "payment_entry", "modified",
+        "approved_by", "paying_user", "credit_journal", "payment_entry", "modified", "voided_by", "void_reason", "voided_on",
     ],
     ("reception", "TH Placement Decision"): [
         "name", "attempt", "status", "released_at", "expires_at",
@@ -866,7 +866,8 @@ def refund_case_rows(desk, fields):
     require_desk_audience(slugs[desk])
     _assert_projection(desk, "TH Tuition Refund Request", fields)
     check = getattr(frappe.db, "has_column", None)
-    if not callable(check) or not check("TH Tuition Refund Request", "credit_journal"):
+    if (not callable(check) or not check("TH Tuition Refund Request", "credit_journal")
+            or not check("TH Tuition Refund Request", "voided_on")):
         return None
     rows = frappe.get_list("TH Tuition Refund Request", fields=list(fields),
                            order_by="modified desc, name desc", limit_page_length=LIMIT_QUEUES + 1)
