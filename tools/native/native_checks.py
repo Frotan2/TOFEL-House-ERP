@@ -1,6 +1,6 @@
 """Real native DB/controller/HTTP acceptance on isolated synthetic sites only."""
 import concurrent.futures
-from datetime import timedelta
+from datetime import date, timedelta
 import hashlib
 import json
 import math
@@ -12,6 +12,14 @@ import time
 import traceback
 from unittest.mock import patch
 from urllib.parse import quote
+
+
+def previous_fixture_teaching_day(reference):
+    """Past attendance fixture within seven days, respecting the Friday holiday."""
+    candidate = date.fromisoformat(str(reference)) - timedelta(days=1)
+    while candidate.weekday() == 4:
+        candidate -= timedelta(days=1)
+    return candidate.isoformat()
 
 
 ROLE_PAGE_API = '/api/method/frappe.desk.desk_page.getpage'
@@ -7272,9 +7280,9 @@ def main():
                 frappe.db.commit()
             member=frappe.db.get_value('Student Group Student',{'parent':GRP_A},'student')
             assert member
-            yesterday=str(frappe.utils.add_days(frappe.utils.today(),-1))
+            attendance_day=previous_fixture_teaching_day(frappe.utils.today())
             sched=as_user('teaching_scheduler',lambda:tea.schedule_session(
-                's9_sched_0000000001',GRP_A,yesterday,'16:00:00','17:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))
+                's9_sched_0000000001',GRP_A,attendance_day,'16:00:00','17:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))
             marked=as_user('attendance_recorder',lambda:tea.record_attendance(
                 's9_rec_000000000001',sched['name'],{member:'Absent'}))
             att=marked['records'][member]
@@ -7286,7 +7294,7 @@ def main():
             assert denied(lambda:as_user('attendance_recorder',lambda:teac.request_attendance_correction(
                 's9_req_shell_000001',att,'Present','SYN shell governs nothing')))
             v1=as_user('course_owner',lambda:teac.set_attendance_correction_policy_version(
-                's9_pol_versn_0000001','SYN-ATT-CORRECT',yesterday,
+                's9_pol_versn_0000001','SYN-ATT-CORRECT',attendance_day,
                 'SYN owner opens attendance corrections','Teaching Auditor',7))
             assert v1['governing_approver_role']=='Teaching Auditor',v1
             assert denied(lambda:as_user('attendance_recorder',lambda:teac.request_attendance_correction(
