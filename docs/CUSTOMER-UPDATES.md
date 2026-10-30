@@ -1,115 +1,79 @@
-# Customer updates — English and Dari / به‌روزرسانی برای مشتری
+# Customer updates — controlled Windows release process
 
-## Current status / وضعیت فعلی
+**Availability:** The update mechanism is implemented but its release channel is
+disabled. Production authorization remains **REJECT / NO-GO**. It cannot be
+used with real institute records until the exact installed release, independent
+acceptance, verified backup, two-person recovery authorization and signed
+release channel have all been approved.
 
-The update feature is under safety qualification and **not enabled for real
-school records**. The shipped channel is disabled until the provider completes the
-release and Owner acceptance gates (#12, #36). Until then, *Check for Updates*
-explains that the provider has paused updates and changes nothing.
+This guide describes the **English-language** customer workflow and the
+separate provider-only procedure. It is not permission to activate updates.
 
-این قابلیت ساخته و آزمایش شده است، اما **برای سوابق واقعی مکتب فعال نیست**.
-تا زمانی که ارائه‌دهنده دروازه‌های انتشار و پذیرش مالک را تکمیل نکند، دکمهٔ
-«بررسی به‌روزرسانی» فقط پیام می‌دهد و هیچ چیزی را تغییر نمی‌دهد.
+## Customer workflow
 
-## What the owner sees / مالک چه می‌بیند
+The Windows launcher offers two distinct actions:
 
-Two buttons in the TOEFL House ERP window, separate from Install and Repair:
+| Action | Customer-visible behavior |
+| --- | --- |
+| **Check for Updates** | Checks trusted, signed provider metadata when the channel is enabled. Does not install or change the site. While disabled, explains that updates are unavailable. |
+| **Install Update** | Requires confirmation, repeats every safety check and refuses an unsafe or unapproved update. |
 
-| Button | English | دری |
-| --- | --- | --- |
-| Check for Updates | Downloads the provider's signed release information and asks the safety engine whether this computer may update. It changes nothing. | معلومات نسخهٔ امضاشدهٔ ارائه‌دهنده را می‌گیرد و از موتور ایمنی می‌پرسد که آیا این کمپیوتر می‌تواند به‌روز شود. هیچ چیزی را تغییر نمی‌دهد. |
-| Install Update | Asks for confirmation, repeats every check, and only then installs the update. | تأیید می‌خواهد، همهٔ بررسی‌ها را تکرار می‌کند و تنها پس از آن به‌روزرسانی را نصب می‌کند. |
+A normal customer must never need Git, Python, PowerShell, Docker commands,
+manual JSON editing, or database administration to update the application.
+The version number and any safe refusal explanation appear in English.
 
-Every message is shown in English and Dari. The version number is shown with the
-result. No terminal, Git, Docker command or database command is ever needed.
+## Safety checks before changing an installed application
 
-هر پیام به انگلیسی و دری نمایش داده می‌شود. شمارهٔ نسخه همراه نتیجه نشان داده
-می‌شود. هیچ ترمینال، Git، فرمان Docker یا فرمان دیتابیس لازم نیست.
+An approved update must independently verify all of these conditions:
 
-## What the updater checks before it touches anything
+1. The provider's cryptographic release signature against a **separately
+   installed** trusted key. A checksum alone is not proof of publisher identity.
+2. The source revision, release sequence, version, pinned prebuilt image and
+   supported upgrade path. The customer machine never builds source code.
+3. The existing site configuration, credentials, named database volume and
+   sufficient disk space; an incomplete or unexpected installation fails closed.
+4. A verified, encrypted backup on the separate approved drive, with matching
+   artifacts and backup receipt.
+5. A recovery authorization signed by **two distinct authorized people**:
+   Course Owner and General Manager (or designated recovery authority), using
+   separate approved keys and the same single-use request identifier.
+6. No unfinished or unreconciled previous update transaction.
+7. The downloaded image's exact size, SHA-256 digest and signed identity,
+   checked again immediately before application.
+8. Complete, readable baseline record counts and relationships for existing
+   students, payments, invoices, books, classes, attendance and payroll.
+   Refuse before changing the installation if an expected baseline cannot be
+   read; never assume absent verification means zero records.
 
-1. The provider signature on the release, using a key installed separately on
-   this computer (a checksum alone is never accepted as identity).
-2. The exact version, release sequence, source revision and prebuilt image
-   identity — the customer PC never builds anything.
-3. A supported upgrade path from the installed version.
-4. The existing site configuration, credentials and the named database volume.
-5. Enough free disk space.
-6. A **verified, encrypted backup on a separate drive**, whose artifacts still
-   match the backup receipt.
-7. A signed Owner recovery and key-custody authorization, bound to that backup.
-8. That no previous update is still unfinished.
-9. That the downloaded image still has the exact size, SHA-256 and image
-   identity the signed release promised — checked again immediately before the
-   update is applied.
-10. That every existing student, payment, invoice, book, class, attendance and
-    payroll record is still there afterwards, with the same counts and the same
-    links between records. If any count cannot be read, the update stops before
-    the first change instead of assuming the data is safe.
+The image is downloaded only after release metadata passes validation. An
+approved installation decision expires after 30 minutes; stale, replayed or
+reused permissions are refused. An update manifest cannot waive the backup
+or recovery authorization requirements.
 
-The image is downloaded only after the release information has passed every
-check, and a verified update permission expires after 30 minutes, so a stale or
-repeated step is refused rather than executed twice.
+## If an update fails
 
-If any item cannot be verified, the update is refused before the first change.
-A release cannot switch these requirements off: a manifest that does not demand
-a verified backup and a signed Owner authorization is rejected as invalid.
+- **Refused before installation:** No installation change was started. Follow
+  the explanation shown in the launcher.
+- **Import or apply failure:** Do not assume services or storage are healthy.
+  The launcher must not silently restart or overwrite anything. Save the
+  support status and contact trusted support.
+- **Recovery decision required:** Do not reinstall, reset Docker, delete
+  application data or restore over the live site. Keep the installation intact.
+  The update journal blocks another attempt until an authorized recovery
+  decision resolves the previous attempt.
 
-### بررسی‌های پیش از هر تغییر
+**Never** delete a Docker volume, run `docker system prune`, reset Docker,
+rebuild the image on the customer machine or proceed without signed release,
+backup and recovery evidence.
 
-۱. امضای ارائه‌دهنده با کلیدی که جداگانه روی این کمپیوتر نصب شده است.
-۲. نسخهٔ دقیق، شمارهٔ ترتیب، نسخهٔ منبع و هویت تصویر آماده — کمپیوتر مشتری
-هیچ چیزی را نمی‌سازد.
-۳. مسیر ارتقای پشتیبانی‌شده از نسخهٔ نصب‌شده.
-۴. تنظیمات سایت، اسناد ورود و حجم نام‌دار دیتابیس.
-۵. فضای کافی دیسک.
-۶. **بکاپ رمزگذاری‌شده و تأییدشده روی یک درایو جداگانه** که فایل‌های آن با
-رسید بکاپ مطابقت داشته باشد.
-۷. اجازهٔ امضاشدهٔ مالک برای بازیابی و نگهداری کلید، متصل به همان بکاپ.
-۸. اینکه هیچ به‌روزرسانی قبلی ناتمام نمانده باشد.
+## Provider-only release channel procedure
 
-۹. اینکه فایل تصویر دانلودشده هنوز همان اندازه، همان SHA-256 و همان هویت
-تصویر وعده‌داده‌شده در نسخهٔ امضاشده را دارد — درست پیش از تطبیق دوباره
-بررسی می‌شود.
-۱۰. اینکه همهٔ سوابق موجود شاگردان، پرداخت‌ها، بل‌ها، صنوف، حاضری و معاشات
-پس از به‌روزرسانی باقی مانده‌اند؛ با همان شمار و همان روابط میان سوابق. اگر
-شمردن هر سابقه ممکن نباشد، به‌روزرسانی پیش از نخستین تغییر متوقف می‌شود و
-فرض نمی‌شود که داده‌ها سالم‌اند.
+These steps belong on the release provider's controlled workstation, **not**
+on a customer machine. The channel must remain disabled until all release
+gates have been independently accepted.
 
-فایل تصویر تنها پس از گذشتن معلومات نسخه از همهٔ بررسی‌ها دانلود می‌شود و
-اجازهٔ تأییدشده پس از ۳۰ دقیقه منقضی می‌گردد؛ بنابراین یک مرحلهٔ کهنه یا
-تکرارشده رد می‌شود و دو بار اجرا نمی‌گردد.
-
-اگر هر مورد تأیید نشود، به‌روزرسانی پیش از نخستین تغییر رد می‌شود. یک نسخه
-نمی‌تواند این شرط‌ها را خاموش کند: مانیفستی که بکاپ تأییدشده و اجازهٔ امضاشدهٔ
-مالک را لازم نداند، نامعتبر شمرده می‌شود.
-
-## Safe recovery / بازیابی ایمن
-
-If an update stops, the window explains the state in both languages:
-
-* **The update was refused before installation** — no installation change was
-  started. Follow the displayed support instructions.
-* **An import or apply step failed** — services are not automatically restarted,
-  even when the database migration did not start; storage may be unavailable.
-  Keep the installation intact and ask trusted support for a recovery decision.
-* **The update needs a recovery decision** — do **not** reinstall, do not delete
-  data, do not reset Docker and do not restore over the live site. Keep this
-  folder, copy the safe support status, and contact trusted support. The journal
-  blocks a second update until this is resolved.
-
-اگر به‌روزرسانی متوقف شود، پنجره وضعیت را به هر دو زبان توضیح می‌دهد:
-
-* **به‌روزرسانی پیش از نصب رد شد** — تغییر نصب آغاز نشد؛ رهنمایی روی صفحه را دنبال کنید.
-* **واردکردن تصویر یا تطبیق نسخه ناکام شد** — سرویس‌ها خودکار دوباره آغاز نمی‌شوند؛ وضعیت ذخیره‌سازی باید تأیید شود. نصب موجود را حفظ و با پشتیبانی مطمئن تماس بگیرید.
-* **به‌روزرسانی نیاز به تصمیم بازیابی دارد** — دوباره نصب نکنید، داده‌ها را حذف
-نکنید، Docker را بازنشانی نکنید و روی سایت زنده بازیابی نکنید. این پوشه را
-نگه دارید، وضعیت ایمن پشتیبانی را کاپی کنید و با پشتیبانی مورد اعتماد تماس
-بگیرید. دفتر روزنامه تا حل شدن این وضعیت، به‌روزرسانی دوم را متوقف می‌کند.
-
-## Provider: enabling a channel / ارائه‌دهنده: فعال‌سازی کانال
-
-1. Build and verify the customer package as usual, then sign it:
+1. Build and qualify the exact source revision and complete customer package.
+   Sign the release using the provider-controlled offline signing key:
 
    ```bash
    python3 tools/release/create_update_bundle.py bundle \
@@ -119,55 +83,40 @@ If an update stops, the window explains the state in both languages:
      --target-schema-version frappe-v16-<release> --copy-archive
    ```
 
-   The tool signs only what the package already says: the release status and
-   the production authorization are copied from `release-manifest.json`, so a
-   `TEST PACKAGE - NO REAL DATA` / `REJECT` package produces a signed update
-   that every customer engine refuses.
+   The tool copies release state and authorization from the verified
+   `release-manifest.json`; it cannot promote a **TEST PACKAGE - NO REAL
+   DATA / REJECT** candidate to an approved production release. The shipped
+   verifier must reject that candidate.
 
-   The tool copies the release status and production authorization from the
-   package manifest; it cannot invent authorization. It re-verifies its own
-   output with the shipped engine.
-
-2. Publish `index.json`, `update.json`, `update.json.sig` and the image archive
-   at the `metadata_url` host allowlist.
-3. Install `trust-store.json` separately on the customer PC at
-   `product\data\updates\trust-store.json` (never download the trust anchor from
-   the update server).
-4. Set `product/updates/channel.json` to `"enabled": true` and the real
-   provider host, then re-issue the customer package.
-5. Record the two-person recovery authorization for the current verified backup.
-   The document is schema 2 and must name one Course Owner and one General
-   Manager or designated recovery authority, with a single-use `request_id`.
-   Each approver signs the identical document with their own offline key,
-   into a separate signature file; a single signature is refused:
+2. Publish `index.json`, `update.json`, `update.json.sig` and the exact
+   image archive on the provider's allowlisted metadata host.
+3. Provision `product/data/updates/trust-store.json` separately on the
+   customer computer. **Never** trust an update-server-supplied trust anchor.
+4. Configure `product/updates/channel.json` only after approving the
+   actual provider host and release channel; then rebuild and independently
+   qualify the distributable.
+5. Before a migrating update, create one schema-2 recovery authorization
+   naming the Course Owner and General Manager or designated authority with
+   a single-use `request_id`. Each signs the identical document using their
+   own offline key and produces a distinct signature file:
 
    ```bash
    python3 tools/release/create_update_bundle.py sign \
      --document recovery-authorization.json --private-key <owner-key>.pem \
-     --key-id <owner-key-id> --document-type recovery --out recovery-authorization.sig
+     --key-id <owner-key-id> --document-type recovery \
+     --out recovery-authorization.sig
    python3 tools/release/create_update_bundle.py sign \
      --document recovery-authorization.json --private-key <manager-key>.pem \
-     --key-id <manager-key-id> --document-type recovery --out recovery-authorization-2.sig
+     --key-id <manager-key-id> --document-type recovery \
+     --out recovery-authorization-2.sig
    ```
 
-   Both signature files, plus a trust store binding each key to its approver
-   identity and role, must be present on the customer PC before a migrating
-   update. A used `request_id` cannot be reused: a failed or interrupted
-   apply needs fresh approvals from both approvers.
+   The trust store must bind each signing key to the correct distinct
+   identity and role. A missing signature, reused request identifier,
+   interrupted update or single-person approval is a hard refusal.
 
-## Never / هرگز
-
-* Never delete the Docker volume, run `docker system prune`, or reset Docker to
-  "fix" an update.
-* Never restore a backup over the live site; restore is a separate, Owner-gated
-  operation.
-* Never rebuild the image on the customer PC.
-* Never install an update whose signature, backup or recovery authorization is
-  missing — the updater will refuse, and it is correct to do so.
-
-* هرگز حجم Docker را حذف نکنید، `docker system prune` را اجرا نکنید و برای
-«درست کردن» به‌روزرسانی، Docker را بازنشانی نکنید.
-* هرگز بکاپ را روی سایت زنده بازیابی نکنید.
-* هرگز تصویر را روی کمپیوتر مشتری نسازید.
-* هرگز به‌روزرسانی‌ای را که امضا، بکاپ یا اجازهٔ بازیابی ندارد نصب نکنید؛
-برنامه آن را رد می‌کند و این رفتار درست است.
+**Release boundary:** This document is a specification for secure updates.
+It does not prove that the current Windows installer, updater, recovery
+ceremony or any release is production-qualified. Refer to
+[Release and documentation authority](DOCUMENTATION.md) for the current
+acceptance requirements.
