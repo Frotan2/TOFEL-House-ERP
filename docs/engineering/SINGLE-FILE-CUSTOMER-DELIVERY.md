@@ -28,6 +28,16 @@ a publisher-signed x64 WSL MSI, a publisher-signed Docker Desktop offline instal
 and a new EXE output path. Only the provider uses this script. Do not ask the
 customer to run it or obtain these inputs.
 
+The Product image workflow now exports the runtime inputs on Linux, then runs
+`offline-windows-installer` on Windows after the exact-source app gates pass.
+That job downloads the original qualified kit and runtime exports from its own
+run, retrieves official WSL/Docker binaries using the committed version/URL/hash
+catalog, checks their publisher signatures, builds the actual offline TEST EXE,
+and publishes it with GitHub artifact provenance. None of these downloads run on
+the customer computer. This still does not replace clean-machine acceptance or a
+publisher-signed production release. The Windows builder accepts `RuntimeBundle`
+so it does not need nested Linux virtualization on a hosted Windows runner.
+
 The provider script verifies the application kit, rejects customer data and links,
 copies the offline Windows installers, fetches the exact digest-pinned Linux/amd64
 MariaDB/Redis images, and exports them with local tags. The offline Compose override

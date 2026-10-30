@@ -12,11 +12,13 @@ using System.Windows.Forms;
 public class CustomerSetup {
     const int FooterSize = 48;
     [STAThread]
-    static void Main() {
+    static void Main(string[] args) {
+        bool verifyOnly = args.Length == 1 && args[0] == "--verify-payload";
         Application.EnableVisualStyles();
         string staging = null;
         Form progress = null;
         try {
+            if (verifyOnly) { VerifyExecutablePayload(); return; }
             string exe = Application.ExecutablePath;
             string parent = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TOEFL House ERP");
             string target = Path.Combine(parent, "Customer");
@@ -76,10 +78,35 @@ public class CustomerSetup {
             }
         } catch (Exception error) {
             Environment.ExitCode = 1;
-            MessageBox.Show(error.Message, "TOEFL House ERP setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (verifyOnly) Console.Error.WriteLine(error.Message);
+            else MessageBox.Show(error.Message, "TOEFL House ERP setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
         } finally {
             if (progress != null) progress.Dispose();
             try { if (staging != null && Directory.Exists(staging)) Directory.Delete(staging, true); } catch { /* An interrupted staging directory is never published. */ }
+        }
+    }
+    // Provider validation of the actual assembled EXE: no GUI, extraction,
+    // service changes, prerequisite installers or customer profile writes.
+    static void VerifyExecutablePayload() {
+        using (FileStream input = File.OpenRead(Application.ExecutablePath)) {
+            long footer = FindFooter(input);
+            input.Position = footer + 8;
+            long length; byte[] expected;
+            using (BinaryReader reader = new BinaryReader(input, Encoding.UTF8, true)) {
+                length = reader.ReadInt64(); expected = reader.ReadBytes(32);
+            }
+            if (length <= 0 || length > footer) throw new Exception("Invalid installer payload.");
+            input.Position = footer - length;
+            using (SHA256 hash = SHA256.Create()) {
+                byte[] buffer = new byte[1024 * 1024]; long remaining = length;
+                while (remaining > 0) {
+                    int count = input.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                    if (count == 0) throw new Exception("Truncated installer.");
+                    hash.TransformBlock(buffer, 0, count, buffer, 0); remaining -= count;
+                }
+                hash.TransformFinalBlock(new byte[0], 0, 0);
+                if (BitConverter.ToString(hash.Hash) != BitConverter.ToString(expected)) throw new Exception("Installer integrity check failed.");
+            }
         }
     }
     public static long FindFooter(FileStream input) {

@@ -31,6 +31,8 @@ on:
       - tests/foundation/test_product_packaging.py
       # Package contents and their delivery contracts must qualify the image
       # on the same revision, even when application code is unchanged.
+      - tools/release/export_offline_runtime.py
+      - tools/release/windows-prerequisites.json
       - tools/release/create_customer_package.py
       - "tools/release/Build Customer Installer.ps1"
       - tools/release/windows/**
@@ -109,6 +111,8 @@ on:
       - docs/CUSTOMER-UPDATES.md
       - docs/engineering/SAFE-UPDATES.md
       - docs/owner-decisions.json
+      - tools/release/export_offline_runtime.py
+      - tools/release/windows-prerequisites.json
       - tools/release/create_customer_package.py
       - "tools/release/Build Customer Installer.ps1"
       - tools/release/windows/**
@@ -1826,6 +1830,19 @@ jobs:
           test -s "$package_root"/*.zip
           test -s "$package_root/TOEFL-House-ERP-Customer-$TOEFL_HOUSE_RELEASE_VERSION/product/release/ci-gates.json"
           echo "::notice title=Customer package::version $TOEFL_HOUSE_RELEASE_VERSION; image archive, checksum, manifest and allowlisted GUI included"
+      - name: Export pinned offline database and cache images
+        if: success()
+        run: |
+          python3 tools/release/export_offline_runtime.py --compose product/docker-compose.yml \
+            --output "$RUNNER_TEMP/toefl-house-offline-runtime" --source-revision "$GITHUB_SHA"
+      - name: Publish provider runtime inputs
+        if: success()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: TOEFL-House-ERP-Offline-Runtime-${{ env.TOEFL_HOUSE_RELEASE_VERSION }}
+          path: ${{ runner.temp }}/toefl-house-offline-runtime/
+          if-no-files-found: error
+          compression-level: 0
       - name: Attest customer package provenance
         if: success()
         uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
@@ -1990,3 +2007,58 @@ jobs:
           if ($idempotentExit -ne 0) {
             throw "normalizer was not idempotent: expected exit 0 on an already-clean tree, got $idempotentExit"
           }
+
+  offline-windows-installer:
+    needs: image
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Download this revision's qualified provider inputs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = 'ci-' + $env:GITHUB_SHA.Substring(0,12)
+          $kit = Join-Path $env:RUNNER_TEMP 'qualified-kit'
+          $runtime = Join-Path $env:RUNNER_TEMP 'offline-runtime'
+          gh run download $env:GITHUB_RUN_ID --repo $env:GITHUB_REPOSITORY --name "TOEFL-House-ERP-Customer-$version" --dir $kit
+          if ($LASTEXITCODE -ne 0) { throw 'Qualified kit download failed.' }
+          gh run download $env:GITHUB_RUN_ID --repo $env:GITHUB_REPOSITORY --name "TOEFL-House-ERP-Offline-Runtime-$version" --dir $runtime
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned runtime download failed.' }
+      - name: Fetch hash-pinned official Windows prerequisites on the provider runner
+        shell: pwsh
+        run: |
+          $catalog = Get-Content -LiteralPath 'tools/release/windows-prerequisites.json' -Raw | ConvertFrom-Json
+          $destination = Join-Path $env:RUNNER_TEMP 'prerequisites'
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          foreach ($entry in @($catalog.wsl, $catalog.docker)) {
+            $file = Join-Path $destination $entry.filename
+            Invoke-WebRequest -Uri $entry.url -OutFile $file
+            if ((Get-FileHash -LiteralPath $file).Hash -ine $entry.sha256) { throw 'Official prerequisite checksum mismatch.' }
+          }
+      - name: Assemble the actual single-file offline TEST installer
+        shell: powershell
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'customer-installer'
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          $output = Join-Path $destination 'TOEFL-House-ERP-Setup-TEST.exe'
+          & 'tools/release/Build Customer Installer.ps1' -Package (Join-Path $env:RUNNER_TEMP 'qualified-kit') -RuntimeBundle (Join-Path $env:RUNNER_TEMP 'offline-runtime') -WslInstaller (Join-Path $env:RUNNER_TEMP 'prerequisites/wsl-x64.msi') -DockerInstaller (Join-Path $env:RUNNER_TEMP 'prerequisites/Docker Desktop Installer.exe') -OutputExe $output
+          if (-not (Test-Path -LiteralPath $output -PathType Leaf)) { throw 'Offline installer was not produced.' }
+          $verification = Start-Process -FilePath $output -ArgumentList '--verify-payload' -Wait -PassThru
+          if ($verification.ExitCode -ne 0) { throw 'Assembled executable payload verification failed.' }
+          $hash = (Get-FileHash -LiteralPath $output).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText($output + '.sha256', $hash + '  TOEFL-House-ERP-Setup-TEST.exe' + [Environment]::NewLine)
+      - name: Attest offline TEST installer provenance
+        uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
+        with:
+          subject-path: '${{ runner.temp }}/customer-installer/*.exe'
+      - name: Publish single-file offline TEST installer
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: TOEFL-House-ERP-Offline-Setup-TEST-${{ github.sha }}
+          path: ${{ runner.temp }}/customer-installer/
+          if-no-files-found: error
+          compression-level: 0

@@ -4,11 +4,20 @@ param(
     [Parameter(Mandatory=$true)][string]$Package,
     [Parameter(Mandatory=$true)][string]$WslInstaller,
     [Parameter(Mandatory=$true)][string]$DockerInstaller,
-    [Parameter(Mandatory=$true)][string]$OutputExe
+    [Parameter(Mandatory=$true)][string]$OutputExe,
+    [string]$RuntimeBundle = ""
 )
 $ErrorActionPreference = 'Stop'
 $staging = $null
 $partial = $null
+function Copy-ArchiveInput([string]$Origin, [string]$Destination) {
+    # Same-volume provider artifacts can share large, immutable TAR bytes.
+    # This is a hard link, never a symlink/junction in the customer archive.
+    try {
+        New-Item -ItemType HardLink -Path $Destination -Target $Origin -ErrorAction Stop | Out-Null
+    } catch { Copy-Item -LiteralPath $Origin -Destination $Destination -ErrorAction Stop }
+}
+
 try {
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -77,7 +86,9 @@ try {
         $relative = $file.FullName.Substring($packageRoot.Length).TrimStart('\')
         $destination = Join-Path $kit $relative
         [IO.Directory]::CreateDirectory((Split-Path -Parent $destination)) | Out-Null
-        Copy-Item -LiteralPath $file.FullName -Destination $destination
+        if ($relative -ieq 'product\release\toefl-house-erp-app.tar') {
+            Copy-ArchiveInput $file.FullName $destination
+        } else { Copy-Item -LiteralPath $file.FullName -Destination $destination }
     }
     foreach ($required in @('Prepare This PC.ps1', 'Import Offline Runtime.ps1')) {
         if (-not (Test-Path -LiteralPath (Join-Path $kit ('product\windows\' + $required)))) {
@@ -95,35 +106,66 @@ try {
     }
     [IO.File]::WriteAllText((Join-Path $prerequisites 'manifest.json'), ($prereqManifest | ConvertTo-Json -Depth 5))
     $compose = Get-Content -LiteralPath (Join-Path $kit 'product\docker-compose.yml') -Raw
-    $images = @()
-    foreach ($row in @(
-        @{ key='db'; repository='mariadb'; tag='toefl-house-erp-db:bundled'; file='db-image.tar' },
-        @{ key='cache'; repository='redis'; tag='toefl-house-erp-cache:bundled'; file='cache-image.tar' }
-    )) {
-        $pattern = '(?m)^\s+image:\s+(' + $row.repository + '@sha256:[a-f0-9]{64})\s*$'
-        $sourceMatches = [regex]::Matches($compose, $pattern)
-        $refs = @($sourceMatches | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
-        if ($refs.Count -ne 1) { throw 'Expected one pinned registry identity for each runtime component.' }
-        $ref = $refs[0]
-        & docker pull --platform linux/amd64 $ref
-        if ($LASTEXITCODE -ne 0) { throw 'Provider could not fetch the pinned runtime image.' }
-        & docker tag $ref $row.tag
-        if ($LASTEXITCODE -ne 0) { throw 'Provider runtime tagging failed.' }
-        $raw = & docker image inspect $row.tag --format '{{json .}}'
-        if ($LASTEXITCODE -ne 0) { throw 'Provider runtime inspection failed.' }
-        $identity = $raw | ConvertFrom-Json
-        if ($identity.Os -cne 'linux' -or $identity.Architecture -cne 'amd64') { throw 'Wrong runtime platform.' }
-        $archive = Join-Path $kit ('product\release\' + $row.file)
-        & docker save --output $archive $row.tag
-        if ($LASTEXITCODE -ne 0) { throw 'Provider runtime export failed.' }
-        $images += @{
-            key=$row.key; source=$ref; tag=$row.tag; file=$row.file
-            sha256=(Get-FileHash -LiteralPath $archive).Hash.ToLowerInvariant()
-            config=$identity.Config; layers=$identity.RootFS.Layers
+    if ($RuntimeBundle) {
+        # Hosted Windows runners do not need a nested Linux Docker engine.
+        # Consume only the three files exported by the same qualified Linux job.
+        $runtime = Get-Content -LiteralPath (Join-Path $RuntimeBundle 'offline-runtime.json') -Raw | ConvertFrom-Json
+        if ($runtime.schema_version -ne 1 -or $runtime.source_revision -cne $manifest.source_revision -or
+            @($runtime.images).Count -ne 2) { throw 'Runtime export does not match this qualified source revision.' }
+        $expectedRuntime = @{
+            db = @{file='db-image.tar'; tag='toefl-house-erp-db:bundled'; repository='mariadb'}
+            cache = @{file='cache-image.tar'; tag='toefl-house-erp-cache:bundled'; repository='redis'}
         }
+        $seen = @{}
+        foreach ($image in $runtime.images) {
+            $key = [string]$image.key
+            if (-not $expectedRuntime.ContainsKey($key) -or $seen.ContainsKey($key)) { throw 'Unexpected runtime export entry.' }
+            $seen[$key] = $true
+            $expectedImage = $expectedRuntime[$key]
+            if ($image.file -cne $expectedImage.file -or $image.tag -cne $expectedImage.tag -or
+                $image.source -notmatch ('^' + $expectedImage.repository + '@sha256:[a-f0-9]{64}$') -or
+                -not $compose.Contains([string]$image.source) -or $image.sha256 -notmatch '^[a-f0-9]{64}$') {
+                throw 'Unexpected runtime export identity.'
+            }
+            $origin = Join-Path $RuntimeBundle $expectedImage.file
+            if ((Get-Item -LiteralPath $origin -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Linked runtime export rejected.' }
+            if ((Get-FileHash -LiteralPath $origin).Hash -ine $image.sha256) { throw 'Runtime export integrity verification failed.' }
+            $destination = Join-Path $kit ('product\release\' + $expectedImage.file)
+            Copy-ArchiveInput $origin $destination
+            if ((Get-FileHash -LiteralPath $destination).Hash -ine $image.sha256) { throw 'Runtime export changed while copying.' }
+        }
+        [IO.File]::WriteAllText((Join-Path $kit 'product\release\offline-runtime.json'), ($runtime | ConvertTo-Json -Depth 30))
+    } else {
+        $images = @()
+        foreach ($row in @(
+            @{ key='db'; repository='mariadb'; tag='toefl-house-erp-db:bundled'; file='db-image.tar' },
+            @{ key='cache'; repository='redis'; tag='toefl-house-erp-cache:bundled'; file='cache-image.tar' }
+        )) {
+            $pattern = '(?m)^\s+image:\s+(' + $row.repository + '@sha256:[a-f0-9]{64})\s*$'
+            $sourceMatches = [regex]::Matches($compose, $pattern)
+            $refs = @($sourceMatches | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
+            if ($refs.Count -ne 1) { throw 'Expected one pinned registry identity for each runtime component.' }
+            $ref = $refs[0]
+            & docker pull --platform linux/amd64 $ref
+            if ($LASTEXITCODE -ne 0) { throw 'Provider could not fetch the pinned runtime image.' }
+            & docker tag $ref $row.tag
+            if ($LASTEXITCODE -ne 0) { throw 'Provider runtime tagging failed.' }
+            $raw = & docker image inspect $row.tag --format '{{json .}}'
+            if ($LASTEXITCODE -ne 0) { throw 'Provider runtime inspection failed.' }
+            $identity = $raw | ConvertFrom-Json
+            if ($identity.Os -cne 'linux' -or $identity.Architecture -cne 'amd64') { throw 'Wrong runtime platform.' }
+            $archive = Join-Path $kit ('product\release\' + $row.file)
+            & docker save --output $archive $row.tag
+            if ($LASTEXITCODE -ne 0) { throw 'Provider runtime export failed.' }
+            $images += @{
+                key=$row.key; source=$ref; tag=$row.tag; file=$row.file
+                sha256=(Get-FileHash -LiteralPath $archive).Hash.ToLowerInvariant()
+                config=$identity.Config; layers=$identity.RootFS.Layers
+            }
+        }
+        [IO.File]::WriteAllText((Join-Path $kit 'product\release\offline-runtime.json'),
+            (@{schema_version=1; images=$images} | ConvertTo-Json -Depth 30))
     }
-    [IO.File]::WriteAllText((Join-Path $kit 'product\release\offline-runtime.json'),
-        (@{schema_version=1; images=$images} | ConvertTo-Json -Depth 30))
     $override = @'
 services:
   bootstrap:
