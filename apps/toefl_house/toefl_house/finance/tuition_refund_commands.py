@@ -63,8 +63,8 @@ def _ledger_rows(student, company, fees, *, kind):
 
     Collections: submitted Payment Entry Receive rows referencing the Fees
     (party Student). Refunds: submitted Payment Entry Pay rows referencing
-    the Fees — today there are none for tuition, because payout is blocked;
-    the query still runs so a future mechanism's refunds are counted, and
+    the Fees — the qualified atomic payout command now records such rows;
+    the query counts them for the current refund ceiling, and
     cancelled rows are returned with docstatus 2 so the preflight excludes
     them from the ceiling while still proving completeness.
     """
