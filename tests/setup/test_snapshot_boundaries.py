@@ -25,6 +25,9 @@ class FakeDB:
         self.datasets = datasets or {}
         self.calls = []
 
+    def exists(self, doctype, name):
+        return any(row.get("name") == name for row in self.datasets.get(doctype, []))
+
     def get_all(self, doctype, *, fields=None, filters=None,
                 order_by=None, limit_page_length=None, **kwargs):
         self.calls.append((doctype, limit_page_length))
@@ -61,7 +64,8 @@ def actual_snapshot_functions(db):
     module = ast.parse(API.read_text(encoding="utf-8"))
     funcs = [n for n in module.body
              if isinstance(n, ast.FunctionDef) and n.name in
-             ("_bounded_rows", "_unique_by", "_snapshot")]
+             ("_bounded_rows", "_unique_by",
+              "_native_program_has_curriculum", "_snapshot")]
     context = {
         "frappe": types.SimpleNamespace(db=db, ValidationError=Refused),
         "_MAX_CATALOG_ROWS": 500, "_MAX_COMPONENT_ROWS": 100,
@@ -147,6 +151,42 @@ class SnapshotSafetyTests(unittest.TestCase):
                 state = actual_snapshot_functions(db)["_snapshot"]()
                 self.assertEqual(
                     state["levels"]["STARTER"]["duration_months"], expected)
+
+    def test_old_native_program_without_courses_is_not_ready_for_setup(self):
+        db = FakeDB({
+            "TH Program Level": [Row(name="L-1", code="STARTER",
+                                     title="Starter", family="F-1",
+                                     native_program="N-1", next_level="",
+                                     status="Active")],
+            "Program": [Row(name="N-1")],
+            "TH Level Duration": [Row(parent="L-1", duration_value=2,
+                                      duration_unit="Solar Hijri Month",
+                                      effective_from="2026-03-21")],
+        })
+        result = actual_snapshot_functions(db)["_snapshot"]()
+        self.assertFalse(result["levels"]["STARTER"]["curriculum_ready"])
+
+    def test_valid_native_course_links_are_required_and_distinct(self):
+        base = {
+            "TH Program Level": [Row(name="L-1", code="STARTER",
+                                     title="Starter", family="F-1",
+                                     native_program="N-1", next_level="",
+                                     status="Active")],
+            "Program": [Row(name="N-1")],
+            "Course": [Row(name="C-1")],
+            "Program Course": [Row(parent="N-1", parenttype="Program",
+                                   course="C-1", required=1)],
+        }
+        db = FakeDB(base)
+        self.assertTrue(actual_snapshot_functions(db)["_snapshot"]()
+                        ["levels"]["STARTER"]["curriculum_ready"])
+        db.datasets["Program Course"].append(
+            Row(parent="N-1", parenttype="Program", course="C-1", required=1))
+        self.assertFalse(actual_snapshot_functions(db)["_snapshot"]()
+                         ["levels"]["STARTER"]["curriculum_ready"])
+        db.datasets["Program Course"][1]["course"] = "C-missing"
+        self.assertFalse(actual_snapshot_functions(db)["_snapshot"]()
+                         ["levels"]["STARTER"]["curriculum_ready"])
 
     def test_malformed_fee_plan_is_conflict_not_missing(self):
         db = FakeDB({
