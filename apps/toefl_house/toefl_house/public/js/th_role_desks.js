@@ -1047,8 +1047,8 @@ frappe.provide("toefl_house.role_desks");
 		],
 		"toefl_house.academic.set_assessment_policy_version": [
 			{ fieldname: "policy", label: "Grading policy", fieldtype: "Data", read_only: 1, reqd: 1 },
-			{ fieldname: "passing_score", label: "New minimum passing mark (%)", fieldtype: "Percent", reqd: 1 },
-			{ fieldname: "retake_wait_days", label: "Minimum waiting days for one retake", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "passing_score", label: "New passing mark (%) — leave blank to keep current", fieldtype: "Percent" },
+			{ fieldname: "retake_wait_days", label: "New retake wait (days) — leave blank to keep current", fieldtype: "Int" },
 			{ fieldname: "effective_from", label: "Date when the revised values take effect", fieldtype: "Date", reqd: 1 },
 			{ fieldname: "reason", label: "Why the grading rule is changing", fieldtype: "Small Text", reqd: 1 },
 			{ fieldname: "grading_scale", label: "New grade scale (optional; blank keeps the old one)", fieldtype: "Link", options: "Grading Scale" },
@@ -1472,6 +1472,28 @@ frappe.provide("toefl_house.role_desks");
 						grade_code, threshold: index === 4 ? 0 : thresholds[index],
 					})));
 					["grade_a", "grade_b", "grade_c", "grade_d"].forEach((key) => delete args[key]);
+				}
+				if (action.endpoint === "toefl_house.academic.set_assessment_policy_version") {
+					const scoreSet = values.passing_score !== undefined &&
+						values.passing_score !== null && values.passing_score !== "";
+					const waitSet = values.retake_wait_days !== undefined &&
+						values.retake_wait_days !== null && values.retake_wait_days !== "";
+					if (!scoreSet && !waitSet) {
+						frappe.msgprint(text("Change at least one number: passing mark or retake wait."));
+						return;
+					}
+					if (scoreSet && (!Number.isInteger(Number(values.passing_score)) ||
+						Number(values.passing_score) < 1 || Number(values.passing_score) > 100)) {
+						frappe.msgprint(text("The passing mark must be a whole percent from 1 to 100."));
+						return;
+					}
+					if (waitSet && (!Number.isInteger(Number(values.retake_wait_days)) ||
+						Number(values.retake_wait_days) < 7 || Number(values.retake_wait_days) > 365)) {
+						frappe.msgprint(text("The retake waiting period must be 7 to 365 whole days."));
+						return;
+					}
+					if (!scoreSet) delete args.passing_score;
+					if (!waitSet) delete args.retake_wait_days;
 				}
 				if (action.endpoint === "toefl_house.finance.policies.set_billing_policy_version") {
 					const monthly = values.installment_cadence === "Solar Hijri Month";
