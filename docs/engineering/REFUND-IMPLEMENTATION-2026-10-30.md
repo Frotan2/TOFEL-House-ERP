@@ -46,6 +46,30 @@ workaround.** Native results belong to the exact pushed commit's artifact.
 
 ## Work still required before enabling #115
 
+Continuation: the isolated upstream accounting mechanism passed Native
+[40991917641](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40991917641)
+at `1ef3e4e0e53c78d9921fb8d063b428c4c2f59a53`, for both fully paid and
+part-paid Fees, including cancellation of payout before credit. The command
+savepoint infrastructure subsequently passed all five gates at
+`d327e758375d3be59a8ad4eeb4d155fd15c62f19`, including a real MariaDB
+failure test retaining a prior caller write and removing failed command data,
+operation and audit records without an outside rollback.
+
+The next paired implementation uses exact in-process native document identity,
+current locking ledger reads, original income/receivable dimensions, scoped
+main-Cash authority and cash availability, locked receipt provenance, immutable
+credit/payment links and command-local rollback. Original source receipts are
+frozen during Requested/Approved/Paid cases, including dimension-only changes;
+the independently audited Reception handover remains permitted without changing
+financial facts. The actual owned Native test must prove payout, replay,
+independent actors, scope denial, both real post-submit failure rollbacks and
+source/artifact mutation refusal. **337 local finance tests and source review
+are not that proof.** Paired reversal, user-facing queues, full race acceptance
+and final Windows candidate acceptance remain required before delivery.
+
+The earlier checklist below remains the full completion scope; it is not a
+claim that the new owned paired command has passed its first database gate.
+
 - Prove the native mechanism, then implement atomic request/Fees/source-receipt
   locks and independently authorized Finance payout with immutable linked
   credit/payment IDs, live Company/Branch/account checks and idempotent replay.

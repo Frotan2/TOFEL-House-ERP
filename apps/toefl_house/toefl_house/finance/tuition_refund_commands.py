@@ -1,25 +1,13 @@
-"""Frappe command layer for tuition refunds (Issue #115).
+"""Audited tuition refund commands with independent General Manager/Finance roles.
 
-Thin wrappers around the pure rules in ``toefl_house.finance.tuition_refunds``:
-they lock the Fees row and the request row (``for update``), re-prove live
-facts against the native ledger at each step, enforce Company scope
-(``require_finance_company``) and Branch scope (``command_scope`` via
-``_execute``), and record the decision on the ``TH Tuition Refund Request``
-record. Request creation requires Finance Officer; approve/deny
-require General Manager, and payout requires a different Finance Manager.
-These are distinct command roles (no Finance Officer prerequisite for the
-approver or payer), and native Fees payout remains blocked.
-
-Payout is deliberately NOT posted here: ``pay_tuition_refund`` runs the
-full preflight and then raises the native-mechanism blocker, leaving the
-request Approved and unconsumed. See ``tuition_refunds.NATIVE_BLOCKER``
-for the pinned-code evidence. When a verified native Fees refund
-mechanism exists, only the final step of ``pay_tuition_refund`` changes:
-create the native artifact inside the refund-payment guard context, submit
-it, then set status Paid and payment_entry — all other checks stay.
+Creation reserves a verified native-collection ceiling. Approval and denial
+retain immutable case evidence. Payout uses an atomic command-local savepoint
+and the separate exact-document native credit/payout authority; both accounting
+artifacts, the Paid request, operation receipt and audit event commit together.
+Company/Branch checks apply before work and on every idempotent replay.
 """
 import frappe
-from toefl_house.api import _execute
+from toefl_house.atomic_commands import execute_atomic as _execute
 from toefl_house.finance import tuition_refunds
 from toefl_house.finance.company_scope import require_finance_company
 from toefl_house.policy import digest
@@ -52,6 +40,7 @@ def _audit_hash(req):
         "approved_by": req.get("approved_by"),
         "paying_user": req.get("paying_user"),
         "payment_entry": req.get("payment_entry"),
+        "credit_journal": req.get("credit_journal"),
     })
 
 
@@ -76,12 +65,8 @@ def _ledger_rows(student, company, fees, *, kind):
     cancelled rows are returned with docstatus 2 so the preflight excludes
     them from the ceiling while still proving completeness.
     """
-    rows = frappe.db.get_all(
-        "Payment Entry Reference",
-        filters={"reference_doctype": FEES, "reference_name": fees},
-        fields=["parent", "allocated_amount"],
-        limit_page_length=1001,
-    )
+    rows = frappe.db.sql("select parent,allocated_amount from `tabPayment Entry Reference` "
+        "where reference_doctype='Fees' and reference_name=%s limit 1001 for update", (fees,), as_dict=True)
     if len(rows or []) > 1000:
         raise frappe.ValidationError(
             "Tuition payment references exceed the verified reporting limit")
@@ -90,7 +75,7 @@ def _ledger_rows(student, company, fees, *, kind):
         entry = frappe.db.get_value(
             PAYMENT, row["parent"],
             ["payment_type", "party_type", "party", "company", "docstatus"],
-            as_dict=True)
+            as_dict=True, for_update=True)
         if not entry or entry.get("party_type") != "Student" \
                 or entry.get("party") != student \
                 or entry.get("company") != company:
@@ -110,10 +95,8 @@ def _ledger_rows(student, company, fees, *, kind):
 
 
 def _existing_requests(fees):
-    rows = frappe.db.get_all(
-        REQUEST, filters={"fees": fees},
-        fields=["fees", "status", "requested_amount", "approved_amount"],
-        limit_page_length=1001)
+    rows = frappe.db.sql("select fees,status,requested_amount,approved_amount from `tabTH Tuition Refund Request` "
+        "where fees=%s limit 1001 for update", (fees,), as_dict=True)
     if len(rows or []) > 1000:
         raise frappe.ValidationError(
             "Tuition refund request evidence exceeds the verified reporting limit")
@@ -133,7 +116,7 @@ def _pending_request(name):
     frappe.db.sql(
         "select name from `tabTH Tuition Refund Request` where name=%s for update",
         (name,))
-    return frappe.get_doc(REQUEST, name)
+    return frappe.get_doc(REQUEST, name, for_update=True)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -146,7 +129,7 @@ def request_tuition_refund(request_key, student, company, fees, requested_amount
         fees_name = _name(fees, "Fees")
         frappe.db.sql("select name from `tabFees` where name=%s for update", (fees_name,))
         fee_row = frappe.db.get_value(
-            FEES, fees_name, ["docstatus", "student", "company"], as_dict=True)
+            FEES, fees_name, ["docstatus", "student", "company"], as_dict=True, for_update=True)
         if not fee_row:
             raise frappe.ValidationError("Unknown fee")
         if int(fee_row.docstatus or 0) != 1:
@@ -248,35 +231,18 @@ def _require_target_company(fees):
 
 @frappe.whitelist(methods=["POST"])
 def pay_tuition_refund(request_key, request):
-    """Finance Manager payout attempt.
+    """Independent Finance payout as one audited native credit/payment pair."""
+    from toefl_house.atomic_commands import execute_atomic
+    from toefl_house.finance.tuition_refund_native import post_approved_refund
 
-    Runs the full preflight (Approved status, Finance Manager role,
-    approver != payer, ceiling recomputed from the live native ledger at
-    pay time) and then refuses at the native posting step: no verified
-    native Fees refund mechanism exists on the pinned stack, so no Payment
-    Entry is created, the request stays Approved, and the approval is not
-    consumed. A retry after a mechanism exists needs no new approval.
-    """
     def work(actor):
         _require_role(actor, tuition_refunds.PAYER_ROLE)
-        req = _pending_request(_name(request, "Tuition refund request"))
-        _require_target_company(req.fees)
+        name = _name(request, "Tuition refund request")
+        before_hash = _audit_hash(frappe.get_doc(REQUEST, name))
         try:
-            tuition_refunds.pay_preflight(
-                {"status": req.status, "student": req.student,
-                 "company": req.company, "fees": req.fees,
-                 "approved_amount": str(req.approved_amount),
-                 "reason": req.reason, "approved_by": req.approved_by},
-                payer=actor, payer_roles=frappe.get_roles(actor),
-                collections=_ledger_rows(req.student, req.company, req.fees,
-                                         kind="Collections"),
-                refunds=_ledger_rows(req.student, req.company, req.fees,
-                                     kind="Refunds"))
-        except tuition_refunds.NativeRefundBlocked as exc:
-            raise frappe.ValidationError(str(exc)) from exc
+            req, result = post_approved_refund(name)
         except (tuition_refunds.RefundError, ValueError) as exc:
             raise frappe.ValidationError(str(exc)) from exc
-        raise frappe.ValidationError(tuition_refunds.NATIVE_BLOCKER)
+        return result, dict(target=req.name, before_hash=before_hash, after_hash=_audit_hash(req))
 
-    return _execute("pay_tuition_refund", request_key,
-                    {"request": request}, work)
+    return execute_atomic("pay_tuition_refund", request_key, {"request": request}, work)

@@ -313,16 +313,19 @@ doc_events = {
     # Customer refunds settle credit notes only; every other native payment
     # type passes through untouched (finance.refunds.guard_payment_entry).
     "Payment Entry": {
+        "before_validate": "toefl_house.finance.tuition_refund_native.guard_payment",
         "validate": "toefl_house.finance.refunds.guard_payment_entry",
         "before_cancel": "toefl_house.finance.refunds.guard_payment_entry",
         "before_update_after_submit": "toefl_house.finance.refunds.guard_payment_entry",
-        "on_trash": "toefl_house.finance.collections.guard_collection_fields",
+        "on_trash": ["toefl_house.finance.tuition_refund_native.guard_payment",
+                     "toefl_house.finance.collections.guard_collection_fields"],
     },
     "Journal Entry": {
         "before_validate": "toefl_house.finance.student_journals.guard_student_journal",
         "validate": "toefl_house.finance.student_journals.guard_student_journal",
         "before_cancel": "toefl_house.finance.student_journals.guard_student_journal",
         "before_update_after_submit": "toefl_house.finance.student_journals.guard_student_journal",
+        "on_trash": "toefl_house.finance.student_journals.guard_student_journal",
     },
     # Book stock integrity (finance.books): receipts need a positive
     # purchase cost, issues/corrections are approved adjustments. Stock

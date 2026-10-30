@@ -80,6 +80,9 @@ def _placement_fee_item():
 
 def guard_fees(doc, method=None):
     require_operational()
+    from toefl_house.finance.tuition_refund_native import protect_fee
+
+    protect_fee(doc, method)
     if finance_command_active(FEES):
         return
     raise frappe.ValidationError("Fees requires an authorized finance command")

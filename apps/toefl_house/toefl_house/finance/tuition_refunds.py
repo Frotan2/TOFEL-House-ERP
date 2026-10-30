@@ -1,56 +1,16 @@
-"""Durable, auditable tuition refund request workflow — pure logic.
+"""Pure case-by-case tuition refund authority and reservation rules.
 
-This module contains NO native accounting writes and NO Frappe import, so
-its rules are testable without a site. The Frappe command layer lives in
-``toefl_house.finance.tuition_refund_commands`` and reuses these rules
-against live rows; the request record itself is the ``TH Tuition Refund
-Request`` DocType (see its JSON next to the correction request DocType).
+General Manager approves each exact amount with supporting evidence; a
+DIFFERENT Finance Manager executes it. The ceiling is verified submitted
+tuition collections less earlier completed native refunds. No automatic
+percentage, refund window, pro-rata price or unpaid-balance waiver is inferred.
 
-Approved business policy (Issue #115, Owner decision, 2026-10-28):
-General Manager reviews each case, records supporting evidence, the reason
-and the exact approved AFN amount; a DIFFERENT Finance Manager performs
-the payout; no routine Course Owner approval is required; refunds never
-exceed verified submitted tuition collections minus earlier completed
-refunds; no automatic percentage, refund window or pro-rata amount is
-authorized.
-
-NATIVE BLOCKER — read before wiring a payout:
-Pinned ERPNext 4048fb7 ``payment_entry.py`` provides NO Fees-aware refund
-path, and a Payment Entry Pay/Student referencing Fees is actively the
-wrong accounting:
-- ``get_valid_reference_doctypes`` (line ~745) returns a tuple only for
-  Customer / Shareholder / Employee / Supplier. For party_type Student it
-  returns None, so ``validate_reference_documents`` returns early: Fees is
-  neither approved nor rejected, and the party-association check
-  (reference's student == payment party) is never run for Student.
-- ``get_reference_details`` (line 2800) treats any non-invoice reference
-  generically: outstanding = total - advance_paid. Fees has no
-  advance_paid field, so the computed outstanding is the Fees grand_total,
-  not its live outstanding_amount.
-- ``validate_allocated_amount`` compares against reference details, which
-  can be recomputed from the generic grand_total rather than live Fees
-  outstanding. A positive allocation is therefore not necessarily refused
-  even for fully paid Fees. Native acceptance alone does not prove safety.
-  ``add_party_gl_entries`` (line 1368)
-  books a Pay as a DEBIT to the party (receivable) account, so the GL
-  outstanding for the Fees (sum debit - sum credit against the voucher,
-  ``gl_entry.py`` line ~410, Fees in ``OUTSTANDING_DOCTYPES``) INCREASES
-  by the standalone payout: the student appears to owe MORE after being refunded,
-  the Fees indicator flips back to Unpaid, and tuition income is never
-  reversed. That is a new charge, not a refund.
-- Pinned Education 93bc707 ``fees.py`` has no refund, credit or reversal
-  document for Fees at all: on submit it debits receivable / credits
-  income, and on cancel it reverses those GL entries in full. There is no
-  partial-refund document to post.
-Consequence: ``pay_tuition_refund`` runs every approval, separation,
-ceiling and identity check and then REFUSES at the posting step with
-``NativeRefundBlocked``. The request stays Approved (not Paid, not
-consumed), so a future approved native mechanism can pay it without a
-new approval round — but until such a mechanism exists, payout stays
-disabled and no Journal Entry or other accounting workaround is invented
-here. The ceiling and request state are the durable, auditable part that
-can ship now; the money movement cannot, honestly, ship on this pinned
-stack.
+validate_payment_authority checks those rules without granting native writes.
+The server's tuition_refund_native module separately posts and reconciles a
+native income credit and Student payout against the exact Fees in one atomic
+command. A standalone Student Pay increases receivable and is never a valid
+refund by itself. pay_preflight remains a deliberately nonposting legacy
+utility; its NativeRefundBlocked exception cannot authorize any accounting.
 """
 from __future__ import annotations
 
@@ -65,15 +25,15 @@ PAYER_ROLE = "Finance Manager"
 REQUESTER_ROLE = "Finance Officer"
 
 NATIVE_BLOCKER = (
-    "No native Fees refund mechanism exists on the pinned stack: a Payment "
-    "Entry Pay/Student referencing Fees is not a Fees-aware refund (see the "
-    "module docstring for the pinned-code evidence). Payout stays disabled; "
-    "this request remains Approved and is not consumed."
+    "A standalone Payment Entry Pay/Student referencing Fees is not a "
+    "tuition refund. Standalone payout stays disabled. Only the separately "
+    "qualified atomic native credit/payment command may move funds; this "
+    "legacy preflight leaves the request Approved and unconsumed."
 )
 
 
 class NativeRefundBlocked(ValueError):
-    """Raised at the posting step of pay: no trustworthy native mechanism."""
+    """Legacy preflight refuses standalone posting; native pair is separate."""
 
 
 class RefundError(ValueError):
@@ -264,16 +224,8 @@ def deny_request(request, *, approver, approver_roles):
     return denied
 
 
-def pay_preflight(request, *, payer, payer_roles, collections, refunds):
-    """All payout checks, in order, ending at the native posting blocker.
-
-    Raises RefundError for every rule refusal. When every check passes it
-    raises NativeRefundBlocked instead of returning: NativeRefundBlocked
-    deliberately does NOT inherit RefundError, so callers can distinguish
-    "rule refused" from "blocked by the native mechanism — request stays
-    Approved and retryable". No caller may mark the request Paid, because
-    no money moved.
-    """
+def validate_payment_authority(request, *, payer, payer_roles, collections, refunds):
+    """Validate case authority and ceiling; this never posts or grants native writes."""
     if not isinstance(request, dict):
         raise RefundError("Refund request is required")
     if request.get("status") != "Approved":
@@ -308,6 +260,13 @@ def pay_preflight(request, *, payer, payer_roles, collections, refunds):
         raise RefundError(str(exc)) from exc
     if report["payment_permitted"]:
         raise RefundError("Unexpected: refund preflight permitted a payout")
+    return report
+
+
+def pay_preflight(request, *, payer, payer_roles, collections, refunds):
+    """Legacy nonposting preflight; native accounting must qualify separately."""
+    validate_payment_authority(request, payer=payer, payer_roles=payer_roles,
+                               collections=collections, refunds=refunds)
     raise NativeRefundBlocked(NATIVE_BLOCKER)
 
 

@@ -359,11 +359,11 @@ class RefundSourceCompletenessTests(unittest.TestCase):
 
     def test_refund_source_rows_keep_fee_identity_for_open_reservations(self):
         class Stub:
-            def get_all(self, doctype, filters, fields, limit_page_length):
+            def sql(self, query, params, as_dict):
                 self_fields = {"fees": "FEES-01", "status": "Approved",
                                "requested_amount": 200,
                                "approved_amount": 200}
-                return [{key: self_fields[key] for key in fields}]
+                return [self_fields]
         rows = self.load_query("_existing_requests", Stub())("FEES-01")
         self.assertEqual(rows[0]["fees"], "FEES-01")
         self.assertEqual(str(REFUNDS.open_amount(rows, fees="FEES-01")), "200")
@@ -377,7 +377,7 @@ class RefundSourceCompletenessTests(unittest.TestCase):
 
     def test_native_currency_floats_are_normalized_at_trusted_read_boundary(self):
         class Stub:
-            def get_all(self, doctype, filters, fields, limit_page_length):
+            def sql(self, query, params, as_dict):
                 return [
                     {"fees": "FEES-01", "status": "Approved",
                      "requested_amount": 40.0, "approved_amount": 40.0},
@@ -391,7 +391,7 @@ class RefundSourceCompletenessTests(unittest.TestCase):
 
     def test_database_currency_normalization_does_not_accept_bad_precision(self):
         class Stub:
-            def get_all(self, doctype, filters, fields, limit_page_length):
+            def sql(self, query, params, as_dict):
                 return [{"fees": "FEES-01", "status": "Requested",
                          "requested_amount": 10.001, "approved_amount": 0.0}]
         rows = self.load_query("_existing_requests", Stub())("FEES-01")
@@ -400,25 +400,27 @@ class RefundSourceCompletenessTests(unittest.TestCase):
 
     def test_truncated_refund_claim_sources_fail_closed(self):
         class Stub:
-            def get_all(self, doctype, filters, fields, limit_page_length):
-                self.limit = limit_page_length
-                return [{"fees": "FEES-01"} for _ in range(limit_page_length)]
+            def sql(self, query, params, as_dict):
+                self.query, self.params = query, params
+                return [{"fees": "FEES-01"} for _ in range(1001)]
         db = Stub()
         with self.assertRaises(ValueError):
             self.load_query("_existing_requests", db)("FEES-01")
-        self.assertEqual(db.limit, 1001)
+        self.assertIn("limit 1001 for update", db.query)
+        self.assertEqual(db.params, ("FEES-01",))
 
     def test_truncated_payment_allocations_fail_closed(self):
         class Stub:
-            def get_all(self, doctype, filters, fields, limit_page_length):
-                self.limit = limit_page_length
+            def sql(self, query, params, as_dict):
+                self.query, self.params = query, params
                 return [{"parent": "PE", "allocated_amount": 1}
-                        for _ in range(limit_page_length)]
+                        for _ in range(1001)]
         db = Stub()
         with self.assertRaises(ValueError):
             self.load_query("_ledger_rows", db)(
                 "STU-01", "TH-CO", "FEES-01", kind="Collections")
-        self.assertEqual(db.limit, 1001)
+        self.assertIn("limit 1001 for update", db.query)
+        self.assertEqual(db.params, ("FEES-01",))
 
 
 class NativeRefundControllerBoundaryTests(unittest.TestCase):
@@ -522,12 +524,12 @@ class NativeBlockerEvidenceTests(unittest.TestCase):
         self.assertIn("Fees", REFUNDS.NATIVE_BLOCKER)
         self.assertIn("disabled", REFUNDS.NATIVE_BLOCKER)
 
-    def test_command_layer_references_the_pure_rules_and_blocker(self):
+    def test_public_payout_uses_atomic_verified_native_pair(self):
         source = (APP / "finance" / "tuition_refund_commands.py").read_text()
         for token in ("request_tuition_refund", "approve_tuition_refund",
                       "deny_tuition_refund", "pay_tuition_refund",
-                      "NativeRefundBlocked", "NATIVE_BLOCKER",
-                      "require_finance_company", "tuition_refunds.pay_preflight"):
+                      "execute_atomic", "post_approved_refund",
+                      "require_finance_company"):
             self.assertIn(token, source)
 
     def test_doctype_json_matches_the_workflow_fields(self):
@@ -542,6 +544,7 @@ class NativeBlockerEvidenceTests(unittest.TestCase):
                          "requested_by", "approved_by", "paying_user",
                          "payment_entry", "synthetic"):
             self.assertIn(expected, fields)
+        self.assertIn("credit_journal", fields)
         self.assertEqual(doctype["name"], "TH Tuition Refund Request")
 
 

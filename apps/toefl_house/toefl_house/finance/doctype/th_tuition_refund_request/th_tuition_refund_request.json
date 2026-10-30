@@ -16,6 +16,7 @@
     "requested_by",
     "approved_by",
     "paying_user",
+    "credit_journal",
     "payment_entry",
     "synthetic"
   ],
@@ -39,7 +40,8 @@
       "fieldtype": "Link",
       "label": "Original Fees",
       "options": "Fees",
-      "reqd": 1
+      "reqd": 1,
+      "search_index": 1
     },
     {
       "fieldname": "requested_amount",
@@ -76,7 +78,7 @@
     },
     {
       "default": "Requested",
-      "description": "Requested -> Approved -> Paid, or Requested -> Denied. Paid is set only by a successful native payout; until a verified native Fees refund mechanism exists, pay refuses and the request stays Approved.",
+      "description": "Requested -> Approved -> Paid, or Requested -> Denied. Paid requires reconciled native credit and payout under independent Finance authority.",
       "fieldname": "status",
       "fieldtype": "Data",
       "label": "Status",
@@ -106,12 +108,22 @@
       "read_only": 1
     },
     {
-      "description": "The native refund Payment Entry, once a verified native mechanism exists. Empty while payout is blocked.",
+      "fieldname": "credit_journal",
+      "fieldtype": "Link",
+      "label": "Native Tuition Credit",
+      "options": "Journal Entry",
+      "read_only": 1,
+      "unique": 1,
+      "description": "Immutable native tuition income reversal against the exact original Fees."
+    },
+    {
+      "description": "Immutable native Student Payment Entry paired with the approved tuition credit.",
       "fieldname": "payment_entry",
       "fieldtype": "Link",
       "label": "Payment Entry",
       "options": "Payment Entry",
-      "read_only": 1
+      "read_only": 1,
+      "unique": 1
     },
     {
       "default": "1",

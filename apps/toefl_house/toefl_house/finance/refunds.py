@@ -285,6 +285,10 @@ def guard_payment_entry(doc, method=None):
     from toefl_house.finance.student_payout_policy import student_pay_write_allowed
 
     require_operational()
+    from toefl_house.finance.tuition_refund_native import guard_payment
+
+    if guard_payment(doc, method):
+        return
     if not student_pay_write_allowed(
             getattr(doc, "payment_type", None),
             getattr(doc, "party_type", None), method):

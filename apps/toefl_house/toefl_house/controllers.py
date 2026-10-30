@@ -165,9 +165,8 @@ class ProtectedRecord(Document):
         """Refund request facts are immutable; the decision is one-shot.
 
         Allowed transitions: Requested -> Approved, Requested -> Denied,
-        Approved -> Paid. Paid is set only by a successful native payout;
-        until a verified native Fees refund mechanism exists, pay refuses
-        and the request stays Approved. Identity, amount, reason and
+        Approved -> Paid. Paid requires a reconciled native credit/payment
+        pair owned by the authenticated payout command. Identity, amount, reason and
         evidence never change after insert, and the recorded approver
         never changes.
         """
@@ -198,22 +197,32 @@ class ProtectedRecord(Document):
         transitions = {
             ("Requested", "Approved"): "approve_tuition_refund",
             ("Requested", "Denied"): "deny_tuition_refund",
+            ("Approved", "Paid"): "pay_tuition_refund",
         }
         required_command = transitions.get((before.status, self.status))
-        # The pinned native Education stack has no valid Fees payout. Until
-        # that accounting gap is independently resolved, even a command
-        # context must not mark a tuition refund Paid without real money.
         if not required_command:
             raise frappe.PermissionError(
                 "Illegal or unsupported tuition refund request transition")
         active_kind, actor = require_command(self.doctype)
-        if active_kind != required_command or self.approved_by != actor:
+        if active_kind != required_command:
             raise frappe.PermissionError(
                 "Tuition refund transition requires its exact authorized decision")
+        if self.status == "Paid":
+            if (not self.get("credit_journal") or not self.payment_entry or self.get("paying_user") != actor
+                    or actor == self.approved_by):
+                raise frappe.PermissionError("A Paid refund requires an independently executed native credit and payout")
+            from toefl_house.finance.tuition_refund_native import assert_paid_transition
+
+            assert_paid_transition(self)
+        elif self.approved_by != actor or self.payment_entry or self.get("credit_journal") or self.get("paying_user"):
+            raise frappe.PermissionError("Only the General Manager may decide an unpaid refund request")
         if before.approved_by and self.approved_by != before.approved_by:
             raise frappe.PermissionError("Recorded decision actor is immutable")
         if before.payment_entry and self.payment_entry != before.payment_entry:
             raise frappe.PermissionError("Posted refund payment reference is immutable")
+        for field in ("credit_journal", "paying_user"):
+            if before.get(field) and before.get(field) != self.get(field):
+                raise frappe.PermissionError("Posted refund accounting identity is immutable")
 
     def _validate_config(self, before):
         if before.code != self.code or before.revision != self.revision or before.owner != self.owner:
