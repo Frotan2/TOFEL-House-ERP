@@ -62,6 +62,50 @@ class HumanAcademicSetupTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     create("EAP", "EAP-ASSESS-01", bad_pass, bad_wait)
 
+    def test_skill_weights_are_validated_and_sum_to_exactly_100(self):
+        module = ast.parse(SOURCE.read_text(encoding="utf-8"))
+        selected = [n for n in module.body if isinstance(n, ast.FunctionDef)
+                    and n.name in ("whole_number", "numeric_skill_distribution")]
+        self.assertEqual(len(selected), 2)
+        namespace = {}
+        exec(compile(ast.Module(body=selected, type_ignores=[]),
+                     str(SOURCE), "exec"), namespace)
+        calculate = namespace["numeric_skill_distribution"]
+        rows = calculate(25, 20, 20, 15, 10, 10, 40)
+        self.assertEqual(len(rows), 12)
+        self.assertEqual(sum(row["weight"] for row in rows), 100)
+        self.assertEqual(next(row["weight"] for row in rows
+                              if row["component"] == "SPK-CA"), 10)
+        self.assertEqual(next(row["weight"] for row in rows
+                              if row["component"] == "SPK-FINAL"), 15)
+        self.assertEqual(sum(row["weight"] for row in rows
+                             if row["component"].endswith("-CA")), 40)
+        self.assertEqual(sum(row["weight"] for row in rows
+                             if row["component"].endswith("-FINAL")), 60)
+        revised = calculate(20, 20, 20, 20, 10, 10, 30)
+        self.assertEqual(sum(row["weight"] for row in revised
+                             if row["component"].endswith("-CA")), 30)
+        for invalid in (
+            (25, 20, 20, 15, 10, 9, 40),
+            (25, 20, 20, 15, 10, 10, 0),
+            (25, 20, 20, 15, 10, 10, 100),
+            (25, 20, 20, 15, -10, 30, 40),
+            (25, 20, 20, 15, 10.5, 9.5, 40),
+        ):
+            with self.subTest(values=invalid), self.assertRaises(ValueError):
+                calculate(*invalid)
+
+    def test_no_code_weight_editor_is_guarded_and_versioned(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("def revise_grading_weights(", source)
+        self.assertIn("skill_weights=weights", source)
+        self.assertIn("_owner()", source)
+        academic = (ROOT / "apps/toefl_house/toefl_house/academic/__init__.py").read_text(
+            encoding="utf-8")
+        self.assertIn("if skill_weights is not None:", academic)
+        self.assertIn('carried["weights"] = rules.canonical_facet(', academic)
+        self.assertIn("configuration_rules.check_appends(", academic)
+
     def test_specialist_courses_refuse_grade_based_promotion(self):
         create = build()
         for family in ("SPECIAL-SPEAKING", "TOEFL-PREP", "UNKNOWN"):
