@@ -15,8 +15,8 @@ WINDOWS = ROOT / "product" / "windows"
 
 
 def read_utf8(path: Path) -> str:
-    # Windows Python otherwise uses the process ANSI code page. The shipped
-    # Dari guide is UTF-8 and must be testable on the same host customers use.
+    # Windows Python may use a legacy ANSI code page. Customer-facing
+    # guides are explicitly UTF-8, even when the installed system uses English.
     return path.read_text(encoding="utf-8")
 
 
@@ -99,10 +99,11 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn('Start-LauncherAction "Repair"', GUI)
         self.assertNotIn('$repair.Add_Click({ Start-LauncherAction "Repair" })', GUI)
 
-    def test_daily_guide_includes_dari_staff_instructions(self):
-        for word in ("صاحب کورس", "ریسپشنیست", "شاگرد", "حاضری",
-                     "فروش کتاب", "شهریه", "پشتیبانی"):
-            self.assertIn(word, DAILY_GUIDE)
+    def test_daily_guide_uses_english_staff_instructions(self):
+        for word in ("Owner", "Reception", "Finance", "Teacher",
+                     "Book", "tuition", "support"):
+            self.assertIn(word.lower(), DAILY_GUIDE.lower())
+        self.assertNotRegex(DAILY_GUIDE, r"[\u0600-\u06FF\u200c]")
 
     def test_incomplete_customer_folder_never_attempts_source_build(self):
         # Even a developer checkout is NOT a verified customer package.  The
