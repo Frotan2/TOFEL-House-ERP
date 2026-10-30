@@ -228,14 +228,25 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
             steps.append(_action("level", level_code, status, details))
             for year in preset["academic_years"]:
                 actual = (tuition.get(level_code) or {}).get(year["name"])
-                if aliases_found:
+                # Only GE/EAP on-site prices have a later explicit Owner
+                # approval (AFN 500/month). Historical specialist price
+                # examples must not become draft Fee Structures automatically.
+                # Finance may configure those separately after Owner approval.
+                approved_initial_tuition = family["code"] in ("GEN-ENG", "EAP")
+                if aliases_found or (not approved_initial_tuition and actual is not None):
                     status = "review"
+                elif not approved_initial_tuition:
+                    status = "deferred"
                 else:
                     status = ("create" if actual is None else
                               "match" if actual == level["semester_tuition_afn"]
                               else "review")
+                details = ("Owner confirmation of specialist tuition required; "
+                           "do not create or reuse an unapproved price"
+                           if not approved_initial_tuition else
+                           "Approved GE/EAP AFN semester price; never modify posted Fees")
                 steps.append(_action("tuition", level_code + "@" + year["name"],
-                                     status, "AFN semester price; never modify posted Fees"))
+                                     status, details))
     category = preset["fee_policy"]["category"]
     category_status = ("match" if category in categories else "create")
     if (category_status == "match" and category_items is not None
@@ -244,7 +255,7 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
     steps.append(_action("fee_category", category, category_status,
                          "Native Education Fee Category and linked Item required"))
     counts = {state: sum(x["status"] == state for x in steps)
-              for state in ("create", "match", "review")}
+              for state in ("create", "match", "review", "deferred")}
     return {
         "mode": "READ_ONLY_PREVIEW",
         "preset_id": preset["preset_id"],
@@ -253,6 +264,7 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
         "ready_to_apply": False,
         "pending_decisions": [
             "Owner verification and auditable confirmation",
+            "Specialist tuition requires separate Owner price verification before live billing",
             "Legal tax classification; do not infer exemption",
             "Approve negotiated one-to-one monthly student tuition and named contract",
             "Approve instructor remuneration independently through HRMS/Payroll",
