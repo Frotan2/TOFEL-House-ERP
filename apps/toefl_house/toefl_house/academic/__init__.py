@@ -76,6 +76,10 @@ def create_program(request_key, code, title, description=""):
             raise frappe.ValidationError(str(exc)) from exc
         if frappe.db.exists(PROGRAM, clean_code):
             raise frappe.ValidationError(f"Program {clean_code} already exists")
+        if frappe.db.exists(PROGRAM, {"title": clean_title}):
+            raise frappe.ValidationError(
+                "A program with this name already exists; choose the existing "
+                "program instead of creating another identifier")
         doc = frappe.get_doc({
             "doctype": PROGRAM, "code": clean_code, "title": clean_title,
             "status": "Active", "description": clean_description,
@@ -122,6 +126,11 @@ def create_level(request_key, family, code, title, sequence,
                 f"Program {clean_family} is retired; reactivate it before adding levels")
         if frappe.db.exists(LEVEL, clean_code):
             raise frappe.ValidationError(f"Level {clean_code} already exists")
+        if frappe.db.exists(LEVEL, {"family": family_doc.name,
+                                    "title": clean_title}):
+            raise frappe.ValidationError(
+                "A level with this name already exists in the selected "
+                "program; choose it rather than creating another ID")
         siblings = frappe.db.get_all(LEVEL, filters={"family": family_doc.name},
                                      fields=["code", "sequence"])
         if any(int(row["sequence"]) == clean_sequence for row in siblings):
@@ -135,6 +144,15 @@ def create_level(request_key, family, code, title, sequence,
                 next_of=lambda c: _next_of(c))
 
         native_title = f"{family_doc.title} — {clean_title}"
+        if (frappe.db.exists("Course", {"course_name": native_title})
+                or frappe.db.exists(NATIVE_PROGRAM,
+                                    {"program_name": native_title})
+                or frappe.db.exists(NATIVE_PROGRAM,
+                                    {"program_abbreviation": clean_code})):
+            raise frappe.ValidationError(
+                "A native Course or Education Program already uses this "
+                "name or level identifier. Review the academic catalog; "
+                "never create duplicate curriculum for a new level")
         course = frappe.get_doc({"doctype": "Course", "course_name": native_title})
         course.insert(ignore_permissions=True)
         native = frappe.get_doc({
@@ -880,6 +898,12 @@ def create_assessment_policy(request_key, family, code, title,
         if frappe.db.exists(ASSESSMENT_POLICY, clean_code):
             raise frappe.ValidationError(
                 f"Assessment policy {clean_code} already exists")
+        if frappe.db.exists(ASSESSMENT_POLICY, {
+                "family": family_doc.name, "title": clean_title}):
+            raise frappe.ValidationError(
+                "This program already has an assessment policy with that "
+                "name. Choose the existing policy rather than creating "
+                "duplicate rules")
         doc = frappe.get_doc({
             "doctype": ASSESSMENT_POLICY, "family": family_doc.name,
             "code": clean_code, "title": clean_title, "status": "Active",
