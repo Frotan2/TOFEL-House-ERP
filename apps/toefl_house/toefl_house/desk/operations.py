@@ -19,6 +19,7 @@ from toefl_house.desk import (
     viewer_roles,
 )
 from toefl_house.desk import lifecycle
+from toefl_house.desk.tuition_refunds import refund_sections
 try:
     from toefl_house.desk import analytics
 except Exception:
@@ -652,6 +653,7 @@ def work():
         "title": DESKS[SLUG]["title"],
         "sections": [
             *ops_analytics,
+            *refund_sections("management"),
             section("funnel", "Operation funnel — today\u2019s state", "facts", facts=funnel_facts,
                     empty_title="No operational preview items",
                     empty_body="The preview alone cannot prove all operational queues are empty; check scoped counts and source records."),

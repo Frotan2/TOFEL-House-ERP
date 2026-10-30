@@ -286,6 +286,18 @@ def assert_paid_transition(req):
     _verify_pair(req, context.fee)
 
 
+def assert_reference_lease(references):
+    """Authorize only this pair's exact reference reads, never a general grant."""
+    context = _PAIR.get()
+    if (context is None or active_command_kind() != "pay_tuition_refund"
+            or frappe.session.user != context.payer or context.payer == context.approver
+            or set(references) != {("Fees", context.fee.name), ("Student", context.fee.student)}):
+        raise frappe.PermissionError("Native refund reference reads require the exact independently authorized pair")
+    from toefl_house.command_scope import authorize_command_scope
+    authorize_command_scope("pay_tuition_refund", {"request": context.request,
+        "fees": context.fee.name, "student": context.fee.student}, context.payer)
+
+
 def post_approved_refund(name):
     kind, actor = require_command(REQUEST)
     if kind != "pay_tuition_refund":
@@ -351,7 +363,8 @@ def post_approved_refund(name):
         references=[dict(reference_doctype="Fees", reference_name=fee.name, allocated_amount=float(amount))], **payout_dimensions))
     context = _NativePair(req.name, actor, req.approved_by, fee, amount, cash, today,
                           income_dimensions, receivable_dimensions, payout_dimensions, credit, payout)
-    with _posting_pair(context):
+    from toefl_house.finance.collection_reads import native_reference_reads
+    with _posting_pair(context), native_reference_reads([("Fees", fee.name), ("Student", fee.student)]):
         for document in (credit, payout):
             document.flags.ignore_permissions = True
             document.insert(ignore_permissions=True)

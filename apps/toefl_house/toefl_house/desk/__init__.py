@@ -81,6 +81,16 @@ DESKS = {
 # through a desk, including sensitive internals (answers, hashes, seeds, keys,
 # payroll detail, result_json). Tested by tests/desk.
 PROJECTION_FIELDS = {
+    ("finance", "TH Tuition Refund Request"): [
+        "name", "student", "company", "fees", "requested_amount", "approved_amount",
+        "reason", "evidence", "approval_evidence", "status", "requested_by",
+        "approved_by", "paying_user", "credit_journal", "payment_entry", "modified",
+    ],
+    ("management", "TH Tuition Refund Request"): [
+        "name", "student", "company", "fees", "requested_amount", "approved_amount",
+        "reason", "evidence", "approval_evidence", "status", "requested_by",
+        "approved_by", "paying_user", "credit_journal", "payment_entry", "modified",
+    ],
     ("reception", "TH Placement Decision"): [
         "name", "attempt", "status", "released_at", "expires_at",
         "course_code", "internal_level",
@@ -842,6 +852,35 @@ def collection_schema_ready():
     """Hide cash actions until the supported field migration has completed."""
     check = getattr(frappe.db, "has_column", None)
     return callable(check) and check("Payment Entry", "th_collection_handover")
+
+
+def refund_case_rows(desk, fields):
+    """Normal native read/list authority, including the refund Branch chain.
+
+    A refund has no flat Branch column. Never route these case/evidence reads
+    through an elevated get_all projection that cannot enforce that chain.
+    """
+    slugs = {"finance": "th-finance-desk", "management": "th-operations-desk"}
+    if desk not in slugs:
+        raise frappe.PermissionError("Refund cases require the Finance or General Manager desk")
+    require_desk_audience(slugs[desk])
+    _assert_projection(desk, "TH Tuition Refund Request", fields)
+    check = getattr(frappe.db, "has_column", None)
+    if not callable(check) or not check("TH Tuition Refund Request", "credit_journal"):
+        return None
+    rows = frappe.get_list("TH Tuition Refund Request", fields=list(fields),
+                           order_by="modified desc, name desc", limit_page_length=LIMIT_QUEUES + 1)
+    # Recheck the same command scope before exposing evidence or prefills.
+    # A native list permission alone must never become action authority.
+    from toefl_house.command_scope import authorize_command_scope
+    visible = []
+    for row in rows:
+        try:
+            authorize_command_scope("approve_tuition_refund", {"request": row["name"]}, frappe.session.user)
+        except frappe.PermissionError:
+            continue
+        visible.append(row)
+    return visible
 
 
 def project_rows(desk, doctype, fields, filters=None, order_by=None, limit=LIMIT_QUEUES,

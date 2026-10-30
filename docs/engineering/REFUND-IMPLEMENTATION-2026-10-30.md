@@ -96,6 +96,19 @@ Journal Entry overrides `Document.submit`; patching the base class cannot
 exercise that stage. Both corrections retain their original negative assertions
 and execute real accounting before fault injection. Hosted rerun is required.
 
+The next hosted failure confirmed that the minimal Finance Manager payer has
+no native Fees read permission for HRMS's reference-detail helper. The existing
+transaction-private, read-only reference lease is reused only under the exact
+refund pair's server context, independent payer, exact Fees/Student set and
+current request/Company/Branch checks. No role or global permission flag is
+changed; temporary rows are removed before commit and the existing unclean
+lease commit guard remains in force. Real Windows tests then passed with an
+FM-only payer, both post-submit failures, successful native posting/replay and
+unchanged share counts; all thirteen business/security table hashes matched
+after the synthetic rollback. The full and partial payment source tests both
+passed previously; the minimal-payer change still requires exact-head hosted
+qualification and final candidate browser acceptance.
+
 The earlier checklist below remains the full completion scope; it is not a
 claim that the new owned paired command has passed its first database gate.
 

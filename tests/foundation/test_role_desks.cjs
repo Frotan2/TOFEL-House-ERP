@@ -211,6 +211,7 @@ const endpointFiles = {
 	"toefl_house.enrollment": ["enrollment/__init__.py"],
 	"toefl_house.api": ["api.py"],
 	"toefl_house.finance.corrections": ["finance/corrections.py"],
+	"toefl_house.finance.tuition_refund_commands": ["finance/tuition_refund_commands.py"],
 	"toefl_house.academic": ["academic/__init__.py"],
 	"toefl_house.academic.catalog_linkage": ["academic/catalog_linkage.py"],
 	"toefl_house.admission.policies": ["admission/policies.py"],

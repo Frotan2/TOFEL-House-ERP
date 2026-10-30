@@ -14,7 +14,7 @@ import frappe
 from toefl_house.security import KIND_ROLES, active_command_kind, authorize
 
 _LEASE = ContextVar("toefl_house_collection_reference_lease", default=None)
-READ_COMMANDS = frozenset({"record_reception_collection", "correct_reception_collection"})
+READ_COMMANDS = frozenset({"record_reception_collection", "correct_reception_collection", "pay_tuition_refund"})
 
 
 def _forbid_lease_commit():
@@ -29,6 +29,9 @@ def native_reference_reads(references):
         raise frappe.PermissionError("Reference reads require the guarded collection command")
     actor = authorize(KIND_ROLES[kind])
     references = sorted(set(references))
+    if kind == "pay_tuition_refund":
+        from toefl_house.finance.tuition_refund_native import assert_reference_lease
+        assert_reference_lease(references)
     if (not references or len(references) > 4
             or any(dt not in {"Fees", "Student"} or not isinstance(name, str)
                    or not name or len(name) > 140 for dt, name in references)):
@@ -39,8 +42,12 @@ def native_reference_reads(references):
     expected = {frappe.db.get_value("Fees", name, "student") for name in fees}
     if not fees or None in expected or students != expected:
         raise frappe.PermissionError("Reference students must belong to the selected fees")
-    for name in fees:
-        authorize_command_scope(kind, {"fees": name}, actor)
+    if kind != "pay_tuition_refund":
+        for name in fees:
+            authorize_command_scope(kind, {"fees": name}, actor)
+    # Refunds already rechecked the exact request + Fees + Student above.
+    # Its Company-scoped authority requires that context-bound request, so
+    # do not replace the complete proof with an incomplete Fees-only payload.
     created = []
     state = {"clean": False}
 

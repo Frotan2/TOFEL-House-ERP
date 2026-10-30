@@ -7965,6 +7965,7 @@ def main():
         def tuition_refund_read_list_parity():
             # A real submitted/amended collection funds this synthetic case.
             from toefl_house.finance import tuition_refund_commands as tuition_refund_cmd
+            from toefl_house.desk.tuition_refunds import refund_sections
             frappe.set_user('Administrator')
             fee=frappe.db.get_value('Payment Entry Reference',
                 {'parent':reception_proof['amended_receipt'],
@@ -7979,6 +7980,12 @@ def main():
             name=created['name']
             assert created['status']=='Requested'
             dt='TH Tuition Refund Request'
+            def desk_case(role,desk):
+                sections=as_user(role,lambda:refund_sections(desk))
+                return next(item for group in sections for item in group['items'] if item['id']==name)
+            manager_case=desk_case('general_manager','management')
+            assert manager_case['action']['endpoint'].endswith('.approve_tuition_refund')
+            assert manager_case['actions'][0]['endpoint'].endswith('.deny_tuition_refund')
             frozen_stages=[]
             def source_receipt_frozen(stage):
                 for action in ('cancel','cost_center','allocation'):
@@ -8103,6 +8110,12 @@ def main():
                     'native_refund_gm_approval_0001',name,
                     'Independent synthetic General Manager approval'))
             assert approval['status']=='Approved',approval
+            finance_case=desk_case('finance_manager','finance')
+            assert finance_case['action']['endpoint'].endswith('.pay_tuition_refund')
+            assert finance_case['action']['args']['recipient']==original.student
+            assert float(finance_case['action']['args']['refund_amount'])==50
+            assert finance_case['action']['args']['approved_by']==users['general_manager']
+            assert not desk_case('general_manager','management').get('action')
             source_receipt_frozen('Approved')
             events=frappe.db.get_all('TH Placement Audit Event',
                 filters={'target':name},fields=['action','before_hash','after_hash'])
@@ -8150,6 +8163,9 @@ def main():
                     allow=allow,for_value=value)).insert()
                 frappe.db.commit();frappe.clear_cache()
                 try:
+                    if allow=='Branch':
+                        sections=as_user('finance_manager',lambda:refund_sections('finance'))
+                        assert not any(item['id']==name for group in sections for item in group['items'])
                     refused=denied(lambda:as_user('finance_manager',lambda:tuition_refund_cmd.pay_tuition_refund(
                         'native_refund_scoped_pay_denied_'+allow,name)))
                     assert refused['denied']=='PermissionError',refused
@@ -8157,6 +8173,12 @@ def main():
                 finally:
                     frappe.set_user('Administrator');frappe.delete_doc('User Permission',permit.name)
                     frappe.db.commit();frappe.clear_cache()
+            # A permitted Company restriction must keep the minimal FM payer
+            # functional, including the native reference lease's scope proof.
+            frappe.set_user('Administrator')
+            allowed_company=frappe.get_doc(dict(doctype='User Permission',user=users['finance_manager'],
+                allow='Company',for_value=original.company)).insert()
+            frappe.db.commit();frappe.clear_cache()
             outstanding_before=float(frappe.db.get_value('Fees',fee,'outstanding_amount'))
             # Execute native posting, then inject an error after its real
             # submit. Catch WITHOUT an outside rollback: command-local atomic
@@ -8173,7 +8195,7 @@ def main():
                 actual_submit=controller.submit
                 key='native_refund_actual_failure_'+phase.replace(' ','_')
                 before_counts={item:frappe.db.count(item) for item in (
-                    'Journal Entry','Payment Entry','GL Entry','TH Placement Operation','TH Placement Audit Event')}
+                    'Journal Entry','Payment Entry','GL Entry','TH Placement Operation','TH Placement Audit Event','DocShare')}
                 entered=[]
                 def fail_after_real_submit(document,*args,**kwargs):
                     result=actual_submit(document,*args,**kwargs)
@@ -8198,10 +8220,15 @@ def main():
                 assert not frappe.db.get_value(dt,name,'credit_journal',for_update=True)
                 assert float(frappe.db.get_value('Fees',fee,'outstanding_amount',for_update=True))==outstanding_before
                 fault_stages.append(phase)
+            shares_before=frappe.db.count('DocShare',{'user':users['finance_manager']})
             payout=as_user('finance_manager',lambda:tuition_refund_cmd.pay_tuition_refund(
                 'native_refund_independent_pay_0001',name))
+            assert frappe.db.count('DocShare',{'user':users['finance_manager']})==shares_before
             assert payout['status']=='Paid' and float(payout['approved_amount'])==50.0,payout
             assert payout['credit_journal'] and payout['payment_entry']
+            paid_case=desk_case('finance_manager','finance')
+            assert payout['credit_journal'] in paid_case['detail'] and payout['payment_entry'] in paid_case['detail']
+            assert not paid_case.get('action') and not paid_case.get('actions')
             assert frappe.db.get_value(dt,name,'status')=='Paid'
             source_receipt_frozen('Paid')
             assert float(frappe.db.get_value('Fees',fee,'outstanding_amount'))==outstanding_before
@@ -8210,6 +8237,8 @@ def main():
             assert payout_replay==payout
             assert denied(lambda:as_user('finance_manager',lambda:tuition_refund_cmd.pay_tuition_refund(
                 'native_refund_second_key_denied_01',name)))
+            frappe.set_user('Administrator');frappe.delete_doc('User Permission',allowed_company.name)
+            frappe.clear_cache()
             for native_type,native_name in (('Journal Entry',payout['credit_journal']),('Payment Entry',payout['payment_entry'])):
                 frappe.db.savepoint('refund_single_artifact_cancel')
                 try:
@@ -8256,6 +8285,7 @@ def main():
                     'idempotent_payout_replay':True,'individual_artifact_cancellation_denied':2,
                     'original_outstanding_preserved':True,'payment_entry':payout['payment_entry'],
                     'credit_journal':payout['credit_journal'],'real_post_submit_failures_rolled_back':fault_stages,
+                    'staff_refund_desk_actions_context_links_and_branch_denial':True,
                     'source_receipt_cancel_cost_center_allocation_frozen':frozen_stages}
         refund_visibility_proof=check('native-tuition-refund-list-document-role-parity',traced(tuition_refund_read_list_parity))
         def refund_atomic_failure_preserves_caller():

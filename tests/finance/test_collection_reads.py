@@ -36,7 +36,8 @@ class ReferenceReadTests(unittest.TestCase):
             return doc
         self.frappe.get_doc = get_doc
         security = types.ModuleType("toefl_house.security")
-        security.KIND_ROLES = {"record_reception_collection": "Reception", "correct_reception_collection": "Course Owner"}
+        security.KIND_ROLES = {"record_reception_collection": "Reception", "correct_reception_collection": "Course Owner",
+                               "pay_tuition_refund": "Finance Manager"}
         security.active_command_kind = lambda: self.kind
         security.authorize = Mock(return_value="reception")
         self.scope = types.ModuleType("toefl_house.command_scope")
@@ -51,6 +52,27 @@ class ReferenceReadTests(unittest.TestCase):
         self.module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.module)
         self.refs = [("Fees", "FEE-A"), ("Student", "STUDENT-A")]
+
+    def test_refund_requires_private_pair_proof_without_a_second_incomplete_scope_payload(self):
+        self.kind = "pay_tuition_refund"
+        native = types.ModuleType("toefl_house.finance.tuition_refund_native")
+        native.assert_reference_lease = Mock()
+        with patch.dict(sys.modules, {"toefl_house.finance.tuition_refund_native": native}):
+            with self.module.native_reference_reads(self.refs):
+                self.assertEqual(len(self.rows), 2)
+            native.assert_reference_lease.assert_called_once_with(sorted(self.refs))
+        self.scope.authorize_command_scope.assert_not_called()
+        self.assertEqual(self.rows, {})
+
+    def test_refund_outside_private_pair_proof_cannot_create_reference_permissions(self):
+        self.kind = "pay_tuition_refund"
+        native = types.ModuleType("toefl_house.finance.tuition_refund_native")
+        native.assert_reference_lease = Mock(side_effect=PermissionError("No exact private pair"))
+        with patch.dict(sys.modules, {"toefl_house.finance.tuition_refund_native": native}):
+            with self.assertRaises(PermissionError), self.module.native_reference_reads(self.refs):
+                pass
+        self.assertEqual(self.rows, {})
+        self.assertEqual(self.callbacks, [])
 
     def test_only_exact_read_rights_exist_during_validation(self):
         with self.module.native_reference_reads(self.refs):

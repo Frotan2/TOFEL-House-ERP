@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "apps/toefl_house/toefl_house"
 DESK = APP / "desk"
 
-DESK_MODULES = ("__init__", "lifecycle", "collections", "reception", "academic", "finance",
+DESK_MODULES = ("__init__", "lifecycle", "collections", "tuition_refunds", "reception", "academic", "finance",
                 "operations", "owner", "setup", "teacher", "configuration")
 
 SENSITIVE_FIELDS = {

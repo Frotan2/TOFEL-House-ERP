@@ -958,6 +958,24 @@ frappe.provide("toefl_house.role_desks");
 		"toefl_house.finance.corrections.deny_fees_correction": [
 			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1 },
 		],
+		"toefl_house.finance.tuition_refund_commands.request_tuition_refund": [
+			{ fieldname: "student", label: "Student", fieldtype: "Link", options: "Student", reqd: 1 },
+			{ fieldname: "company", label: "Company", fieldtype: "Link", options: "Company", reqd: 1 },
+			{ fieldname: "fees", label: "Original tuition bill", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "requested_amount", label: "Amount to return (AFN, maximum two decimal places)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "reason", label: "Reason for this case", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "evidence", label: "Supporting evidence", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.finance.tuition_refund_commands.approve_tuition_refund": [
+			{ fieldname: "request", label: "Refund case", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "evidence", label: "General Manager approval evidence", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.finance.tuition_refund_commands.deny_tuition_refund": [
+			{ fieldname: "request", label: "Refund case", fieldtype: "Data", reqd: 1, read_only: 1 },
+		],
+		"toefl_house.finance.tuition_refund_commands.pay_tuition_refund": [
+			{ fieldname: "request", label: "Approved refund case", fieldtype: "Data", reqd: 1, read_only: 1 },
+		],
 		"toefl_house.finance.corrections.request_fees_correction": [
 			{ fieldname: "fees", label: "Fees", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "reason", label: "Reason", fieldtype: "Data", reqd: 1 },
@@ -1283,7 +1301,8 @@ frappe.provide("toefl_house.role_desks");
 			});
 			return;
 		}
-		const contextKeys = ["outstanding", "expected_amount", "currency", "receipt_list"];
+		const contextKeys = ["outstanding", "expected_amount", "currency", "receipt_list",
+			"recipient", "tuition_bill", "refund_amount", "refund_reason", "supporting_evidence", "approved_by", "approval_evidence"];
 		const contextFacts = contextKeys.filter((key) => action.args && action.args[key] !== undefined)
 			.map((key) => `<dt>${escapeText(key.replace(/_/g, " "))}</dt><dd style="white-space:pre-wrap">${escapeText(action.args[key])}</dd>`).join("");
 		const contextFields = contextFacts ? [{ fieldname: "cash_context", fieldtype: "HTML", options: `<dl>${contextFacts}</dl>` }] : [];
