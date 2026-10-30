@@ -41,6 +41,10 @@ function docker {
     if ($args[0] -ne 'load') { throw 'Unexpected Docker operation in offline importer.' }
 }
 & (Join-Path $PSScriptRoot 'product\windows\Import Offline Runtime.ps1')
+# When invoked by another PowerShell script, the importer's `exit 1` can
+# return to this worker. Explicitly propagate its failure to the parent
+# powershell.exe process; a fake Docker function sets LASTEXITCODE to 0.
+if ($LASTEXITCODE -ne 0) { exit 1 }
 '@ | Set-Content -LiteralPath $worker -Encoding UTF8
     function Save-Manifest {
         [IO.File]::WriteAllText((Join-Path $release 'offline-runtime.json'),
