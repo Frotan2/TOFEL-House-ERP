@@ -32,6 +32,10 @@ on:
       # Package contents and their delivery contracts must qualify the image
       # on the same revision, even when application code is unchanged.
       - tools/release/create_customer_package.py
+      - "tools/release/Build Customer Installer.ps1"
+      - tools/release/windows/**
+      - tests/foundation/test_customer_exe.ps1
+      - tests/foundation/test_offline_runtime.ps1
       - tests/foundation/test_customer_package_manifest.py
       - tests/foundation/test_customer_install_package.py
       - tests/foundation/test_windows_delivery_finalization.py
@@ -100,6 +104,10 @@ on:
       - docs/engineering/SAFE-UPDATES.md
       - docs/owner-decisions.json
       - tools/release/create_customer_package.py
+      - "tools/release/Build Customer Installer.ps1"
+      - tools/release/windows/**
+      - tests/foundation/test_customer_exe.ps1
+      - tests/foundation/test_offline_runtime.ps1
       - tools/release/verify_ci_gates.py
   workflow_dispatch:
 
@@ -1810,6 +1818,7 @@ jobs:
             --gate-evidence "$RUNNER_TEMP/toefl-house-ci-gates.json" \
             --provider-attestation "GitHub Actions artifact attestation"
           test -s "$package_root"/*.zip
+          test -s "$package_root/TOEFL-House-ERP-Customer-$TOEFL_HOUSE_RELEASE_VERSION/product/release/ci-gates.json"
           echo "::notice title=Customer package::version $TOEFL_HOUSE_RELEASE_VERSION; image archive, checksum, manifest and allowlisted GUI included"
       - name: Attest customer package provenance
         if: success()
@@ -1821,13 +1830,7 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: TOEFL-House-ERP-Customer-${{ env.TOEFL_HOUSE_RELEASE_VERSION }}
-          path: |
-            ${{ runner.temp }}/toefl-house-customer-package/*.zip
-            ${{ runner.temp }}/toefl-house-customer-package/*.zip.sha256
-            ${{ runner.temp }}/toefl-house-customer-package/*/product/release/release-manifest.json
-            ${{ runner.temp }}/toefl-house-customer-package/*/product/release/release-manifest.json.sha256
-            ${{ runner.temp }}/toefl-house-customer-package/*/product/release/ci-gates.json
-            ${{ runner.temp }}/toefl-house-customer-package/*/product/release/ci-gates.json.sha256
+          path: ${{ runner.temp }}/toefl-house-customer-package/TOEFL-House-ERP-Customer-${{ env.TOEFL_HOUSE_RELEASE_VERSION }}/
           if-no-files-found: error
           compression-level: 0
       - name: Publish tagged customer release

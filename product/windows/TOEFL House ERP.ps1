@@ -1,4 +1,4 @@
-param([switch]$SmokeTest)
+param([switch]$SmokeTest, [switch]$AutoInstall)
 # TOEFL House ERP - Windows graphical launcher.
 # A customer uses the root .vbs shortcut; no console, Git or typed commands.
 # Supports Windows PowerShell 5.1 and the existing guarded CMD lifecycle.
@@ -9,6 +9,7 @@ Add-Type -AssemblyName System.Drawing
 
 $productRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $worker = Join-Path $PSScriptRoot "Run TOEFL House ERP.ps1"
+$guiPath = Join-Path $PSScriptRoot "TOEFL House ERP.ps1"
 $credentialFile = Join-Path $productRoot "data\sites\toeflhouse.localhost\private\first-run-credentials.txt"
 $guideFile = Join-Path $PSScriptRoot "OWNER ACCEPTANCE GUIDE.txt"
 $handbookFile = Join-Path $PSScriptRoot "OWNER HANDBOOK.txt"
@@ -78,7 +79,7 @@ $install = New-LauncherButton "Install" 30 229 145
 $open = New-LauncherButton "Open / Start" 185 229 145
 $repair = New-LauncherButton "Repair" 340 229 145
 $stop = New-LauncherButton "Stop" 495 229 145
-$dockerButton = New-LauncherButton "Get Docker Desktop" 30 285 205
+$dockerButton = New-LauncherButton "Prepare This Computer" 30 285 205
 $credentials = New-LauncherButton "View Administrator Login" 248 285 222
 $logButton = New-LauncherButton "View Details" 485 285 155
 $checkButton = New-LauncherButton "Check This PC" 30 339 165
@@ -92,7 +93,7 @@ $updateButton = New-LauncherButton "Check for Updates" 30 451 269
 $installUpdateButton = New-LauncherButton "Install Update" 309 451 220
 
 $disclaimer = New-Object System.Windows.Forms.Label
-$disclaimer.Text = "Docker Desktop must be installed once. Real business use requires owner configuration and release approval."
+$disclaimer.Text = "Windows setup uses the included installers. Real business use requires owner configuration and release approval."
 $disclaimer.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $disclaimer.ForeColor = [System.Drawing.Color]::FromArgb(96, 105, 119)
 $disclaimer.Location = New-Object System.Drawing.Point(30, 524)
@@ -209,9 +210,12 @@ function Set-Busy([bool]$busy) {
 
 function Test-DockerClient {
     if (Get-Command docker -ErrorAction SilentlyContinue) { return $true }
-    if (Test-Path -LiteralPath $dockerCli -PathType Leaf) {
-        $env:PATH = (Split-Path -Parent $dockerCli) + ";" + $env:PATH
-        return $true
+    foreach ($bin in @("$env:ProgramFiles\Docker\Docker\resources\bin",
+                       "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin")) {
+        if (Test-Path -LiteralPath (Join-Path $bin 'docker.exe') -PathType Leaf) {
+            $env:PATH = $bin + ';' + $env:PATH
+            return $true
+        }
     }
     return $false
 }
@@ -221,8 +225,8 @@ function Start-LauncherAction([string]$action) {
     # Any attempted lifecycle action invalidates the previous PC check.
     $script:lastCheckPath = ""
     Set-Busy $false
-    if ($action -ne "Check" -and -not (Test-DockerClient)) {
-        $status.Text = "Docker Desktop is not installed. Click 'Get Docker Desktop', finish its Windows installer, then return here."
+    if ($action -ne "Check" -and $action -ne "Install" -and $action -ne "Prepare" -and -not (Test-DockerClient)) {
+        $status.Text = "Select Prepare This Computer to install the included Windows prerequisites."
         return
     }
     if ($action -eq "Install" -and -not (Test-Path -LiteralPath (Join-Path $productRoot "release\toefl-house-erp-app.tar"))) {
@@ -392,8 +396,7 @@ $installUpdateButton.Add_Click({
     }
 })
 $dockerButton.Add_Click({
-    [System.Diagnostics.Process]::Start("https://www.docker.com/products/docker-desktop/") | Out-Null
-    $status.Text = "Install Docker Desktop for Windows, complete WSL 2 setup if prompted, and restart Windows if required. Reopen this app."
+    Start-LauncherAction "Prepare"
 })
 $credentials.Add_Click({
     if (Test-Path -LiteralPath $credentialFile -PathType Leaf) {
@@ -452,8 +455,13 @@ $timer.Add_Tick({
         $script:process.Dispose()
         $script:process = $null
         Set-Busy $false
-        if ($exitCode -eq 0) {
-            if ($completedAction -eq "Stop") {
+        if ($exitCode -eq 3010) {
+            $status.Text = "Windows setup needs a restart. Save your work, restart Windows, then reopen TOEFL House ERP and click Install."
+            [System.Windows.Forms.MessageBox]::Show($status.Text, "Restart required") | Out-Null
+        } elseif ($exitCode -eq 0) {
+            if ($completedAction -eq "Prepare") {
+                $status.Text = "Windows prerequisites are prepared. Select Install to continue."
+            } elseif ($completedAction -eq "Stop") {
                 $status.Text = "TOEFL House ERP has stopped safely. Your data remains stored."
             } elseif ($completedAction -eq "Check") {
                 $script:lastCheckPath = $script:stdoutPath
@@ -472,6 +480,17 @@ $timer.Add_Tick({
                     [System.Diagnostics.Process]::Start("http://127.0.0.1:8000/") | Out-Null
                 }
             } else {
+                if ($completedAction -eq "Install") {
+                    try {
+                        $shell = New-Object -ComObject WScript.Shell
+                        $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'TOEFL House ERP.lnk'))
+                        $shortcut.TargetPath = $powershellExe
+                        $shortcut.Arguments = '-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $guiPath + '" -AutoInstall'
+                        $shortcut.WorkingDirectory = $productRoot
+                        $shortcut.Save()
+                    } catch { # A restricted Desktop does not invalidate a successful installation.
+                    }
+                }
                 $status.Text = "TOEFL House ERP is ready. Opening in your browser."
                 [System.Diagnostics.Process]::Start("http://127.0.0.1:8000/") | Out-Null
             }
@@ -545,6 +564,13 @@ if ($SmokeTest) {
     exit 0
 }
 Set-Busy $false
+if ($AutoInstall) {
+    $form.Add_Shown({
+        if (Test-Path -LiteralPath (Join-Path $productRoot 'data\secrets\db.env')) {
+            Start-LauncherAction "Start"
+        } else { Start-LauncherAction "Install" }
+    })
+}
 $timer.Start()
 [void]$form.ShowDialog()
 $timer.Stop()

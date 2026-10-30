@@ -40,10 +40,10 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("shell.Run command, 0, False", SHORTCUT)
         self.assertIn("product\\windows\\TOEFL House ERP.ps1", SHORTCUT)
         self.assertIn("System.Windows.Forms", GUI)
-        self.assertIn("param([switch]$SmokeTest)", GUI)
+        self.assertIn("param([switch]$SmokeTest, [switch]$AutoInstall)", GUI)
         self.assertIn("Windows GUI controls initialized", GUI)
         for button in ('"Install"', '"Open / Start"', '"Repair"', '"Stop"',
-                       '"Get Docker Desktop"', '"View Administrator Login"',
+                       '"Prepare This Computer"', '"View Administrator Login"',
                        '"Check This PC"', '"Owner Readiness Guide"', '"How to Use"',
                        '"Copy Safe Support Status"'):
             self.assertIn(button, GUI)

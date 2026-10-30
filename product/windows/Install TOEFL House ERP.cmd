@@ -34,11 +34,9 @@ if exist "data\sites\toeflhouse.localhost\site_config.json" goto :alreadyinstall
 where docker >nul 2>nul
 if not errorlevel 1 goto :dockerfound
 echo.
-echo  Docker Desktop is not installed yet.
-echo  1. Install it from https://www.docker.com/products/docker-desktop/
-echo  2. Restart your PC when it asks.
-echo  3. Double-click this file again.
-start "" "https://www.docker.com/products/docker-desktop/"
+echo  Windows prerequisites are missing from this installation.
+echo  Open TOEFL House ERP and select Install to use the included prerequisite installers.
+echo  If the prerequisite files are missing, request a complete package from your provider.
 goto :pause
 :dockerfound
 
@@ -47,7 +45,12 @@ if not errorlevel 1 goto :dockerup
 echo.
 echo  Docker Desktop is installed but not running.
 echo  Starting it now - this can take a minute...
+if exist "%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe" goto :startuserdocker
 start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+goto :desktopstarted
+:startuserdocker
+start "" "%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe"
+:desktopstarted
 set DAEMON_TRIES=60
 :waitdaemon
 powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5" >nul 2>nul
@@ -66,6 +69,12 @@ if not exist "release\toefl-house-erp-app.tar" goto :packagemissing
 echo [TH_STAGE] Checking package integrity before local installation...
 powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1"
 if errorlevel 1 goto :packageinvalid
+
+rem A single-file offline kit supplies the two database/cache images too.
+if not exist "release\offline-runtime.json" goto :runtimeimagesready
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Import Offline Runtime.ps1"
+if errorlevel 1 goto :packageinvalid
+:runtimeimagesready
 
 if not exist data\secrets mkdir data\secrets
 rem  Restrict database credentials before writing any temporary password.

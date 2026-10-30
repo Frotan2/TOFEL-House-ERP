@@ -50,9 +50,14 @@ try {
 
 $dockerCommand = Get-Command docker -ErrorAction SilentlyContinue
 if (-not $dockerCommand) {
-    $candidate = Join-Path $env:ProgramFiles "Docker\Docker\resources\bin\docker.exe"
-    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-        $dockerCommand = $candidate
+    foreach ($candidate in @(
+        (Join-Path $env:ProgramFiles "Docker\Docker\resources\bin\docker.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\DockerDesktop\resources\bin\docker.exe")
+    )) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            $dockerCommand = $candidate
+            break
+        }
     }
 }
 $dockerReady = $false

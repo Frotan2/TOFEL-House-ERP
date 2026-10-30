@@ -82,6 +82,15 @@ class ReleaseImageTriggerContract(unittest.TestCase):
         self.assertIn('--gate-evidence "$RUNNER_TEMP/toefl-house-ci-gates.json"', workflow)
         self.assertIn("/product/release/ci-gates.json", workflow)
 
+    def test_actions_customer_download_does_not_wrap_another_zip(self):
+        workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
+        artifact = workflow.split("      - name: Publish customer package artifact", 1)[1].split(
+            "      - name:", 1
+        )[0]
+        self.assertIn("/TOEFL-House-ERP-Customer-${{ env.TOEFL_HOUSE_RELEASE_VERSION }}/", artifact)
+        self.assertNotIn("*.zip", artifact)
+        self.assertNotIn("/product/release/", artifact)
+
     def test_tagged_release_uses_versioned_notes_and_exact_build_references(self):
         workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
         self.assertIn("cp docs/engineering/RELEASE-CANDIDATE.md", workflow)

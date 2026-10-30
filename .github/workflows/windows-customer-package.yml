@@ -4,6 +4,10 @@ on:
   push:
     paths:
       - "TOEFL House ERP.vbs"
+      - "tools/release/Build Customer Installer.ps1"
+      - "tools/release/windows/**"
+      - "tests/foundation/test_customer_exe.ps1"
+      - "tests/foundation/test_offline_runtime.ps1"
       - docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md
       - "product/windows/**"
       - "product/update_engine.py"
@@ -38,6 +42,16 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
+      - name: Compile and exercise real single-file Windows setup
+        shell: powershell
+        run: |
+          & powershell.exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File 'tests/foundation/test_customer_exe.ps1'
+          if ($LASTEXITCODE -ne 0) { throw "Customer EXE extraction tests failed." }
+      - name: Exercise offline runtime integrity and identity refusals
+        shell: powershell
+        run: |
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'tests/foundation/test_offline_runtime.ps1'
+          if ($LASTEXITCODE -ne 0) { throw "Offline runtime tests failed." }
       - name: Parse all customer PowerShell launchers
         shell: pwsh
         run: |
@@ -45,6 +59,9 @@ jobs:
           $paths = @(
             'product/windows/TOEFL House ERP.ps1',
             'product/windows/Run TOEFL House ERP.ps1',
+            'product/windows/Prepare This PC.ps1',
+            'product/windows/Import Offline Runtime.ps1',
+            'tools/release/Build Customer Installer.ps1',
             'product/windows/Check This PC.ps1',
             'product/windows/Verify Package Image.ps1',
             'product/windows/Prepare Customer Package.ps1',

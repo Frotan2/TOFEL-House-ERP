@@ -32,6 +32,8 @@ ALLOWED_FILES = (
     "product/docker-compose.yml",
     "product/windows/TOEFL House ERP.ps1",
     "product/windows/Run TOEFL House ERP.ps1",
+    "product/windows/Prepare This PC.ps1",
+    "product/windows/Import Offline Runtime.ps1",
     "product/windows/Check This PC.ps1",
     "product/windows/OWNER ACCEPTANCE GUIDE.txt",
     "product/windows/OWNER HANDBOOK.txt",
@@ -376,8 +378,12 @@ def create_package(
 This package contains a provider-built Linux application image. The customer
 does not build Frappe, compile Docker images, use Git, or run database commands.
 
-1. Install Docker Desktop for Windows 10/11 (64-bit) and complete WSL 2 setup.
-2. Extract this complete folder to a local drive and double-click TOEFL House ERP.vbs.
+This folder is an engineering kit, not the final single-file customer delivery.
+The provider must assemble the offline Setup EXE with signed Windows prerequisites
+and the pinned database/cache images before customer handover.
+
+1. Use the provider-supplied Setup EXE and follow its Windows setup dialogs.
+2. For engineering inspection of this kit, double-click TOEFL House ERP.vbs.
 3. Use Install on a genuinely new computer, then use Open / Start on later days.
 4. Open the included Owner Handbook from the GUI, then use the Owner Readiness
    Guide and DAILY USE GUIDE.txt. They are acceptance instructions, not

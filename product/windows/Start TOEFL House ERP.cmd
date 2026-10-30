@@ -13,7 +13,12 @@ if errorlevel 1 goto :startdaemon
 goto :up
 :startdaemon
 echo  Starting Docker Desktop - this can take a minute...
+if exist "%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe" goto :startuserdocker
 start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+goto :desktopstarted
+:startuserdocker
+start "" "%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe"
+:desktopstarted
 set DAEMON_TRIES=60
 :waitdaemon
 powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5" >nul 2>nul

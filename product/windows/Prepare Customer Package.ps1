@@ -84,6 +84,8 @@ try {
         "product/docker-compose.yml",
         "product/windows/TOEFL House ERP.ps1",
         "product/windows/Run TOEFL House ERP.ps1",
+        "product/windows/Prepare This PC.ps1",
+        "product/windows/Import Offline Runtime.ps1",
         "product/windows/Check This PC.ps1",
         "product/windows/OWNER ACCEPTANCE GUIDE.txt",
         "product/windows/OWNER HANDBOOK.txt",
@@ -217,9 +219,12 @@ try {
     $instructions = @"
 TOEFL HOUSE ERP - CUSTOMER INSTALLATION ($Version)
 
-1. On the Windows 10/11 (64-bit) main computer, install Docker Desktop from
-   https://www.docker.com/products/docker-desktop/ and finish WSL 2 setup.
-   This one-time prerequisite may need administrator approval and a restart.
+This folder is an engineering kit, not the final one-file customer delivery.
+The provider must assemble the offline Setup EXE with the signed Windows
+prerequisites and database/cache images before customer handover.
+
+1. Use the provider-supplied Setup EXE on the Windows x64 main computer.
+   Follow its Windows permission/license dialogs and restart if requested.
 2. Keep this entire package together on a local drive, not inside OneDrive,
    a synchronized folder or a network share.
 3. Double-click "TOEFL House ERP.vbs". Select Install. No terminal commands,
