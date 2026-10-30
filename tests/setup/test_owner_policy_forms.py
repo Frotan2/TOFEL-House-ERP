@@ -1,6 +1,5 @@
 """The Course Owner configures grades with numbers, not JSON or source edits."""
 import ast
-import copy
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 import sys
