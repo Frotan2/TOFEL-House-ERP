@@ -17,8 +17,8 @@ def build():
     module = ast.parse(SOURCE.read_text(encoding="utf-8"))
     functions = [n for n in module.body
                  if isinstance(n, ast.FunctionDef)
-                 and n.name == "initial_assessment_values"]
-    assert len(functions) == 1
+                 and n.name in ("initial_assessment_values", "whole_number")]
+    assert len(functions) == 2
     context = {"load_preset": load_preset, "build_assessment_facets": build_assessment_facets}
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(SOURCE), "exec"),
          context)
