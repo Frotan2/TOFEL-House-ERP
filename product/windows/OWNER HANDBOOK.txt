@@ -21,59 +21,57 @@ automatic notification delivery, production-qualified academic assessment
 or progression, or an approved automatic updater. Do not ask staff to imitate those functions in spreadsheets
 or unofficial records.
 
-1. WHAT YOU SHOULD RECEIVE
---------------------------
-Receive the versioned customer ZIP and its .zip.sha256 file from the trusted
-provider's GitHub Release. The provider must identify the exact release version
-and source revision and provide the package fingerprint/attestation.
+1. DELIVERY: FINAL TARGET VERSUS ENGINEERING TEST KIT
+--------------------------------------------------
+The accepted customer delivery target is ONE offline, independently verified,
+provider-signed Windows Setup EXE. It must contain the application and verified
+prerequisites. An end customer must not download Docker or WSL separately,
+unpack nested ZIP files, build an image, run scripts or edit code.
 
-The complete ZIP contains:
-  * TOEFL House ERP.vbs - the normal Windows launcher.
-  * A provider-built Linux/amd64 application image; you do not build it.
-  * product/release/release-manifest.json and its checksum.
-  * product/release/ci-gates.json and its checksum.
-  * Owner Readiness Guide, Daily Use Guide, and this Owner Handbook.
+This target has NOT yet passed real clean-Windows acceptance. A source checkout,
+older GitHub Actions ZIP, folder-based kit or VBS launcher is an ENGINEERING
+FALLBACK, not a production installer. Do not mistake a file with an EXE
+extension, green CI check or successful test-machine login for approval.
 
-The CI receipt lists the four hosted engineering workflows and their run links.
-It does NOT prove your Windows PC, backup drive, recovery, staff devices, real
-cashier work, or production readiness.
-
-Do not use a ZIP from a chat forward, unknown website, or unapproved provider.
-Do not accept only a loose image, scripts, or source-code folder as the customer
-package. Do not extract and run individual files while leaving the rest behind.
+A legitimate release must provide a verified version, complete source
+revision, trusted publisher identity, package digest, release manifest and
+the matching exact-head test evidence. Do not accept an unidentified archive,
+a forwarded attachment or a separately distributed image and script.
 
 2. BEFORE ANY INSTALLATION
 --------------------------
-Use a separate, disposable Windows 10/11 64-bit practice PC with no existing
-TOEFL House customer data. Docker Desktop and WSL 2 must be installed and
-working; an administrator may be needed for that initial computer setup.
+Testing is permitted only on a clean, disposable 64-bit Windows 10/11 PC
+using invented records. Confirm virtualization, free space and Windows
+prerequisites with the provider; the provider is responsible for packaging
+them for a finished customer release.
 
-If the computer has EVER contained TOEFL House ERP data:
-  STOP. Do not reinstall, repair, reset a password, restore, or delete anything.
-  Open TOEFL House ERP.vbs and choose only "Check This PC" for a read-only
-  report. Contact trusted support before any other action.
+If this PC has EVER stored TOEFL House application data, STOP. Do not run
+Install, Repair, Restore, Update or Deactivate, reset passwords or remove data.
+Use the existing launcher only for "Check This PC" and "Copy Safe Support
+Status" where those actions are available, then contact trusted support.
 
-Never delete, rename, or move product/data, Docker volumes, database secrets,
-recovery keys, or backups. Never restore over an original site. Do not expose
-the service with a router port, public tunnel, or public web address.
+Never delete, rename, move or replace product/data, database volumes,
+private secrets, recovery keys or backups. Never restore over a live site.
+Do not expose the ERP through public ports, tunnels or websites.
 
-3. INSTALL AND OPEN ON THE PRACTICE PC
---------------------------------------
-[ ] Extract the COMPLETE ZIP to a local, non-synchronized drive.
-[ ] Double-click TOEFL House ERP.vbs.
-[ ] Choose "Check This PC" and save the safe summary. BLOCKED or NOT VERIFIED
-    must remain unchanged; do not reinstall just to make a warning disappear.
-[ ] On a genuinely fresh practice PC only, choose Install.
-[ ] When installation finishes, choose Open / Start.
-[ ] The browser should open the local login page, normally
-    http://127.0.0.1:8000/.
-[ ] Choose "View Administrator Login" privately only on this test computer.
-    Never photograph, email, or publish the password.
-[ ] Sign in and change the initial password. Give each practice staff member
-    an individual account and only the roles required for that job.
-
-If installation fails, record the step and safe message. Do not retry with
-Repair, database deletion, or a source build. Contact the provider.
+3. GRAPHICAL INSTALLATION: DISPOSABLE TEST MACHINE ONLY
+-------------------------------------------------------
+[ ] Obtain the complete, publisher-verified, version-matched test deliverable
+    from an authorized provider; do not use a GitHub source ZIP.
+[ ] If a qualified Setup EXE exists, double-click it and follow the ordinary
+    on-screen steps. Do not run a second installer over existing data.
+[ ] Until the EXE is qualified, the provider may use the complete folder-based
+    engineering test kit and its existing "TOEFL House ERP.vbs" GUI on a
+    disposable PC only. This is NOT the accepted customer delivery.
+[ ] Choose "Check This PC"; refuse installation if integrity, runtime or
+    preservation checks cannot be verified.
+[ ] On a confirmed new disposable site only, select "Install". The provider
+    records startup, restart, role and recovery evidence.
+[ ] Open the local browser login, normally http://127.0.0.1:8000/.
+[ ] View initial Administrator credentials privately, change the password,
+    and configure a separate least-privilege Course Owner role account.
+[ ] Never share, photograph or email passwords, secrets, financial records
+    or unredacted support logs.
 
 4. OWNER CONFIGURATION - INSIDE THE APPLICATION
 -----------------------------------------------
