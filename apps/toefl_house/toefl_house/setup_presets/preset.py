@@ -217,7 +217,9 @@ def preview_catalog(snapshot: dict, preset: dict | None = None) -> dict:
             orphan_native = (existing is None
                              and (native_title in native_program_titles
                                   or native_title in native_course_titles
-                                  or level_code in native_program_abbreviations))
+                                  or level_code in native_program_abbreviations
+                                  or any(alias in native_program_abbreviations
+                                         for alias in level.get("existing_site_aliases", []))))
             if aliases_found:
                 # Never silently introduce a second native Program for a level.
                 status = "review"
