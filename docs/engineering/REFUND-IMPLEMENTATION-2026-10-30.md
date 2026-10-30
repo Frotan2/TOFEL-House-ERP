@@ -67,6 +67,16 @@ source/artifact mutation refusal. **337 local finance tests and source review
 are not that proof.** Paired reversal, user-facing queues, full race acceptance
 and final Windows candidate acceptance remain required before delivery.
 
+The first owned run failed closed before credit insertion: native Journal Entry
+child defaults replaced an unassigned Fees receivable cost center with the
+Company default. The correction transports original empty dimensions as explicit
+empty Links, preserving native defaults elsewhere and retaining exact guard/GL
+comparison. A disposable Windows helper using current source and fresh local
+document hooks submitted the actual native credit on the synthetic site,
+verified both GL rows and every original dimension, then rolled back; original
+Journal Entry/Payment Entry/GL counts were unchanged. This targeted diagnostic
+does not qualify the entire paired command or replace its hosted Native gate.
+
 The earlier checklist below remains the full completion scope; it is not a
 claim that the new owned paired command has passed its first database gate.
 

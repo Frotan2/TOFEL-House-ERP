@@ -93,7 +93,11 @@ def _fee_dimensions(fee):
     rows = _check_gl("Fees", fee.name, {_party_key(fee): (total, Decimal(0)),
         (fee.income_account, "", "", "", ""): (Decimal(0), total)})
     fields = ("cost_center", "project", *get_accounting_dimensions())
-    return {row.account: {key: row.get(key) for key in fields} for row in rows}
+    # A native Journal Entry child fills None with its :Company defaults
+    # before before_validate. An explicit empty Link preserves the original
+    # unassigned dimension instead; GL comparison normalizes both to None.
+    # In particular, do not introduce a cost center on the Fees receivable.
+    return {row.account: {key: row.get(key) or "" for key in fields} for row in rows}
 
 
 def _party_key(fee):
