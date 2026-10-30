@@ -57,8 +57,19 @@ function docker {
     Remove-Item -LiteralPath $callsPath
     $images[1].sha256 = '0' * 64
     Save-Manifest
+    $corrupt = Get-Content -LiteralPath (Join-Path $release 'offline-runtime.json') -Raw | ConvertFrom-Json
+    $bad = @($corrupt.images | Where-Object { $_.key -eq 'cache' })
+    if ($bad.Count -ne 1 -or $bad[0].sha256 -cne ('0' * 64)) {
+        throw 'Test fixture failed to persist the corrupted cache manifest.'
+    }
     & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $worker
-    if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $callsPath)) { throw 'Corrupt second archive was not rejected before the first Docker operation.' }
+    $badResult = $LASTEXITCODE
+    $badCalls = if (Test-Path -LiteralPath $callsPath) {
+        @(Get-Content -LiteralPath $callsPath) -join '; '
+    } else { '<none>' }
+    if ($badResult -eq 0 -or (Test-Path -LiteralPath $callsPath)) {
+        throw ("Corrupt second archive was not rejected before Docker: exit={0}; calls={1}" -f $badResult, $badCalls)
+    }
     $images[1].sha256 = (Get-FileHash -LiteralPath (Join-Path $release 'cache-image.tar')).Hash.ToLowerInvariant()
     Save-Manifest
     # Keep the expected manifest intact but simulate a mismatched loaded image.
