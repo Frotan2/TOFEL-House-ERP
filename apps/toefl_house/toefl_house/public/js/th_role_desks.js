@@ -1499,7 +1499,7 @@ frappe.provide("toefl_house.role_desks");
 					// generated from selected human-friendly dropdowns.
 					args.statuses = JSON.stringify(statuses);
 				}
-				frappe.call({
+				const submitAction = () => frappe.call({
 					method: action.endpoint,
 					args,
 					freeze: true,
@@ -1524,6 +1524,15 @@ frappe.provide("toefl_house.role_desks");
 						frappe.msgprint({ title: text(action.label), message: escapeText(detail), indicator: "red" });
 					},
 				});
+				if (teachingContractForm) {
+					frappe.confirm(text(
+						action.endpoint === "toefl_house.teaching.compensation.revise_teaching_contract"
+							? "This replaces the complete instructor contract from the new effective date. Re-enter ALL approved skills, rates, quantities and adjustments; omitted items will not carry over. Continue?"
+							: "Save these instructor contract terms? This records an approved contract, not a salary payment."
+					), submitAction);
+				} else {
+					submitAction();
+				}
 			},
 		});
 		const values = Object.assign({}, action.args || {});
