@@ -1,7 +1,15 @@
 # TOEFL House ERP — setup identity, policy and duplicate-safety review
 
 **Date:** 2026-10-31  
-**Scope:** `work` first-run catalog and Owner setup, not an installed-site sign-off.  
+**Scope:** `work` first-run catalog and Owner setup, not an installed-site sign-off.
+
+**Owner correction, 2026-10-31:** TOEFL House has **zero historical
+operational records** in this ERP. The customer product is a first installation
+on an empty business dataset. Old-level migration, imported students, issued
+Fees, receipts and demonstration data are **not part of initial setup**. All
+legacy scenarios in old engineering test reports refer to disposable tests,
+not to course operations. Generic duplicate/permission guards remain because
+future data must be protected once the application is used.  
 **Release:** **REJECT / TEST DATA ONLY**. `main` must remain untouched pending exact-head gates and independent approval.
 
 ## Policy precedence (do not resurrect superseded numbers)
@@ -19,14 +27,12 @@ TOEFL statements. Use these exact current **configuration** values:
 | Special Speaking | `SPECIAL-SPEAKING-2M` | 2 | AFN 2,000 per semester | Concurrent independent track; no mandatory pass/promotion |
 | TOEFL Preparation | `TOEFL-PREP-4M` | 4 | AFN 7,000 per semester | Independent track; no official TOEFL-score claim |
 
-Eleven levels across four families. Preset fee amounts are **semester
-totals**, not a second monthly charge. The authorized billing engine partitions
-one net tuition amount into distinct **native Fees** installments only after an
-effective Owner billing policy is configured. An advance payment may settle the
-whole tuition. `TOEFL-PREP-2M`, `PREP-ONE`, `PREP-TWO`, etc. are existing-site
-aliases needing explicit mapping — **never create parallel canonical levels**.
-An installed legacy TOEFL 2M code may have a new effective-dated 4-month
-duration; preserve its identifier, history and existing contracts.
+Eleven **canonical, new** levels across four families. The fresh
+preset contains **no legacy aliases or migrated records**. Fees in the
+preset are full **semester totals**, never a second monthly charge.
+Future approved installment billing will divide the same tuition total.
+There are no previous student contracts, posted Fees or collection receipts
+to migrate or reconcile on this first installation.
 
 Other Owner values: AFN currency, Asia/Kabul, Friday-only weekly closure,
 seven confirmed daily sessions with separate male/female starts, assessment
