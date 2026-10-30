@@ -62,12 +62,16 @@ merely because source code exists. Unapproved portals, external channels,
 online payment gateways, derived retention KPIs and live release remain
 deferred or blocked as recorded by their governing decisions.
 
-**Tuition refund warning (Issue #115):** request and General Manager
-approval are implemented; actual *Fees* refund payout is deliberately
-blocked on the pinned native accounting stack. Do not use direct Student
-Pay, a book-return credit note, or an ad-hoc Journal Entry to work around
-this safety block. Book refunds follow a separate Sales Invoice return
-workflow. See `finance/tuition_refunds.py` and the current checkpoint.
+**Tuition refund warning (Issue #115):** a guarded, atomic native Fees
+credit-and-payout pair has been implemented and exercised in synthetic
+finance checks, including separate General Manager approval and Finance
+Manager execution. **That does not authorize production refunds:** the
+real installed-site, exact-revision and reversal/recovery acceptance remain
+open; paid-refund reversal is intentionally unavailable in this release.
+Do not use direct Student Pay, a book-return credit note, or an ad-hoc
+Journal Entry as a shortcut. Book refunds follow a distinct native Sales
+Invoice return workflow. See `finance/tuition_refund_native.py`,
+`docs/engineering/REFUND-IMPLEMENTATION-2026-10-30.md` and Issue #115.
 
 **Historical engineering package only:** snapshot
 `9c9ec48a6ead45dc802117eecb4f423e9b64f99d` previously passed five
