@@ -284,7 +284,8 @@ def create_package(
     source_revision: str,
     gate_evidence: Path,
     provider_attestation: str,
-) -> tuple[Path, Path, dict]:
+    include_zip: bool = True,
+) -> tuple[Path, Path | None, dict]:
     source = source.resolve()
     output = output.resolve()
     # Resolve() follows symlinks. Reject the supplied archive path first so
@@ -399,7 +400,10 @@ authorization is REJECT. Do not enter real student, payroll or financial data
 until the owner gates are separately approved.
 """
         write_utf8(package / "READ ME FIRST.txt", instructions)
-        archive_zip = make_zip(package)
+        # Provider-side single-EXE assembly consumes the verified folder
+        # directly. A multi-gigabyte archive must never be forced through the
+        # legacy 2 GiB GitHub ZIP release limit before offline EXE assembly.
+        archive_zip = make_zip(package) if include_zip else None
         return package, archive_zip, manifest
     except Exception:
         # Keep the failure recoverable and obvious; never delete an existing
@@ -419,6 +423,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gate-evidence", type=Path, required=True,
                         help="passing exact-SHA receipt from verify_ci_gates.py --output")
     parser.add_argument("--provider-attestation", default="GitHub Actions artifact attestation")
+    parser.add_argument("--no-zip", action="store_true",
+                        help="create only the verified folder for the offline Windows EXE provider pipeline")
     args = parser.parse_args(argv)
     try:
         labels = load_json(args.image_labels)
@@ -431,11 +437,12 @@ def main(argv: list[str] | None = None) -> int:
             source_revision=args.source_revision,
             gate_evidence=args.gate_evidence,
             provider_attestation=args.provider_attestation,
+            include_zip=not args.no_zip,
         )
         print(json.dumps({
             "package": str(package),
-            "archive": str(archive),
-            "archive_sha256": sha256(archive),
+            "archive": str(archive) if archive else None,
+            "archive_sha256": sha256(archive) if archive else None,
             "image_archive_sha256": manifest["image"]["sha256"],
             "version": manifest["version"],
             "source_revision": manifest["source_revision"],
