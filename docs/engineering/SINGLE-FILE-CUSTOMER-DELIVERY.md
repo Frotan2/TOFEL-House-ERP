@@ -109,3 +109,16 @@ Before handing the EXE to a customer:
 
 Until this evidence exists, keep **TEST PACKAGE - NO REAL DATA** and production
 **REJECT**. No customer-ready EXE is claimed merely because its source compiles.
+
+## Small online setup alternative (engineering-only)
+
+For users with reliable internet, the [Smart Online Installer](SMART-ONLINE-INSTALLER.md)
+adds a **small signed WinForms bootstrap** which fetches the **same immutable,
+publisher-signed offline Setup** from the official versioned GitHub Release.
+It validates exact SHA-256, byte size and Authenticode publisher, supports
+HTTP Range resume, and then delegates the actual prerequisites/ERP install to
+the existing offline Setup. It is **not** a partial-Docker runtime downloader,
+a silent updater, an already published customer EXE, or a way around the
+Owner/production NO-GO. The fully offline Setup remains an option for poor
+internet connectivity. A legitimate provider signing certificate, a real
+signed Release asset and clean Windows acceptance are still required.

@@ -15,13 +15,16 @@ echo  Docker Desktop is not running. Please start it, wait a minute, then run th
 if not defined TH_GUI_MODE pause
 exit /b 1
 :repair
+rem Never revert an independently signed update to the original factory image.
+rem Even completed update journals require a version-aware supported recovery.
+if exist data\updates\journal.json goto :updaterepairhold
 if not exist data\secrets\db.env goto :nosecret
 echo [TH_STAGE] Verifying preserved site and database before repair...
 powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Test Existing Installation.ps1"
 if errorlevel 1 goto :datapreservationhold
-if not exist data\activation mkdir data\activation
-icacls data\activation /inheritance:r /grant:r "%USERDOMAIN%\%USERNAME%:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /T >nul 2>nul
-if errorlevel 1 goto :failed
+rem Repair must not recreate activation storage or change Owner-established
+rem ACLs; if its installed-image receipt is missing, preserve data and refuse.
+if not exist data\activation\installed-image-identity.json goto :failed
 rem Repair only ever reinstalls the verified prebuilt image that ships with
 rem the customer kit.  Building from source here would compile a different
 rem application on the customer PC and could replace a working installation
@@ -57,7 +60,7 @@ if errorlevel 1 goto :waitservices
 goto :ready
 :waitservices
 set /a READY_TRIES-=1
-if READY_TRIES GTR 0 goto :waitready
+if %READY_TRIES% GTR 0 goto :waitready
 echo  TOEFL House ERP services did not all become ready within 50 minutes.
 goto :failed
 :ready
@@ -81,6 +84,12 @@ exit /b 1
 echo  Missing database credentials with existing or unverified site/storage.
 echo  Do NOT reinstall, delete data or create a replacement database password.
 echo  Recover the original credentials or contact TOEFL House support.
+if not defined TH_GUI_MODE pause
+exit /b 1
+:updaterepairhold
+echo  Repair refused: a signed update journal exists.
+echo  The original factory image must not replace a later approved release.
+echo  Stop and request preservation-safe, version-aware recovery from trusted support.
 if not defined TH_GUI_MODE pause
 exit /b 1
 :datapreservationhold

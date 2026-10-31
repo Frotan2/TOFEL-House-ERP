@@ -27,6 +27,11 @@ jobs:
         run: |
           & powershell.exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File 'tests/foundation/test_customer_exe.ps1'
           if ($LASTEXITCODE -ne 0) { throw "Customer EXE extraction tests failed." }
+      - name: Compile and exercise smart online installer with synthetic ranged HTTP
+        shell: powershell
+        run: |
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'tests/foundation/test_online_installer.ps1'
+          if ($LASTEXITCODE -ne 0) { throw "Smart online installer regression failed." }
       - name: Exercise offline runtime integrity and identity refusals
         shell: powershell
         run: |
@@ -161,11 +166,19 @@ jobs:
           $env:TH_SYNTHETIC_LABELS = $labels | ConvertTo-Json -Compress
           $configDigest = (& python -c "from pathlib import Path; import json, os; from tests.foundation.test_customer_package_manifest import write_image_archive; print(write_image_archive(Path(os.environ['TH_SYNTHETIC_IMAGE_ARCHIVE']), json.loads(os.environ['TH_SYNTHETIC_LABELS'])))").Trim()
           if ($LASTEXITCODE -ne 0) { throw 'Synthetic Docker archive creation failed.' }
+          # The synthetic image has exactly one layer. Read its digest as a
+          # scalar, avoiding PowerShell 5.1 JSON array unrolling/nesting bugs.
+          $rootfsLayer = (& python -c "import os,tarfile,json; t=tarfile.open(os.environ['TH_SYNTHETIC_IMAGE_ARCHIVE']); m=json.load(t.extractfile('manifest.json')); c=json.load(t.extractfile(m[0]['Config'])); assert len(c['rootfs']['diff_ids']) == 1; print(c['rootfs']['diff_ids'][0])").Trim()
+          if ($LASTEXITCODE -ne 0 -or $rootfsLayer.Length -ne 71 -or $rootfsLayer -notmatch '^sha256:[0-9a-f]{64}') {
+            throw 'Cannot read synthetic factory layer digest.'
+          }
+          $rootfsLayers = @($rootfsLayer)
           $env:TH_SYNTHETIC_INSPECT_JSON = [ordered]@{
             # Containerd-backed Docker can expose a manifest digest as .Id.
             Id = 'sha256:' + ('c' * 64)
             RepoTags = @('toefl-house-erp-app:local')
             Config = @{ Labels = $labels }
+            RootFS = @{ Layers = $rootfsLayers }
           } | ConvertTo-Json -Depth 6 -Compress
           $target = Join-Path $env:RUNNER_TEMP "Customer Kits"
           New-Item -ItemType Directory -Path $target -Force | Out-Null
@@ -322,6 +335,43 @@ jobs:
             throw "Headless synthetic install did not generate its local credential file."
           }
           Write-Host "Headless installer, start, stop and repair routes passed with fake Docker."
+          $installedIdentityPath = Join-Path $kit 'product/data/activation/installed-image-identity.json'
+          if (-not (Test-Path -LiteralPath $installedIdentityPath -PathType Leaf)) {
+            throw 'Initial Install did not record the verified Docker image ID.'
+          }
+          $installedIdentity = [IO.File]::ReadAllText($installedIdentityPath) | ConvertFrom-Json
+          if ($installedIdentity.provenance -cne 'factory' -or
+              $installedIdentity.image_id -cne ('sha256:' + ('c' * 64))) {
+            throw 'Initial installed-image identity is not pinned to actual loaded bytes.'
+          }
+          # Security regression: after a completed install, a mismatched loaded
+          # application image must refuse daily Start before Compose can run.
+          # All hashes are synthetic fixtures, and only the test kit is touched.
+          $goodImageIdentity = $env:TH_SYNTHETIC_INSPECT_JSON
+          $identity = $goodImageIdentity | ConvertFrom-Json
+          $identity.Config.Labels.'org.toefl-house.source-revision' = ('0' * 40)
+          $env:TH_SYNTHETIC_INSPECT_JSON = $identity | ConvertTo-Json -Depth 10 -Compress
+          $syntheticSecret = Join-Path $kit 'product/data/secrets/db.env'
+          $secretBefore = (Get-FileHash -LiteralPath $syntheticSecret).Hash
+          $syntheticStart = Join-Path $kit 'product/windows/Start TOEFL House ERP.cmd'
+          try {
+            $previousPreference = $ErrorActionPreference
+            try {
+              $ErrorActionPreference = 'Continue'
+              $mismatchedOutput = @(& $syntheticStart 2>&1)
+              $mismatchedExit = $LASTEXITCODE
+            } finally { $ErrorActionPreference = $previousPreference }
+            if ($mismatchedExit -eq 0 -or
+                ($mismatchedOutput -join "`n") -notmatch 'Start refused an absent or mismatched verified application image') {
+              throw 'Daily Start accepted a mismatched image or omitted its safe refusal.'
+            }
+            if ((Get-FileHash -LiteralPath $syntheticSecret).Hash -ne $secretBefore) {
+              throw 'Daily Start changed local credentials while refusing the image.'
+            }
+            Write-Host 'Daily Start refused a mismatched loaded application image; credentials preserved.'
+          } finally {
+            $env:TH_SYNTHETIC_INSPECT_JSON = $goodImageIdentity
+          }
           # Accidental Install on an already completed site must refuse before
           # regenerating credentials, importing an image or invoking Compose.
           $repeatInstall = Join-Path $kit 'product/windows/Install TOEFL House ERP.cmd'
@@ -457,11 +507,12 @@ jobs:
           $sha = "$tar.sha256"
           $manifest = Join-Path $kit 'product/release/release-manifest.json'
           function Assert-PackageVerification {
-            param([bool]$ShouldPass, [switch]$Loaded)
+            param([bool]$ShouldPass, [switch]$Loaded, [switch]$Provider)
             $verifyArgs = @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-              '-File', 'product/windows/Verify Package Image.ps1', '-Archive', $tar,
+              '-File', (Join-Path $kit 'product/windows/Verify Package Image.ps1'), '-Archive', $tar,
               '-Checksum', $sha, '-Manifest', $manifest)
             if ($Loaded) { $verifyArgs += '-VerifyLoadedImage' }
+            if ($Provider) { $verifyArgs += '-VerifyProviderImage' }
             $previousPreference = $ErrorActionPreference
             try {
               $ErrorActionPreference = 'Continue'
@@ -474,6 +525,7 @@ jobs:
           }
           Assert-PackageVerification $true
           Assert-PackageVerification $true -Loaded
+          Assert-PackageVerification $true -Loaded -Provider
           $originalManifest = [System.IO.File]::ReadAllBytes($manifest)
           try {
             [System.IO.File]::AppendAllText($manifest, ' ')
@@ -493,12 +545,70 @@ jobs:
             $wrongImage = $originalInspect | ConvertFrom-Json
             $wrongImage.Id = 'sha256:' + ('0' * 64)
             $env:TH_SYNTHETIC_INSPECT_JSON = $wrongImage | ConvertTo-Json -Depth 6 -Compress
-            Assert-PackageVerification $true -Loaded
+            Assert-PackageVerification $false -Loaded
+            Assert-PackageVerification $false -Loaded -Provider
             $wrongImage = $originalInspect | ConvertFrom-Json
             $wrongImage.Config.Labels.'org.toefl-house.source-revision' = 'b' * 40
             $env:TH_SYNTHETIC_INSPECT_JSON = $wrongImage | ConvertTo-Json -Depth 6 -Compress
             Assert-PackageVerification $false -Loaded
           } finally { $env:TH_SYNTHETIC_INSPECT_JSON = $originalInspect }
+          # Signed-update handoff REHEARSAL ONLY: the trusted engine is not
+          # invoked, just its already-verified candidate ID and completed journal.
+          # Confirm that a new image starts only with a matching durable record.
+          $originalIdentityRecord = [IO.File]::ReadAllBytes($installedIdentityPath)
+          $journal = Join-Path $kit 'product/data/updates/journal.json'
+          [IO.Directory]::CreateDirectory((Split-Path -Parent $journal)) | Out-Null
+          [IO.File]::WriteAllText($journal, '{"schema_version":1,"document_type":"toefl-house-erp-update-journal","phase":"applying","version":"2026.11.01"}')
+          try {
+            Assert-PackageVerification $false -Loaded
+          } finally {
+            Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
+          }
+          $updateId = 'sha256:' + ('d' * 64)
+          $simulatedImage = $originalInspect | ConvertFrom-Json
+          $simulatedImage.Id = $updateId
+          $simulatedImage.Config.Labels.'org.toefl-house.release-version' = '2026.11.01'
+          $env:TH_SYNTHETIC_INSPECT_JSON = $simulatedImage | ConvertTo-Json -Depth 6 -Compress
+          $env:TH_SYNTHETIC_VOLUME_EXISTS = '1'
+          try {
+            & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $kit 'product/windows/Verify Package Image.ps1') -VerifyLoadedImage -RecordSignedUpdateImage -ExpectedUpdatedImageId $updateId -ExpectedUpdatedVersion '2026.11.01' -ExpectedUpdatedRevision $env:TH_SYNTHETIC_REVISION
+            if ($LASTEXITCODE -ne 0) { throw 'Verified synthetic signed-update identity could not be recorded.' }
+            Assert-PackageVerification $false -Loaded
+            [IO.Directory]::CreateDirectory((Split-Path -Parent $journal)) | Out-Null
+            [IO.File]::WriteAllText($journal, '{"schema_version":1,"document_type":"toefl-house-erp-update-journal","phase":"completed","version":"2026.11.01"}')
+            Assert-PackageVerification $true -Loaded
+            $startAfterUpdate = Join-Path $kit 'product/windows/Start TOEFL House ERP.cmd'
+            # The first synthetic HTTP listener was intentionally stopped after
+            # the initial lifecycle test. Recreate it for this second Start.
+            $updateHttpProcess = Start-Process -FilePath $fakeHttpPath -PassThru -WindowStyle Hidden
+            try {
+              Start-Sleep -Milliseconds 250
+              if ($updateHttpProcess.HasExited) { throw 'Signed-update loopback listener could not start.' }
+              & $startAfterUpdate | Out-Null
+              if ($LASTEXITCODE -ne 0) { throw 'Daily Start refused the completed simulated signed update.' }
+            } finally {
+              if (-not $updateHttpProcess.HasExited) {
+                Stop-Process -Id $updateHttpProcess.Id -ErrorAction Stop
+              }
+            }
+            $repairAfterUpdate = Join-Path $kit 'product/windows/Repair TOEFL House ERP.cmd'
+            $previousPreference = $ErrorActionPreference
+            try {
+              $ErrorActionPreference = 'Continue'
+              $repairMessage = @(& $repairAfterUpdate 2>&1)
+              $repairExit = $LASTEXITCODE
+            } finally { $ErrorActionPreference = $previousPreference }
+            if ($repairExit -eq 0 -or ($repairMessage -join "`n") -notmatch 'signed update journal exists') {
+              throw 'Legacy factory Repair would overwrite a signed update.'
+            }
+            [IO.File]::WriteAllText($journal, '{"schema_version":1,"document_type":"toefl-house-erp-update-journal","phase":"applying","version":"2026.11.01"}')
+            Assert-PackageVerification $false -Loaded
+          } finally {
+            $env:TH_SYNTHETIC_INSPECT_JSON = $originalInspect
+            [IO.File]::WriteAllBytes($installedIdentityPath, $originalIdentityRecord)
+            Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
+          }
+          Assert-PackageVerification $true -Loaded
           Add-Content -LiteralPath $tar -Value 'TAMPERED'
           Assert-PackageVerification $false
           Write-Host "Package allowlist, manifest/image integrity and loaded identity checks passed."

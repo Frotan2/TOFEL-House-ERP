@@ -30,6 +30,7 @@ rem installation. Even an incomplete attempt may have preserved database data;
 rem never treat it as a fresh install and never recreate a missing volume.
 if exist "data\secrets\db.env" goto :alreadyinstalled
 if exist "data\sites\toeflhouse.localhost\site_config.json" goto :alreadyinstalled
+if exist "data\.installation-claim" goto :alreadyinstalled
 
 where docker >nul 2>nul
 if not errorlevel 1 goto :dockerfound
@@ -56,10 +57,17 @@ set DAEMON_TRIES=60
 powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5" >nul 2>nul
 docker info >nul 2>nul && goto :dockerup
 set /a DAEMON_TRIES-=1
-if DAEMON_TRIES GTR 0 goto :waitdaemon
+if %DAEMON_TRIES% GTR 0 goto :waitdaemon
 echo  Docker Desktop did not finish starting within 5 minutes.
 goto :failed
 :dockerup
+
+rem The fresh-storage check must precede even Docker image imports. An
+rem orphaned named MariaDB volume is still customer data if site files and
+rem credentials are missing. Never retag or import runtime images first.
+echo [TH_STAGE] Checking that no prior database or site exists...
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Test Fresh Installation.ps1"
+if errorlevel 1 goto :storagecheckfailed
 
 rem A customer kit always ships one prebuilt, verified image.  There is no
 rem source-build path: compiling Frappe or frontend assets on a customer PC
@@ -69,6 +77,14 @@ if not exist "release\toefl-house-erp-app.tar" goto :packagemissing
 echo [TH_STAGE] Checking package integrity before local installation...
 powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1"
 if errorlevel 1 goto :packageinvalid
+
+rem Atomically claim this empty installation before importing any runtime
+rem image, creating credentials or starting Compose. Keep the marker on
+rem failure so a second launch cannot race or silently restart setup.
+if not exist data mkdir data
+if errorlevel 1 goto :failed
+mkdir "data\.installation-claim" >nul 2>nul
+if errorlevel 1 goto :alreadyinstalled
 
 rem A single-file offline kit supplies the two database/cache images too.
 if not exist "release\offline-runtime.json" goto :runtimeimagesready
@@ -90,7 +106,7 @@ rem  inside PowerShell's ToString('N') even at top level (proven on a real
 rem  Windows run: ") was unexpected at this time."). Instead PowerShell
 rem  writes the one-time password to a temp file and CMD reads it with
 rem  SET /P - no parentheses and no FOR constructs touch CMD's parser.
-if exist data\secrets\db.env goto :secretok
+if exist data\secrets\db.env goto :alreadyinstalled
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Test Fresh Installation.ps1"
 if errorlevel 1 goto :storagecheckfailed
 echo  Generating a private database password for this computer...
@@ -99,7 +115,6 @@ set /p DBPW=<data\secrets\.dbpw.tmp
 del data\secrets\.dbpw.tmp >nul 2>nul
 if not defined DBPW goto :failed
 >data\secrets\db.env echo MARIADB_ROOT_PASSWORD=%DBPW%
-:secretok
 attrib +h data\secrets >nul 2>nul
 
 echo.
@@ -109,7 +124,7 @@ if errorlevel 1 goto :packagechanged
 echo [TH_STAGE] Loading the ready-to-run application. This can take several minutes.
 docker load -i "release\toefl-house-erp-app.tar"
 if errorlevel 1 goto :failed
-powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1" -VerifyLoadedImage
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1" -VerifyLoadedImage -RecordFactoryImage
 if errorlevel 1 goto :failed
 echo [TH_STAGE] Starting TOEFL House ERP...
 docker compose up -d --no-build
@@ -130,7 +145,7 @@ goto :ready
 :preparing
 echo  Still preparing... site setup can take 15-40 minutes on first run.
 set /a READY_TRIES-=1
-if READY_TRIES GTR 0 goto :waitready
+if %READY_TRIES% GTR 0 goto :waitready
 echo  The first run did not finish within 50 minutes.
 goto :failed
 :ready
