@@ -80,7 +80,8 @@ class InstalledImageIdentityTests(unittest.TestCase):
         self.assertLess(UPDATE.index("-RecordSignedUpdateImage -ExpectedUpdatedImageId"),
                         UPDATE.index('Set-JournalState "completed" $Check.Version'))
         self.assertIn("Set-JournalState \"recovery-required\" $Check.Version", UPDATE)
-        self.assertIn("[IO.File]::Replace($temporaryIdentity, $identityPath, $null)", VERIFY)
+        self.assertIn("[IO.File]::Replace($temporaryIdentity, $identityPath, $identityBackup)", VERIFY)
+        self.assertIn("if (Test-Path -LiteralPath $identityBackup)", VERIFY)
 
     def test_factory_repair_refuses_signed_update_journal(self):
         self.assertIn(r"if exist data\updates\journal.json goto :updaterepairhold", REPAIR)
