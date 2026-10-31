@@ -322,6 +322,15 @@ jobs:
             throw "Headless synthetic install did not generate its local credential file."
           }
           Write-Host "Headless installer, start, stop and repair routes passed with fake Docker."
+          $installedIdentityPath = Join-Path $kit 'product/data/activation/installed-image-identity.json'
+          if (-not (Test-Path -LiteralPath $installedIdentityPath -PathType Leaf)) {
+            throw 'Initial Install did not record the verified Docker image ID.'
+          }
+          $installedIdentity = [IO.File]::ReadAllText($installedIdentityPath) | ConvertFrom-Json
+          if ($installedIdentity.provenance -cne 'factory' -or
+              $installedIdentity.image_id -cne ('sha256:' + ('c' * 64))) {
+            throw 'Initial installed-image identity is not pinned to actual loaded bytes.'
+          }
           # Security regression: after a completed install, a mismatched loaded
           # application image must refuse daily Start before Compose can run.
           # All hashes are synthetic fixtures, and only the test kit is touched.
@@ -521,12 +530,51 @@ jobs:
             $wrongImage = $originalInspect | ConvertFrom-Json
             $wrongImage.Id = 'sha256:' + ('0' * 64)
             $env:TH_SYNTHETIC_INSPECT_JSON = $wrongImage | ConvertTo-Json -Depth 6 -Compress
-            Assert-PackageVerification $true -Loaded
+            Assert-PackageVerification $false -Loaded
             $wrongImage = $originalInspect | ConvertFrom-Json
             $wrongImage.Config.Labels.'org.toefl-house.source-revision' = 'b' * 40
             $env:TH_SYNTHETIC_INSPECT_JSON = $wrongImage | ConvertTo-Json -Depth 6 -Compress
             Assert-PackageVerification $false -Loaded
           } finally { $env:TH_SYNTHETIC_INSPECT_JSON = $originalInspect }
+          # Signed-update handoff REHEARSAL ONLY: the trusted engine is not
+          # invoked, just its already-verified candidate ID and completed journal.
+          # Confirm that a new image starts only with a matching durable record.
+          $originalIdentityRecord = [IO.File]::ReadAllBytes($installedIdentityPath)
+          $journal = Join-Path $kit 'product/data/updates/journal.json'
+          $updateId = 'sha256:' + ('d' * 64)
+          $simulatedImage = $originalInspect | ConvertFrom-Json
+          $simulatedImage.Id = $updateId
+          $simulatedImage.Config.Labels.'org.toefl-house.release-version' = '2026.11.01'
+          $env:TH_SYNTHETIC_INSPECT_JSON = $simulatedImage | ConvertTo-Json -Depth 6 -Compress
+          $env:TH_SYNTHETIC_VOLUME_EXISTS = '1'
+          try {
+            & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'product/windows/Verify Package Image.ps1' -VerifyLoadedImage -RecordSignedUpdateImage -ExpectedUpdatedImageId $updateId
+            if ($LASTEXITCODE -ne 0) { throw 'Verified synthetic signed-update identity could not be recorded.' }
+            Assert-PackageVerification $false -Loaded
+            [IO.Directory]::CreateDirectory((Split-Path -Parent $journal)) | Out-Null
+            [IO.File]::WriteAllText($journal, '{"schema_version":1,"document_type":"toefl-house-erp-update-journal","phase":"completed","version":"2026.11.01"}')
+            Assert-PackageVerification $true -Loaded
+            $startAfterUpdate = Join-Path $kit 'product/windows/Start TOEFL House ERP.cmd'
+            & $startAfterUpdate | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Daily Start refused the completed simulated signed update.' }
+            $repairAfterUpdate = Join-Path $kit 'product/windows/Repair TOEFL House ERP.cmd'
+            $previousPreference = $ErrorActionPreference
+            try {
+              $ErrorActionPreference = 'Continue'
+              $repairMessage = @(& $repairAfterUpdate 2>&1)
+              $repairExit = $LASTEXITCODE
+            } finally { $ErrorActionPreference = $previousPreference }
+            if ($repairExit -eq 0 -or ($repairMessage -join "`n") -notmatch 'signed update journal exists') {
+              throw 'Legacy factory Repair would overwrite a signed update.'
+            }
+            [IO.File]::WriteAllText($journal, '{"schema_version":1,"document_type":"toefl-house-erp-update-journal","phase":"applying","version":"2026.11.01"}')
+            Assert-PackageVerification $false -Loaded
+          } finally {
+            $env:TH_SYNTHETIC_INSPECT_JSON = $originalInspect
+            [IO.File]::WriteAllBytes($installedIdentityPath, $originalIdentityRecord)
+            Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
+          }
+          Assert-PackageVerification $true -Loaded
           Add-Content -LiteralPath $tar -Value 'TAMPERED'
           Assert-PackageVerification $false
           Write-Host "Package allowlist, manifest/image integrity and loaded identity checks passed."
