@@ -24,7 +24,7 @@ set DAEMON_TRIES=60
 powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5" >nul 2>nul
 docker info >nul 2>nul && goto :up
 set /a DAEMON_TRIES-=1
-if DAEMON_TRIES GTR 0 goto :waitdaemon
+if %DAEMON_TRIES% GTR 0 goto :waitdaemon
 echo  Docker Desktop did not finish starting within 5 minutes.
 goto :failed
 :up
@@ -47,7 +47,7 @@ if errorlevel 1 goto :waitservices
 goto :ready
 :waitservices
 set /a READY_TRIES-=1
-if READY_TRIES GTR 0 goto :waitready
+if %READY_TRIES% GTR 0 goto :waitready
 echo  TOEFL House ERP services did not all become ready within 10 minutes.
 goto :failed
 :ready
