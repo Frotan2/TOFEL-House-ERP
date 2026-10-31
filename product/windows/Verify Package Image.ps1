@@ -213,17 +213,28 @@ try {
                 }
             }
             if ($VerifyProviderImage) {
-                # The provider compares identities within the SAME Docker daemon.
-                # Its pre-export image ID is part of the freshly written release
-                # manifest, so even an identical-label tag swap must be refused.
-                if ([string]$release.image.provider_image_id -cnotmatch '^sha256:[0-9a-f]{64}
+                if ([string]$release.image.provider_image_id -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+                    [string]$loaded.Id -cne [string]$release.image.provider_image_id) {
+                    throw "Provider image ID changed between export and final package verification."
+                }
+                Write-Host "Provider loaded image filesystem and release identity: verified."
+                exit 0
+            }
         }
         if ($RecordFactoryImage -or $RecordSignedUpdateImage) {
             if ($RecordFactoryImage -and (Test-Path -LiteralPath $identityPath)) {
                 throw "The installed image identity already exists; an initial installer must not overwrite it."
             }
             if ($RecordSignedUpdateImage -and
-                ($ExpectedUpdatedImageId -cnotmatch '^sha256:[0-9a-f]{64}
+                ($ExpectedUpdatedImageId -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+                 $ExpectedUpdatedVersion -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._+\-]{0,95}$' -or
+                 $ExpectedUpdatedRevision -cnotmatch '^[0-9a-fA-F]{40}$' -or
+                 [string]$loaded.Id -cne $ExpectedUpdatedImageId -or
+                 $releaseVersion -cne $ExpectedUpdatedVersion -or
+                 $sourceRevision -cne $ExpectedUpdatedRevision -or
+                 -not (Test-Path -LiteralPath $identityPath -PathType Leaf))) {
+                throw "Signed updater image identity, source revision or version conflicts with the signed release."
+            }
             if (-not (Test-Path -LiteralPath $identityDirectory -PathType Container)) {
                 throw "Protected activation storage is missing; installed identity was not recorded."
             }
