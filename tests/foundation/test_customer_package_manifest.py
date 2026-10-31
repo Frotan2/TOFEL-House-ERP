@@ -374,7 +374,7 @@ class CustomerPackageManifestTests(unittest.TestCase):
         (self.source / "unrelated-note.txt").write_text("unrelated local note", encoding="utf-8")
         self.assertEqual(self.create()[2]["source_revision"], self.revision)
 
-    def run_verifier(self, package, *, loaded=False, inspect=None, docker_exit=0):
+    def run_verifier(self, package, *, loaded=False, record_factory=False, inspect=None, docker_exit=0):
         release = package / "product/release"
         if inspect is None:
             saved = json.loads((release / "release-manifest.json").read_text(encoding="utf-8"))
@@ -400,23 +400,32 @@ function docker {
 & $env:TH_TEST_VERIFY_SCRIPT -Archive ($env:TH_TEST_RELEASE + '/toefl-house-erp-app.tar') -Checksum ($env:TH_TEST_RELEASE + '/toefl-house-erp-app.tar.sha256') -Manifest ($env:TH_TEST_RELEASE + '/release-manifest.json')
 exit $LASTEXITCODE
 """
-        if loaded:
-            command = command.replace("\nexit $LASTEXITCODE", " -VerifyLoadedImage\nexit $LASTEXITCODE")
+        if loaded or record_factory:
+            switch = " -VerifyLoadedImage -RecordFactoryImage" if record_factory else " -VerifyLoadedImage"
+            command = command.replace("\nexit $LASTEXITCODE", switch + "\nexit $LASTEXITCODE")
         return subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
                                "-Command", command], env=env, capture_output=True, text=True, timeout=30)
 
     @unittest.skipUnless(os.name == "nt", "Windows PowerShell verifier")
     def test_windows_verifier_accepts_archive_and_loaded_identity(self):
         package, _, _ = self.create()
-        for loaded in (False, True):
-            with self.subTest(loaded=loaded):
-                result = self.run_verifier(package, loaded=loaded)
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        result = self.run_verifier(package)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # The first installer, not a read-only check, must establish the
+        # recorded factory image. Never synthesize this record by hand.
+        identity_dir = package / "product/data/activation"
+        identity_dir.mkdir(parents=True, exist_ok=True)
+        result = self.run_verifier(package, record_factory=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        result = self.run_verifier(package, loaded=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         # Docker 29/containerd can report a manifest digest as .Id. It need not
         # equal the config digest already checked against the archive bytes.
+        # A changed ID with unchanged labels must now be REFUSED, not accepted.
         result = self.run_verifier(package, loaded=True, inspect={
             "Id": "sha256:" + "c" * 64, "RepoTags": [IMAGE_TAG], "Config": {"Labels": self.labels}})
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not match", result.stdout + result.stderr)
 
     @unittest.skipUnless(os.name == "nt", "Windows built-in tar selection")
     def test_windows_verifier_prefers_builtin_tar_with_actual_git_tar_first_in_path(self):
