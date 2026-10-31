@@ -93,6 +93,12 @@ class InstalledImageIdentityTests(unittest.TestCase):
         self.assertNotIn("mkdir data\\activation", REPAIR.lower())
         self.assertIn("-VerifyLoadedImage", REPAIR)
 
+    def test_daily_start_must_not_mutate_protected_activation_acls(self):
+        self.assertNotIn("icacls data\\activation", START.lower())
+        self.assertNotIn("mkdir data\\activation", START.lower())
+        self.assertIn("-VerifyLoadedImage", START)
+        self.assertLess(START.index("-VerifyLoadedImage"), START.index("docker compose up -d --no-build"))
+
 
 class OwnerHandbookDeliveryTests(unittest.TestCase):
     def test_gui_opens_the_handbook_read_only(self):
