@@ -91,8 +91,15 @@ try {
     if (Test-Path $forbidden) { throw 'Tampered download was published.' }
     $existingRoot = Join-Path $work 'existing'
     [IO.Directory]::CreateDirectory((Join-Path $existingRoot 'Customer')) | Out-Null
-    $existingOutput = @(& $exe --probe-installation $existingRoot 2>&1)
-    if ($LASTEXITCODE -eq 0 -or ($existingOutput -join ' ') -notmatch 'Existing TOEFL House installation') {
+    $previousPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell 5.1 converts expected native stderr into a
+        # terminating NativeCommandError while ErrorActionPreference is Stop.
+        $ErrorActionPreference = 'Continue'
+        $existingOutput = @(& $exe --probe-installation $existingRoot 2>&1)
+        $existingExit = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $previousPreference }
+    if ($existingExit -eq 0 -or ($existingOutput -join ' ') -notmatch 'Existing TOEFL House installation') {
         throw 'Bootstrap did not refuse a known existing customer installation.'
     }
     $freshRoot = Join-Path $work 'no-customer'
