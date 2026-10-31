@@ -261,17 +261,24 @@ try {
                 original_release_revision = [string]$release.source_revision
             }
             $temporaryIdentity = $identityPath + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
+            $identityBackup = $identityPath + '.' + [guid]::NewGuid().ToString('N') + '.bak'
             try {
                 [IO.File]::WriteAllText($temporaryIdentity, ($record | ConvertTo-Json -Depth 5),
                     (New-Object System.Text.UTF8Encoding($false)))
                 if ($RecordFactoryImage) {
                     [IO.File]::Move($temporaryIdentity, $identityPath)
                 } else {
-                    [IO.File]::Replace($temporaryIdentity, $identityPath, $null)
+                    # Windows PowerShell 5.1/.NET Framework requires a valid
+                    # backup path for this atomic replacement overload.
+                    # Keep the prior identity recoverable until replacement succeeds.
+                    [IO.File]::Replace($temporaryIdentity, $identityPath, $identityBackup)
                 }
             } finally {
                 if (Test-Path -LiteralPath $temporaryIdentity) {
                     Remove-Item -LiteralPath $temporaryIdentity -Force
+                }
+                if (Test-Path -LiteralPath $identityBackup) {
+                    Remove-Item -LiteralPath $identityBackup -Force
                 }
             }
             Write-Host "Verified installed image ID recorded in protected activation storage."
