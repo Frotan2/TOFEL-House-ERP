@@ -2,7 +2,7 @@
 """Apply the reviewed Python dependency security uplift to pinned Frappe.
 
 The product remains commit-pinned to Frappe
-988e54f3c4c291e2077a83809663f123731abe76. This helper changes only five
+988e54f3c4c291e2077a83809663f123731abe76. This helper changes only six
 dependency declarations in that exact checkout, then the installers replace the
 resolved packages with reviewed patched releases and reinstall Frappe metadata.
 
@@ -13,8 +13,10 @@ Reviewed uplifts:
   Frappe PR #44814 makes the same dependency-family uplift.
 - PyJWT 2.15.1: includes the 2.14.0 fix for GHSA-pxh4-856f-4h89 and aligns
   with the newer upstream Frappe line.
-- pypdf 6.21.2: includes the October 2026 parser/resource fixes through
-  6.21.2, including the 6.21.1 DCT/JPEG validation fix.
+- pypdf 6.21.4: includes the October 2026 parser/resource fixes through
+  6.21.4, including the newly published October page-label/resource fixes.
+- OAuthlib 4.0.0: binds authorization to the authenticated token client
+  (GHSA-7984-qgvg-3j9c).
 - filelock 4.2.4: includes the 4.2.1 fix for GHSA-69hj-f68j-2879 and
   GHSA-8mx5-7m5m-r77g; pinned Frappe 3.x dependency metadata must be
   overlaid together with the installed package (never bypass pip check).
@@ -35,18 +37,20 @@ PINNED_FRAPPE_COMMIT = "988e54f3c4c291e2077a83809663f123731abe76"
 PINNED_PYPROJECT_SHA256 = "75a442bcc2fdf946920bd4352c9719370869c5d943ad11e46e4f552bf301d8a6"
 
 REQUIREMENT_UPGRADES = (
+    (b'    "oauthlib~=3.3.1",\n', b'    "oauthlib~=4.0.0",\n'),
     (b'    "GitPython~=3.1.45",\n', b'    "GitPython~=3.2.1",\n'),
     (b'    "Pillow~=12.3.0",\n', b'    "Pillow~=13.0.0",\n'),
     (b'    "PyJWT~=2.13.0",\n', b'    "PyJWT~=2.15.1",\n'),
-    (b'    "pypdf==6.15.0",\n', b'    "pypdf==6.21.2",\n'),
+    (b'    "pypdf==6.15.0",\n', b'    "pypdf==6.21.4",\n'),
     (b'    "filelock~=3.20.1",\n', b'    "filelock~=4.2.4",\n'),
 )
 
 REQUIRED_RUNTIME_VERSIONS = {
+    "oauthlib": "4.0.0",
     "GitPython": "3.2.1",
     "Pillow": "13.0.0",
     "PyJWT": "2.15.1",
-    "pypdf": "6.21.2",
+    "pypdf": "6.21.4",
     "filelock": "4.2.4",
 }
 

@@ -8,8 +8,8 @@
     },
     "banking/yarn.lock": {
       "upstream_sha256": "33963765905e6174f7838f42f3f67dffc563c564427cf559378c000db1aa6411",
-      "security_sha256": "2f0babbb86b70e09b92fcda338983b5bd78a139dfd3c542e66a986e65d5386a7"
+      "security_sha256": "12460a2db32047f1f1d1fab64505766c16a9feab4992227d596e0fa6702c92b3"
     }
   },
-  "purpose": "2026-10-19: resolve ws 8.21.3 for the banking frontend (ws 8.17.1 is inside GHSA-96hv-2xvq-fx4p, first patched 8.21.0, and GHSA-58qx-3vcg-4xpx, first patched 8.20.1)."
+  "purpose": "2026-10-19: resolve ws 8.21.3 for the banking frontend (ws 8.17.1 is inside GHSA-96hv-2xvq-fx4p, first patched 8.21.0, and GHSA-58qx-3vcg-4xpx, first patched 8.20.1). 2026-10-31: follow-redirects 1.16.2 fixes cross-realm sensitiveHeaders credential forwarding (GHSA-mrwp-f3q8-3g9p)."
 }

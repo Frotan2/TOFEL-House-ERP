@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-31",
+  "kind": "local disposable dependency qualification; not final release acceptance",
+  "base_revision": "705ebd55741f1f0b0bd11e4d90d8f9b606e4cf9b",
+  "checked_file_sha256": {
+    "product/app.Dockerfile": "22fb495532cec25c6a2537bfa5038a4787cff1ed5c3e303c6646e07afb7bfea4",
+    "tools/foundation/secure_frappe_python.py": "e66b4643459b4fb84d63e10c23a6c597bc3ced0e4bd5b3a15ef36e1a38ecdb7f",
+    "tools/foundation/runtime_install.py": "7c8395a9f9e06aabeeaa6891c5dc6bef3aad3490d029bfc519ac7930636dc4fe",
+    "tools/native/run_native.py": "5fdf43468b9817b7ae55061535f5f9b72a5875e65cba8d268ec6b8ae13cd3c92",
+    "tools/native/security_acceptance.py": "112b8a92b7dc67198407964345d831a813f0cb6eb242fc70d3436acfcd09c324",
+    "tools/foundation/banking-locks/banking/yarn.lock": "12460a2db32047f1f1d1fab64505766c16a9feab4992227d596e0fa6702c92b3",
+    "tools/foundation/banking-locks/manifest.json": "92d12e0c05083a12397a1e9535aa4a847582ecfefbce2534e00616125ffdd02e"
+  },
+  "python": {
+    "status": "pass",
+    "actual_pinned_frappe": true,
+    "metadata_pip_check_passed": true,
+    "oauthlib": "4.0.0",
+    "pypdf": "6.21.4",
+    "oauth_authenticated_identity_binding": true,
+    "existing_device_grant_refusal": true,
+    "pdf_write_read": true,
+    "owner_sites_mounted": false
+  },
+  "banking": {
+    "status": "pass",
+    "actual_pinned_erpnext_banking": true,
+    "frozen_lock_install": true,
+    "follow_redirects": "1.16.2",
+    "owner_sites_mounted": false
+  },
+  "negative_control": "OAuthlib 3.3.1 fails the new authenticated-client regression; 4.0.0 passes",
+  "node_runtime_packages_checked": 28,
+  "glob_minimatch_in_runtime_graph": false,
+  "focused_security_tests": 88,
+  "focused_security_environment_skips": 1,
+  "production_authorization": "REJECT",
+  "owner_runtime_modified": false
+}
