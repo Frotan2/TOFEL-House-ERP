@@ -380,7 +380,7 @@ class CustomerPackageManifestTests(unittest.TestCase):
             saved = json.loads((release / "release-manifest.json").read_text(encoding="utf-8"))
             inspect = {"Id": saved["image"]["config_digest"], "RepoTags": [IMAGE_TAG],
                        "Config": {"Labels": dict(self.labels)}}
-        env = dict(os.environ, TH_TEST_VERIFY_SCRIPT=str(ROOT / "product/windows/Verify Package Image.ps1"),
+        env = dict(os.environ, TH_TEST_VERIFY_SCRIPT=str(package / "product/windows/Verify Package Image.ps1"),
                    TH_TEST_RELEASE=str(release), TH_TEST_DOCKER_EXIT=str(docker_exit),
                    TH_TEST_INSPECT=json.dumps(inspect) if not isinstance(inspect, str) else inspect)
         # Python can inherit PowerShell 7's module path, which is incompatible
