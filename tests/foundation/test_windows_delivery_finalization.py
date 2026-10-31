@@ -80,12 +80,12 @@ class InstalledImageIdentityTests(unittest.TestCase):
         self.assertLess(UPDATE.index("-RecordSignedUpdateImage -ExpectedUpdatedImageId"),
                         UPDATE.index('Set-JournalState "completed" $Check.Version'))
         self.assertIn("Set-JournalState \"recovery-required\" $Check.Version", UPDATE)
-        self.assertIn("[IO.File]::Replace($temporaryIdentity, $identityPath)", VERIFY)
+        self.assertIn("[IO.File]::Replace($temporaryIdentity, $identityPath, $null)", VERIFY)
 
     def test_factory_repair_refuses_signed_update_journal(self):
         self.assertIn(r"if exist data\updates\journal.json goto :updaterepairhold", REPAIR)
         self.assertLess(REPAIR.index(r"if exist data\updates\journal.json goto :updaterepairhold"),
-                        REPAIR.index('docker load -i "release\toefl-house-erp-app.tar"'))
+                        REPAIR.index(r'docker load -i "release\toefl-house-erp-app.tar"'))
 
 
 class OwnerHandbookDeliveryTests(unittest.TestCase):
