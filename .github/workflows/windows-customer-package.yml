@@ -509,7 +509,7 @@ jobs:
           function Assert-PackageVerification {
             param([bool]$ShouldPass, [switch]$Loaded, [switch]$Provider)
             $verifyArgs = @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-              '-File', 'product/windows/Verify Package Image.ps1', '-Archive', $tar,
+              '-File', (Join-Path $kit 'product/windows/Verify Package Image.ps1'), '-Archive', $tar,
               '-Checksum', $sha, '-Manifest', $manifest)
             if ($Loaded) { $verifyArgs += '-VerifyLoadedImage' }
             if ($Provider) { $verifyArgs += '-VerifyProviderImage' }
@@ -571,7 +571,7 @@ jobs:
           $env:TH_SYNTHETIC_INSPECT_JSON = $simulatedImage | ConvertTo-Json -Depth 6 -Compress
           $env:TH_SYNTHETIC_VOLUME_EXISTS = '1'
           try {
-            & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'product/windows/Verify Package Image.ps1' -VerifyLoadedImage -RecordSignedUpdateImage -ExpectedUpdatedImageId $updateId -ExpectedUpdatedVersion '2026.11.01' -ExpectedUpdatedRevision $env:TH_SYNTHETIC_REVISION
+            & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $kit 'product/windows/Verify Package Image.ps1') -VerifyLoadedImage -RecordSignedUpdateImage -ExpectedUpdatedImageId $updateId -ExpectedUpdatedVersion '2026.11.01' -ExpectedUpdatedRevision $env:TH_SYNTHETIC_REVISION
             if ($LASTEXITCODE -ne 0) { throw 'Verified synthetic signed-update identity could not be recorded.' }
             Assert-PackageVerification $false -Loaded
             [IO.Directory]::CreateDirectory((Split-Path -Parent $journal)) | Out-Null
