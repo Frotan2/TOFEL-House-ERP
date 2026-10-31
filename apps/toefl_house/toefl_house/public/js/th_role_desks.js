@@ -836,11 +836,6 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "installments", label: "Installments (owner policy)", fieldtype: "Int", reqd: 1 },
 			{ fieldname: "shares", label: "Contractual shares % (optional, owner policy)", fieldtype: "Small Text", description: "Leave empty for an equal split. Negotiated unequal installments such as 60,40 must total 100% and are refused unless the governing Owner billing policy authorizes them. The plan always totals the full net tuition." },
 		],
-		"toefl_house.finance.cashier.reconcile_cashier_day": [
-			{ fieldname: "company", label: "Company", fieldtype: "Data", reqd: 1, read_only: 1 },
-			{ fieldname: "date", label: "Business date", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "counts", label: "Counted drawers", fieldtype: "Small Text", reqd: 1 },
-		],
 		"toefl_house.finance.policies.create_billing_policy": [
 			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
@@ -1521,7 +1516,7 @@ frappe.provide("toefl_house.role_desks");
 						const raw = values["drawer_counted_" + index];
 						if (raw === undefined || raw === null || raw === "" ||
 							!Number.isFinite(Number(raw)) || Number(raw) < 0 ||
-							!/^\\d+(?:\\.\\d{1,2})?$/.test(String(raw))) {
+							!/^\d+(?:\.\d{1,2})?$/.test(String(raw))) {
 							frappe.msgprint(text("Enter every physical count in AFN with at most two decimals; enter 0 for empty drawers."));
 							return;
 						}

@@ -248,6 +248,11 @@ for (const [method, fields] of Object.entries(actionFields)) {
 	const signature = signatureOf(method);
 	assert.strictEqual(signature[0], "request_key", `${method} must be idempotent`);
 	// Array.from: `fields` comes from the vm realm and map() would keep its realm prototype.
+	if (method === "toefl_house.finance.cashier.reconcile_cashier_day") {
+		assert.deepStrictEqual(Array.from(fields, (field) => field.fieldname), ["company", "date"]);
+		assert.deepStrictEqual(signature.slice(1), ["company", "date", "counts"]);
+		continue;
+	}
 	if (method === "toefl_house.academic.set_assessment_policy_version") {
 		assert.deepStrictEqual(Array.from(fields, (field) => field.fieldname),
 			["policy", "passing_score", "retake_wait_days", "effective_from", "reason", "grading_scale"]);
@@ -282,6 +287,14 @@ assert.strictEqual(decideGuard({ outcome: "Approved", conditions: "" }), null);
 
 /* The client may only call the desk projection endpoints and the registry. */
 const source = fs.readFileSync(SCRIPT, "utf8");
+const declaredActionKeys = Array.from(source.matchAll(/^\s*"(toefl_house\.[^"]+)": \[/gm), (match) => match[1]);
+assert.strictEqual(new Set(declaredActionKeys).size, declaredActionKeys.length,
+	"duplicate action definitions must not silently replace reviewed business forms");
+const amountGuardLines = source.split("\n").filter((line) => line.includes(".test(String(raw))"));
+assert.strictEqual(amountGuardLines.length, 1, "cash-count number validation must be identifiable");
+const amountPattern = vm.runInNewContext(amountGuardLines[0].trim().split(".test(String(raw))")[0].replace(/^!/, ""));
+for (const value of ["0", "1", "1.23", "5150.00"]) assert(amountPattern.test(value), `valid AFN count refused: ${value}`);
+for (const value of ["", "-1", "1.234", "1e3", "NaN", "Infinity", "\\d"]) assert(!amountPattern.test(value), `invalid AFN count accepted: ${value}`);
 for (const forbidden of [/frappe\.db\b/, /frappe\.client\b/, /frappe\.get_doc\b/, /frappe\.get_list\b/, /\bfetch\s*\(/, /XMLHttpRequest/, /frappe\.set_route\(\s*["']List/]) {
 	assert(!forbidden.test(source), `desk client contains a forbidden primitive: ${forbidden}`);
 }
