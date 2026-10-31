@@ -9,7 +9,10 @@ They do not substitute for real Windows + Docker Desktop qualification.
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 import unittest
 
@@ -133,6 +136,36 @@ class LifecyclePreservationTests(unittest.TestCase):
                     self.assertRegex(script, rf"(?m)^set /a {counter}-=1$")
                     self.assertRegex(script, rf"(?m)^if %{counter}% GTR 0 goto :{label}$")
                     self.assertNotRegex(script, rf"(?m)^if {counter} GTR 0 goto")
+
+    @unittest.skipUnless(os.name == "nt", "Requires Windows cmd.exe")
+    def test_windows_cmd_actually_exits_each_retry_loop(self):
+        # Execute the actual counter decrement and IF line in a two-iteration
+        # disposable CMD harness. If the IF accidentally compares a bare
+        # variable name, CMD will loop until subprocess timeout and fail CI.
+        for name, script, loops in (
+            ("Install", INSTALL, (("DAEMON_TRIES", "waitdaemon"), ("READY_TRIES", "waitready"))),
+            ("Start", START, (("DAEMON_TRIES", "waitdaemon"), ("READY_TRIES", "waitready"))),
+            ("Repair", REPAIR, (("READY_TRIES", "waitready"),)),
+        ):
+            for counter, label in loops:
+                with self.subTest(script=name, counter=counter):
+                    decrement = re.search(rf"(?m)^set /a {counter}-=1$", script)
+                    condition = re.search(rf"(?m)^if .* GTR 0 goto :{label}$", script)
+                    self.assertIsNotNone(decrement)
+                    self.assertIsNotNone(condition)
+                    harness = (
+                        f"@echo off\\nsetlocal\\nset {counter}=2\\n:{label}\\n"
+                        f"{decrement.group(0)}\\n{condition.group(0)}\\n"
+                        f'if not "%{counter}%"=="0" exit /b 4\\nexit /b 0\\n'
+                    ).replace("\\n", "\n")
+                    with tempfile.TemporaryDirectory(prefix="th-cmd-retry-") as tmp:
+                        runner = Path(tmp) / "bounded-retry.cmd"
+                        runner.write_text(harness, encoding="ascii")
+                        result = subprocess.run(
+                            ["cmd.exe", "/d", "/c", str(runner)],
+                            capture_output=True, text=True, timeout=5, check=False,
+                        )
+                    self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_install_orders_verification_before_credentials_and_data(self):
         self.assertLess(
