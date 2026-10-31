@@ -4,7 +4,6 @@ Never serves, reads, or writes any TOEFL House database. Deliberately plain
 HTTP: the production online bootstrap rejects HTTP, while TEST_BUILD accepts
 loopback solely to exercise ranged-download mechanics without real releases.
 """
-import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import re
