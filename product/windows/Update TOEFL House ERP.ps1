@@ -1178,6 +1178,17 @@ function Invoke-UpdateInstall($Check) {
         Write-Message "launcher" "updater.recovery_required"
         exit $script:ExitRecoveryRequired
     }
+    # The candidate was authenticated by the signed-update engine and is now
+    # running healthy. Record its exact Docker ID before completing the journal.
+    # If this fails, leave the update in recovery-required state; do not
+    # silently fall back to the old factory manifest on the next daily Start.
+    & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (
+        Join-Path $PSScriptRoot 'Verify Package Image.ps1'
+    ) -VerifyLoadedImage -RecordSignedUpdateImage -ExpectedUpdatedImageId $candidateImageId
+    if ($LASTEXITCODE -ne 0) {
+        Set-JournalState "recovery-required" $Check.Version
+        Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
+    }
     Set-JournalState "completed" $Check.Version
     Save-Result -Status "completed" -Section "launcher" -Key "updater.completed" -Version $Check.Version
     Write-Host ""
