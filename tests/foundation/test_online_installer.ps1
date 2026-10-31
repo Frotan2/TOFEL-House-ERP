@@ -26,8 +26,8 @@ try {
             [string]$data.Length, ('A' * 40)) -join [Environment]::NewLine) +
             [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
         $exe = Join-Path $work ($name + '.exe')
-        & $csc /nologo /target:exe /platform:x64 /define:TEST_BUILD ("/out:" + $exe) /reference:System.Windows.Forms.dll /reference:System.Drawing.dll ('/resource:' + $plan + ',TOEFLHouse.OnlinePlan') $source
-        if ($LASTEXITCODE -ne 0) { throw 'Online C# compilation failed.' }
+        $diagnostics = @(& $csc /nologo /target:exe /platform:x64 /define:TEST_BUILD ("/out:" + $exe) /reference:System.Windows.Forms.dll /reference:System.Drawing.dll ('/resource:' + $plan + ',TOEFLHouse.OnlinePlan') $source 2>&1)
+        if ($LASTEXITCODE -ne 0) { throw ('Online C# compilation failed: ' + ($diagnostics -join ' ')) }
         return $exe
     }
     function Probe([string]$exe, [string]$dest, [bool]$success) {
