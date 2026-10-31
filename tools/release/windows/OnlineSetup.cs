@@ -211,10 +211,21 @@ internal static class OnlineDownloader {
                 }
             }
         }
-        VerifyDigest(part, plan);
+        try {
+            VerifyDigest(part, plan);
+        } catch (InvalidDataException) {
+            // Only this digest-named, untrusted .part is discarded. An invalid
+            // complete cache must not trap nontechnical users in a failed retry.
+            File.Delete(part);
+            throw new InvalidDataException("The download failed verification and was discarded. Open Setup again to retry.");
+        }
+        if (worker != null && worker.CancellationPending)
+            throw new OperationCanceledException("Download cancelled before installation.");
 #if !TEST_BUILD
         InstallerTrust.VerifySignedInstaller(part, plan.Signer);
 #endif
+        if (worker != null && worker.CancellationPending)
+            throw new OperationCanceledException("Download cancelled before installation.");
         // Do not replace existing files or any previously installed Customer site.
         File.Move(part, destination);
         return destination;
