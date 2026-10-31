@@ -498,11 +498,12 @@ jobs:
           $sha = "$tar.sha256"
           $manifest = Join-Path $kit 'product/release/release-manifest.json'
           function Assert-PackageVerification {
-            param([bool]$ShouldPass, [switch]$Loaded)
+            param([bool]$ShouldPass, [switch]$Loaded, [switch]$Provider)
             $verifyArgs = @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
               '-File', 'product/windows/Verify Package Image.ps1', '-Archive', $tar,
               '-Checksum', $sha, '-Manifest', $manifest)
             if ($Loaded) { $verifyArgs += '-VerifyLoadedImage' }
+            if ($Provider) { $verifyArgs += '-VerifyProviderImage' }
             $previousPreference = $ErrorActionPreference
             try {
               $ErrorActionPreference = 'Continue'
@@ -515,6 +516,7 @@ jobs:
           }
           Assert-PackageVerification $true
           Assert-PackageVerification $true -Loaded
+          Assert-PackageVerification $true -Loaded -Provider
           $originalManifest = [System.IO.File]::ReadAllBytes($manifest)
           try {
             [System.IO.File]::AppendAllText($manifest, ' ')
@@ -535,6 +537,7 @@ jobs:
             $wrongImage.Id = 'sha256:' + ('0' * 64)
             $env:TH_SYNTHETIC_INSPECT_JSON = $wrongImage | ConvertTo-Json -Depth 6 -Compress
             Assert-PackageVerification $false -Loaded
+            Assert-PackageVerification $false -Loaded -Provider
             $wrongImage = $originalInspect | ConvertFrom-Json
             $wrongImage.Config.Labels.'org.toefl-house.source-revision' = 'b' * 40
             $env:TH_SYNTHETIC_INSPECT_JSON = $wrongImage | ConvertTo-Json -Depth 6 -Compress
