@@ -148,14 +148,27 @@ internal static class OnlineDownloader {
         RejectReparse(destination); RejectReparse(part);
         // A verified cached installer is safe to reuse, without downloading.
         if (File.Exists(destination)) {
-            VerifyDigest(destination, plan);
+            try {
+                VerifyDigest(destination, plan);
+            } catch (InvalidDataException) {
+                // A corrupt digest-named cache would otherwise prevent every retry.
+                // Remove ONLY this untrusted download; never an installed site.
+                File.Delete(destination);
+                throw new InvalidDataException("The cached download was damaged and removed. Click Download & Install to retry.");
+            }
 #if !TEST_BUILD
+            // Trust failures are not treated as ordinary cache corruption.
+            // Preserve the file for trusted support; never execute it.
             InstallerTrust.VerifySignedInstaller(destination, plan.Signer);
 #endif
             return destination;
         }
         long offset = File.Exists(part) ? new FileInfo(part).Length : 0;
-        if (offset > plan.Bytes) throw new InvalidDataException("A partial download exceeds the published installer size.");
+        if (offset > plan.Bytes) {
+            // An oversized partial is unrecoverable with HTTP Range.
+            File.Delete(part);
+            throw new InvalidDataException("The partial download was invalid and removed. Click Download & Install to retry.");
+        }
         if (offset != plan.Bytes) {
             // TLS 1.2 required by GitHub. HttpWebRequest handles HTTPS redirects,
             // but the resulting address must remain HTTPS. Never send secrets.
@@ -306,6 +319,21 @@ public sealed class OnlineSetup : Form {
             if (worker.IsBusy) { worker.CancelAsync(); args.Cancel = true; }
         };
     }
+    private static void RefuseExistingInstallation(string root) {
+        // The signed offline setup installs to Customer under the same root.
+        if (Directory.Exists(Path.Combine(root, "Customer")))
+            throw new InvalidDataException("Existing TOEFL House installation detected. Use the existing launcher. No download or reinstall was attempted.");
+        // Older portable/customer-kit installations may reside on the Desktop.
+        // Detect only actual ERP data, not a source checkout with the same name.
+        string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        foreach (string name in new string[] { "TOEFL-House-ERP", "TOFEL-House-ERP", "TOEFL House ERP" }) {
+            string data = Path.Combine(desktop, name, "product", "data");
+            if (File.Exists(Path.Combine(data, "secrets", "db.env")) ||
+                Directory.Exists(Path.Combine(data, "sites")) ||
+                Directory.Exists(Path.Combine(data, ".installation-claim")))
+                throw new InvalidDataException("Existing portable ERP data was detected on the Desktop. Use the installed launcher or contact support.");
+        }
+    }
     [STAThread]
     public static int Main(string[] args) {
         try {
@@ -321,8 +349,7 @@ public sealed class OnlineSetup : Form {
 #endif
             if (args.Length != 0) throw new InvalidDataException("Unsupported setup arguments.");
             string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TOEFL House ERP");
-            if (Directory.Exists(Path.Combine(root, "Customer")))
-                throw new InvalidDataException("Existing TOEFL House installation detected. Use the existing launcher. No download or reinstall was attempted.");
+            RefuseExistingInstallation(root);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new OnlineSetup(plan, root));
