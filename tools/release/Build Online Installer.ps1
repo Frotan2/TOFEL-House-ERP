@@ -40,7 +40,8 @@ try {
     }
     $output = [IO.Path]::GetFullPath($OutputExe)
     if ([IO.Path]::GetExtension($output) -ine '.exe' -or
-        (Test-Path -LiteralPath $output) -or $output -ieq $signed.FullName) {
+        (Test-Path -LiteralPath $output) -or (Test-Path -LiteralPath ($output + '.sha256')) -or
+        $output -ieq $signed.FullName) {
         throw 'Choose a new online EXE output location. Existing release artifacts are never overwritten.'
     }
     [IO.Directory]::CreateDirectory((Split-Path -Parent $output)) | Out-Null
@@ -72,9 +73,20 @@ try {
     if ((Get-Item -LiteralPath $temporaryExe).Length -gt 20MB) {
         throw 'The online bootstrap exceeded its 20 MB small-installer design limit.'
     }
+    # Stage both artifacts, refuse collisions, and never overwrite another
+    # release's checksum even if that sidecar already exists.
+    $sidecarStaging = Join-Path $staging 'online-setup.sha256'
+    [IO.File]::WriteAllText($sidecarStaging,
+        ((Get-FileHash -LiteralPath $temporaryExe).Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($output) + [Environment]::NewLine))
     [IO.File]::Move($temporaryExe, $output)
-    [IO.File]::WriteAllText($output + '.sha256',
-        ((Get-FileHash -LiteralPath $output).Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($output) + [Environment]::NewLine))
+    try {
+        [IO.File]::Move($sidecarStaging, $output + '.sha256')
+    } catch {
+        # Avoid publishing an orphaned EXE if the sidecar appeared concurrently.
+        # Restore to staging rather than deleting signed release bytes.
+        [IO.File]::Move($output, $temporaryExe)
+        throw 'Online installer checksum destination already exists or is unwritable.'
+    }
     Write-Host ('Online setup built and signed: ' + $output)
     Write-Host ('Published offline target must be: ' + $uri)
     Write-Host ('Required signed offline asset SHA-256: ' + $hash)
