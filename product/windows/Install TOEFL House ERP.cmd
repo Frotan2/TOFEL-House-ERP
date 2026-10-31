@@ -56,7 +56,7 @@ set DAEMON_TRIES=60
 powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5" >nul 2>nul
 docker info >nul 2>nul && goto :dockerup
 set /a DAEMON_TRIES-=1
-if DAEMON_TRIES GTR 0 goto :waitdaemon
+if %DAEMON_TRIES% GTR 0 goto :waitdaemon
 echo  Docker Desktop did not finish starting within 5 minutes.
 goto :failed
 :dockerup
@@ -130,7 +130,7 @@ goto :ready
 :preparing
 echo  Still preparing... site setup can take 15-40 minutes on first run.
 set /a READY_TRIES-=1
-if READY_TRIES GTR 0 goto :waitready
+if %READY_TRIES% GTR 0 goto :waitready
 echo  The first run did not finish within 50 minutes.
 goto :failed
 :ready
