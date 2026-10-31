@@ -59,6 +59,20 @@ try {
     $oldCount = @([IO.File]::ReadAllLines($logFile)).Count
     Probe $exe $destRoot $true
     if (@([IO.File]::ReadAllLines($logFile)).Count -ne $oldCount) { throw 'Cache missed.' }
+    # Corrupt completed cache must be discarded, not trap users in endless retries.
+    [IO.File]::WriteAllText($dest, 'CORRUPTED-SYNTHETIC-CACHE')
+    Probe $exe $destRoot $false
+    if (Test-Path -LiteralPath $dest) { throw 'Corrupted completed cache was not removed.' }
+    Probe $exe $destRoot $true
+    if ((Get-FileHash $dest).Hash.ToLowerInvariant() -ne $hash) { throw 'Cache retry did not recover.' }
+    Remove-Item $dest -Force
+    # An impossible oversized partial must also be recoverable.
+    $tooLarge = New-Object byte[] ($data.Length + 1)
+    [IO.File]::WriteAllBytes(($dest + '.part'), $tooLarge)
+    Probe $exe $destRoot $false
+    if (Test-Path -LiteralPath ($dest + '.part')) { throw 'Oversized partial was not removed.' }
+    Probe $exe $destRoot $true
+    if ((Get-FileHash $dest).Hash.ToLowerInvariant() -ne $hash) { throw 'Oversized-part retry did not recover.' }
     Remove-Item $dest -Force
     $prefix = New-Object byte[] 65536
     [Array]::Copy($data, 0, $prefix, 0, $prefix.Length)
@@ -75,9 +89,19 @@ try {
     Probe $bad $badRoot $false
     $forbidden = Join-Path $badRoot ('Downloads/TOEFL-House-ERP-Setup-' + $badHash.Substring(0,16) + '.exe')
     if (Test-Path $forbidden) { throw 'Tampered download was published.' }
+    $existingRoot = Join-Path $work 'existing'
+    [IO.Directory]::CreateDirectory((Join-Path $existingRoot 'Customer')) | Out-Null
+    $existingOutput = @(& $exe --probe-installation $existingRoot 2>&1)
+    if ($LASTEXITCODE -eq 0 -or ($existingOutput -join ' ') -notmatch 'Existing TOEFL House installation') {
+        throw 'Bootstrap did not refuse a known existing customer installation.'
+    }
+    $freshRoot = Join-Path $work 'no-customer'
+    & $exe --probe-installation $freshRoot | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Bootstrap refused an empty customer location.' }
     $builder = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '../../tools/release/Build Online Installer.ps1'))
-    if ($builder.Contains('/define:TEST_BUILD') -or -not $builder.Contains('Set-AuthenticodeSignature')) {
-        throw 'Provider signing boundary absent.'
+    if ($builder.Contains('/define:TEST_BUILD') -or -not $builder.Contains('Set-AuthenticodeSignature') -or
+        -not $builder.Contains("(Test-Path -LiteralPath (" + '$output' + " + '.sha256'))")) {
+        throw 'Provider signing or checksum collision boundary absent.'
     }
     Write-Host 'Smart online setup: download, cache, range resume, SHA refusal PASS.'
 } finally {
