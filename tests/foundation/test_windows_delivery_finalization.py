@@ -87,6 +87,12 @@ class InstalledImageIdentityTests(unittest.TestCase):
         self.assertLess(REPAIR.index(r"if exist data\updates\journal.json goto :updaterepairhold"),
                         REPAIR.index(r'docker load -i "release\toefl-house-erp-app.tar"'))
 
+    def test_repair_must_not_mutate_protected_activation_acls(self):
+        self.assertIn(r"if not exist data\activation\installed-image-identity.json goto :failed", REPAIR)
+        self.assertNotIn("icacls data\\activation", REPAIR.lower())
+        self.assertNotIn("mkdir data\\activation", REPAIR.lower())
+        self.assertIn("-VerifyLoadedImage", REPAIR)
+
 
 class OwnerHandbookDeliveryTests(unittest.TestCase):
     def test_gui_opens_the_handbook_read_only(self):
