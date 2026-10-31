@@ -187,6 +187,37 @@ class LifecyclePreservationTests(unittest.TestCase):
             INSTALL.index("docker compose up -d --no-build"),
         )
 
+    def test_first_install_checks_storage_and_claims_before_docker_import(self):
+        # Importing a runtime image mutates shared Docker tags. Even this
+        # must be refused when a prior site or database volume exists.
+        preflight = INSTALL.index("Checking that no prior database or site exists")
+        first_check = INSTALL.index("Test Fresh Installation.ps1")
+        verify = INSTALL.index("Checking package integrity before local installation")
+        claim = INSTALL.index('mkdir "data\\.installation-claim"')
+        runtime = INSTALL.index("Import Offline Runtime.ps1")
+        app = INSTALL.index('docker load -i "release\\\\toefl-house-erp-app.tar"')
+        self.assertLess(preflight, first_check)
+        self.assertLess(first_check, verify)
+        self.assertLess(verify, claim)
+        self.assertLess(claim, runtime)
+        self.assertLess(runtime, app)
+        self.assertIn('if exist "data\\.installation-claim" goto :alreadyinstalled', INSTALL)
+        self.assertIn('if errorlevel 1 goto :alreadyinstalled', INSTALL)
+        self.assertIn('if exist data\\secrets\\db.env goto :alreadyinstalled', INSTALL)
+        self.assertNotIn('goto :secretok', INSTALL)
+
+    @unittest.skipUnless(os.name == "nt", "Requires Windows cmd.exe")
+    def test_install_claim_is_exclusive_on_windows(self):
+        # Actual CMD/NTFS behavior: a second installer cannot create the
+        # same claim directory in the disposable test location.
+        with tempfile.TemporaryDirectory(prefix="th-install-claim-") as tmp:
+            claim = Path(tmp) / ".installation-claim"
+            command = ["cmd.exe", "/d", "/c", "mkdir", str(claim)]
+            first = subprocess.run(command, capture_output=True, text=True, timeout=5)
+            second = subprocess.run(command, capture_output=True, text=True, timeout=5)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertNotEqual(second.returncode, 0, "Duplicate install claim was accepted")
+
     def test_install_reports_a_changed_package_with_partial_state_guidance(self):
         self.assertIn("if errorlevel 1 goto :packagechanged", INSTALL)
         self.assertIn("\n:packagechanged", INSTALL)
