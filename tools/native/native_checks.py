@@ -5761,17 +5761,17 @@ def main():
                            ('odcp-retire-tieb-00001','SYN-DISC-TIE-B'),
                            ('odcp-retire-gen-000001','SYN-DISC-GEN')):
                 as_user('course_owner',lambda k=k,code=code:acm.set_discount_rule_status(k,code,0))
-            # only EVE (non-matching) and the retired set remain: new issuances
-            # must bill gross on a fresh structure
+            # Only EVE (non-matching) and the retired set remain. Revise the
+            # single draft catalog to tuition-only; never introduce a second
+            # competing active plan just to test a new issuance.
             frappe.set_user('Administrator')
-            comp=frappe.get_doc('Company','TOEFL House')
-            fs3=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
-                program=cat['program'],academic_year=cat['academic_year'],
-                receivable_account=comp.default_receivable_account,
-                income_account=comp.default_income_account,
-                cost_center=comp.cost_center,company='TOEFL House'))
-            fs3.append('components',{'fees_category':'SYN-Tuition','amount':25000})
-            fs3.insert()
+            fs3=frappe.get_doc('Fee Structure',fsx['fs2'])
+            original=[row for row in fs3.components if row.name==fsx['original_component']]
+            assert len(original)==1 and float(original[0].amount)==25000
+            fs3.set('components',original)
+            fs3.save()
+            assert len(frappe.get_doc('Fees',fdisc['fees']).components)==2
+            assert float(frappe.db.get_value('Fees',fdisc['fees'],'grand_total'))==26000
             fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
                 'odcp-fee-post-retire-01',odcp_learners['retirement']['program_enrollment'],fs3.name,
                 '2026-09-07','2026-10-07'))
