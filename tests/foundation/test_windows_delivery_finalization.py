@@ -117,6 +117,23 @@ class LifecyclePreservationTests(unittest.TestCase):
                     f"{name} must not use a FOR command",
                 )
 
+    def test_customer_retry_loops_use_numeric_values_and_stop_at_zero(self):
+        # CMD does not expand bare names in IF comparisons. Comparing a
+        # literal such as DAEMON_TRIES to 0 can loop forever on failed Docker
+        # startup, leaving the GUI indefinitely at a preparing state.
+        # These linear batch scripts must expand %%NAME%% on every iteration.
+        for name, script, loops in (
+            ("Install", INSTALL, (("DAEMON_TRIES", "waitdaemon"), ("READY_TRIES", "waitready"))),
+            ("Start", START, (("DAEMON_TRIES", "waitdaemon"), ("READY_TRIES", "waitready"))),
+            ("Repair", REPAIR, (("READY_TRIES", "waitready"),)),
+        ):
+            for counter, label in loops:
+                with self.subTest(script=name, counter=counter):
+                    self.assertRegex(script, rf"(?m)^set {counter}=[1-9][0-9]*$")
+                    self.assertRegex(script, rf"(?m)^set /a {counter}-=1$")
+                    self.assertRegex(script, rf"(?m)^if %{counter}% GTR 0 goto :{label}$")
+                    self.assertNotRegex(script, rf"(?m)^if {counter} GTR 0 goto")
+
     def test_install_orders_verification_before_credentials_and_data(self):
         self.assertLess(
             INSTALL.index("Checking package integrity before local installation"),
