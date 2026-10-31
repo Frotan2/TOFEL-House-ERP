@@ -378,8 +378,10 @@ class CustomerPackageManifestTests(unittest.TestCase):
         release = package / "product/release"
         if inspect is None:
             saved = json.loads((release / "release-manifest.json").read_text(encoding="utf-8"))
+            image_config = json.loads(self.members[self.config_digest.removeprefix("sha256:") + ".json"])
             inspect = {"Id": saved["image"]["config_digest"], "RepoTags": [IMAGE_TAG],
-                       "Config": {"Labels": dict(self.labels)}}
+                       "Config": {"Labels": dict(self.labels)},
+                       "RootFS": {"Layers": image_config["rootfs"]["diff_ids"]}}
         env = dict(os.environ, TH_TEST_VERIFY_SCRIPT=str(package / "product/windows/Verify Package Image.ps1"),
                    TH_TEST_RELEASE=str(release), TH_TEST_DOCKER_EXIT=str(docker_exit),
                    TH_TEST_INSPECT=json.dumps(inspect) if not isinstance(inspect, str) else inspect)
@@ -423,7 +425,8 @@ exit $LASTEXITCODE
         # equal the config digest already checked against the archive bytes.
         # A changed ID with unchanged labels must now be REFUSED, not accepted.
         result = self.run_verifier(package, loaded=True, inspect={
-            "Id": "sha256:" + "c" * 64, "RepoTags": [IMAGE_TAG], "Config": {"Labels": self.labels}})
+            "Id": "sha256:" + "c" * 64, "RepoTags": [IMAGE_TAG], "Config": {"Labels": self.labels},
+            "RootFS": {"Layers": json.loads(self.members[self.config_digest.removeprefix("sha256:") + ".json"])["rootfs"]["diff_ids"]}})
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("does not match", result.stdout + result.stderr)
 
@@ -524,7 +527,8 @@ exit 0
     def test_windows_verifier_rejects_loaded_identity_mismatches(self):
         package, _, manifest = self.create()
         valid = {"Id": manifest["image"]["config_digest"], "RepoTags": [IMAGE_TAG],
-                 "Config": {"Labels": dict(self.labels)}}
+                 "Config": {"Labels": dict(self.labels)},
+                 "RootFS": {"Layers": json.loads(self.members[self.config_digest.removeprefix("sha256:") + ".json"])["rootfs"]["diff_ids"]}}
         bad = [dict(valid, RepoTags=["toefl-house-erp-app:ci"]),
                {}, [], "not-json"]
         for key, value in (("org.toefl-house.source-revision", "b" * 40),
