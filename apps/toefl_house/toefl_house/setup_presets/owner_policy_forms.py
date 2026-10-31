@@ -1,6 +1,6 @@
 """Human-friendly initial academic policy form; no JSON entered by the Owner.
 
-Only brand-new GE/EAP policies are supported. The underlying academic command
+Only graded program templates are supported for initialization. The underlying academic command
 remains the authority for permissions, native links, dates, audit, replay and
 transaction rollback. No policy is activated automatically at installation.
 """
@@ -32,20 +32,29 @@ def whole_number(value, label, minimum, maximum):
     return int(number)
 
 
+def graded_template_family_codes():
+    return tuple(row["code"] for row in load_preset()["programs"]
+                 if row.get("progression_kind") == "sequential")
+
+
 def initial_assessment_values(family, policy, passing_score, retake_wait_days):
     """Resolve the approved family template using only scalar Owner inputs."""
     preset = load_preset()
     programs = {row["code"]: row for row in preset["programs"]}
-    if family not in ("GEN-ENG", "EAP") or family not in programs:
+    if family not in graded_template_family_codes() or family not in programs:
         raise ValueError(
-            "This graded assessment form supports General English and EAP only; "
+            "This form supports graded program templates only; "
             "Special Speaking and TOEFL Preparation use separate progress reports")
     if not isinstance(policy, str) or not policy.strip():
         raise ValueError("Choose an existing academic assessment policy first")
-    pass_score = whole_number(passing_score, "Pass mark", 1, 100)
-    waiting = whole_number(retake_wait_days, "Retake wait", 7, 365)
-
     facets = build_assessment_facets(family, preset)
+    if passing_score is None:
+        passing_score = facets["pass_rules"]["overall"]["value"]
+    minimum_wait = facets["retakes"]["wait_days"]
+    if retake_wait_days is None:
+        retake_wait_days = minimum_wait
+    pass_score = whole_number(passing_score, "Pass mark", 1, 100)
+    waiting = whole_number(retake_wait_days, "Retake wait", minimum_wait, 365)
     if set(facets) != {
         "components", "weights", "pass_rules", "rubrics",
         "progression", "retakes", "level_mapping",
@@ -54,8 +63,6 @@ def initial_assessment_values(family, policy, passing_score, retake_wait_days):
     facets["pass_rules"]["overall"] = {"kind": "percent", "value": pass_score}
     facets["retakes"]["wait_days"] = waiting
     # No additional retake: one initial attempt and one retake, retaining best.
-    facets["retakes"]["max_attempts"] = 2
-    facets["retakes"]["governing"] = "best"
     for evidence in facets["progression"]["requires"]:
         if evidence.get("kind") == "assessment_pass":
             evidence["policy"] = policy.strip()
@@ -65,9 +72,9 @@ def initial_assessment_values(family, policy, passing_score, retake_wait_days):
 @frappe.whitelist(methods=["POST"])
 def configure_initial_assessment(
         request_key, policy, effective_from, reason, grading_scale,
-        passing_score=60, retake_wait_days=7,
-        speaking=25, listening=20, writing=20, reading=15,
-        grammar=10, vocabulary=10, continuous_percent=40):
+        passing_score=None, retake_wait_days=None,
+        speaking=None, listening=None, writing=None, reading=None,
+        grammar=None, vocabulary=None, continuous_percent=None):
     """Create one audited initial version from normal numeric form controls.
 
     The User interface never asks for a code, JSON object, schema or command.
@@ -92,9 +99,13 @@ def configure_initial_assessment(
     try:
         facets = initial_assessment_values(
             family, policy, passing_score, retake_wait_days)
-        facets["weights"] = numeric_skill_distribution(
-            speaking, listening, writing, reading, grammar,
-            vocabulary, continuous_percent)
+        defaults = load_preset()["assessment"]
+        values = dict(speaking=speaking, listening=listening, writing=writing,
+                      reading=reading, grammar=grammar, vocabulary=vocabulary)
+        values = {name: defaults["skills_weight_percent"][name] if value is None else value
+                  for name, value in values.items()}
+        continuous = defaults["continuous_percent"] if continuous_percent is None else continuous_percent
+        facets["weights"] = numeric_skill_distribution(**values, continuous_percent=continuous)
     except ValueError as exc:
         raise frappe.ValidationError(str(exc)) from exc
     return academic.set_assessment_policy_version(
@@ -149,11 +160,11 @@ def revise_grading_weights(
         "TH Assessment Policy", {"code": policy.strip()},
         ["family", "status"], as_dict=True)
     if not record or record.status != "Active":
-        raise frappe.ValidationError("Choose an active GE or EAP assessment policy")
+        raise frappe.ValidationError("Choose an active graded assessment policy")
     family = frappe.db.get_value("TH Academic Program", record.family, "code")
-    if family not in ("GEN-ENG", "EAP"):
+    if family not in graded_template_family_codes():
         raise frappe.ValidationError(
-            "Skill-weight form applies to GE/EAP only; specialist courses "
+            "Skill-weight form applies to graded templates only; specialist courses "
             "have their own progress-report rules")
     try:
         weights = numeric_skill_distribution(

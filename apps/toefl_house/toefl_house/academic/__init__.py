@@ -637,6 +637,7 @@ def _managed_fee_structure(native_program, academic_year, company=""):
             "Finance must set it before fee plans can be configured")
     doc = frappe.get_doc({
         "doctype": FEE_STRUCTURE,
+        "docstatus": 0,
         "naming_series": FEE_STRUCTURE_NAMING,
         "program": native_program, "academic_year": academic_year,
         "company": company_name, "receivable_account": receivable,
@@ -995,9 +996,10 @@ def set_assessment_policy_version(request_key, policy, effective_from,
             if not versions:
                 raise frappe.ValidationError(
                     "Use the guided initial assessment form for a new policy")
-            if frappe.db.get_value(PROGRAM, doc.family, "code") not in ("GEN-ENG", "EAP"):
+            from toefl_house.setup_presets.owner_policy_forms import graded_template_family_codes
+            if frappe.db.get_value(PROGRAM, doc.family, "code") not in graded_template_family_codes():
                 raise frappe.ValidationError(
-                    "Numeric pass/retake revision is for GE and EAP only")
+                    "Numeric pass/retake revision is for graded templates only")
             from toefl_house.setup_presets.owner_policy_forms import whole_number
             try:
                 if passing_score is not None:
@@ -1028,11 +1030,12 @@ def set_assessment_policy_version(request_key, policy, effective_from,
         if skill_weights is not None:
             if initial_facets is not None or not versions:
                 raise frappe.ValidationError(
-                    "Change skill weights only on an existing GE/EAP grading "
+                    "Change skill weights only on an existing graded assessment "
                     "policy; use the initial guided form for the first version")
-            if frappe.db.get_value(PROGRAM, doc.family, "code") not in ("GEN-ENG", "EAP"):
+            from toefl_house.setup_presets.owner_policy_forms import graded_template_family_codes
+            if frappe.db.get_value(PROGRAM, doc.family, "code") not in graded_template_family_codes():
                 raise frappe.ValidationError(
-                    "Only GE/EAP grading policies support this weight editor")
+                    "Only graded assessment policies support this weight editor")
             components = rules.parse_facet("components", carried.get("components"))
             old_weights = rules.parse_facet("weights", carried.get("weights"))
             if (not isinstance(skill_weights, list) or len(skill_weights) != 12
@@ -1043,7 +1046,7 @@ def set_assessment_policy_version(request_key, policy, effective_from,
                     != {entry.get("component") for entry in old_weights}):
                 raise frappe.ValidationError(
                     "The proposed skill distribution must cover exactly "
-                    "the 12 existing GE/EAP assessment components")
+                    "the 12 existing graded assessment components")
             try:
                 from decimal import Decimal, InvalidOperation
                 try:

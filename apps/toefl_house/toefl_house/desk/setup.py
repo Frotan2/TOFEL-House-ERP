@@ -675,7 +675,7 @@ def _grading_items(policies, versions, today):
                                "The guarded grading and progression commands "
                                "exist, but no missing policy is inferred and "
                                "native operational acceptance remains required."),
-            "next": ("Create a graded GE/EAP assessment policy and complete "
+            "next": ("Create a graded graded assessment policy and complete "
                      "the numeric Owner setup. Do not publish grades until "
                      "the native plan, permissions and results are verified."),
             "next_role": "Course Owner",
@@ -789,7 +789,8 @@ def _assessment_actions(policy, readiness):
     so they are offered everywhere the version action is.
     """
     code = policy["code"]
-    graded = policy.get("family") in ("GEN-ENG", "EAP")
+    from toefl_house.setup_presets.owner_policy_forms import graded_template_family_codes
+    graded = policy.get("family") in graded_template_family_codes()
     retired = readiness == "retired"
     if retired:
         primary = guided_action(

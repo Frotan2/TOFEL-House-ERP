@@ -705,9 +705,9 @@ def get_contract_revision_form(contract):
     if doc.status != "Active":
         raise frappe.ValidationError(
             "Only an active instructor contract can be revised")
-    skills = list(doc.get("skill_terms") or [])
+    contract_skills = list(doc.get("skill_terms") or [])
     changes = list(doc.get("adjustments") or [])
-    if len(skills) > 6 or len(changes) > 2:
+    if len(contract_skills) > 6 or len(changes) > 2:
         raise frappe.ValidationError(
             "This contract contains more rows than the standard guided form "
             "supports. Do not use a partial revision or lose approved pay terms")
@@ -725,7 +725,7 @@ def get_contract_revision_form(contract):
              "rate": row.rate, "payable_quantity": row.payable_quantity,
              "minimum_amount": row.minimum_amount,
              "maximum_amount": row.maximum_amount}
-            for row in skills
+            for row in contract_skills
         ],
         "adjustments": [
             {"adjustment_type": row.adjustment_type, "amount": row.amount,

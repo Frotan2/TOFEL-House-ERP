@@ -35,7 +35,7 @@ distribution and commercial licensing before release.
 
 1. Check the publisher's Authenticode signature, release identity, installer
    digest and the full Git revision through the trusted provider.
-2. On a **new disposable acceptance PC only**, double-click the EXE. It
+2. In an **approved disposable Windows acceptance environment**, double-click the EXE. It
    verifies its embedded payload before extraction and publishes the
    extracted kit only after validation. The Windows setup step verifies
    bundled prerequisite SHA-256 hashes and trusted Microsoft/Docker
@@ -57,8 +57,9 @@ distribution and commercial licensing before release.
    require developer tooling.
 
 The current repository also has an image-inclusive **folder/VBS engineering
-fallback**. It can be used under provider supervision on a separate
-disposable test machine. It is **not** the accepted final customer delivery,
+fallback**. It can be used under provider supervision with an isolated test
+site on the existing Windows PC, preserving the Owner installation. This does
+not substitute for the clean offline first-install gate below. It is **not** the accepted final customer delivery,
 and an old GitHub Actions ZIP is not proof of an approved EXE.
 
 ## Provider-only building and verification

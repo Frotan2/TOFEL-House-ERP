@@ -184,7 +184,12 @@ class _FakeFrappe:
         matched = []
         for doc in self.store.get(doctype, {}).values():
             payload = doc._payload if hasattr(doc, "_payload") else doc
-            if all(payload.get(k) == v for k, v in dict(filters or {}).items()):
+            def matches(key, value):
+                actual = payload.get(key)
+                if isinstance(value, (list, tuple)) and len(value) == 2 and value[0] == "!=":
+                    return actual != value[1]
+                return actual == value
+            if all(matches(k, v) for k, v in dict(filters or {}).items()):
                 matched.append(dict(payload))
         if not matched and filters and "parent" in filters:
             parent_dt = filters.get("parenttype")

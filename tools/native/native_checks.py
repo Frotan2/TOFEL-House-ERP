@@ -5575,7 +5575,7 @@ def main():
         # but the receivable stayed at gross.
         from toefl_house import academic as acm
         def odcp_fixtures():
-            # Second Fee Structure (two lines) so per-line resolution is
+            # Reuse the one draft Fee Structure (two lines) so per-line resolution is
             # observable in one issuance. The family-scoped rule is exercised
             # only after the native Program used by Admission/Enrollment is
             # explicitly anchored to that TH Academic Program through a real
@@ -5619,17 +5619,14 @@ def main():
                     )],
                 )).insert(ignore_permissions=True)
             frappe.set_user('Administrator')
-            comp=frappe.get_doc('Company','TOEFL House')
-            fs2=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
-                program=cat['program'],academic_year=cat['academic_year'],
-                receivable_account=comp.default_receivable_account,
-                income_account=comp.default_income_account,
-                cost_center=comp.cost_center,company='TOEFL House'))
-            fs2.append('components',{'fees_category':'SYN-Tuition','amount':25000})
+            fs2=frappe.get_doc('Fee Structure',fin['fee_structure'])
+            assert fs2.docstatus==0 and len(fs2.components)==1
+            assert fs2.components[0].fees_category=='SYN-Tuition' and float(fs2.components[0].amount)==25000
+            original_component=fs2.components[0].name
             fs2.append('components',{'fees_category':'SYN-Books','amount':5000})
-            fs2.insert()
+            fs2.save()
             frappe.db.commit()
-            return {'fs2':fs2.name,'tuition':25000,'books':5000}
+            return {'fs2':fs2.name,'tuition':25000,'books':5000,'original_component':original_component}
         def odcp_seed_rules():
             # Six named draft rules, five explicitly activated + one left retired:
             # BIG broad 20% p5; TUI tuition 10% p9 (wins tuition);
@@ -5912,6 +5909,21 @@ def main():
         check('odcp-global-config-no-branch',traced(branch_free_money_config))
         check('odcp-legacy-vocabulary-absent',traced(legacy_vocabulary_absent))
         check('integration-journey-through-fees',traced(fee_receipt_chain))
+        def restore_odcp_draft_catalog():
+            # Keep later installments on the original 25,000-AFN contract.
+            # Issued Fees keep their copied discount/components and original ID.
+            frappe.set_user('Administrator')
+            structure=frappe.get_doc('Fee Structure',fsx['fs2'])
+            original=[row for row in structure.components if row.name==fsx['original_component']]
+            assert len(original)==1 and float(original[0].amount)==25000
+            structure.set('components',original)
+            structure.save()
+            frappe.db.commit()
+            assert len(frappe.get_doc('Fees',fdisc['fees']).components)==2
+            assert float(frappe.db.get_value('Fees',fdisc['fees'],'grand_total'))==26000
+            return {'same_native_structure':True,'original_component_id_preserved':True,
+                    'issued_discounted_fee_unchanged':True}
+        check('odcp-draft-catalog-restored-without-duplicate-plan',traced(restore_odcp_draft_catalog))
         # ---- Role-desk hosted qualification (Phase 2: D1-D6, U1, U9). ----
         # Every desk must LOAD over the real HTTP pipeline as its audience,
         # refuse non-audiences and guests, carry the governed class lifecycle

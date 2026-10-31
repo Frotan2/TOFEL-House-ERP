@@ -1333,7 +1333,7 @@ frappe.provide("toefl_house.role_desks");
 				{ fieldname: "drawer_expected_" + index, label: "Native ledger balance (AFN, view only)",
 					fieldtype: "Currency", read_only: 1, default: drawer.expected },
 				{ fieldname: "drawer_counted_" + index, label: "Actual counted amount (AFN) — use 0 if empty",
-					fieldtype: "Currency", description: "Enter your own physical count, never an assumed ledger amount." },
+					fieldtype: "Currency", description: "Enter your own physical count, never an assumed ledger amount. No payment or cash movement is created." },
 				{ fieldname: "drawer_note_" + index, label: "Explanation of a difference",
 					fieldtype: "Small Text" },
 			])];

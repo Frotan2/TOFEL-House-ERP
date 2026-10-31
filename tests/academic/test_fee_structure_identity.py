@@ -77,7 +77,7 @@ class ExistingFeeComponentsTests(unittest.TestCase):
             db=SimpleNamespace(exists=lambda doctype, name: True),
             ValidationError=ValueError)
         audit = SimpleNamespace(
-            execute=lambda _operation, _key, _payload, callback: callback("Course Owner"),
+            execute=lambda _operation, _key, _payload, callback: callback("Course Owner")[0],
             latest_after_hash=lambda target: "")
         context = {
             "frappe": frappe,

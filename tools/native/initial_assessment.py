@@ -9,6 +9,7 @@ import frappe
 
 def run(owner_user, forbidden_user):
     from toefl_house import academic
+    from toefl_house.administration import set_managed_role
     from toefl_house.academic import rules
     from toefl_house.policy import digest, request_digest
     from toefl_house.security import SYNTHETIC, site_mode
@@ -16,7 +17,7 @@ def run(owner_user, forbidden_user):
 
     assert site_mode() == SYNTHETIC and not frappe.conf.get("toefl_house_production_active")
     original_user = frappe.session.user
-    tables = ("TH Academic Program", "TH Program Level", "Program", "Program Course", "Course", "Room", "Grading Scale",
+    tables = ("User", "Has Role", "Version", "TH Academic Program", "TH Program Level", "Program", "Program Course", "Course", "Room", "Grading Scale",
               "Grading Scale Interval", "TH Assessment Policy", "TH Assessment Policy Version",
               "TH Configuration Operation", "TH Configuration Audit Event", "Fees", "GL Entry")
 
@@ -38,6 +39,19 @@ def run(owner_user, forbidden_user):
     frappe.db.savepoint("initial_assessment_root")
     try:
         frappe.set_user(owner_user)
+        staff = frappe.get_doc({"doctype": "User", "email": "initial-role-" + token.lower() + "@example.test",
+                               "first_name": "Synthetic staged staff", "enabled": 0,
+                               "send_welcome_email": 0, "user_type": "System User",
+                               "roles": [{"role": "Reception"}]})
+        staff.insert(ignore_permissions=True)
+        granted = set_managed_role(key + "grant-role", staff.name, "Enrollment Officer", True)
+        assert granted["changed"] is True
+        assert "Enrollment Officer" in {row.role for row in frappe.get_doc("User", staff.name).roles}
+        assert not frappe.db.get_value("User", staff.name, "enabled")
+        replay = set_managed_role(key + "grant-role", staff.name, "Enrollment Officer", True)
+        assert replay["replayed"] and replay["changed"]
+        set_managed_role(key + "revoke-role", staff.name, "Enrollment Officer", False)
+        assert "Enrollment Officer" not in {row.role for row in frappe.get_doc("User", staff.name).roles}
         for code in (family, foreign_family):
             academic.create_program(key + code.lower(), code, code, reason)
         for code, parent in ((level, family), (foreign_level, foreign_family)):
@@ -104,6 +118,9 @@ def run(owner_user, forbidden_user):
             key + "grade", bad_policy, day, reason, scale, bad_grade))
         assert not frappe.get_doc("TH Assessment Policy", bad_policy).versions
         frappe.set_user(forbidden_user)
+        refused(lambda: set_managed_role(key + "unauthorized-role", staff.name,
+                                        "Enrollment Officer", True), frappe.PermissionError)
+        assert "Enrollment Officer" not in {row.role for row in frappe.get_doc("User", staff.name).roles}
         refused(lambda: academic.create_room(key + "room-unauthorized", room_name + " denied", 15, reason),
                 frappe.PermissionError)
         refused(lambda: academic.set_assessment_policy_version(
@@ -116,6 +133,8 @@ def run(owner_user, forbidden_user):
         assert frappe.db.get_value("TH Configuration Operation", operation, "input_hash") == request_digest(
             original_payload, frappe.conf.get("encryption_key"))
         return {"native_database": True, "one_complete_initial_version": True,
+                "native_user_role_grant_replay_revoke_while_disabled": True,
+                "non_owner_role_grant_refused": True,
                 "new_levels_have_required_native_courses": True,
                 "native_room_creation_replay_and_duplicate_preservation": True,
                 "invalid_capacity_and_non_owner_room_creation_refused": True,

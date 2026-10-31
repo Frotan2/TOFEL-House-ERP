@@ -166,15 +166,17 @@ def set_managed_role(request_key, user, role, enabled):
             "audit_authority": "Version",
         }
 
-    current = set(target.get_roles())
+    current = {row.role for row in target.get("roles") or []}
     already = (role in current) == enabled
     if not already:
         if enabled:
-            target.add_roles(role)
+            target.append("roles", {"role": role})
         else:
-            target.remove_roles(role)
+            target.set("roles", [row for row in target.get("roles") or [] if row.role != role])
         target.save(ignore_permissions=True)
-        after = set(target.get_roles())
+        after = {row.role for row in target.get("roles") or []}
+        if (role in after) != enabled:
+            raise frappe.ValidationError("The native User role profile prevented this role change")
     else:
         after = current
 

@@ -69,7 +69,8 @@ class CustomerDocumentationContractTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertRegex(source(path), r"(?is)offline.{0,160}(EXE|Setup)")
         delivery = source("docs/CUSTOMER-DELIVERY.md")
-        self.assertIn("Engineering-only folder/launcher fallback", delivery)
+        self.assertRegex(delivery, r"folder/VBS engineering\s+fallback")
+        self.assertIn("**not** the accepted final customer delivery", delivery)
         handbook = source("product/windows/OWNER HANDBOOK.txt")
         self.assertIn("ENGINEERING", handbook)
         self.assertIn("NOT yet passed", handbook)

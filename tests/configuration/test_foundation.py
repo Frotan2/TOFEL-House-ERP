@@ -540,7 +540,7 @@ class D1CommandContractTests(unittest.TestCase):
                                      "title", "description"],
         "set_assessment_policy_version": ["request_key", "policy",
                                           "effective_from", "reason",
-                                          "grading_scale", "initial_facets"],
+                                          "grading_scale", "initial_facets", "passing_score", "retake_wait_days", "skill_weights"],
         "set_assessment_policy_status": ["request_key", "policy", "active"],
         "validate_assessment_policy": ["request_key", "policy"],
         "set_assessment_components": ["request_key", "policy",
@@ -670,7 +670,7 @@ class ConfigurationNavigationTests(unittest.TestCase):
             "toefl_house.academic.create_assessment_policy":
                 ["family", "code", "title", "description"],
             "toefl_house.academic.set_assessment_policy_version":
-                ["policy", "effective_from", "reason", "grading_scale", "initial_facets"],
+                ["policy", "passing_score", "retake_wait_days", "effective_from", "reason", "grading_scale"],
             "toefl_house.academic.set_assessment_policy_status":
                 ["policy", "active"],
             "toefl_house.academic.validate_assessment_policy": ["policy"],

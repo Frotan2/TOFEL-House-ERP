@@ -14,9 +14,11 @@ ROOT = Path(__file__).resolve().parents[2]
 class ReleaseHoldContract(unittest.TestCase):
     def test_readme_prominently_states_the_active_hold(self):
         text = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("CURRENT RELEASE HOLD — READ BEFORE SETUP", text)
-        self.assertIn("Do not edit or validate policies", text)
-        self.assertIn("Production authorization remains **REJECTED**", text)
+        self.assertIn("NOT APPROVED FOR PRODUCTION", text)
+        self.assertIn("Production authorization: REJECT / NO-GO", text)
+        self.assertIn("TEST PACKAGE — NO REAL DATA", text)
+        self.assertIn("Preserve the existing Frappe site", text)
+        self.assertIn("activate production on that computer", text)
 
     def test_handover_does_not_authorize_policy_mutation_during_hold(self):
         text = (ROOT / "docs/engineering/HANDOVER-2026-10-20.md").read_text(

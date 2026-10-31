@@ -11,9 +11,11 @@ in [draft PR #120](https://github.com/Frotan2/TOFEL-House-ERP/pull/120).
 
 > **Existing Owner installation:** Preserve the existing Frappe site,
 > `product/data`, Docker volumes, credentials, encrypted backups, and
-> recovery keys. During the release hold, use only the documented read-only
-> status checks. Do not reinstall, repair, update, restore, delete volumes or
-> activate production on that computer.
+> recovery keys. Routine use during the release hold is limited to documented
+> read-only status checks. The Owner has separately authorized preserved,
+> backed-up configuration and isolated synthetic acceptance on this PC;
+> engineering must retain the authorization and evidence for each operation.
+> Do not reinstall, reset, delete volumes or activate production on that computer.
 
 ## Product scope
 

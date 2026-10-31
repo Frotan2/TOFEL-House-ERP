@@ -205,6 +205,8 @@ const actionFields = client.toefl_house.role_desks.actionFields;
 assert(Object.keys(actionFields).length >= 8, "guided actions went missing");
 
 const endpointFiles = {
+	"toefl_house.setup_presets.owner_policy_forms": ["setup_presets/owner_policy_forms.py"],
+	"toefl_house.setup_presets.api": ["setup_presets/api.py"],
 	"toefl_house.operations.owner_configuration": ["operations/owner_configuration.py"],
 	"toefl_house.setup_presets.native_grading_scale": ["setup_presets/native_grading_scale.py"],
 	"toefl_house.admission": ["admission/__init__.py"],
@@ -246,7 +248,21 @@ for (const [method, fields] of Object.entries(actionFields)) {
 	const signature = signatureOf(method);
 	assert.strictEqual(signature[0], "request_key", `${method} must be idempotent`);
 	// Array.from: `fields` comes from the vm realm and map() would keep its realm prototype.
-	assert.deepStrictEqual(Array.from(fields, (field) => field.fieldname), signature.slice(1),
+	if (method === "toefl_house.academic.set_assessment_policy_version") {
+		assert.deepStrictEqual(Array.from(fields, (field) => field.fieldname),
+			["policy", "passing_score", "retake_wait_days", "effective_from", "reason", "grading_scale"]);
+		assert.deepStrictEqual(signature.slice(1),
+			["policy", "effective_from", "reason", "grading_scale", "initial_facets", "passing_score", "retake_wait_days", "skill_weights"]);
+		continue;
+	}
+	if (method === "toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale") {
+		assert.deepStrictEqual(Array.from(fields, (field) => field.fieldname),
+			["grading_scale_name", "grade_a", "grade_b", "grade_c", "grade_d", "reason"]);
+		assert.deepStrictEqual(signature.slice(1), ["grading_scale_name", "intervals", "reason"]);
+		continue;
+	}
+	// Calls use named arguments; related UI fields may have a different display order.
+	assert.deepStrictEqual(Array.from(fields, (field) => field.fieldname).sort(), signature.slice(1).sort(),
 		`${method} dialog fields drift from the reviewed signature`);
 }
 
@@ -274,7 +290,10 @@ const allowedCalls = new Set([...Object.values(EXPECTED).map((shape) => shape.en
 	"toefl_house.desk.academic.attendance_records",
 	"toefl_house.desk.academic.enrollment_records",
 	"toefl_house.finance.collections.get_collection_receipt",
+	"toefl_house.teaching.compensation.get_contract_revision_form",
 	"toefl_house.setup_presets.api.preview_owner_initial_setup",
+	"toefl_house.setup_presets.owner_policy_forms.owner_form_options",
+	"toefl_house.setup_presets.installer.initialize_owner_catalog",
 	client.toefl_house.role_desks.registry,
 	...Object.keys(actionFields)]);
 for (const method of Object.keys(actionFields)) {

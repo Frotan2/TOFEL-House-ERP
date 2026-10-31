@@ -25,7 +25,7 @@ class OfflineInstallerSigningTests(unittest.TestCase):
         self.assertLess(BUILDER.index("& $partial --verify-payload"),
                         BUILDER.index("[IO.File]::Move($partial, $output)"))
         self.assertIn("The assembled Windows installer failed self-verification.", BUILDER)
-        self.assertIn("SourceRevision", BUILDER)
+        self.assertIn("$manifest.source_revision", BUILDER)
 
     def test_existing_installer_never_reinitializes_a_site(self):
         existing = SETUP.split("if (Directory.Exists(target)) {", 1)[1].split(
