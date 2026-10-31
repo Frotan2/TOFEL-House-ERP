@@ -1184,7 +1184,8 @@ function Invoke-UpdateInstall($Check) {
     # silently fall back to the old factory manifest on the next daily Start.
     & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (
         Join-Path $PSScriptRoot 'Verify Package Image.ps1'
-    ) -VerifyLoadedImage -RecordSignedUpdateImage -ExpectedUpdatedImageId $candidateImageId
+    ) -VerifyLoadedImage -RecordSignedUpdateImage -ExpectedUpdatedImageId $candidateImageId `
+       -ExpectedUpdatedVersion $Check.Version -ExpectedUpdatedRevision ([string]$Check.Response.target.source_revision)
     if ($LASTEXITCODE -ne 0) {
         Set-JournalState "recovery-required" $Check.Version
         Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
