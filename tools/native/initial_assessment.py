@@ -14,6 +14,7 @@ def run(owner_user, forbidden_user):
     from toefl_house.policy import digest, request_digest
     from toefl_house.security import SYNTHETIC, site_mode
     from toefl_house.setup_presets.native_grading_scale import create_owner_grading_scale
+    from toefl_house.setup_presets.owner_policy_forms import active_family_level_mapping
 
     assert site_mode() == SYNTHETIC and not frappe.conf.get("toefl_house_production_active")
     original_user = frappe.session.user
@@ -62,6 +63,8 @@ def run(owner_user, forbidden_user):
             assert len(native.courses) == 1 and native.courses[0].required
             assert frappe.db.exists("Course", native.courses[0].course)
         room_name = "Synthetic initial room " + token
+        assert active_family_level_mapping(family) == {"levels": [level]}
+        assert active_family_level_mapping(foreign_family) == {"levels": [foreign_level]}
         room = academic.create_room(key + "room", room_name, 15, reason)
         assert room == academic.create_room(key + "room", room_name, 15, reason)
         assert int(frappe.db.get_value("Room", room["name"], "seating_capacity")) == 15
@@ -136,6 +139,7 @@ def run(owner_user, forbidden_user):
                 "native_user_role_grant_replay_revoke_while_disabled": True,
                 "non_owner_role_grant_refused": True,
                 "new_levels_have_required_native_courses": True,
+                "initial_grading_mapping_uses_native_family_level_identities": True,
                 "native_room_creation_replay_and_duplicate_preservation": True,
                 "invalid_capacity_and_non_owner_room_creation_refused": True,
                 "same_key_replay": True, "historical_rewrite_refused": True,

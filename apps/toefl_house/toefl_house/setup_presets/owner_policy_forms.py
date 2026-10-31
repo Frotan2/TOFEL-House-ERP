@@ -37,6 +37,18 @@ def graded_template_family_codes():
                  if row.get("progression_kind") == "sequential")
 
 
+def active_family_level_mapping(family):
+    """Use native level identities, including preserved Owner catalog names."""
+    levels = frappe.get_all(
+        "TH Program Level", filters={"family": family, "status": "Active"},
+        fields=["code"], order_by="sequence asc, code asc", limit_page_length=101)
+    if not levels or len(levels) > 100:
+        raise frappe.ValidationError(
+            "The program needs between 1 and 100 active levels before its "
+            "initial assessment policy can be configured")
+    return {"levels": [level["code"] for level in levels]}
+
+
 def initial_assessment_values(family, policy, passing_score, retake_wait_days):
     """Resolve the approved family template using only scalar Owner inputs."""
     preset = load_preset()
@@ -99,6 +111,9 @@ def configure_initial_assessment(
     try:
         facets = initial_assessment_values(
             family, policy, passing_score, retake_wait_days)
+        # The clean-install template supplies policy values, not replacement
+        # identities for an existing Owner's native academic catalog.
+        facets["level_mapping"] = active_family_level_mapping(row.family)
         defaults = load_preset()["assessment"]
         values = dict(speaking=speaking, listening=listening, writing=writing,
                       reading=reading, grammar=grammar, vocabulary=vocabulary)

@@ -38,10 +38,18 @@ and staged staff scope have been prepared. All five prepared staff accounts
 remain disabled. Sample instructor HR details require later Owner correction;
 there is no invented approved salary or actual teaching assignment.
 
-Encrypted native backup artifacts were hash-verified on the reconnected backup
-drive. Later configuration still requires a new final checkpoint and independent
-restore qualification. Earlier recovery and Windows browser evidence remains
-historical; it cannot certify the final source/image.
+The configured Owner site has a fresh encrypted checkpoint on the reconnected
+backup drive. Independent restore into a new inactive site passed: 23 tables,
+Owner authentication/roles, encryption key, fiscal settings and policy versions
+matched. The five disabled staff accounts, roles and Company/Branch permissions
+also matched separately. Source records and drive artifact hashes remained
+unchanged. This used the existing runtime; final-image recovery qualification
+and Windows transaction acceptance remain open.
+
+The initial grading form now resolves level mapping from the actual native
+program family. Read-only checks on the Owner database verified its preserved
+GE level identities and current EAP catalog without adding or renaming records.
+The native transactional qualifier also verifies foreign-family separation.
 
 ## Open release gates
 
