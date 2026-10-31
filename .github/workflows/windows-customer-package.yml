@@ -364,7 +364,9 @@ jobs:
             Write-Host "::error::Update refusal did not explain the disabled channel."
             throw "Update refusal did not explain the disabled channel."
           }
-          if ($updateText -notmatch '\p{IsArabic}') { throw "Update refusal was not shown in Dari." }
+          if ($updateText -notmatch 'Your data was not changed\.' -or $updateText -match '\p{IsArabic}') {
+            throw "Update refusal must explain data preservation in the approved English interface."
+          }
           $updateResult = Join-Path $kit 'product/data/updates/last-result.json'
           if (-not (Test-Path -LiteralPath $updateResult -PathType Leaf)) {
             Write-Host "::error::Update refusal did not record a safe result."
