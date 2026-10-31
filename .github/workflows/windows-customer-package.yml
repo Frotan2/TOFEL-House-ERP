@@ -48,6 +48,7 @@ jobs:
             'product/windows/Prepare This PC.ps1',
             'product/windows/Import Offline Runtime.ps1',
             'tools/release/Build Customer Installer.ps1',
+            'tools/release/Build Online Installer.ps1',
             'product/windows/Check This PC.ps1',
             'product/windows/Verify Package Image.ps1',
             'product/windows/Prepare Customer Package.ps1',
