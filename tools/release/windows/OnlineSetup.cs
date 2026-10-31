@@ -346,6 +346,11 @@ public sealed class OnlineSetup : Form {
                 Console.WriteLine("TEST_ONLY_NO_LAUNCH: download integrity verified");
                 return 0;
             }
+            if (args.Length == 2 && args[0] == "--probe-installation") {
+                RefuseExistingInstallation(args[1]);
+                Console.WriteLine("TEST_ONLY_NO_LAUNCH: no installation found");
+                return 0;
+            }
 #endif
             if (args.Length != 0) throw new InvalidDataException("Unsupported setup arguments.");
             string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TOEFL House ERP");
@@ -356,8 +361,8 @@ public sealed class OnlineSetup : Form {
             return 0;
         } catch (Exception error) {
 #if TEST_BUILD
-            if (args.Length == 2 && args[0] == "--probe-download") {
-                Console.Error.WriteLine("Synthetic download refused: " + error.Message);
+            if (args.Length == 2 && (args[0] == "--probe-download" || args[0] == "--probe-installation")) {
+                Console.Error.WriteLine("Synthetic operation refused: " + error.Message);
                 return 1;
             }
 #endif
