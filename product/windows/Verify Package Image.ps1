@@ -246,18 +246,30 @@ try {
             $identity.original_release_revision -cne $release.source_revision) {
             throw "Loaded Docker image does not match the recorded, verified installed image ID."
         }
-        if ($identity.provenance -ceq 'factory') {
-            if ($sourceRevision -cne $release.source_revision -or $releaseVersion -cne $release.version) {
-                throw "Factory installation labels no longer match the original release."
-            }
-        } elseif ($identity.provenance -ceq 'signed-update') {
-            $journalPath = Join-Path $PSScriptRoot '..\data\updates\journal.json'
-            if (-not (Test-Path -LiteralPath $journalPath -PathType Leaf)) {
-                throw "The signed update journal is missing; refusing to start."
+        # A failed or interrupted signed update can leave the factory image
+        # loaded. Its old identity MUST NOT bypass the recovery-required journal.
+        $journalPath = Join-Path $PSScriptRoot '..\data\updates\journal.json'
+        $journal = $null
+        if (Test-Path -LiteralPath $journalPath -PathType Leaf) {
+            $journalInfo = Get-Item -LiteralPath $journalPath -Force
+            if (($journalInfo.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+                $journalInfo.Length -gt 262144) {
+                throw "The update journal is unsafe or malformed; refusing to start."
             }
             $journal = [IO.File]::ReadAllText($journalPath) | ConvertFrom-Json
             if ($journal.schema_version -ne 1 -or
                 $journal.document_type -cne 'toefl-house-erp-update-journal' -or
+                $journal.phase -cnotin @('idle', 'completed')) {
+                throw "An incomplete or unverified signed update requires recovery before daily Start."
+            }
+        }
+        if ($identity.provenance -ceq 'factory') {
+            if ($sourceRevision -cne $release.source_revision -or $releaseVersion -cne $release.version -or
+                ($null -ne $journal -and $journal.phase -cne 'idle')) {
+                throw "Factory installation identity conflicts with the update journal or original release."
+            }
+        } elseif ($identity.provenance -ceq 'signed-update') {
+            if ($null -eq $journal -or
                 $journal.phase -cne 'completed' -or
                 $journal.version -cne $releaseVersion) {
                 throw "The signed update was not completed or does not match the installed image."
