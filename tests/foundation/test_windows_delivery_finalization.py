@@ -61,6 +61,33 @@ def code_lines(script: str) -> str:
     return "\n".join(kept)
 
 
+class InstalledImageIdentityTests(unittest.TestCase):
+    def test_factory_install_records_loaded_image_before_starting_compose(self):
+        self.assertIn("-VerifyLoadedImage -RecordFactoryImage", INSTALL)
+        self.assertLess(INSTALL.index("-RecordFactoryImage"), INSTALL.index("docker compose up -d --no-build"))
+        self.assertIn("installed-image-identity.json", VERIFY)
+        self.assertIn("File]::Move($temporaryIdentity, $identityPath)", VERIFY)
+        self.assertIn("The verified installed-image record is missing", VERIFY)
+
+    def test_start_requires_pinned_image_id_not_just_labels(self):
+        self.assertIn('Verify Package Image.ps1" -VerifyLoadedImage', START)
+        self.assertIn("$identity.image_id -cne [string]$loaded.Id", VERIFY)
+        self.assertIn("Loaded Docker image does not match the recorded", VERIFY)
+        self.assertIn("journal.phase -cne 'completed'", VERIFY)
+        self.assertIn("journal.version -cne $releaseVersion", VERIFY)
+
+    def test_signed_update_records_identity_before_marking_completed(self):
+        self.assertLess(UPDATE.index("-RecordSignedUpdateImage -ExpectedUpdatedImageId"),
+                        UPDATE.index('Set-JournalState "completed" $Check.Version'))
+        self.assertIn("Set-JournalState \"recovery-required\" $Check.Version", UPDATE)
+        self.assertIn("[IO.File]::Replace($temporaryIdentity, $identityPath)", VERIFY)
+
+    def test_factory_repair_refuses_signed_update_journal(self):
+        self.assertIn(r"if exist data\updates\journal.json goto :updaterepairhold", REPAIR)
+        self.assertLess(REPAIR.index(r"if exist data\updates\journal.json goto :updaterepairhold"),
+                        REPAIR.index('docker load -i "release\toefl-house-erp-app.tar"'))
+
+
 class OwnerHandbookDeliveryTests(unittest.TestCase):
     def test_gui_opens_the_handbook_read_only(self):
         self.assertIn('$handbookFile = Join-Path $PSScriptRoot "OWNER HANDBOOK.txt"', GUI)
