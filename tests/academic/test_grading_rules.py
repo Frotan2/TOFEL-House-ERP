@@ -14,6 +14,7 @@ from decimal import Decimal
 from tests.academic._harness import load_pure_modules
 
 grading = load_pure_modules("academic.grading")
+academic_rules = load_pure_modules("academic.rules")
 policy = load_pure_modules("policy")
 
 
@@ -340,7 +341,7 @@ class ProgressionEvidenceTests(unittest.TestCase):
 
 class RetakeTests(unittest.TestCase):
     retakes = {"max_attempts": 2, "wait_days": 14, "scope": "full",
-               "governing": "latest"}
+               "governing": "best"}
 
     def test_a_first_attempt_after_the_wait_is_allowed(self):
         state = grading.retake_state(self.retakes, attempts_made=1,
@@ -371,7 +372,24 @@ class RetakeTests(unittest.TestCase):
                                      last_attempt_on="2026-09-01",
                                      on_date="2026-10-01")
         self.assertEqual(state["scope"], "full")
-        self.assertEqual(state["governing"], "latest")
+        self.assertEqual(state["governing"], "best")
+
+
+class BestFacetCompatibilityTests(unittest.TestCase):
+    def test_new_assessment_policies_reject_deprecated_first_and_latest(self):
+        for governing in ("first", "latest"):
+            with self.subTest(governing=governing):
+                facet = {"max_attempts": 2, "wait_days": 7,
+                         "scope": "full", "governing": governing}
+                with self.assertRaises(ValueError):
+                    academic_rules.canonical_facet("retakes", facet)
+
+    def test_historical_policy_versions_remain_parseable(self):
+        facet = {"max_attempts": 2, "wait_days": 7,
+                 "scope": "full", "governing": "latest"}
+        historical = academic_rules.validate_policy_facets(
+            {"retakes": json.dumps(facet)})
+        self.assertEqual(historical["retakes"]["governing"], "latest")
 
 
 class SnapshotTests(unittest.TestCase):

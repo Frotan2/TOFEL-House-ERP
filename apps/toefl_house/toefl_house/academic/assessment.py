@@ -33,6 +33,7 @@ from toefl_house.policy import digest
 from toefl_house.security import record_synthetic_flag, require_operational
 
 BOOK = "TH Assessment Book"
+DECISION = "TH Progression Decision"
 MARK = "TH Assessment Book Mark"
 CORRECTION = "TH Assessment Book Correction"
 RESULT = "TH Academic Result"
@@ -214,6 +215,7 @@ def _book_result(book, extra=None):
         "policy_effective_from": str(book.policy_effective_from),
         "status": book.status,
         "attempt": book.attempt,
+        "retake_student": book.get("retake_student") or "",
         "mark_count": len(book.get("marks") or []),
     }
     if extra:
@@ -221,14 +223,157 @@ def _book_result(book, extra=None):
     return result
 
 
-def _attempt_rows(student_group, policy):
-    return frappe.get_all(BOOK, filters={"student_group": student_group, "policy": policy},
+def _attempt_rows(student_group, level_name):
+    # Ordinals belong to the class and academic level, never the pinned
+    # assessment policy. Changing policy must not reset retake consumption.
+    return frappe.get_all(BOOK, filters={"student_group": student_group,
+                                         "level": level_name},
                           fields=["name", "attempt"], order_by="attempt desc")
+
+
+def _book_students(book):
+    """Students this book is authorized to assess, not the entire roster on a retake."""
+    members = roster(book.student_group)
+    retake_student = book.get("retake_student") or ""
+    if retake_student:
+        if retake_student not in members:
+            raise frappe.ValidationError(
+                "The retake student is no longer on this class's active roster")
+        return [retake_student]
+    return members
+
+
+def _lock_assessment_group(student_group):
+    """Serialize book opening/publication for this class in native MariaDB."""
+    frappe.db.sql("select name from `tabStudent Group` where name=%s for update",
+                  (student_group,))
+
+
+# --- Retake authorization for individually scoped books ---------------------
+# One published initial class book is permitted. Every subsequent book must
+# name a single failed student with a separate academic Retake authorization.
+# Book opening and publication recheck the student-specific permission and
+# never grant new results to classmates or reuse an approved retake.
+def _current_published_by_student(student_group, level_name):
+    """Current Published result per (student, attempt), highest revision wins."""
+    rows = frappe.get_all(RESULT,
+                          filters={"student_group": student_group,
+                                   "level": level_name, "status": "Published"},
+                          fields=["name", "student", "level", "book", "attempt",
+                                  "revision", "outcome", "published_on",
+                                  "policy", "policy_effective_from"])
+    current = {}
+    for row in rows:
+        key = (row.get("student"), int(row.get("attempt") or 1))
+        previous = current.get(key)
+        if previous is None or int(row.get("revision") or 1) > int(previous.get("revision") or 1):
+            current[key] = row
+    return current
+
+
+def _retake_authorization(student_group, level_name, on_date, *,
+                          next_attempt, student, exclude_book=None):
+    """Is a further book for this class+level authorized, and by whom?
+
+    Returns (True, student_name) only when this named student is
+    eligible, or (False, reason). Authorization requires ALL of:
+      (i) an Approved Retake decision exists for some result (any revision)
+          of that student at this level with the same attempt ordinal;
+      (ii) the student's current Published result for that attempt is Fail;
+      (iii) the wait has elapsed from that result's own publication date,
+          under its pinned retakes facet bounded by the mission's 7-day
+          floor (grading.wait_until_for_retake);
+      (iv) no Published retake result exists for the student at this level
+          with a higher attempt ordinal;
+      (v) no other in-progress (unpublished) book exists for this
+          class+level with a higher attempt ordinal — a Retake decision is
+          consumed exactly once, by the one retake book it authorizes.
+    The book itself is per-student on retakes; the first book stays
+    class-wide. Another student's decision never authorizes this book.
+    """
+    members = set(roster(student_group))
+    current = _current_published_by_student(student_group, level_name)
+    if not current:
+        return False, "No published result exists for this class and level"
+    books = frappe.get_all(BOOK, filters={"student_group": student_group,
+                                          "level": level_name},
+                           fields=["name", "attempt", "status", "retake_student"])
+    blockers = []
+    by_student_attempt = {}
+    for (source_student, attempt), row in current.items():
+        by_student_attempt.setdefault(source_student, {})[attempt] = row
+    # Authorization is strictly for the named student; an approval held by
+    # one classmate cannot permit publishing another classmate's result.
+    for candidate in sorted(by_student_attempt):
+        if candidate != student or candidate not in members:
+            continue
+        for attempt in sorted(by_student_attempt[candidate]):
+            row = by_student_attempt[candidate][attempt]
+            if row.get("outcome") != "Fail":
+                blockers.append(
+                    f"{candidate} attempt {attempt}: outcome is {row.get('outcome')}, "
+                    "not Fail")
+                continue
+            names = [item.get("name") for item in frappe.get_all(
+                RESULT, filters={"student": candidate, "level": level_name,
+                                 "attempt": attempt}, fields=["name"])]
+            decisions = frappe.get_all(
+                DECISION, filters={"academic_result": ["in", names],
+                                   "decision": "Retake", "status": "Approved"},
+                fields=["name"]) if names else []
+            if not decisions:
+                blockers.append(
+                    f"{candidate} attempt {attempt}: no approved Retake decision")
+                continue
+            try:
+                policy_code = frappe.db.get_value(POLICY, row.get("policy"), "code")
+                _doc, version = pinned_version(policy_code,
+                                               row.get("policy_effective_from"))
+                retakes = version_facets(version).get("retakes")
+            except Exception:
+                retakes = None
+            if not retakes:
+                blockers.append(
+                    f"{candidate} attempt {attempt}: no retake rules are configured")
+                continue
+            effective = grading.effective_retake_rules(retakes)
+            if (attempt >= effective["max_attempts"]
+                    or int(next_attempt) != attempt + 1):
+                blockers.append(
+                    f"{candidate} attempt {attempt}: retake ordinal or total-attempt "
+                    "limit does not match the next assessment book")
+                continue
+            wait_until = grading.wait_until_for_retake(
+                retakes.get("wait_days"), row.get("published_on") or "")
+            if str(on_date) < wait_until:
+                blockers.append(
+                    f"{candidate} attempt {attempt}: the retake wait ends on {wait_until}")
+                continue
+            if any(int(other.get("attempt") or 0) > attempt
+                   for (other_student, _), other in current.items()
+                   if other_student == candidate):
+                blockers.append(
+                    f"{candidate} attempt {attempt}: a retake attempt already exists")
+                continue
+            in_progress = [book for book in books
+                           if book.get("name") != exclude_book
+                           and int(book.get("attempt") or 0) > attempt
+                           and (not book.get("retake_student")
+                                or book.get("retake_student") == candidate)
+                           and book.get("status") != "Published"]
+            if in_progress:
+                blockers.append(
+                    f"{candidate} attempt {attempt}: a retake book is already in progress")
+                continue
+            return True, candidate
+    detail = "; ".join(blockers[:3])
+    return False, ("No approved retake authorizes a further book for this class"
+                   + (f": {detail}" if detail else ""))
 
 
 @frappe.whitelist(methods=["POST"])
 def open_assessment_book(request_key, student_group, policy, effective_from="",
-                         assessment_plan=""):
+                         assessment_plan="", retake_student=""):
     """Open one class's mark book against the governing policy version.
 
     Academic staff open the book; the governing version is pinned (effective
@@ -240,6 +385,7 @@ def open_assessment_book(request_key, student_group, policy, effective_from="",
         group_name = _text(student_group, "Student group")
         policy_code = _text(policy, "Assessment policy")
         roster(group_name)
+        _lock_assessment_group(group_name)
         group = frappe.db.get_value(GROUP, group_name, ["program", "academic_year"],
                                     as_dict=True)
         level = _level_for_program(group.program if group else None)
@@ -267,9 +413,33 @@ def open_assessment_book(request_key, student_group, policy, effective_from="",
             plan = _text(assessment_plan, "Native assessment plan")
             if not frappe.db.exists(PLAN, plan):
                 raise frappe.ValidationError("Unknown native assessment plan")
-        existing = _attempt_rows(group_name, policy_code)
-        next_attempt = (max(int(row["attempt"] or 0) for row in existing) + 1
-                        if existing else 1)
+        retaker = (_text(retake_student, "Retake student")
+                   if retake_student else "")
+        members = set(roster(group_name))
+        if retaker and retaker not in members:
+            raise frappe.ValidationError("The retake student is not on the class roster")
+        existing = _attempt_rows(group_name, level.name)
+        published = _current_published_by_student(group_name, level.name)
+        if retaker:
+            if not published:
+                raise frappe.ValidationError(
+                    "A first class assessment must be published before any retake")
+            # A distinct book per authorized student, always attempt two.
+            # Books for different students may share the ordinal without
+            # sharing results, authorization, or a native Assessment Result.
+            next_attempt = 2
+            allowed, reason = _retake_authorization(
+                group_name, level.name, today, next_attempt=next_attempt,
+                student=retaker)
+            if not allowed:
+                raise frappe.ValidationError(reason)
+        else:
+            if existing or published:
+                raise frappe.ValidationError(
+                    "An existing class assessment already holds the first attempt; "
+                    "a further assessment needs an explicitly named, approved "
+                    "retake student")
+            next_attempt = 1
         policy_digest = digest({
             "policy": policy_code,
             "effective_from": str(version.get("effective_from")),
@@ -286,6 +456,7 @@ def open_assessment_book(request_key, student_group, policy, effective_from="",
             "grading_scale": version.get("grading_scale") or "",
             "assessment_plan": plan,
             "attempt": next_attempt,
+            "retake_student": retaker,
             "status": "Open",
             "opened_by": actor,
             "opened_on": frappe.utils.now_datetime(),
@@ -302,7 +473,8 @@ def open_assessment_book(request_key, student_group, policy, effective_from="",
     return _execute("open_assessment_book", request_key,
                     {"student_group": student_group, "policy": policy,
                      "effective_from": effective_from,
-                     "assessment_plan": assessment_plan}, work)
+                     "assessment_plan": assessment_plan,
+                     "retake_student": retake_student}, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -324,9 +496,9 @@ def record_assessment_marks(request_key, book, marks):
                 "an academic correction needs its own command")
         _assigned_instructor(actor, doc.student_group)
         rows = _mark_rows(marks)
-        members = set(roster(doc.student_group))
+        members = set(_book_students(doc))
         if not members:
-            raise frappe.ValidationError("The class has no active students on its roster")
+            raise frappe.ValidationError("The assessment book has no eligible student")
         _doc, version = pinned_version(
             frappe.db.get_value(POLICY, doc.policy, "code"), doc.policy_effective_from)
         facets = version_facets(version)
@@ -445,7 +617,7 @@ def submit_assessment_book(request_key, book):
         if doc.status not in ("Open", "Returned"):
             raise frappe.ValidationError(f"A book that is {doc.status} cannot be submitted")
         _assigned_instructor(actor, doc.student_group)
-        members = roster(doc.student_group)
+        members = _book_students(doc)
         _doc, version = pinned_version(
             frappe.db.get_value(POLICY, doc.policy, "code"), doc.policy_effective_from)
         components = [row["code"] for row in version_facets(version).get("components") or []]
@@ -785,6 +957,7 @@ def publish_assessment_results(request_key, book):
                 "approval is required first")
         if not doc.approved_by:
             raise frappe.ValidationError("Publication requires a recorded approval")
+        _lock_assessment_group(doc.student_group)
         if doc.submitted_by and doc.submitted_by == doc.approved_by:
             raise frappe.PermissionError(
                 "The submitting instructor cannot be the approving actor")
@@ -795,9 +968,9 @@ def publish_assessment_results(request_key, book):
         state = grading.policy_state(facets, intervals)
         if not state["configured"]:
             raise frappe.ValidationError("; ".join(state["explanations"]))
-        members = roster(doc.student_group)
+        members = _book_students(doc)
         if not members:
-            raise frappe.ValidationError("The class has no active students on its roster")
+            raise frappe.ValidationError("The book has no eligible students")
         published = frappe.get_all(RESULT,
                                    filters={"book": doc.name, "status": "Published"},
                                    fields=["name", "student"])
@@ -805,6 +978,31 @@ def publish_assessment_results(request_key, book):
             raise frappe.ValidationError(
                 "Results are already published for this book; a change is an "
                 "academic correction, not a second publication")
+        # Publication is scoped to the explicitly authorized retake student.
+        # A legacy class-wide second book may never create a new result for
+        # students whose earlier Pass remains valid.
+        retaker = doc.get("retake_student") or ""
+        others = _current_published_by_student(
+            doc.student_group, doc.get("level") or "")
+        if retaker:
+            if int(doc.attempt or 0) != 2 or not others:
+                raise frappe.ValidationError(
+                    "An individual retake requires a published first attempt "
+                    "and exactly the second attempt ordinal")
+            allowed, reason = _retake_authorization(
+                doc.student_group, doc.get("level") or "",
+                frappe.utils.today(), next_attempt=2, student=retaker,
+                exclude_book=doc.name)
+            if not allowed:
+                raise frappe.ValidationError(reason)
+            if any(candidate.get("student") != retaker
+                   for candidate in doc.get("marks") or []):
+                raise frappe.ValidationError(
+                    "A retake book contains marks for an unauthorized student")
+        elif others or int(doc.attempt or 0) != 1:
+            raise frappe.ValidationError(
+                "A class-wide book is only valid for the first attempt; "
+                "retakes must name one authorized student")
         recorded = {}
         results = []
         outcomes = {"Pass": 0, "Fail": 0, "Incomplete": 0}

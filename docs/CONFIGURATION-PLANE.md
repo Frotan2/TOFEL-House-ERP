@@ -1,3 +1,10 @@
+> **Source-level architecture, with dated engineering evidence.** This
+> document explains the configured policy architecture; its dated inventory
+> and prior D1 release conclusions are not the current production decision.
+> Guarded assessment/progression consumers now exist but require approved
+> native policies and independent installed-site acceptance. See
+> [Documentation authority](DOCUMENTATION.md) for current-source precedence.
+>
 # The Academic Control Plane — Owner-Managed Configuration
 
 Date: 2026-09-18 · Inventory refreshed 2026-09-25; end-to-end policy-to-runtime audit refreshed 2026-10-09.

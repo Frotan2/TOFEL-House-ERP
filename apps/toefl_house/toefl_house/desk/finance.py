@@ -28,6 +28,9 @@ from toefl_house.desk import (
 
 from toefl_house.finance import cashier as cashier_money
 from toefl_house.finance import taxes as tax_configuration
+from toefl_house.finance import shamsi as solar_calendar
+from toefl_house.desk.collections import finance_sections
+from toefl_house.desk.tuition_refunds import refund_sections
 
 SLUG = "th-finance-desk"
 
@@ -401,14 +404,17 @@ def _compensation_items(contracts, instructors):
         items.append({
             "id": "payroll-period",
             "person": "Payroll period",
-            "detail": "Compensation posts once per period, from the active "
-                      "contracts and the recorded teaching facts.",
+            "detail": "Calculate auditable native Additional Salary drafts for eligible "
+                      "teaching facts. These are not submitted wages or payments.",
             "status": "Periodic",
             "stage": "Compensation period",
-            "stage_definition": ("One payroll-period calculation into native "
-                                 "payroll inputs; fixed-salary instructors "
-                                 "stay on their native salary structure."),
-            "next": "Run the calculation when the period closes.",
+            "stage_definition": ("Calculation prepares native Additional Salary drafts. "
+                                 "Authorized payroll staff must review and submit "
+                                 "them before HRMS Salary Slip; fixed-salary "
+                                 "instructors stay on native Salary Structure."),
+            "next": "Calculate when the period closes. Authorized payroll staff must "
+                    "review and submit the Additional Salary drafts, then process "
+                    "Salary Slip under normal HRMS approvals.",
             "next_role": "Finance Officer",
             "waiting_since": None,
         })
@@ -507,6 +513,28 @@ def work():
     from toefl_house.finance import policies as billing_policy
     installment_terms = billing_policy.governing_billing_terms()
 
+    if ((installment_terms or {}).get("installment_cadence") == "Solar Hijri Month"
+            and int(installment_terms.get("installments_allowed") or 0)):
+        grace = int(installment_terms.get("payment_grace_days") or 0)
+        # The contracted day is the Owner's value (1 unless another day such
+        # as the 25th is set). Proposing the month's first day under a 25th
+        # policy would offer an action the command must refuse.
+        due_day = int(installment_terms.get("installment_due_day") or 1)
+        first_solar_due = solar_calendar.monthly_due_dates(
+            solar_calendar.month_key(day), 1, grace, due_day)[0].isoformat()
+        day_label = ("first of each month" if due_day == 1
+                     else f"day {due_day} of each month")
+        installment_message = (
+            f"Solar Hijri monthly, {day_label} + {grace} grace days; "
+            f"up to {int(installment_terms.get('max_installments') or 0)} charges")
+    else:
+        first_solar_due = None
+        installment_message = (
+            f"Allowed, up to {int(installment_terms.get('max_installments') or 0)}"
+            f" every {int(installment_terms.get('installment_interval_days') or 0)} days"
+            if installment_terms and int(installment_terms.get("installments_allowed") or 0)
+            else "Not enabled")
+
     money_facts = [
         {"label": "Collected today",
          "definition": "Money received today from posted payment records, summed per receiving currency.",
@@ -534,18 +562,24 @@ def work():
          "definition": ("The governing billing policy's installment terms. The "
                         "Course Owner decides whether a configured price may be "
                         "split and how far apart the due dates fall."),
-         "value": (f"Allowed, up to {int(installment_terms.get('max_installments') or 0)}"
-                   f" every {int(installment_terms.get('installment_interval_days') or 0)} days"
-                   if installment_terms and int(installment_terms.get("installments_allowed") or 0)
-                   else "Not enabled"),
+         "value": installment_message,
          "owner": "Course Owner"},
         {"label": "Teaching assignments on file",
-         "definition": "Instructor skill assignments. Pay is native payroll, one-off per assignment; this desk does not calculate pay.",
+         "definition": "Instructor skill assignments. The contract determines one-off or monthly earnings in native payroll; this desk does not calculate pay.",
          "value": len(assignments), "owner": "Finance Officer"},
     ]
 
     def money_item(row, kind):
         state = _invoice_display_state(row) if kind == "Sales Invoice" else _money_state(row)
+        # An ISO due date is preserved as the native bookkeeping date;
+        # the Afghan Solar Hijri month is a read-only human label, never
+        # an alternative mutable invoice date or a second receivable.
+        due_iso = str(row.get("due_date") or "")
+        try:
+            due_label = solar_calendar.solar_month_label(
+                solar_calendar.month_key(due_iso)) if due_iso else ""
+        except ValueError:
+            due_label = ""
         return {
             "id": row["name"],
             "person": row.get("customer_name") or row.get("customer")
@@ -556,9 +590,12 @@ def work():
             "stage": {"Sales Invoice": "Invoice", "Fees": "Tuition fee"}.get(kind, kind),
             "stage_definition": (
                 "Charged {grand} {currency}; outstanding {outstanding} {currency}. "
-                "Amounts are read straight from the posted document.").format(
+                "Solar Hijri due month: {period}. "
+                "Amounts are read straight from the posted document; this is "
+                "a CURRENT balance, not a historical month-end GL report.").format(
                     grand=row.get("grand_total") or 0, currency=row.get("currency") or "",
-                    outstanding=row.get("outstanding_amount") or 0),
+                    outstanding=row.get("outstanding_amount") or 0,
+                    period=due_label or "Not recorded"),
             "next": ("Record the payment against this document in the finance workspace. "
                      "This desk does not collect money itself.")
             if state in ("Outstanding", "Overdue", "Unpaid")
@@ -617,8 +654,16 @@ def work():
             "Issue installment plan",
             {"program_enrollment": row["name"],
              "fee_structure": plan["name"],
-             "posting_date": day, "first_due_date": day,
-             "installments": maximum})
+             "posting_date": day,
+             # For an approved Shamsi cadence the *contractual* date is
+             # 1st of the present Afghan month + configured grace, even
+             # when a student joins after that date. The server permits
+             # current-month arrears only; it never backdates the GL.
+             "first_due_date": first_solar_due or day,
+             # Propose a two-month plan for the common short semester,
+             # not the maximum invoice count. Finance explicitly
+             # changes this field for Owner-configured longer courses.
+             "installments": min(2, maximum)})
 
     def billing_guidance(row):
         """Resolve the plan for one unbilled enrollment into next/action.
@@ -681,8 +726,8 @@ def work():
         "detail": " · ".join(part for part in (row.get("student_group"), row.get("skill")) if part),
         "status": row.get("effective_end") or "open",
         "stage": "Teaching assignment",
-        "stage_definition": ("An instructor skill assignment. Pay is one-off in the first "
-                             "covering payroll period, through native payroll."),
+        "stage_definition": ("An instructor skill assignment. The contract determines "
+                             "one-off or Solar Hijri monthly earnings through native payroll."),
         "next": "Run native payroll for the covering period. This desk does not calculate pay.",
         "next_role": "Finance Officer",
         "waiting_since": row.get("effective_start"),
@@ -701,8 +746,11 @@ def work():
             ("Configure book prices", "Item Price", "create"),
             ("Warehouse stock", "Bin", "read"),
             ("Receive book stock", "Stock Entry", "create"),
+            ("Book purchases", "Purchase Receipt", "create"),
             ("Sell books / sales invoices", "Sales Invoice", "create"),
             ("Record a customer payment", "Payment Entry", "create"),
+            ("Book stock movements", "Stock Ledger Entry", "read"),
+            ("Count and correct book stock", "Stock Reconciliation", "create"),
         )
         links = [
             {"title": title, "slug": "List/" + doctype}
@@ -723,6 +771,8 @@ def work():
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
         "sections": [
+            *finance_sections(),
+            *refund_sections("finance"),
             section("today", "Today", "queue", items=payment_items,
                     empty_title="No payments recorded today",
                     empty_body="No payment has been received for today. Payments appear here the moment they are posted."),
@@ -856,6 +906,36 @@ def _cash_close_sections(day):
             "currency": "",
         }
         items.append(item)
+
+    # Offer ONE guarded company/day close, never independent row closes:
+    # the accounting command requires a real count of ALL enabled drawers
+    # for the company. Ledger expected amounts are read-only comparison
+    # hints and MUST NOT be submitted as cashier-count defaults.
+    for row in position:
+        company = row["company"]
+        company_drawers = row.get("drawers", [])
+        if (row.get("close") or company in drifted or not closing_window
+                or not company_drawers
+                or len(company_drawers) > cashier_money.MAX_DRAWERS):
+            continue
+        action = guided_action(
+            "Finance Officer", RECONCILE_ENDPOINT,
+            "Close today's company cash drawers",
+            {"company": company, "date": day,
+             "drawers": [{"account": d["account"],
+                          "expected": d["closing"]}
+                         for d in company_drawers]})
+        if not action:
+            continue
+        target = next((item for item in items
+                       if item["id"] == f"{company}:{company_drawers[0]['account']}"),
+                      None)
+        if target is not None:
+            target["action"] = action
+            target["next"] = (
+                "Count every enabled drawer for this company, then enter "
+                "actual physical amounts. The ERP compares them with the "
+                "native ledger; no expected amount is prefilled")
 
     cash = section("cash-close", "Cash close", "queue", items=items,
                    facts=facts,

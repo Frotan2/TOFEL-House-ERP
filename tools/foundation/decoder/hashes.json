@@ -1,0 +1,10 @@
+{
+  "upstream_commit": "58ed85f5adc7cfaee5e49e4d52b067f172d0bcb6",
+  "upstream_url": "https://github.com/SamVerschueren/decode-uri-component/blob/58ed85f5adc7cfaee5e49e4d52b067f172d0bcb6/index.js",
+  "upstream_0_5_1_sha256": "6a86ac891edf15c5efa0841ebb31935e3669d58b98318b57d7b08a4530317cb0",
+  "cjs_0_5_1_sha256": "50676d3fbf7dfd1dd34ff05cd0e497605cbf19ecfd554ecc6fbbff0ed740a740",
+  "original_0_2_2_sha256": "3b8ba0a765e1089d11bba9a919d0d8789ecd9a6833ea078d8d9114e1db093863",
+  "original_tarball_integrity": "sha512-FqUYQ+8o158GyGTrMFJms9qh3CqTKvAqgqsTnkLI8sKu0028orqBhxNMFkFen0zGyg6epACD32pjVk58ngIErQ==",
+  "adaptation": "Remove ESM export default and append CommonJS adapter preserving 0.2.2 plus-to-space behavior; upstream decoder body unchanged",
+  "original_package_json_sha256": "8f2e9784337b3b4fa69359f88f75a2847e0aa17776f062cb518d008d8d408bca"
+}

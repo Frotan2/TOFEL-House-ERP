@@ -14,7 +14,6 @@ from toefl_house.desk import (
     active_cohort_rows,
     cohort_state,
     guided_action,
-    open_cohort_keys,
     project_count,
     project_rows,
     require_desk_audience,
@@ -37,9 +36,72 @@ ASSIGNMENT = "TH Teaching Assignment"
 ATTENDANCE = "Student Attendance"
 ENROLLMENT = "Program Enrollment"
 
+
+@frappe.whitelist(methods=["GET", "POST"])
+def attendance_records(student_group=None):
+    """Bounded source rows under the same audience and Branch scope as the desk."""
+    require_desk_audience(SLUG)
+    if student_group is not None and (
+            not isinstance(student_group, str) or not student_group.strip()
+            or len(student_group) > 140):
+        raise frappe.ValidationError("Choose a valid class")
+    filters = {"docstatus": 1}
+    if student_group:
+        filters["student_group"] = student_group
+    fields = ["name", "student", "student_group", "course_schedule", "date", "status"]
+    rows = project_rows("academic", ATTENDANCE, fields, filters=filters,
+                        order_by="date desc, name asc", limit=LIMIT_QUEUES + 1)
+    return {"rows": rows[:LIMIT_QUEUES], "truncated": len(rows) > LIMIT_QUEUES}
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def enrollment_records(waiting_only=0):
+    """Native enrollment source, optionally restricted to the desk's waiting list."""
+    require_desk_audience(SLUG)
+    if waiting_only not in (0, 1, "0", "1"):
+        raise frappe.ValidationError("Choose a valid enrollment view")
+    waiting = waiting_only in (1, "1")
+    rows = project_rows("academic", ENROLLMENT,
+                        ["name", "student", "student_name", "program", "academic_year",
+                         "academic_term", "enrollment_date", "docstatus"],
+                        filters={"docstatus": 1}, order_by="enrollment_date desc, name asc",
+                        limit=BOUNCE_WINDOW if waiting else LIMIT_QUEUES + 1)
+    if waiting:
+        groups = project_rows("academic", GROUP,
+                              ["name", "program", "academic_year", "academic_term",
+                               "disabled", "th_class_status"],
+                              filters={"disabled": 0}, order_by="name asc", limit=BOUNCE_WINDOW)
+        names = [row["name"] for row in groups if cohort_state(row) in ("Planned", "Active")]
+        roster = project_rows("academic", "Student Group Student",
+                              ["name", "parent", "student", "active"],
+                              filters={"parent": ("in", names), "active": 1},
+                              order_by="name asc", limit=BOUNCE_WINDOW) if names else []
+        if any(len(batch) >= BOUNCE_WINDOW for batch in (rows, groups, roster)):
+            raise frappe.ValidationError("Waiting list exceeds the complete scoped read; narrow the branch scope")
+        rows = _enrollments_without_roster(rows, groups, roster)
+    return {"rows": rows[:LIMIT_QUEUES], "truncated": len(rows) > LIMIT_QUEUES}
+
 ADMISSION_FIELDS = ["name", "student_applicant", "program", "academic_year",
                     "status", "accepted", "native_student", "version", "modified",
                     "drafted_by"]
+
+
+def _matching_open_groups(enrollment, groups):
+    """Classes that actually match this native enrollment's intake."""
+    return [group for group in groups
+            if cohort_state(group) in ("Planned", "Active")
+            and group.get("program") == enrollment.get("program")
+            and group.get("academic_year") == enrollment.get("academic_year")
+            and (not group.get("academic_term")
+                 or group.get("academic_term") == enrollment.get("academic_term"))]
+
+
+def _enrollments_without_roster(enrollments, groups, roster):
+    memberships = {(row.get("parent"), row.get("student")) for row in roster
+                   if int(row.get("active") or 0) == 1}
+    return [row for row in enrollments
+            if not any((group["name"], row.get("student")) in memberships
+                       for group in _matching_open_groups(row, groups))]
 
 
 def _admission_queue(admissions):
@@ -115,7 +177,7 @@ def work():
                           limit=LIMIT_QUEUES)
     sessions = project_rows("academic", SCHEDULE,
                             ["name", "student_group", "instructor", "course", "room",
-                             "from_time", "to_time", "schedule_date"],
+                             "from_time", "to_time", "schedule_date", "th_session_status"],
                             filters={"schedule_date": day},
                             order_by="from_time asc", limit=LIMIT_QUEUES)
     assignments = project_rows("academic", ASSIGNMENT,
@@ -126,12 +188,27 @@ def work():
     # --- enrollment -> cohort coverage (facts) ------------------------------
     enrollments = project_rows("academic", ENROLLMENT,
                                ["name", "student", "student_name", "program",
-                                "academic_year", "enrollment_date", "docstatus"],
+                                "academic_year", "academic_term", "enrollment_date", "docstatus"],
                                filters={"docstatus": 1},
                                order_by="enrollment_date desc", limit=BOUNCE_WINDOW)
-    cohorts = open_cohort_keys(groups)
-    unclassed = [row for row in enrollments
-                 if (row.get("program"), row.get("academic_year")) not in cohorts]
+    coverage_groups = project_rows("academic", GROUP,
+                                   ["name", "program", "academic_year", "academic_term",
+                                    "disabled", "th_class_status"],
+                                   filters={"disabled": 0}, order_by="name asc",
+                                   limit=BOUNCE_WINDOW)
+    group_names = [row["name"] for row in coverage_groups
+                   if cohort_state(row) in ("Planned", "Active")]
+    roster = project_rows("academic", "Student Group Student",
+                          ["name", "parent", "student", "active"],
+                          filters={"parent": ("in", group_names), "active": 1},
+                          order_by="name asc", limit=BOUNCE_WINDOW) if group_names else []
+    # A full page may have been truncated. Never present an invented exact
+    # count, nor issue creation/roster suggestions from incomplete evidence.
+    coverage_complete = all(len(rows) < BOUNCE_WINDOW
+                            for rows in (enrollments, coverage_groups, roster))
+    unclassed = (_enrollments_without_roster(enrollments, coverage_groups, roster)
+                 if coverage_complete else [])
+    unclassed_total = len(unclassed) if coverage_complete else "—"
 
     attendance_facts = _attendance_window(groups)
 
@@ -165,8 +242,9 @@ def work():
          "value": sum(1 for row in groups if cohort_state(row) == "Planned"),
          "owner": "Teaching Scheduler"},
         {"label": "Enrollments awaiting a class",
-         "definition": "Confirmed enrollments whose level and academic year have no class planned or running yet.",
-         "value": len(unclassed), "owner": "Teaching Scheduler"},
+         "definition": "Submitted enrollments without an active roster in a matching planned or active class. "
+                       "Unavailable when the scoped source exceeds the bounded read.",
+         "value": unclassed_total, "owner": "Teaching Scheduler"},
     ]
 
     release_items = [{
@@ -189,11 +267,14 @@ def work():
         "person": row.get("student_group") or "",
         "detail": " · ".join(part for part in (row.get("course"), row.get("room"),
                                                row.get("instructor")) if part),
-        "status": f"{row.get('from_time', '')}–{row.get('to_time', '')}",
+        "status": f"{row.get('th_session_status') or 'Scheduled'} · {row.get('from_time', '')}–{row.get('to_time', '')}",
         "stage": "Session today",
-        "stage_definition": "Scheduled course session for today.",
-        "next": "Record attendance after the session.",
-        "next_role": "Attendance Recorder",
+        "stage_definition": "Course session for today; postponed and cancelled sessions do not meet.",
+        "next": ("Record attendance after the session."
+                 if (row.get("th_session_status") or "Scheduled") == "Scheduled"
+                 else "No attendance: this session does not meet."),
+        "next_role": ("Attendance Recorder"
+                      if (row.get("th_session_status") or "Scheduled") == "Scheduled" else None),
         "waiting_since": None,
         "action": None,
     } for row in sessions]
@@ -239,40 +320,62 @@ def work():
             "action": action,
         })
 
-    # Submitted enrollments with no class get one guided creation row per
-    # level and year — only for viewers who can actually run it.
+    # A class existing for the intake is NOT evidence that a particular late
+    # learner has joined it. Offer the existing guarded roster command; when
+    # several classes match, the scheduler explicitly chooses one.
     if unclassed:
         seen = set()
-        creation_items = []
+        creation_items, joining_items = [], []
         for row in unclassed:
-            pair = (row.get("program"), row.get("academic_year"))
-            if not pair[0] or pair in seen:
+            matches = _matching_open_groups(row, coverage_groups)
+            if matches:
+                prefill = {"student": row.get("student") or ""}
+                if len(matches) == 1:
+                    prefill["student_group"] = matches[0]["name"]
+                joining_items.append({
+                    "id": f"unrostered:{row['name']}",
+                    "person": row.get("student_name") or row.get("student") or "",
+                    "detail": " · ".join(str(value) for value in
+                                         (row.get("program"), row.get("academic_year"),
+                                          row.get("academic_term")) if value),
+                    "status": "Not on a class roster",
+                    "stage": "Enrollment awaiting roster",
+                    "stage_definition": "This submitted enrollment has no active membership in a matching open class.",
+                    "next": "Choose a matching class and add the student under the roster policy.",
+                    "next_role": "Teaching Scheduler",
+                    "waiting_since": row.get("enrollment_date"),
+                    "action": guided_action("Teaching Scheduler", "toefl_house.teaching.add_class_member",
+                                            "Add to class", prefill),
+                })
                 continue
-            seen.add(pair)
-            intake = [r for r in unclassed if (r.get("program"), r.get("academic_year")) == pair]
-            action = guided_action("Teaching Scheduler",
-                                   "toefl_house.teaching.create_student_group",
-                                   "Create class",
-                                   {"program": pair[0],
-                                    "academic_year": pair[1] or ""})
+            intake_key = (row.get("program"), row.get("academic_year"), row.get("academic_term") or "")
+            if not intake_key[0] or intake_key in seen:
+                continue
+            seen.add(intake_key)
+            intake = [r for r in unclassed
+                      if (r.get("program"), r.get("academic_year"), r.get("academic_term") or "") == intake_key]
+            prefill = {"program": intake_key[0], "academic_year": intake_key[1] or ""}
+            if intake_key[2]:
+                prefill["academic_term"] = intake_key[2]
+            action = guided_action("Teaching Scheduler", "toefl_house.teaching.create_student_group",
+                                   "Create class", prefill)
             if not action:
-                break
+                continue
+            suffix = f":{intake_key[2]}" if intake_key[2] else ""
             creation_items.append({
-                "id": f"new-class:{pair[0]}:{pair[1] or '-'}",
+                "id": f"new-class:{intake_key[0]}:{intake_key[1] or '-'}{suffix}",
                 "person": "New class for this intake",
-                "detail": f"{pair[0]} · {pair[1] or 'no year'} · {len(intake)} "
-                          f"enrolled without a class",
+                "detail": f"{intake_key[0]} · {intake_key[1] or 'no year'} · {len(intake)} "
+                          "enrolled without a class",
                 "status": "Needs a class",
                 "stage": "Class creation",
-                "stage_definition": ("Confirmed enrollments exist for this level and "
-                                     "year, but no class is planned or running yet."),
-                "next": "Name the class and set its capacity; the roster is drawn "
-                        "from these confirmed enrollments by the command itself.",
+                "stage_definition": "Submitted enrollments exist, but no matching class is planned or running.",
+                "next": "Name the class, set its dates and capacity, and select its enrolled students.",
                 "next_role": "Teaching Scheduler",
                 "waiting_since": min((r.get("enrollment_date") or "") for r in intake) or None,
                 "action": action,
             })
-        cohort_items = creation_items + cohort_items
+        cohort_items = (joining_items + creation_items)[:LIMIT_QUEUES] + cohort_items
 
     assignment_items = [{
         "id": row["name"],
@@ -295,18 +398,18 @@ def work():
                 section("academic-attendance", "Attendance analytics (auditable)", "facts",
                         facts=[
                             {"label": "Attendance records", "value": att_metrics["total"],
-                             "definition": att_metrics["definition"], "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "owner": "Attendance Recorder"},
+                             "definition": att_metrics["definition"], "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "attendance_source": True, "owner": "Attendance Recorder"},
                             {"label": "Attendance rate", "value": att_metrics["rate"],
-                             "definition": "Present / (Present + Absent) — submitted marks only; no threshold invented.", "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "owner": "Attendance Recorder"},
+                             "definition": "Deferred until an owner-approved denominator and disclosure policy exists.", "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "attendance_source": True, "owner": "Attendance Recorder"},
                             {"label": "Absent marks", "value": att_metrics["absent"],
-                             "definition": "Submitted attendance with absent mark.", "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "owner": "Attendance Recorder"},
+                             "definition": "Submitted attendance with absent mark.", "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "attendance_source": True, "owner": "Attendance Recorder"},
                         ],
                         empty_title="No attendance yet", empty_body="Attendance appears when sessions are scheduled and marks recorded."))
             if att_metrics.get("by_group"):
                 academic_analytics[-1]["comparison"] = {
                     "title": "Attendance by class (recent window)",
                     "columns": ["Class", "Records"],
-                    "rows": [{"label": k or "Unassigned", "value": v, "drill": {"slug": "List/Student Attendance"}} for k, v in sorted(att_metrics["by_group"].items(), key=lambda x: -x[1])[:10]],
+                    "rows": [{"label": k or "Unassigned", "value": v, "drill": {"attendance_group": k}} for k, v in sorted(att_metrics["by_group"].items(), key=lambda x: -x[1])[:10]],
                 }
                 academic_analytics[-1]["provenance"] = [
                     {"label": "Source records", "value": att_metrics["source"]},
@@ -321,9 +424,9 @@ def work():
                 section("academic-enrollments", "Enrollments & waiting list", "facts",
                         facts=[
                             {"label": "Active enrollments", "value": enroll_metrics["total"],
-                             "definition": enroll_metrics["definition"], "source": enroll_metrics["source"], "scope": enroll_metrics["scope"], "drill_path": enroll_metrics["drill"], "owner": "Enrollment Officer"},
-                            {"label": "Enrollments awaiting a class", "value": len(unclassed),
-                             "definition": "Enrollments whose program/year has no planned or active class.", "source": "enrollments + class roster", "scope": "Branch via roster", "drill_path": "enrollment list", "owner": "Teaching Scheduler"},
+                             "definition": enroll_metrics["definition"], "source": enroll_metrics["source"], "scope": enroll_metrics["scope"], "drill_path": enroll_metrics["drill"], "enrollment_source": "all", "owner": "Enrollment Officer"},
+                            {"label": "Enrollments awaiting a class", "value": unclassed_total,
+                             "definition": "Submitted enrollments without an active roster in a matching open class; unavailable if the scoped read is incomplete.", "source": "enrollments + class roster", "scope": "Permitted branch", "drill_path": "enrollment list", "enrollment_source": "waiting", "owner": "Teaching Scheduler"},
                         ],
                         empty_title="No enrollments", empty_body="Enrollments appear after admission conversion."))
             if enroll_metrics.get("by_program"):
@@ -396,3 +499,5 @@ def _attendance_window(groups):
             "owner": "Attendance Recorder",
         })
     return facts
+
+

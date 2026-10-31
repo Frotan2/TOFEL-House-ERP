@@ -1,6 +1,6 @@
 """Real native DB/controller/HTTP acceptance on isolated synthetic sites only."""
 import concurrent.futures
-from datetime import timedelta
+from datetime import date, timedelta
 import hashlib
 import json
 import math
@@ -12,6 +12,14 @@ import time
 import traceback
 from unittest.mock import patch
 from urllib.parse import quote
+
+
+def previous_fixture_teaching_day(reference):
+    """Past attendance fixture within seven days, respecting the Friday holiday."""
+    candidate = date.fromisoformat(str(reference)) - timedelta(days=1)
+    while candidate.weekday() == 4:
+        candidate -= timedelta(days=1)
+    return candidate.isoformat()
 
 
 ROLE_PAGE_API = '/api/method/frappe.desk.desk_page.getpage'
@@ -480,6 +488,7 @@ def main():
            'attendance_recorder':'synthetic-attendance-recorder@example.test',
            'teaching_auditor':'synthetic-teaching-auditor@example.test',
            'finance_officer':'synthetic-finance-officer@example.test',
+           'refund_officer':'synthetic-refund-officer@example.test',
            'finance_auditor':'synthetic-finance-auditor@example.test',
            'containment_probe':'synthetic-containment-probe@example.test',
            'course_owner':'synthetic-course-owner@example.test',
@@ -582,6 +591,9 @@ def main():
                          # Finance Officer acting role, so the desk's guided
                          # compensation actions are server-embeddable.
                          'finance_officer':['Finance Officer','Accounts User','Finance Manager'],
+                         # Distinct least-privilege negative control: the desk
+                         # fixture above legitimately holds payout authority.
+                         'refund_officer':['Finance Officer'],
                          'finance_auditor':['Finance Auditor'],
                           'book_seller':['Finance Officer','Accounts User','Finance Manager'],
                           'book_unauthorized':['Accounts User'],
@@ -2362,6 +2374,17 @@ def main():
                 student_email_id=users['outsider'])).insert().name
         outsider_stu=check('teaching-outsider-student-fixture',outsider_student)
         stu1,stu2=groupA['roster']
+        def future_attendance_refused():
+            # Synthetic clock only: the native schedule and enrolled roster
+            # are real rows, but this probe treats the session as tomorrow.
+            before=frappe.db.count('Student Attendance')
+            with patch.object(frappe.utils,'today',return_value='2026-09-20'):
+                unavailable(lambda:as_user('attendance_recorder',lambda:
+                    tea.record_attendance('tea_future_mark_00001',schedA['name'],{stu1:'Present'})),
+                    'future session')
+            assert frappe.db.count('Student Attendance')==before
+            return {'future_date_refused':True,'no_native_mark':True,'clock':'synthetic'}
+        check('teaching-future-attendance-refused',traced(future_attendance_refused))
         check('teaching-attendance-scheduler-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.record_attendance('tea_sch_att_000000001',schedA['name'],{stu1:'Present'}))))
         check('teaching-attendance-invalid-status-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_badstatus_0000001',schedA['name'],{stu1:'Late'}))))
         check('teaching-attendance-empty-batch-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_empty_att_0000001',schedA['name'],{}))))
@@ -3378,6 +3401,59 @@ def main():
                     'receivable':comp.default_receivable_account,'payer':payers['one'],
                     'payer_waiver':payers['two'],'before':fin_before}
         fin=check('finance-native-catalog',traced(finance_catalog))
+        def owner_fee_type_native():
+            from toefl_house import academic as owner_catalog
+            label='SYN-Owner-Fee-Type'
+            result=as_user('course_owner',lambda:owner_catalog.create_fee_type(
+                'owner_fee_type_native_0001',label,'Synthetic Owner native fee item'))
+            assert result['item']==label,result
+            item=frappe.get_doc('Item',label)
+            assert item.item_group=='Fee Component' and not item.is_stock_item and item.is_sales_item,item.name
+            assert item.owner==users['course_owner'],item.owner
+            replay=as_user('course_owner',lambda:owner_catalog.create_fee_type(
+                'owner_fee_type_native_0001',label,'Synthetic Owner native fee item'))
+            assert replay==result,(result,replay)
+            def raw_item_denied():
+                assert not frappe.has_permission('Item',ptype='create')
+                assert not frappe.get_doc('Item',label).has_permission('write')
+                assert not frappe.get_doc('Item',label).has_permission('read')
+            as_user('course_owner',raw_item_denied)
+            denied(lambda:as_user('receptionist',lambda:owner_catalog.create_fee_type(
+                'owner_fee_type_foreign_001','SYN-Unauthorized-Fee','')))
+            denied(lambda:as_user('course_owner',lambda:owner_catalog.create_fee_type(
+                'owner_fee_type_collision_1','SYN-PLACEMENT-FEE','')))
+            # This qualification runs on a wizard-less native site. Earlier
+            # admission/teaching fixtures create an unanchored native Program,
+            # not a TH Program Level. Create the Owner's own active level via
+            # the real guarded commands rather than indexing an empty table.
+            owner_program=as_user('course_owner',lambda:owner_catalog.create_program(
+                'owner_fee_program_native_0001','SYN-FEE-OWNED',
+                'Synthetic Owner Fee Program','Native accounting acceptance'))
+            assert owner_program['code']=='SYN-FEE-OWNED',owner_program
+            level=as_user('course_owner',lambda:owner_catalog.create_level(
+                'owner_fee_level_native_0001','SYN-FEE-OWNED','SYN-FEE-LVL',
+                'Synthetic Fee Level',1,2,'Solar Hijri Month','2026-09-01'))
+            assert level['native_program'] and frappe.db.exists('Program',level['native_program']),level
+            assert not frappe.db.exists('Fee Structure',{'program':level['native_program'],
+                'academic_year':cat['academic_year'],'docstatus':0})
+            plan=as_user('course_owner',lambda:owner_catalog.set_level_fee_component(
+                'owner_fee_plan_native_0001',level['code'],cat['academic_year'],label,5000,fin['company']))
+            saved=frappe.get_doc('Fee Structure',plan['fee_structure'])
+            assert len(saved.components)==1 and float(saved.total_amount)==5000,plan
+            # Live native commands must refuse invalid Owner money BEFORE
+            # updating a saved fee plan. This also exercises the real Frappe
+            # guarded command, not only the pure unit validator.
+            for index, invalid in enumerate(('nan','inf','-inf')):
+                denial=denied(lambda:as_user('course_owner',lambda:owner_catalog.set_level_fee_component(
+                    f'owner_fee_bad_amount_{index:04d}',level['code'],
+                    cat['academic_year'],label,invalid,fin['company'])))
+                assert denial['denied']=='ValidationError',denial
+            saved.reload()
+            assert len(saved.components)==1 and float(saved.total_amount)==5000,saved.name
+            return {'fee_category':result['name'],'native_item':result['item'],
+                    'raw_item_permissions':False,'idempotent_replay':True,
+                    'first_fee_structure':saved.name,'total':saved.total_amount}
+        check('owner-native-fee-type-without-item-roles',traced(owner_fee_type_native))
         def isolation_evidence():
             # S3: record the effective transaction isolation the first-writer
             # races run under. Every money path uses anchor locks + locking
@@ -3669,6 +3745,15 @@ def main():
                     item_name='SYN Textbook',item_group='Books',
                     stock_uom='Nos',is_stock_item=1,is_sales_item=1,
                     is_purchase_item=1)).insert()
+            # The cashier never types a book price: the configured native
+            # selling Item Price is the only rate a book sale may bill.
+            if not frappe.db.exists('Item Price',{'item_code':code,
+                    'price_list':fin['price_list']}):
+                frappe.get_doc(dict(doctype='Item Price',item_code=code,
+                    price_list=fin['price_list'],selling=1,
+                    currency=frappe.db.get_value('Price List',
+                        fin['price_list'],'currency'),
+                    price_list_rate=300)).insert()
             wh=frappe.db.get_value('Warehouse',{'warehouse_name':'SYN Book Shop',
                 'company':fin['company']},'name')
             if not wh:
@@ -3735,6 +3820,41 @@ def main():
             return denied(lambda:as_user('book_seller',
                 lambda:doc.insert(ignore_permissions=True)))
         check('book-native-no-stock-update-denied',book_without_stock)
+        def book_price_abuse():
+            # A hand-typed document discount on a priced book, and a
+            # hand-typed rate on a book with no configured selling price:
+            # both reprice away from native Item Price authority.
+            frappe.set_user('Administrator')
+            unpriced='SYN-BOOK-NOPRICE'
+            if not frappe.db.exists('Item',unpriced):
+                frappe.get_doc(dict(doctype='Item',item_code=unpriced,
+                    item_name='SYN Unpriced Textbook',item_group='Books',
+                    stock_uom='Nos',is_stock_item=1,is_sales_item=1,
+                    is_purchase_item=1)).insert()
+            if not frappe.db.exists('Bin',{'item_code':unpriced,
+                    'warehouse':books['warehouse']}):
+                entry=frappe.get_doc(dict(doctype='Stock Entry',
+                    stock_entry_type='Material Receipt',
+                    purpose='Material Receipt',company=fin['company'],
+                    items=[dict(item_code=unpriced,qty=3,
+                        t_warehouse=books['warehouse'],basic_rate=175)]))
+                entry.insert();entry.submit()
+            discount_doc=book_doc()
+            discount_doc.apply_discount_on='Grand Total'
+            discount_doc.discount_amount=60
+            unpriced_doc=book_doc(item_code=unpriced,qty=1)
+            return {
+                'manual_discount':denied(lambda:as_user('book_seller',
+                    lambda:discount_doc.insert(ignore_permissions=True))),
+                'unconfigured_price':denied(lambda:as_user('book_seller',
+                    lambda:unpriced_doc.insert(ignore_permissions=True))),
+            }
+        check('book-native-unconfigured-price-denied',book_price_abuse)
+        def book_oversell():
+            doc=book_doc(qty=999)
+            return denied(lambda:as_user('book_seller',
+                lambda:doc.insert(ignore_permissions=True)))
+        check('book-native-oversell-beyond-bin-denied',book_oversell)
         def book_sale_positive():
             book_stages['baseline'] = native_book_state(frappe, book_context)
             doc=book_doc()
@@ -3878,6 +3998,130 @@ def main():
                 role_page_identity(unrelated, base, users['outsider'])
                 return native_book_http_cycle(frappe, cashier, unrelated, base, book_context, book_doc().as_dict())
         check('book-http-cashier-sale-payment-return-refund', traced(book_http_commerce))
+        def book_return_abuse():
+            # Restocking into a warehouse that never sold the book diverts
+            # branch stock; crediting one returned book at the two-book
+            # rate extracts the whole sale value for half the books.
+            from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
+            frappe.set_user('Administrator')
+            annex=frappe.db.get_value('Warehouse',
+                {'warehouse_name':'SYN Book Annex','company':fin['company']},'name')
+            if not annex:
+                annex=frappe.get_doc(dict(doctype='Warehouse',
+                    warehouse_name='SYN Book Annex',
+                    company=fin['company'])).insert().name
+            sale=book_doc()
+            as_user('book_seller',lambda:sale.insert())
+            as_user('book_seller',lambda:sale.submit())
+            frappe.set_user('Administrator')
+            diverted=make_sales_return(sale.name)
+            diverted.items[0].warehouse=annex
+            inflated=make_sales_return(sale.name)
+            inflated.items[0].qty=-1
+            inflated.items[0].rate=600
+            return {
+                'sale':sale.name,
+                'diverted_warehouse':denied(lambda:as_user('book_seller',
+                    lambda:diverted.insert(ignore_permissions=True))),
+                'inflated_rate':denied(lambda:as_user('book_seller',
+                    lambda:inflated.insert(ignore_permissions=True))),
+            }
+        check('book-native-return-warehouse-and-rate-abuse-denied',traced(book_return_abuse))
+        def book_return_cancel():
+            # The authorized reversal of a submitted full return must not
+            # be read as a second return stacked on top of itself.
+            from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
+            frappe.set_user('Administrator')
+            seller=frappe.get_doc('User',users['book_seller'])
+            seller.add_roles('Accounts Manager')
+            frappe.db.commit();frappe.clear_cache(user=seller.name)
+            sale=book_doc()
+            as_user('book_seller',lambda:sale.insert())
+            as_user('book_seller',lambda:sale.submit())
+            after_sale=frappe.db.get_value('Bin',
+                {'item_code':books['item'],'warehouse':books['warehouse']},
+                'actual_qty')
+            def post():
+                doc=make_sales_return(sale.name)
+                doc.insert();doc.submit()
+                return doc
+            credit=as_user('book_seller',post)
+            as_user('book_seller',lambda:credit.cancel())
+            frappe.set_user('Administrator')
+            assert int(frappe.db.get_value(
+                'Sales Invoice',credit.name,'docstatus'))==2
+            after_cancel=frappe.db.get_value('Bin',
+                {'item_code':books['item'],'warehouse':books['warehouse']},
+                'actual_qty')
+            assert abs(float(after_cancel)-float(after_sale))<0.001,\
+                (after_sale,after_cancel)
+            return {'credit_note_cancelled':credit.name,
+                    'stock_restored_to_sale_qty':True}
+        check('book-native-return-cancel-reverses-stock',traced(book_return_cancel))
+        def book_program_subgroup():
+            # GE/EAP-style program shelves are Item Groups below Books;
+            # their books sell through the same guarded native path.
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Item Group','Books','is_group',1)
+            if not frappe.db.exists('Item Group','SYN GE Books'):
+                frappe.get_doc(dict(doctype='Item Group',
+                    item_group_name='SYN GE Books',
+                    parent_item_group='Books')).insert()
+            code='SYN-BOOK-GE'
+            if not frappe.db.exists('Item',code):
+                frappe.get_doc(dict(doctype='Item',item_code=code,
+                    item_name='SYN GE Textbook',item_group='SYN GE Books',
+                    stock_uom='Nos',is_stock_item=1,is_sales_item=1,
+                    is_purchase_item=1)).insert()
+            if not frappe.db.exists('Item Price',{'item_code':code,
+                    'price_list':fin['price_list']}):
+                frappe.get_doc(dict(doctype='Item Price',item_code=code,
+                    price_list=fin['price_list'],selling=1,
+                    currency=frappe.db.get_value('Price List',
+                        fin['price_list'],'currency'),
+                    price_list_rate=300)).insert()
+            entry=frappe.get_doc(dict(doctype='Stock Entry',
+                stock_entry_type='Material Receipt',
+                purpose='Material Receipt',company=fin['company'],
+                items=[dict(item_code=code,qty=3,
+                    t_warehouse=books['warehouse'],basic_rate=175)]))
+            entry.insert();entry.submit()
+            doc=book_doc(item_code=code,qty=1)
+            as_user('book_seller',lambda:doc.insert())
+            as_user('book_seller',lambda:doc.submit())
+            assert int(doc.docstatus)==1
+            return {'invoice':doc.name,'item_group':'SYN GE Books'}
+        check('book-native-program-subgroup-sale',traced(book_program_subgroup))
+        def book_ledger_reconciliation():
+            # Bin is a projection; the Stock Ledger is truth. After the
+            # whole sale/return/refund/cancel cycle they must still agree
+            # in quantity and in value for every book item. A cancelled
+            # return leaves a queued Repost Item Valuation whose whole
+            # job is to re-settle Bin from the ledger; drain it first so
+            # the comparison judges the settled state, not the queue.
+            from toefl_house.finance import books as book_rules
+            from erpnext.stock.doctype.repost_item_valuation.repost_item_valuation import execute_reposting_entry
+            frappe.set_user('Administrator')
+            for row in frappe.db.get_all('Repost Item Valuation',
+                    filters={'docstatus':1,
+                             'status':['in',('Queued','In Progress')]},
+                    fields=['name'],limit_page_length=100):
+                execute_reposting_entry(row.name)
+            codes=[books['item'],'SYN-BOOK-GE','SYN-BOOK-NOPRICE']
+            bins=frappe.db.get_all('Bin',
+                filters={'item_code':['in',codes]},
+                fields=['item_code','warehouse','actual_qty','stock_value',
+                        'valuation_rate'])
+            ledger=frappe.db.get_all('Stock Ledger Entry',
+                filters={'item_code':['in',codes],'is_cancelled':0},
+                fields=['item_code','warehouse','actual_qty',
+                        'stock_value_difference'],limit_page_length=1000)
+            report=book_rules.reconcile_book_stock(
+                [dict(r) for r in bins],[dict(r) for r in ledger])
+            assert report['checked_bins']>=1,report
+            assert report['ok'],report
+            return report
+        check('book-native-stock-ledger-reconciliation',traced(book_ledger_reconciliation))
 
         def tax_configuration_state():
             # The owner has supplied no tax policy, so the only truthful
@@ -3917,6 +4161,12 @@ def main():
             balances={row['account']:row for row in fin_cash.drawer_balances(company,names,day)}
             account=sorted(balances)[0]
             expected=balances[account]['closing']
+            for index,invalid in enumerate(('NaN','Infinity','-Infinity','1e9999')):
+                assert unavailable(
+                    lambda value=invalid, idx=index:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
+                        f'fin_cashier_nonfinite_{idx:04d}',company,day,
+                        [dict(account=account,counted_amount=value,note='SYN invalid count')])),
+                    'finite amount')
             # Independent ledger read: the close must equal the native GL sum
             # with cancelled entries excluded.
             gl=frappe.db.sql("""select coalesce(sum(debit-credit),0) from `tabGL Entry`
@@ -3972,6 +4222,36 @@ def main():
                     [dict(account=fin_close['drawer'],counted_amount=0,note='')])),
                 'future business day')
         check('finance-cashier-close-future-day-denied',cashier_close_future_day)
+        def cashier_receipt_company_scope():
+            from toefl_house.finance import cashier as fin_cash
+            frappe.set_user('Administrator')
+            other='SYN Receipt Scope Company'
+            if not frappe.db.exists('Company',other):
+                frappe.get_doc(dict(doctype='Company',company_name=other,abbr='SRC',
+                    country='Afghanistan',default_currency='AFN',
+                    create_chart_of_accounts_based_on='Standard Template')).insert()
+            permission=frappe.get_doc(dict(doctype='User Permission',
+                user=users['book_seller'],allow='Company',for_value=other)).insert()
+            frappe.db.commit()
+            count=frappe.db.count('GL Entry')
+            try:
+                try:
+                    as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
+                        'fin_cashier_close_0001',fin['company'],frappe.utils.today(),
+                        [dict(account=fin_close['drawer'],
+                              counted_amount=fin_close['ledger_closing'],note='')]))
+                except frappe.PermissionError:
+                    pass
+                else:
+                    raise AssertionError('cached cash-close receipt bypassed changed Company scope')
+                frappe.set_user('Administrator')
+                assert frappe.db.count('GL Entry')==count
+                return {'changed_company_receipt_denied':True,'gl_unchanged':True}
+            finally:
+                frappe.set_user('Administrator')
+                frappe.delete_doc('User Permission',permission.name)
+                frappe.db.commit()
+        check('finance-cashier-receipt-company-scope',traced(cashier_receipt_company_scope))
         # ---- A13 containment: native bypass-route negative proofs. Pinned
         # frappe (988e54f3c4c2, document.py run_before_save_methods):
         # "validate" fires only for save/submit; cancel runs "before_cancel"
@@ -4489,10 +4769,20 @@ def main():
                     ename=emp.name
                 emps[label]=ename
                 if not frappe.db.exists('Salary Structure','SYN Teaching Structure'):
-                    frappe.get_doc(dict(doctype='Salary Structure',name='SYN Teaching Structure',
-                        company=comp,currency=cur,is_active='Yes',payroll_frequency='Monthly',
+                    structure=frappe.get_doc(dict(
+                        doctype='Salary Structure',name='SYN Teaching Structure',
+                        company=comp,currency=cur,is_active='Yes',
+                        payroll_frequency='Monthly',
                         earnings=[dict(salary_component='SYN Teaching Pay',
-                                       amount_based_on_formula=0,amount=1)])).insert()
+                                       amount_based_on_formula=0,amount=1)]))
+                    structure.insert()
+                    # HRMS check_sal_struct() joins a SUBMITTED Salary
+                    # Structure: merely inserting a draft and submitting
+                    # its Assignment is insufficient for a native slip.
+                    structure.submit()
+                assert frappe.db.get_value(
+                    'Salary Structure','SYN Teaching Structure','docstatus')==1,(
+                    'synthetic Salary Structure not submitted')
                 if not frappe.db.get_value('Salary Structure Assignment',{'employee':ename,'docstatus':1},'name'):
                     ssa=frappe.get_doc(dict(doctype='Salary Structure Assignment',employee=ename,
                         salary_structure='SYN Teaching Structure',from_date='2026-01-01',
@@ -4861,9 +5151,14 @@ def main():
             assert hist.skill=='RV' and hist.student_group=='SYN-GRP-MAIN-2',(afacts['assignments']['a3'],hist)
             term=frappe.db.get_all('TH Contract Skill Term',filters={'parent':cauth['contracts']['two'],'parenttype':CON,'skill':'RV'},fields=['name','rate'])
             assert term and float(term[0].rate)==15,(cauth['contracts']['two'],term)
+            # Keep this coverage effective through the qualification day:
+            # the teacher desk/command now correctly revoke ended assignments.
+            # The end remains an audited, immutable command fact; it is not a
+            # claim that former assignments allow historical access forever.
+            assignment_end=max('2026-09-30',frappe.utils.today())
             ended3=as_user('teaching_scheduler',lambda:tcomp.end_teaching_assignment(
-                'tc_end_three_hist_01',afacts['assignments']['a3'],'2026-09-30'))
-            assert ended3['effective_end']=='2026-09-30'
+                'tc_end_three_hist_01',afacts['assignments']['a3'],assignment_end))
+            assert ended3['effective_end']==assignment_end
             # Retirement is one-way
             assert denied(lambda:(lambda x:(x.__setattr__('status','Active'),x.save(ignore_permissions=True)))(
                 frappe.get_doc('TH Skill','RV'))),('retired skill was reactivated')
@@ -5280,7 +5575,7 @@ def main():
         # but the receivable stayed at gross.
         from toefl_house import academic as acm
         def odcp_fixtures():
-            # Second Fee Structure (two lines) so per-line resolution is
+            # Reuse the one draft Fee Structure (two lines) so per-line resolution is
             # observable in one issuance. The family-scoped rule is exercised
             # only after the native Program used by Admission/Enrollment is
             # explicitly anchored to that TH Academic Program through a real
@@ -5324,36 +5619,49 @@ def main():
                     )],
                 )).insert(ignore_permissions=True)
             frappe.set_user('Administrator')
-            comp=frappe.get_doc('Company','TOEFL House')
-            fs2=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
-                program=cat['program'],academic_year=cat['academic_year'],
-                receivable_account=comp.default_receivable_account,
-                income_account=comp.default_income_account,
-                cost_center=comp.cost_center,company='TOEFL House'))
-            fs2.append('components',{'fees_category':'SYN-Tuition','amount':25000})
+            fs2=frappe.get_doc('Fee Structure',fin['fee_structure'])
+            assert fs2.docstatus==0 and len(fs2.components)==1
+            assert fs2.components[0].fees_category=='SYN-Tuition' and float(fs2.components[0].amount)==25000
+            original_component=fs2.components[0].name
             fs2.append('components',{'fees_category':'SYN-Books','amount':5000})
-            fs2.insert()
+            fs2.save()
             frappe.db.commit()
-            return {'fs2':fs2.name,'tuition':25000,'books':5000}
+            return {'fs2':fs2.name,'tuition':25000,'books':5000,'original_component':original_component}
         def odcp_seed_rules():
-            # Six Active rules + one immediate retirement:
+            # Six named draft rules, five explicitly activated + one left retired:
             # BIG broad 20% p5; TUI tuition 10% p9 (wins tuition);
             # TIE-A/TIE-B books 30% p7 (deterministic code tie-break -> TIE-B);
             # RET 50% p99 retired before any issuance (must be ignored);
             # EVE 9% p60 scoped to a family that never matches (must be ignored).
             frappe.set_user('Administrator')
             as_user('course_owner',lambda:acm.create_discount_rule(
-                'odcp-rule-big-00000001','SYN-DISC-BIG','SYN broad twenty',20,5,'',''))
+                'odcp-rule-big-00000001','SYN-DISC-BIG','SYN broad twenty',20,5,'','',
+                'Approved named synthetic case: tuition and books',odcp_learners['discount']['student']))
             as_user('course_owner',lambda:acm.create_discount_rule(
-                'odcp-rule-tui-00000001','SYN-DISC-TUI','SYN tuition ten',10,9,'SYN-Tuition',''))
+                'odcp-rule-tui-00000001','SYN-DISC-TUI','SYN tuition ten',10,9,'SYN-Tuition','',
+                'Approved named synthetic tuition scholarship',odcp_learners['discount']['student']))
             as_user('course_owner',lambda:acm.create_discount_rule(
-                'odcp-rule-tie-a-00001','SYN-DISC-TIE-A','SYN books tie A',30,7,'SYN-Books',''))
+                'odcp-rule-tie-a-00001','SYN-DISC-TIE-A','SYN books tie A',30,7,'SYN-Books','',
+                'Approved named synthetic book award A',odcp_learners['discount']['student']))
             as_user('course_owner',lambda:acm.create_discount_rule(
-                'odcp-rule-tie-b-00001','SYN-DISC-TIE-B','SYN books tie B',30,7,'SYN-Books',''))
+                'odcp-rule-tie-b-00001','SYN-DISC-TIE-B','SYN books tie B',30,7,'SYN-Books','',
+                'Approved named synthetic book award B',odcp_learners['discount']['student']))
             as_user('course_owner',lambda:acm.create_discount_rule(
-                'odcp-rule-ret-0000001','SYN-DISC-RET','SYN retired fifty',50,99,'',''))
+                'odcp-rule-ret-0000001','SYN-DISC-RET','SYN retired fifty',50,99,'','',
+                'An unapproved dormant refund-reduction example',odcp_learners['discount']['student']))
             as_user('course_owner',lambda:acm.create_discount_rule(
-                'odcp-rule-eve-0000001','SYN-DISC-EVE','SYN evening nine',9,60,'','SYN-PROG-EVENING'))
+                'odcp-rule-eve-0000001','SYN-DISC-EVE','SYN evening nine',9,60,'','SYN-PROG-EVENING',
+                'Approved named synthetic wrong-family scope',odcp_learners['discount']['student']))
+            # Newly defined discounts are inactive. Activate only the
+            # reviewed awards for the named student, with audit receipts.
+            for key,code in (
+                ('odcp-activate-big-000001','SYN-DISC-BIG'),
+                ('odcp-activate-tui-000001','SYN-DISC-TUI'),
+                ('odcp-activate-tie-a-001','SYN-DISC-TIE-A'),
+                ('odcp-activate-tie-b-001','SYN-DISC-TIE-B'),
+                ('odcp-activate-eve-000001','SYN-DISC-EVE')):
+                as_user('course_owner',lambda key=key,code=code:
+                    acm.set_discount_rule_status(key,code,1))
             as_user('course_owner',lambda:acm.set_discount_rule_status(
                 'odcp-rule-retire-ret-01','SYN-DISC-RET',0))
             frappe.db.commit()
@@ -5392,7 +5700,7 @@ def main():
         def discount_single_winner():
             frappe.set_user('Administrator')
             fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
-                'odcp-fee-discounted-0001',second['program_enrollment'],fsx['fs2'],
+                'odcp-fee-discounted-0001',odcp_learners['discount']['program_enrollment'],fsx['fs2'],
                 pf_post,pf_due))
             applied={d['fee_category']:d for d in fees['discounts_applied']}
             assert set(applied)=={'SYN-Tuition','SYN-Books'},applied
@@ -5414,7 +5722,7 @@ def main():
             assert float(gl)==26000.0,(gl,)
             count=frappe.db.count(api.AUDIT);fees_count=frappe.db.count('Fees')
             again=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
-                'odcp-fee-discounted-0001',second['program_enrollment'],fsx['fs2'],
+                'odcp-fee-discounted-0001',odcp_learners['discount']['program_enrollment'],fsx['fs2'],
                 pf_post,pf_due))
             assert again==fees and frappe.db.count(api.AUDIT)==count and frappe.db.count('Fees')==fees_count
             return {'fees':fees['fees'],'grand_total':26000.0,
@@ -5428,9 +5736,13 @@ def main():
             # higher precedence on both lines; earlier money facts stay frozen
             as_user('course_owner',lambda:acm.create_discount_rule(
                 'odcp-rule-gen-00000001','SYN-DISC-GEN','SYN general fifty',50,50,
-                '','SYN-PROGRAM-GENERAL'))
+                '','SYN-PROGRAM-GENERAL',
+                'Approved named synthetic second intake scholarship',
+                odcp_learners['scope']['student']))
+            as_user('course_owner',lambda:acm.set_discount_rule_status(
+                'odcp-activate-gen-000001','SYN-DISC-GEN',1))
             fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
-                'odcp-fee-scoped-live-01',enrolled['program_enrollment'],fsx['fs2'],
+                'odcp-fee-scoped-live-01',odcp_learners['scope']['program_enrollment'],fsx['fs2'],
                 '2026-09-06','2026-10-06'))
             assert fees['grand_total']==15000.0,fees
             applied={d['fee_category']:d['rule_code'] for d in fees['discounts_applied']}
@@ -5449,19 +5761,19 @@ def main():
                            ('odcp-retire-tieb-00001','SYN-DISC-TIE-B'),
                            ('odcp-retire-gen-000001','SYN-DISC-GEN')):
                 as_user('course_owner',lambda k=k,code=code:acm.set_discount_rule_status(k,code,0))
-            # only EVE (non-matching) and the retired set remain: new issuances
-            # must bill gross on a fresh structure
+            # Only EVE (non-matching) and the retired set remain. Revise the
+            # single draft catalog to tuition-only; never introduce a second
+            # competing active plan just to test a new issuance.
             frappe.set_user('Administrator')
-            comp=frappe.get_doc('Company','TOEFL House')
-            fs3=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
-                program=cat['program'],academic_year=cat['academic_year'],
-                receivable_account=comp.default_receivable_account,
-                income_account=comp.default_income_account,
-                cost_center=comp.cost_center,company='TOEFL House'))
-            fs3.append('components',{'fees_category':'SYN-Tuition','amount':25000})
-            fs3.insert()
+            fs3=frappe.get_doc('Fee Structure',fsx['fs2'])
+            original=[row for row in fs3.components if row.name==fsx['original_component']]
+            assert len(original)==1 and float(original[0].amount)==25000
+            fs3.set('components',original)
+            fs3.save()
+            assert len(frappe.get_doc('Fees',fdisc['fees']).components)==2
+            assert float(frappe.db.get_value('Fees',fdisc['fees'],'grand_total'))==26000
             fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
-                'odcp-fee-post-retire-01',second['program_enrollment'],fs3.name,
+                'odcp-fee-post-retire-01',odcp_learners['retirement']['program_enrollment'],fs3.name,
                 '2026-09-07','2026-10-07'))
             assert 'discounts_applied' not in fees,fees
             assert fees['grand_total']==25000.0,fees
@@ -5501,11 +5813,23 @@ def main():
             frappe.set_user('Administrator')
             names=frappe.db.get_all('DocType',filters={'name':['like','TH %']},pluck='name')
             banned=('Refund','Override','Partial','Branch','Fee Schedule','Payment Term')
-            hits=[n for n in names if any(b in n for b in banned)]
+            # Issue #115 introduces one protected, non-submittable REQUEST
+            # record. It is not a financial refund authority: payment remains
+            # blocked by the native Student Pay gate. Preserve every other
+            # historical forbidden vocabulary boundary.
+            allowed_control='TH Tuition Refund Request'
+            hits=[n for n in names if n!=allowed_control
+                  and any(b in n for b in banned)]
             assert not hits,hits
+            meta=frappe.get_meta(allowed_control)
+            assert not int(meta.get('is_submittable') or 0),'Refund request became postable'
+            for field in ('fees','requested_amount','approved_amount','status',
+                          'approved_by','approval_evidence'):
+                assert meta.has_field(field),(allowed_control,field)
             for dt in ('TH Fee Override','TH Partial Refund','TH Branch Fee','TH Refund'):
                 assert not frappe.db.exists('DocType',dt),dt
-            return {'th_doctypes_scanned':len(names),'legacy_names_absent':True}
+            return {'th_doctypes_scanned':len(names),'legacy_names_absent':True,
+                    'nonposting_refund_request_only':True}
         def fee_receipt_chain():
             frappe.set_user('Administrator')
             opname=digest(['issue_tuition_fees','odcp-fee-discounted-0001'])
@@ -5520,16 +5844,62 @@ def main():
             assert fdisc['fees'] in (op['result_json'] or ''),op['result_json']
             n_before=frappe.db.count('TH Placement Audit Event',{'operation':opname})
             as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
-                'odcp-fee-discounted-0001',second['program_enrollment'],fsx['fs2'],
+                'odcp-fee-discounted-0001',odcp_learners['discount']['program_enrollment'],fsx['fs2'],
                 pf_post,pf_due))
             assert frappe.db.count('TH Placement Audit Event',{'operation':opname})==n_before
             # the discounted fee belongs to the admission->enrollment journey:
-            pe_student=frappe.db.get_value('Program Enrollment',second['program_enrollment'],'student')
-            assert pe_student==second['student'],(pe_student,second['student'])
+            pe_student=frappe.db.get_value('Program Enrollment',odcp_learners['discount']['program_enrollment'],'student')
+            assert pe_student==odcp_learners['discount']['student'],(pe_student,odcp_learners['discount']['student'])
             return {'operation_receipt_complete':True,'single_audit_event':True,
                     'audit_target_is_the_fee':True,'replay_adds_no_event':True,
                     'pe_matches_journey_student':True}
         fsx=check('odcp-fee-catalog-fixture',traced(odcp_fixtures))
+        def odcp_unbilled_intake(tag):
+            """Create a distinct, approved, fully enrolled synthetic student.
+
+            Native tuition is UNIQUE per Program Enrollment, not per chosen
+            Fee Structure. The older discount fixture mistakenly rebilled
+            two previously invoiced students. Never weaken the production
+            uniqueness guard just to make a discount test pass.
+            """
+            frappe.set_user('Administrator')
+            subject=f'synthetic-odcp-{tag}@example.test'
+            assert not frappe.db.exists('User',subject),subject
+            frappe.get_doc(dict(
+                doctype='User',email=subject,first_name=f'Synthetic ODCP {tag}',
+                enabled=1,send_welcome_email=0,
+                new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
+                roles=[])).insert()
+            prefix=f'odcp_{tag}_'
+            case=as_user('publisher',lambda:api.create_case(
+                prefix+'create_case_0001',subject))
+            alloc=digital_finalize(case['name'],prefix+'pipe')
+            rel=as_user('releaser',lambda:api.release_decision(
+                prefix+'release_000001',alloc['attempt'],7))
+            app=as_user('officer',lambda:adm.record_applicant(
+                prefix+'record_000001',rel['decision'],
+                f'SYNTHETIC ODCP learner {tag}',cat['program'],cat['academic_year']))
+            dec=as_user('officer',lambda:adm.create_admission(
+                prefix+'admit_0000001',app['name'],rel['decision']))
+            as_user('admissions_reviewer',lambda:adm.review_admission(
+                prefix+'review_000001',dec['name'],1))
+            as_user('approver',lambda:adm.decide_admission(
+                prefix+'approve_00001',dec['name'],2,'Approved',REASON))
+            as_user('officer',lambda:adm.accept_offer(
+                prefix+'accept_000001',dec['name'],3))
+            conv=as_user('approver',lambda:adm.convert_applicant(
+                prefix+'convert_00001',dec['name'],4))
+            enrolled_new=as_user('enrollment_officer',
+                lambda:enr.enroll_in_program(prefix+'enroll_000001',dec['name']))
+            name=enrolled_new['program_enrollment']
+            assert enrolled_new['docstatus']==1
+            assert enrolled_new['student']==conv['native_student']
+            assert not frappe.db.exists('Fees',
+                {'program_enrollment':name,'docstatus':('!=',2)})
+            return {'student':conv['native_student'],'program_enrollment':name}
+        odcp_learners=check('odcp-three-independent-approved-intakes',
+            traced(lambda:{tag:odcp_unbilled_intake(tag)
+                for tag in ('discount','scope','retirement','installment')}))
         check('odcp-discount-rules-seeded',traced(odcp_seed_rules))
         check('odcp-discount-rule-command-guard',traced(odcp_command_guard))
         fdisc=check('odcp-discount-single-winner-tuition',traced(discount_single_winner))
@@ -5539,6 +5909,21 @@ def main():
         check('odcp-global-config-no-branch',traced(branch_free_money_config))
         check('odcp-legacy-vocabulary-absent',traced(legacy_vocabulary_absent))
         check('integration-journey-through-fees',traced(fee_receipt_chain))
+        def restore_odcp_draft_catalog():
+            # Keep later installments on the original 25,000-AFN contract.
+            # Issued Fees keep their copied discount/components and original ID.
+            frappe.set_user('Administrator')
+            structure=frappe.get_doc('Fee Structure',fsx['fs2'])
+            original=[row for row in structure.components if row.name==fsx['original_component']]
+            assert len(original)==1 and float(original[0].amount)==25000
+            structure.set('components',original)
+            structure.save()
+            frappe.db.commit()
+            assert len(frappe.get_doc('Fees',fdisc['fees']).components)==2
+            assert float(frappe.db.get_value('Fees',fdisc['fees'],'grand_total'))==26000
+            return {'same_native_structure':True,'original_component_id_preserved':True,
+                    'issued_discounted_fee_unchanged':True}
+        check('odcp-draft-catalog-restored-without-duplicate-plan',traced(restore_odcp_draft_catalog))
         # ---- Role-desk hosted qualification (Phase 2: D1-D6, U1, U9). ----
         # Every desk must LOAD over the real HTTP pipeline as its audience,
         # refuse non-audiences and guests, carry the governed class lifecycle
@@ -5692,6 +6077,8 @@ def main():
             assert routes<={
                 'List/Item','List/Item Price','List/Bin','List/Stock Entry',
                 'List/Sales Invoice','List/Payment Entry',
+                'List/Purchase Receipt','List/Stock Ledger Entry',
+                'List/Stock Reconciliation',
             },routes
             assert not routes.intersection({
                 'List/Bin','List/Stock Entry','List/Item Price',
@@ -6229,8 +6616,9 @@ def main():
             assert "'SYN-BR-A'" in qd and "'SYN-BR-B'" not in qd
             names=[r[0] for r in frappe.db.sql("select name from `tabTH Admission Decision` where "+qd,as_list=True)]
             assert dec['A'] in names and dec['B'] not in names,(names)
-            return {'branches':2,'scoped_staff':2,'hq_controls':2,'surfaces_proved':3}
-        check('branch-isolation-multi-branch-operating-rule',traced(branch_isolation))
+            return {'branches':2,'scoped_staff':2,'hq_controls':2,'surfaces_proved':3,
+                    'fixture_students':stu,'fixture_years':{'A':'SYN-AY-2031','B':'SYN-AY-2032'}}
+        branch_fixture=check('branch-isolation-multi-branch-operating-rule',traced(branch_isolation))
         # --- S6 obs-engineering-layer: the health surface, in process ---
         # The GM desk and owner cockpit project native scheduler facts. This
         # pins the audience gate (including the Administrator refusal), the
@@ -6300,6 +6688,140 @@ def main():
                     'rosters_assigned_only':True,'off_roster_excluded':outsider_stu,
                     'compensation_rows':len(pay),'unlinked_empty_state':True}
         check('role-desk-teacher-hosted',traced(desk_teacher))
+        def ended_assignment_revokes_desk_and_command():
+            # Real native rows, synthetic read clock: the assignment ended on
+            # its recorded inclusive date and must no longer authorize tomorrow.
+            import toefl_house.desk.teacher as teacher_desk
+            frappe.set_user('Administrator')
+            end=str(frappe.db.get_value('TH Teaching Assignment',afacts['assignments']['a3'],'effective_end'))
+            later=frappe.utils.add_days(end,1)
+            with patch.object(teacher_desk,'today',return_value=later):
+                payload=as_user('teacher_two',teacher_desk.work)
+            visible={i['person'] for s in payload['sections'] if s['id']=='classes' for i in s['items']}
+            assert GRP_B not in visible,('expired class remained visible',visible)
+            frappe.set_user('Administrator')
+            session=frappe.db.get_value('Course Schedule',schedB['name'],
+                ['student_group','instructor','schedule_date'],as_dict=True)
+            with patch.object(frappe.utils,'today',return_value=later):
+                denied(lambda:tea._require_own_instructor_session(users['teacher_two'],session,schedB['name']))
+            return {'expired_class_hidden':True,'expired_command_denied':True,'clock':'synthetic'}
+        check('teacher-ended-assignment-revokes-access',traced(ended_assignment_revokes_desk_and_command))
+        def instructor_attendance_own_vs_cross():
+            # Two native Employee->Instructor links, two real Course Schedule
+            # rows, two separate class assignments, one Instructor-only role.
+            # The existing Attendance Recorder command must still refuse
+            # teachers who have not separately been granted that broad role.
+            frappe.set_user('Administrator')
+            stu_b=groupB['roster'][0]
+            before=frappe.db.count('Student Attendance')
+            assert denied(lambda:as_user('teacher_two',lambda:
+                tea.record_attendance('own_att_broad_role_01',
+                    schedB['name'],{stu_b:'Present'}))),(
+                        'Instructor gained generic Attendance Recorder authority')
+            assert denied(lambda:as_user('teacher_one',lambda:
+                tea.record_instructor_attendance('own_att_cross_a_01',
+                    schedB['name'],{stu_b:'Present'}))),(
+                        'Teacher One recorded Teacher Two class')
+            assert denied(lambda:as_user('teacher_unlinked',lambda:
+                tea.record_instructor_attendance('own_att_unlinked_01',
+                    schedB['name'],{stu_b:'Present'}))),(
+                        'Unlinked instructor recorded attendance')
+            assert frappe.db.count('Student Attendance')==before,(
+                'Denied cross-class attendance mutated native records')
+            result=as_user('teacher_two',lambda:
+                tea.record_instructor_attendance('own_att_positive_b_01',
+                    schedB['name'],{stu_b:'Present'}))
+            assert result['marked']==1 and result['course_schedule']==schedB['name'],result
+            mark=frappe.db.get_value('Student Attendance',result['records'][stu_b],
+                ['student','status','docstatus','course_schedule'],as_dict=True)
+            assert mark.student==stu_b and mark.status=='Present' and int(mark.docstatus)==1
+            from toefl_house.desk.teacher import work as teacher_work
+            partial=as_user('teacher_two',teacher_work)
+            session_item=next(i for section in partial['sections']
+                if section['id']=='sessions' for i in section['items']
+                if i['id']==schedB['name'])
+            pending={i['student'] for i in session_item['action']['args']['roster']}
+            assert pending==set(groupB['roster'])-{stu_b},sorted(pending)
+            assert session_item['next_role']=='Instructor'
+            old=frappe.db.count('Student Attendance')
+            repeated=as_user('teacher_two',lambda:
+                tea.record_instructor_attendance('own_att_positive_b_01',
+                    schedB['name'],{stu_b:'Present'}))
+            assert repeated==result and frappe.db.count('Student Attendance')==old
+            assert denied(lambda:as_user('teacher_two',lambda:
+                tea.record_instructor_attendance('own_att_duplicate_01',
+                    schedB['name'],{stu_b:'Absent'}))),(
+                        'Duplicate teacher attendance accepted')
+            frappe.set_user('Administrator')
+            op=frappe.db.get_value(api.OP,digest(['record_instructor_attendance',
+                'own_att_positive_b_01']),['actor','kind','status'],as_dict=True)
+            assert op and op.actor==users['teacher_two'] and op.status=='Complete'
+            assert op.kind=='record_instructor_attendance'
+            return {'own_session_native_mark':True,'another_teacher_denied':True,
+                    'unlinked_denied':True,'generic_role_not_granted':True,
+                    'idempotent_receipt':True,'native_audit':True,
+                    'partial_roster_remains_actionable':True}
+        check('teacher-instructor-own-attendance-and-cross-class-denials',
+              traced(instructor_attendance_own_vs_cross))
+        def five_role_business_walkthrough():
+            """Five independent real HTTP sessions with populated native data.
+
+            Every user opens their own installed Frappe Page AND calls their
+            own role Desk endpoint over HTTP. We check actual underlying
+            populated Fees/student/teacher fixtures, then try accessing
+            another role's endpoint. This is NOT a claim of physical Windows
+            or completed client-side Chromium interaction.
+            """
+            cases=(
+                ('receptionist','th-reception-desk','people',
+                 'toefl_house.desk.finance.work'),
+                ('finance_manager','th-finance-desk','outstanding',
+                 'toefl_house.desk.owner.cockpit'),
+                ('general_manager','th-operations-desk','staffing',
+                 'toefl_house.desk.finance.work'),
+                ('teacher_one','th-teacher-desk','students',
+                 'toefl_house.desk.finance.work'),
+                ('course_owner','th-owner-cockpit','tuition',
+                 'toefl_house.desk.teacher.work'),
+            )
+            report={}
+            for label,page,section_id,foreign_api in cases:
+                with login(label) as session:
+                    role_page_identity(session,base,users[label])
+                    role_page_api_observation(session,base,page,users[label])
+                    own_api=ROLE_PAGE_CASES[page][1]
+                    response=session.get(base+'/api/method/'+own_api,
+                        headers={'Accept':'application/json'},
+                        timeout=40,allow_redirects=False)
+                    assert response.status_code==200,(label,'own role desk',response.status_code)
+                    payload=response.json().get('message')
+                    assert isinstance(payload,dict) and payload.get('desk')==page,(label,'desk identity')
+                    sections=payload.get('sections') or []
+                    target=next((x for x in sections if x.get('id')==section_id),None)
+                    assert target,(label,'business section not rendered',section_id)
+                    # Realistic synthetic native rows must be visible on the
+                    # operational Reception, Finance and Instructor desks,
+                    # not merely a successful login with empty placeholders.
+                    if label in ('receptionist','finance_manager','teacher_one'):
+                        assert target.get('items'),(label,section_id,'empty despite native fixture data')
+                    stranger=session.get(base+'/api/method/'+foreign_api,
+                        headers={'Accept':'application/json'},timeout=40,
+                        allow_redirects=False)
+                    assert stranger.status_code==403,(label,'cross-desk data leak',stranger.status_code)
+                    assert stranger.json().get('exc_type')=='PermissionError',(
+                        label,'cross-desk must fail by native permission')
+                    report[label]={'own_page':page,'role_http':200,
+                        'business_section':section_id,
+                        'native_rows':len(target.get('items') or []),
+                        'cross_role_denied':True}
+            frappe.set_user('Administrator')
+            assert frappe.db.count('Fees',{'docstatus':1})>=1,'populated native Finance ledger missing'
+            assert frappe.db.count('Student Group')>=2,'native cohorts missing'
+            return {'isolation':'synthetic real-site HTTP', 'roles':report,
+                    'native_records_used':True,
+                    'browser_chromium_physical_windows_not_claimed':True}
+        check('five-role-populated-native-http-journey',
+              traced(five_role_business_walkthrough))
         # --- S6/S9 broad-isolation matrix: two branches, two students, all
         # surfaces. Each cell names its enforcement layer, proven at runtime:
         # desk RPCs gate on audience; native list/REST gate on role read plus
@@ -6322,26 +6844,49 @@ def main():
         # the exact-scoping cell runs between two populated branches.
         def desk_isolation_matrix():
             frappe.set_user('Administrator')
-            for br in ('SYN-ISOL-A','SYN-ISOL-B'):
-                if not frappe.db.exists('Branch',br):
-                    frappe.get_doc(dict(doctype='Branch',branch=br)).insert()
+            # Reuse the two separately admitted/enrolled branch journeys.
+            # Never put the same learners into both branches just to populate
+            # the matrix: the roster command now refuses that unsafe fixture.
             IA,IB='SYN-GRP-ISOL-A','SYN-GRP-ISOL-B'
-            roster_n=frappe.db.count('Program Enrollment',{'program':cat['program'],
-                'academic_year':cat['academic_year'],'docstatus':1})
-            assert roster_n>=2,('two enrolled learners are needed for the matrix',roster_n)
-            if not frappe.db.exists('Student Group',IA):
+            branch_students=branch_fixture['fixture_students']
+            branch_years=branch_fixture['fixture_years']
+            start=frappe.utils.today();end=frappe.utils.add_days(start,14)
+            for tail,group in (('A',IA),('B',IB)):
                 as_user('teaching_scheduler',lambda:tea.create_student_group(
-                    'isol_group_a_0000001',IA,cat['program'],cat['academic_year'],'',
-                    roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-A'))
-            if not frappe.db.exists('Student Group',IB):
-                as_user('teaching_scheduler',lambda:tea.create_student_group(
-                    'isol_group_b_0000001',IB,cat['program'],cat['academic_year'],'',
-                    roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-B'))
+                    'isol_group_'+tail.lower()+'_0000001',group,cat['program'],branch_years[tail],'',
+                    1,start,end,branch='SYN-BR-'+tail,students=[branch_students[tail]]))
             frappe.set_user('Administrator')
-            assert frappe.db.get_value('Student Group',IA,'th_branch')=='SYN-ISOL-A'
-            assert frappe.db.get_value('Student Group',IB,'th_branch')=='SYN-ISOL-B'
+            assert frappe.db.get_value('Student Group',IA,'th_branch')=='SYN-BR-A'
+            assert frappe.db.get_value('Student Group',IB,'th_branch')=='SYN-BR-B'
+            # Writes and cached command receipts must obey the same native
+            # Branch User Permission after it is added or changed.
+            scheduler_scope=frappe.get_doc(dict(doctype='User Permission',
+                user=users['teaching_scheduler'],allow='Branch',
+                for_value='SYN-BR-A')).insert()
+            frappe.db.commit()
+            try:
+                own_replay=as_user('teaching_scheduler',lambda:tea.create_student_group(
+                    'isol_group_a_0000001',IA,cat['program'],branch_years['A'],'',
+                    1,start,end,branch='SYN-BR-A',students=[branch_students['A']]))
+                assert own_replay['name']==IA
+                for key,group in (('isol_group_b_0000001',IB),
+                                  ('isol_foreign_write_0001','SYN-ISOL-DENIED')):
+                    try:
+                        as_user('teaching_scheduler',lambda:tea.create_student_group(
+                            key,group,cat['program'],branch_years['B'],'',
+                            1,start,end,branch='SYN-BR-B',students=[branch_students['B']]))
+                    except frappe.PermissionError:
+                        pass
+                    else:
+                        raise AssertionError('foreign branch write or receipt escaped scope')
+                frappe.set_user('Administrator')
+                assert not frappe.db.exists('Student Group','SYN-ISOL-DENIED')
+            finally:
+                frappe.set_user('Administrator')
+                frappe.delete_doc('User Permission',scheduler_scope.name)
+                frappe.db.commit()
             up=frappe.get_doc(dict(doctype='User Permission',user=users['teacher_two'],
-                allow='Branch',for_value='SYN-ISOL-A')).insert()
+                allow='Branch',for_value='SYN-BR-A')).insert()
             frappe.db.commit()
             try:
                 # LIST shape for a branch-scoped viewer: the native list
@@ -6356,9 +6901,9 @@ def main():
                     'Student Group',fields=['name'],limit_page_length=100))}
                 frappe.set_user('Administrator')
                 own_group={r['name'] for r in frappe.get_all('Student Group',
-                    filters={'th_branch':'SYN-ISOL-A'},fields=['name'],
+                    filters={'th_branch':'SYN-BR-A'},fields=['name'],
                     limit_page_length=100)}
-                assert pre==own_group=={IA}, \
+                assert pre==own_group and IA in pre and IB not in pre, \
                     ('branch-scoped class list is not exactly the own-branch classes',
                      sorted(pre),sorted(own_group))
                 # The native non-strict user-permission shape, pinned at the
@@ -6380,13 +6925,14 @@ def main():
                 # scoping cell below proves exact isolation between two
                 # populated branches on the production-default mode.
                 for g in (GRP_A,GRP_B,GRP_C,GRP_D,GRP_HTTP):
-                    frappe.db.set_value('Student Group',g,'th_branch','SYN-ISOL-B')
+                    frappe.db.set_value('Student Group',g,'th_branch','SYN-BR-B')
                 frappe.db.commit()
                 # LIST: role read + branch user-permission scope the native list.
                 listed={r['name'] for r in as_user('teacher_two',lambda:frappe.get_list(
                     'Student Group',fields=['name'],limit_page_length=100))}
                 frappe.set_user('Administrator')
-                assert listed=={IA},('branch user-permission did not scope the native class list',sorted(listed))
+                assert listed==own_group and IA in listed and IB not in listed, \
+                    ('branch user-permission did not scope the native class list',sorted(listed))
                 # ELEVATED PROJECTION: the desk seam (project_rows) is an
                 # elevated raw read — frappe.get_all ignores the role,
                 # user-permission and hook conditions that scope the native
@@ -6398,7 +6944,8 @@ def main():
                 unscoped={r['name'] for r in as_user('teacher_two',lambda:proj(
                     'teacher','Student Group',['name'],limit=100))}
                 frappe.set_user('Administrator')
-                assert unscoped=={IA},('the desk projection seam escaped the branch rule',sorted(unscoped))
+                assert unscoped==own_group and IA in unscoped and IB not in unscoped, \
+                    ('the desk projection seam escaped the branch rule',sorted(unscoped))
                 # DESK: after the branch reassignment, the teacher's only
                 # standing assignment is the far-branch class — and it must
                 # not reach the desk. The assignment join is branch-scoped
@@ -6745,9 +7292,9 @@ def main():
                 frappe.db.commit()
             member=frappe.db.get_value('Student Group Student',{'parent':GRP_A},'student')
             assert member
-            yesterday=str(frappe.utils.add_days(frappe.utils.today(),-1))
+            attendance_day=previous_fixture_teaching_day(frappe.utils.today())
             sched=as_user('teaching_scheduler',lambda:tea.schedule_session(
-                's9_sched_0000000001',GRP_A,yesterday,'16:00:00','17:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))
+                's9_sched_0000000001',GRP_A,attendance_day,'16:00:00','17:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))
             marked=as_user('attendance_recorder',lambda:tea.record_attendance(
                 's9_rec_000000000001',sched['name'],{member:'Absent'}))
             att=marked['records'][member]
@@ -6759,7 +7306,7 @@ def main():
             assert denied(lambda:as_user('attendance_recorder',lambda:teac.request_attendance_correction(
                 's9_req_shell_000001',att,'Present','SYN shell governs nothing')))
             v1=as_user('course_owner',lambda:teac.set_attendance_correction_policy_version(
-                's9_pol_versn_0000001','SYN-ATT-CORRECT',yesterday,
+                's9_pol_versn_0000001','SYN-ATT-CORRECT',attendance_day,
                 'SYN owner opens attendance corrections','Teaching Auditor',7))
             assert v1['governing_approver_role']=='Teaching Auditor',v1
             assert denied(lambda:as_user('attendance_recorder',lambda:teac.request_attendance_correction(
@@ -7206,6 +7753,766 @@ def main():
             return {'doctypes':observed,'commands':len(commands)+5,
                     'unconfigured_missing':sorted(empty['missing'])}
         check('academic-s14-deployment-and-fail-closed',traced(s14_academic_wiring))
+        def native_payroll_bridge():
+            # D2: HRMS remains the payroll authority. This synthetic check
+            # verifies that the teaching inputs enter a real native slip;
+            # statutory rates, payable accounts and actual payment stay with
+            # the institution's configured HRMS process.
+            frappe.set_user('Administrator')
+            employee=cfx['emps']['One']
+            # Compensation calculates DRAFT native inputs. Finance approval
+            # is a separate HRMS submit action; a synthetic acceptance must
+            # exercise that approval, not assume calculation auto-submitted pay.
+            # Select only the fixture's verified instructor One references,
+            # never unrelated additional salaries for the same employee.
+            references={
+                (ASSIGN,afacts['assignments']['a1']),
+                (ASSIGN,afacts['assignments']['a2']),
+                ('TH Contract Adjustment',
+                 frappe.get_doc(CON,cauth['contracts']['one']).adjustments[0].name),
+            }
+            rows=frappe.get_all(ADS,
+                filters={'employee':employee,'payroll_date':'2026-09-30',
+                         'disabled':0},
+                fields=['name','ref_doctype','ref_docname','type','docstatus',
+                        'salary_component','overwrite_salary_structure_amount',
+                        'is_recurring'])
+            selected={}
+            for row in rows:
+                reference=(row.ref_doctype,row.ref_docname)
+                if reference not in references:
+                    continue
+                assert reference not in selected,('duplicate teaching input',reference)
+                # HRMS queries submitted Additional Salary by its *own*
+                # type when populating a Salary Slip. Salary Component.type
+                # alone cannot rescue an input that has a blank/wrong type.
+                assert row.salary_component==cfx['earning'],row
+                assert frappe.db.get_value('Salary Component',
+                    row.salary_component,'type')=='Earning',row
+                assert row.type=='Earning',(
+                    'teaching input would be excluded by native HRMS',row.name)
+                # Native HRMS rejects a second same-component same-date
+                # salary with overwrite enabled. Teaching inputs must add,
+                # never replace the underlying Salary Structure amount.
+                assert not row.overwrite_salary_structure_amount,(
+                    'teaching compensation incorrectly overwrites structure',row.name)
+                assert not row.is_recurring,(
+                    'one-off teaching input unexpectedly recurs',row.name)
+                assert row.docstatus in (0,1),('invalid teaching input state',row)
+                selected[reference]=row
+            assert set(selected)==references,(
+                'missing genuine teaching payroll inputs',sorted(references-set(selected)))
+            expected=set()
+            for reference in sorted(selected):
+                row=selected[reference]
+                if row.docstatus==0:
+                    # Administrator performs the Finance-approved native
+                    # submission on this isolated synthetic site only.
+                    frappe.get_doc(ADS,row.name).submit()
+                assert frappe.db.get_value(ADS,row.name,'docstatus')==1,(
+                    'teaching input not submitted',row.name)
+                expected.add(row.name)
+            frappe.db.commit()
+            # HRMS v16 reads a submitted Holiday List Assignment (employee or
+            # company), not merely Company.default_holiday_list. The isolated
+            # teaching fixture must supply its own explicit synthetic calendar
+            # before submitting the native Salary Slip; otherwise HRMS properly
+            # refuses due to a missing payroll holiday policy on today's date.
+            # Never bypass holiday validation, or configure a real Owner site.
+            calendar_name='SYN Teaching Payroll Calendar'
+            assert not frappe.db.exists('Holiday List',calendar_name),(
+                'synthetic payroll calendar unexpectedly exists',calendar_name)
+            assert not frappe.db.exists('Holiday List Assignment',
+                {'assigned_to':cfx['company'],'docstatus':1}),(
+                'unexpected submitted payroll holiday policy',cfx['company'])
+            calendar_to=f"{max(2026,frappe.utils.getdate().year)}-12-31"
+            calendar=frappe.get_doc(dict(
+                doctype='Holiday List',holiday_list_name=calendar_name,
+                from_date='2026-01-01',to_date=calendar_to,weekly_off='Friday'))
+            calendar.get_weekly_off_dates()
+            calendar.insert()
+            holiday_assignment=frappe.get_doc(dict(
+                doctype='Holiday List Assignment',
+                naming_series='HR-HLA-.YYYY.-',applicable_for='Company',
+                assigned_to=cfx['company'],holiday_list=calendar.name,
+                from_date='2026-01-01'))
+            holiday_assignment.insert()
+            holiday_assignment.submit()
+            assert holiday_assignment.docstatus==1
+            assert frappe.get_attr('hrms.utils.holiday_list.get_holiday_list_for_employee')(
+                employee,as_on='2026-09-30')==calendar.name
+            frappe.db.commit()
+            # Direct HRMS Salary Slip creation must explicitly identify the
+            # employee's submitted Salary Structure Assignment; payroll-entry
+            # generation normally supplies this link on the employee's behalf.
+            structure_assignment=frappe.db.get_value('Salary Structure Assignment',
+                {'employee':employee,'docstatus':1,
+                 'from_date':['<=','2026-09-01']},
+                ['name','salary_structure'],as_dict=True,
+                order_by='from_date desc')
+            assert structure_assignment and structure_assignment.salary_structure==(
+                'SYN Teaching Structure'),('missing active synthetic payroll assignment',employee)
+            slip=frappe.get_doc(dict(doctype='Salary Slip',employee=employee,
+                company=cfx['company'],salary_structure=structure_assignment.salary_structure,
+                payroll_frequency='Monthly',start_date='2026-09-01',
+                end_date='2026-09-30',posting_date='2026-09-30'))
+            slip.insert()
+            linked=[row.additional_salary for row in slip.earnings
+                    if row.get('additional_salary')]
+            assert expected.issubset(set(linked)),('native slip omitted teaching inputs',
+                sorted(expected-set(linked)))
+            assert len(linked)==len(set(linked)),('native slip duplicated an input',linked)
+            assert slip.employee==employee and slip.company==cfx['company']
+            assert float(slip.net_pay)>=0,slip.net_pay
+            slip.submit()
+            assert slip.docstatus==1 and frappe.db.get_value('Salary Slip',slip.name,'docstatus')==1
+            frappe.db.commit()
+            return {'salary_slip':slip.name,'linked_teaching_inputs':len(expected),
+                    'native_submitted':True,'statutory_policy_asserted':False}
+        check('teaching-native-payroll-slip-bridge',traced(native_payroll_bridge))
+        def native_monthly_contract():
+            # Owner 2026-10-26: recurrence belongs to each contract. Exercise
+            # genuine revision, native draft inputs, two Afghan months and
+            # different-request-key replay. This does not disburse wages.
+            frappe.set_user('Administrator')
+            current=frappe.db.get_value(CON,{'instructor':cfx['ins']['One'],'status':'Active'},'name')
+            assert current,('no active synthetic contract',cfx['ins']['One'])
+            revision=as_user('finance_officer',lambda:tcomp.revise_teaching_contract(
+                'tc_monthly_revision_0001',current,'Skill-Based','SYN full-month assignment',
+                'Following Solar Hijri month','2027-03-21',skill_terms=[
+                    dict(skill=SK1,unit_of_payment='SYN worked month',rate=500,payable_quantity=1)],
+                earning_basis='Solar Hijri Monthly'))
+            assert revision['earning_basis']=='Solar Hijri Monthly',revision
+            assert frappe.db.get_value(CON,revision['name'],'earning_basis')=='Solar Hijri Monthly'
+            assert (frappe.db.get_value(CON,current,'earning_basis') or 'One-off')=='One-off'
+            reference=afacts['assignments']['a1']
+            observed=[]
+            for index,(start,end) in enumerate((('2027-03-21','2027-04-20'),('2027-04-21','2027-05-21'))):
+                result=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                    f'tc_monthly_calculate_{index:04d}',start,end,cfx['company'],cfx['earning'],cfx['deduction']))
+                own=[row for row in result['posted'].get(cfx['ins']['One'],[]) if row.get('assignment')==reference]
+                assert len(own)==1 and own[0]['amount']==500,('monthly earning missing',result)
+                row=frappe.db.get_value(ADS,own[0]['name'],
+                    ['docstatus','payroll_date','ref_docname','amount','is_recurring'],as_dict=True)
+                assert row.docstatus==0 and str(row.payroll_date)==end and row.ref_docname==reference,row
+                assert float(row.amount)==500 and not row.is_recurring,row
+                count=frappe.db.count(ADS)
+                replay=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                    f'tc_monthly_replay_{index:04d}',start,end,cfx['company'],cfx['earning'],cfx['deduction']))
+                assert not replay['posted'] and frappe.db.count(ADS)==count,replay
+                observed.append(own[0]['name'])
+            assert len(set(observed))==2,observed
+            assert unavailable(lambda:as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_monthly_gregorian_01','2027-04-01','2027-04-30',cfx['company'],cfx['earning'],cfx['deduction'])),
+                'full Solar Hijri month')
+            frappe.db.commit()
+            return {'contract':revision['name'],'monthly_draft_inputs':observed,
+                    'different_key_deduplicated':True,'legacy_contract_preserved':True,
+                    'wages_disbursed':False}
+        check('teaching-native-per-contract-monthly-earning',traced(native_monthly_contract))
+        def reception_cash_cycle():
+            # Run after the existing native financial fixtures, preserving
+            # their independently qualified cash-close/outstanding baselines.
+            frappe.set_user('Administrator')
+            fee=frappe.db.get_value('Fees',{'company':fin['company'],'docstatus':1,
+                'outstanding_amount':('>',100)},'name',order_by='name asc')
+            assert fee,'A submitted synthetic tuition balance is required'
+            company=frappe.db.get_value('Fees',fee,'company')
+            prefix='toefl_house.finance.collections.'
+            actors={key:login(key) for key in ('course_owner','receptionist','book_seller','outsider')}
+
+            def rpc(role,method,payload,expected=200,get=False):
+                url=base+'/api/method/'+prefix+method
+                response=(actors[role].get(url,params=payload,timeout=60) if get else
+                          actors[role].post(url,json=payload,timeout=60))
+                assert response.status_code==expected,(method,response.status_code,response.json().get('exc_type'))
+                assert not response.json().get('_server_messages'),(method,'unexpected blocking message')
+                return response.json().get('message')
+
+            rpc('course_owner','configure_reception_counter',dict(
+                request_key='native_counter_assignment_0001',user=users['receptionist'],company=company,
+                counter_label='SYN Reception Cash Counter',reason='SYN native acceptance counter assignment'))
+            frappe.db.rollback()
+            before=float(frappe.db.get_value('Fees',fee,'outstanding_amount'))
+            shares=frappe.db.count('DocShare',{'user':users['receptionist']})
+            payload=dict(request_key='native_counter_receipt_000001',fees=fee,amount='100.00')
+            receipt=rpc('receptionist','record_reception_collection',payload)
+            frappe.db.rollback()
+            assert float(frappe.db.get_value('Fees',fee,'outstanding_amount'))==before-100
+            assert frappe.db.count('DocShare',{'user':users['receptionist']})==shares
+            assert rpc('receptionist','record_reception_collection',payload)==receipt
+            number=receipt['payment_entry']
+            assert rpc('receptionist','get_collection_receipt',dict(payment_entry=number),get=True)['number']==number
+            # Rejections may legitimately carry their explanatory message.
+            rejected=actors['outsider'].get(base+'/api/method/'+prefix+'get_collection_receipt',
+                params=dict(payment_entry=number),timeout=40)
+            assert rejected.status_code==403
+            correction=rpc('course_owner','correct_reception_collection',dict(
+                request_key='native_counter_correction_0001',payment_entry=number,fees=fee,
+                reason='SYN native amended receipt qualification'))
+            frappe.db.rollback()
+            assert frappe.db.get_value('Payment Entry',number,'docstatus')==2
+            amended=correction['payment_entry']
+            assert frappe.db.get_value('Payment Entry',amended,'amended_from')==number
+            assert float(frappe.db.get_value('Fees',fee,'outstanding_amount'))==before-100
+            handover_payload=dict(request_key='native_counter_handover_0001',
+                payment_entries=[amended],counted_amount='100.00')
+            transfer=rpc('book_seller','accept_reception_handover',handover_payload)
+            assert rpc('book_seller','accept_reception_handover',handover_payload)==transfer
+            frappe.db.rollback()
+            assert float(frappe.db.get_value('Fees',fee,'outstanding_amount'))==before-100
+            assert frappe.db.get_value('Payment Entry',amended,'th_collection_handover')==transfer['payment_entry']
+            for source,target,amount in ((receipt['counter_account'],None,0),
+                                         (None,transfer['main_cash_account'],100)):
+                account=source or target
+                gl=frappe.db.sql('''select coalesce(sum(debit-credit),0) from `tabGL Entry`
+                    where account=%s and voucher_type='Payment Entry' and voucher_no in %s
+                    and is_cancelled=0''',(account,(amended,transfer['payment_entry'])))[0][0]
+                assert abs(float(gl)-amount)<0.005,(account,gl,amount)
+            duplicate=actors['book_seller'].post(base+'/api/method/'+prefix+'accept_reception_handover',
+                json=dict(handover_payload,request_key='native_counter_second_handover'),timeout=40)
+            assert duplicate.status_code==417
+            native_read=actors['receptionist'].get(base+'/api/method/frappe.client.get',
+                params=dict(doctype='Fees',name=fee),timeout=40)
+            assert native_read.status_code==403
+            for actor in actors.values():
+                actor.close()
+            return dict(receipt=number,amended_receipt=amended,transfer=transfer['payment_entry'],
+                immediate_student_reduction=100,handover_student_change=0,counter_net=0,
+                main_cash_increase=100,idempotent=True,temporary_shares_removed=True,
+                unauthorized_read_denied=True,second_handover_denied=True)
+        reception_proof=check('reception-native-http-cash-receipt-correction-handover',traced(reception_cash_cycle))
+        def tuition_refund_read_list_parity():
+            # A real submitted/amended collection funds this synthetic case.
+            from toefl_house.finance import tuition_refund_commands as tuition_refund_cmd
+            from toefl_house.desk.tuition_refunds import refund_sections
+            frappe.set_user('Administrator')
+            fee=frappe.db.get_value('Payment Entry Reference',
+                {'parent':reception_proof['amended_receipt'],
+                 'reference_doctype':'Fees'},'reference_name')
+            assert fee,'Synthetic tuition receipt is missing its native Fees allocation'
+            original=frappe.db.get_value('Fees',fee,['student','company'],as_dict=True)
+            assert original and original.student and original.company
+            created=as_user('finance_officer',lambda:tuition_refund_cmd.request_tuition_refund(
+                'native_refund_visibility_0001',original.student,original.company,
+                fee,'50.00','SYN native refund visibility case',
+                'Synthetic paid Fees allocation and documented review reason'))
+            name=created['name']
+            assert created['status']=='Requested'
+            dt='TH Tuition Refund Request'
+            def desk_case(role,desk):
+                sections=as_user(role,lambda:refund_sections(desk))
+                return next(item for group in sections for item in group['items'] if item['id']==name)
+            manager_case=desk_case('general_manager','management')
+            assert manager_case['action']['endpoint'].endswith('.approve_tuition_refund')
+            assert manager_case['actions'][0]['endpoint'].endswith('.deny_tuition_refund')
+            frozen_stages=[]
+            def source_receipt_frozen(stage):
+                for action in ('cancel','cost_center','allocation'):
+                    frappe.db.savepoint('refund_source_mutation')
+                    frappe.set_user('Administrator')
+                    source=frappe.get_doc('Payment Entry',reception_proof['amended_receipt'])
+                    source.flags.ignore_permissions=True
+                    try:
+                        try:
+                            if action=='cancel':
+                                source.cancel()
+                            else:
+                                if action=='cost_center':
+                                    center=frappe.db.get_value('Company',original.company,'cost_center')
+                                    source.cost_center=center if source.cost_center!=center else None
+                                else:
+                                    source.references[0].allocated_amount-=1
+                                source.save(ignore_permissions=True)
+                        except frappe.PermissionError as exc:
+                            assert 'Resolve the approved/refunded tuition case' in str(exc),str(exc)
+                        else:
+                            raise AssertionError('Refund source receipt changed in '+stage+' via '+action)
+                    finally:
+                        frappe.db.rollback(save_point='refund_source_mutation')
+                frozen_stages.append(stage)
+            source_receipt_frozen('Requested')
+            # Native adversarial replay and financial-ceiling checks.
+            # These are true Frappe DB commands, not a text-only policy stub.
+            refund_events_before=frappe.db.count('TH Placement Audit Event')
+            replay=as_user('finance_officer',lambda:tuition_refund_cmd.request_tuition_refund(
+                'native_refund_visibility_0001',original.student,original.company,
+                fee,'50.00','SYN native refund visibility case',
+                'Synthetic paid Fees allocation and documented review reason'))
+            assert replay==created,('Same request key did not replay exactly',replay,created)
+            assert frappe.db.count('TH Placement Audit Event')==refund_events_before
+            assert denied(lambda:as_user('finance_officer',
+                lambda:tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_visibility_0001',original.student,original.company,
+                    fee,'60.00','SYN native refund visibility case',
+                    'Synthetic paid Fees allocation and documented review reason')))
+            assert denied(lambda:as_user('publisher',
+                lambda:tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_wrong_role_0001',original.student,original.company,
+                    fee,'1.00','Unauthorized creation attempt',
+                    'Synthetic evidence only')))
+            assert denied(lambda:as_user('general_manager',
+                lambda:tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_wrong_actor_0001',original.student,original.company,
+                    fee,'1.00','Wrong command authority',
+                    'Synthetic evidence only')))
+            assert denied(lambda:as_user('finance_officer',
+                lambda:tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_wrong_company_001',original.student,
+                    'SYN-UNRELATED-COMPANY',fee,'1.00',
+                    'Company mismatch refused','Synthetic evidence only')))
+            assert denied(lambda:as_user('finance_officer',
+                lambda:tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_wrong_student_001','SYN-UNRELATED-STUDENT',
+                    original.company,fee,'1.00',
+                    'Student mismatch refused','Synthetic evidence only')))
+            assert denied(lambda:as_user('finance_officer',
+                lambda:tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_over_ceiling_0001',original.student,
+                    original.company,fee,'999999.00',
+                    'Ceiling excess refused','Synthetic evidence only')))
+            assert denied(lambda:as_user('finance_manager',
+                lambda:tuition_refund_cmd.approve_tuition_refund(
+                    'native_refund_wrong_approver_1',name,
+                    'Not a General Manager decision')))
+            assert denied(lambda:as_user('finance_officer',
+                lambda:tuition_refund_cmd.approve_tuition_refund(
+                    'native_refund_self_approve_001',name,
+                    'Requester is not General Manager')))
+            assert frappe.db.count('TH Tuition Refund Request',
+                                   {'name':name,'status':'Requested'})==1
+            allowed=('finance_officer','finance_auditor','general_manager','finance_manager')
+            for label in allowed:
+                def allowed_read():
+                    doc=frappe.get_doc(dt,name)
+                    assert doc.has_permission('read'),(label,'direct document read denied')
+                    rows=frappe.get_list(dt,filters={'name':name},fields=['name'])
+                    assert [row.name for row in rows]==[name],(label,'list/read mismatch',rows)
+                as_user(label,allowed_read)
+            for label in ('publisher','outsider'):
+                def refused_read():
+                    doc=frappe.get_doc(dt,name)
+                    assert not doc.has_permission('read'),(label,'unexpected document access')
+                    try:
+                        rows=frappe.get_list(dt,filters={'name':name},fields=['name'])
+                    except frappe.PermissionError:
+                        rows=[]
+                    assert not rows,(label,'unauthorized refund list disclosure')
+                as_user(label,refused_read)
+            frappe.set_user('Administrator')
+            assert frappe.db.get_value(dt,name,'status')=='Requested'
+            # Branch-scoped Finance Auditor must see neither list nor detail
+            # for a student without a roster in this unrelated test Branch.
+            # Use and remove real Frappe User Permission, never edit a role.
+            unrelated='SYN-UNRELATED-REFUND-BRANCH'
+            if not frappe.db.exists('Branch',unrelated):
+                frappe.get_doc(dict(doctype='Branch',branch=unrelated)).insert()
+            scoped_user=users['finance_auditor']
+            permit=frappe.get_doc(dict(doctype='User Permission',user=scoped_user,
+                allow='Branch',for_value=unrelated)).insert()
+            frappe.db.commit()
+            frappe.clear_cache()
+            try:
+                def branch_refused():
+                    assert not frappe.get_doc(dt,name).has_permission('read')
+                    assert not frappe.get_list(dt,filters={'name':name},
+                                               fields=['name'])
+                as_user('finance_auditor',branch_refused)
+            finally:
+                frappe.set_user('Administrator')
+                frappe.delete_doc('User Permission',permit.name)
+                frappe.db.commit()
+                frappe.clear_cache()
+            original_payments=frappe.db.count('Payment Entry')
+            original_gl=frappe.db.count('GL Entry')
+            approval=as_user('general_manager',lambda:
+                tuition_refund_cmd.approve_tuition_refund(
+                    'native_refund_gm_approval_0001',name,
+                    'Independent synthetic General Manager approval'))
+            assert approval['status']=='Approved',approval
+            finance_case=desk_case('finance_manager','finance')
+            assert finance_case['action']['endpoint'].endswith('.pay_tuition_refund')
+            assert finance_case['action']['args']['recipient']==original.student
+            assert float(finance_case['action']['args']['refund_amount'])==50
+            assert finance_case['action']['args']['approved_by']==users['general_manager']
+            assert not desk_case('general_manager','management').get('action')
+            source_receipt_frozen('Approved')
+            events=frappe.db.get_all('TH Placement Audit Event',
+                filters={'target':name},fields=['action','before_hash','after_hash'])
+            assert len(events)==2,('Request and approval must both be audited',events)
+            assert {row.action for row in events}=={
+                'request_tuition_refund','approve_tuition_refund'},events
+            assert all(row.after_hash and len(row.after_hash)==64 for row in events)
+            assert any(row.action=='approve_tuition_refund' and row.before_hash
+                       for row in events),events
+            assert 'Finance Officer' not in frappe.get_roles(users['finance_manager'])
+            assert 'Finance Manager' not in frappe.get_roles(users['refund_officer'])
+            for label in ('refund_officer','general_manager','publisher'):
+                assert denied(lambda label=label:as_user(label,lambda:tuition_refund_cmd.pay_tuition_refund(
+                    'native_refund_wrong_payer_'+label,name)))['denied']=='PermissionError'
+            # Give the original approving actor the payer role temporarily:
+            # separation must still refuse, for its exact reason, not merely
+            # because one of the two roles happened to be absent.
+            frappe.set_user('Administrator')
+            manager=frappe.get_doc('User',users['general_manager'])
+            original_roles=[row.role for row in manager.roles]
+            manager.append('roles',{'role':'Finance Manager'})
+            manager.save(ignore_permissions=True)
+            frappe.db.commit();frappe.clear_cache()
+            try:
+                try:
+                    as_user('general_manager',lambda:tuition_refund_cmd.pay_tuition_refund(
+                        'native_refund_same_actor_denied_01',name))
+                except frappe.ValidationError as exc:
+                    assert 'approving manager must not execute' in str(exc),str(exc)
+                else:
+                    raise AssertionError('Approving General Manager paid their own refund')
+            finally:
+                frappe.set_user('Administrator')
+                manager=frappe.get_doc('User',users['general_manager'])
+                manager.set('roles',[{'role':role} for role in original_roles])
+                manager.save(ignore_permissions=True)
+                frappe.db.commit();frappe.clear_cache()
+            # Current branch and treasury permissions apply at payout, not
+            # only when a request or General Manager decision was created.
+            scoped_denials=0
+            for allow,value in (('Branch',unrelated),('Account',frappe.get_doc(
+                    'Payment Entry',reception_proof['amended_receipt']).paid_to)):
+                frappe.set_user('Administrator')
+                permit=frappe.get_doc(dict(doctype='User Permission',user=users['finance_manager'],
+                    allow=allow,for_value=value)).insert()
+                frappe.db.commit();frappe.clear_cache()
+                try:
+                    if allow=='Branch':
+                        sections=as_user('finance_manager',lambda:refund_sections('finance'))
+                        assert not any(item['id']==name for group in sections for item in group['items'])
+                    refused=denied(lambda:as_user('finance_manager',lambda:tuition_refund_cmd.pay_tuition_refund(
+                        'native_refund_scoped_pay_denied_'+allow,name)))
+                    assert refused['denied']=='PermissionError',refused
+                    scoped_denials+=1
+                finally:
+                    frappe.set_user('Administrator');frappe.delete_doc('User Permission',permit.name)
+                    frappe.db.commit();frappe.clear_cache()
+            # A permitted Company restriction must keep the minimal FM payer
+            # functional, including the native reference lease's scope proof.
+            frappe.set_user('Administrator')
+            allowed_company=frappe.get_doc(dict(doctype='User Permission',user=users['finance_manager'],
+                allow='Company',for_value=original.company)).insert()
+            frappe.db.commit();frappe.clear_cache()
+            outstanding_before=float(frappe.db.get_value('Fees',fee,'outstanding_amount'))
+            # Execute native posting, then inject an error after its real
+            # submit. Catch WITHOUT an outside rollback: command-local atomic
+            # rollback must remove real native journals/payments/GL and its
+            # operation receipt, leaving the same approval reusable.
+            from frappe.model.base_document import get_controller
+            from toefl_house.security import active_command_kind
+            fault_stages=[]
+            for phase in ('Journal Entry','Payment Entry'):
+                # Journal Entry overrides Document.submit. Patch the actual
+                # controller entry point and call it first, preserving native
+                # accounting and checking its GL before the injected failure.
+                controller=get_controller(phase)
+                actual_submit=controller.submit
+                key='native_refund_actual_failure_'+phase.replace(' ','_')
+                before_counts={item:frappe.db.count(item) for item in (
+                    'Journal Entry','Payment Entry','GL Entry','TH Placement Operation','TH Placement Audit Event','DocShare')}
+                entered=[]
+                def fail_after_real_submit(document,*args,**kwargs):
+                    result=actual_submit(document,*args,**kwargs)
+                    if document.doctype==phase and active_command_kind()=='pay_tuition_refund':
+                        assert int(document.docstatus)==1
+                        assert frappe.db.count('GL Entry',{'voucher_type':phase,'voucher_no':document.name,'is_cancelled':0})==2
+                        entered.append(document.name)
+                        raise frappe.ValidationError('SYN controlled failure after actual '+phase)
+                    return result
+                with patch.object(controller,'submit',fail_after_real_submit):
+                    try:
+                        as_user('finance_manager',lambda:tuition_refund_cmd.pay_tuition_refund(key,name))
+                    except frappe.ValidationError as exc:
+                        assert str(exc)=='SYN controlled failure after actual '+phase,str(exc)
+                    else:
+                        raise AssertionError('Post-submit fault unexpectedly succeeded')
+                assert entered,('Actual native stage was not reached',phase)
+                assert before_counts=={item:frappe.db.count(item) for item in before_counts}
+                assert not frappe.db.exists('TH Placement Operation',digest(['pay_tuition_refund',key]))
+                assert frappe.db.get_value(dt,name,'status',for_update=True)=='Approved'
+                assert not frappe.db.get_value(dt,name,'payment_entry',for_update=True)
+                assert not frappe.db.get_value(dt,name,'credit_journal',for_update=True)
+                assert float(frappe.db.get_value('Fees',fee,'outstanding_amount',for_update=True))==outstanding_before
+                fault_stages.append(phase)
+            shares_before=frappe.db.count('DocShare',{'user':users['finance_manager']})
+            payout=as_user('finance_manager',lambda:tuition_refund_cmd.pay_tuition_refund(
+                'native_refund_independent_pay_0001',name))
+            assert frappe.db.count('DocShare',{'user':users['finance_manager']})==shares_before
+            assert payout['status']=='Paid' and float(payout['approved_amount'])==50.0,payout
+            assert payout['credit_journal'] and payout['payment_entry']
+            paid_case=desk_case('finance_manager','finance')
+            assert payout['credit_journal'] in paid_case['detail'] and payout['payment_entry'] in paid_case['detail']
+            assert not paid_case.get('action') and not paid_case.get('actions')
+            assert frappe.db.get_value(dt,name,'status')=='Paid'
+            source_receipt_frozen('Paid')
+            assert float(frappe.db.get_value('Fees',fee,'outstanding_amount'))==outstanding_before
+            payout_replay=as_user('finance_manager',lambda:tuition_refund_cmd.pay_tuition_refund(
+                'native_refund_independent_pay_0001',name))
+            assert payout_replay==payout
+            assert denied(lambda:as_user('finance_manager',lambda:tuition_refund_cmd.pay_tuition_refund(
+                'native_refund_second_key_denied_01',name)))
+            frappe.set_user('Administrator');frappe.delete_doc('User Permission',allowed_company.name)
+            frappe.clear_cache()
+            for native_type,native_name in (('Journal Entry',payout['credit_journal']),('Payment Entry',payout['payment_entry'])):
+                frappe.db.savepoint('refund_single_artifact_cancel')
+                try:
+                    document=frappe.get_doc(native_type,native_name)
+                    document.flags.ignore_permissions=True
+                    try:
+                        document.cancel()
+                    except frappe.PermissionError as exc:
+                        assert 'paired reversal' in str(exc),str(exc)
+                    else:
+                        raise AssertionError('Independent refund artifact cancellation bypassed the pair')
+                finally:
+                    frappe.db.rollback(save_point='refund_single_artifact_cancel')
+            assert denied(lambda:as_user('finance_officer',lambda:tuition_refund_cmd.request_tuition_refund(
+                'native_refund_after_pay_ceiling_01',original.student,original.company,fee,'51.00',
+                'SYN over remaining collected tuition','Synthetic ceiling check after actual payout')))
+            alternate=as_user('finance_officer',lambda:
+                tuition_refund_cmd.request_tuition_refund(
+                    'native_refund_denial_case_0001',original.student,
+                    original.company,fee,'20.00',
+                    'Second synthetic independent review case',
+                    'Synthetic collection and rejection evidence'))
+            rejected=as_user('general_manager',lambda:
+                tuition_refund_cmd.deny_tuition_refund(
+                    'native_refund_gm_deny_000001',alternate['name']))
+            assert rejected['status']=='Denied'
+            denied_events=frappe.db.get_all('TH Placement Audit Event',
+                filters={'target':alternate['name']},
+                fields=['action','after_hash','before_hash'])
+            assert len(denied_events)==2,denied_events
+            assert all(row.after_hash and len(row.after_hash)==64
+                       for row in denied_events),denied_events
+            assert frappe.db.count('Payment Entry')==original_payments+1
+            assert frappe.db.count('GL Entry')==original_gl+4
+            return {'request':name,'allowed_role_count':len(allowed),
+                    'unauthorized_roles_denied':2,
+                    'adversarial_command_denials':8,
+                    'idempotent_same_key_replay':True,
+                    'branch_scoped_document_and_list_denied':True,
+                    'gm_approved':approval['status']=='Approved',
+                    'separate_case_denied':rejected['status']=='Denied',
+                    'audit_events_verified':5,'independent_native_pair_posted':True,
+                    'payer_needs_no_finance_officer_role':True,'payout_scope_denials':scoped_denials,
+                    'idempotent_payout_replay':True,'individual_artifact_cancellation_denied':2,
+                    'original_outstanding_preserved':True,'payment_entry':payout['payment_entry'],
+                    'credit_journal':payout['credit_journal'],'real_post_submit_failures_rolled_back':fault_stages,
+                    'staff_refund_desk_actions_context_links_and_branch_denial':True,
+                    'source_receipt_cancel_cost_center_allocation_frozen':frozen_stages}
+        refund_visibility_proof=check('native-tuition-refund-list-document-role-parity',traced(tuition_refund_read_list_parity))
+        def refund_unpaid_approval_withdrawal():
+            from toefl_house.finance import tuition_refund_commands as cmd
+            original=frappe.get_doc('TH Tuition Refund Request',refund_visibility_proof['request'])
+            counts={dt:frappe.db.count(dt) for dt in ('Journal Entry','Payment Entry','GL Entry','Payment Ledger Entry','DocShare')}
+            created=as_user('refund_officer',lambda:cmd.request_tuition_refund(
+                'native_void_request_0001',original.student,original.company,original.fees,'40.00',
+                'SYN approval withdrawal qualification','SYN documentary evidence'))
+            name=created['name']
+            as_user('general_manager',lambda:cmd.approve_tuition_refund('native_void_approve_0001',name,'SYN original approval evidence'))
+            assert denied(lambda:as_user('refund_officer',lambda:cmd.request_tuition_refund(
+                'native_void_reserved_ceiling',original.student,original.company,original.fees,'11.00',
+                'SYN reserved ceiling check','SYN evidence')))
+            assert denied(lambda:as_user('finance_manager',lambda:cmd.void_tuition_refund(
+                'native_void_wrong_role_0001',name,'SYN wrong-role withdrawal')))['denied']=='PermissionError'
+            assert denied(lambda:as_user('general_manager',lambda:cmd.void_tuition_refund(
+                'native_void_empty_reason_0001',name,' ')))
+            withdrawn=as_user('general_manager',lambda:cmd.void_tuition_refund(
+                'native_void_success_0001',name,'SYN case withdrawn before any cash payout'))
+            assert withdrawn['status']=='Voided'
+            assert as_user('general_manager',lambda:cmd.void_tuition_refund(
+                'native_void_success_0001',name,'SYN case withdrawn before any cash payout'))==withdrawn
+            row=frappe.get_doc('TH Tuition Refund Request',name)
+            assert row.approved_by==users['general_manager'] and float(row.approved_amount)==40
+            assert row.approval_evidence=='SYN original approval evidence'
+            assert row.voided_by==users['general_manager'] and row.void_reason and row.voided_on
+            assert denied(lambda:as_user('finance_manager',lambda:cmd.pay_tuition_refund('native_void_pay_denied_0001',name)))
+            assert denied(lambda:as_user('general_manager',lambda:cmd.void_tuition_refund(
+                'native_void_paid_denied_0001',original.name,'A Paid case cannot be voided')))
+            replacement=as_user('refund_officer',lambda:cmd.request_tuition_refund(
+                'native_void_released_ceiling',original.student,original.company,original.fees,'50.00',
+                'SYN released reservation check','SYN new independently documented case'))
+            as_user('general_manager',lambda:cmd.deny_tuition_refund('native_void_replacement_deny',replacement['name']))
+            events=frappe.get_all('TH Placement Audit Event',filters={'target':name},fields=['action','before_hash','after_hash'])
+            assert {row.action for row in events}=={'request_tuition_refund','approve_tuition_refund','void_tuition_refund'}
+            assert len(events)==3 and all(row.after_hash for row in events)
+            assert counts=={dt:frappe.db.count(dt) for dt in counts}
+            return dict(request=name,status='Voided',approval_history_preserved=True,reservation_released=True,
+                paid_case_refused=True,wrong_role_refused=True,exact_replay=True,audit_events=3,native_financial_counts_unchanged=True)
+        check('native-tuition-refund-unpaid-approval-withdrawal',traced(refund_unpaid_approval_withdrawal))
+        def refund_atomic_failure_preserves_caller():
+            from toefl_house.atomic_commands import execute_atomic
+            frappe.set_user('Administrator')
+            prior=frappe.get_doc(dict(doctype='Note',title='SYN atomic refund prior caller write',public=0)).insert()
+            point_before={dt:frappe.db.count(dt) for dt in ('TH Placement Operation','TH Placement Audit Event','GL Entry','Payment Entry')}
+            key='native_refund_atomic_failure_0001'
+            attempted=[]
+            def failing_work(actor):
+                note=frappe.get_doc(dict(doctype='Note',title='SYN atomic refund failed command write',public=0)).insert(ignore_permissions=True)
+                attempted.append(note.name)
+                raise frappe.ValidationError('SYN controlled post-write failure')
+            try:
+                as_user('finance_manager',lambda:execute_atomic('pay_tuition_refund',key,
+                    {'request':refund_visibility_proof['request']},failing_work))
+            except frappe.ValidationError as exc:
+                assert str(exc)=='SYN controlled post-write failure',str(exc)
+            else:
+                raise AssertionError('Atomic failure probe unexpectedly succeeded')
+            # No outside rollback here: prove the helper itself restored its
+            # attempt while retaining a caller write from before its savepoint.
+            assert attempted and frappe.db.exists('Note',prior.name)
+            assert not frappe.db.exists('Note',attempted[0])
+            assert not frappe.db.exists('TH Placement Operation',digest(['pay_tuition_refund',key]))
+            assert point_before=={dt:frappe.db.count(dt) for dt in point_before}
+            frappe.set_user('Administrator')
+            frappe.delete_doc('Note',prior.name)
+            return {'real_database_failure_injected':True,'caller_write_preserved':True,
+                    'failed_write_operation_and_audit_rolled_back':True,'financial_counts_unchanged':True}
+        check('native-refund-atomic-failure-preserves-caller',traced(refund_atomic_failure_preserves_caller))
+        def student_journal_refund_bypass_denied():
+            frappe.set_user('Administrator')
+            fee=frappe.db.get_value('Payment Entry Reference',
+                {'parent':reception_proof['amended_receipt'],
+                 'reference_doctype':'Fees'},'reference_name')
+            original=frappe.get_doc('Fees',fee)
+            cash=frappe.get_doc('Payment Entry',reception_proof['amended_receipt']).paid_to
+            before={dt:frappe.db.count(dt) for dt in ('Journal Entry','GL Entry')}
+            attempts=0
+            for party_type, reference in (('Student',None),('Student','Fees'),(None,'Fees')):
+                frappe.db.savepoint('student_journal_containment')
+                try:
+                    journal=frappe.get_doc(dict(doctype='Journal Entry',
+                        voucher_type='Journal Entry',company=original.company,
+                        posting_date=original.posting_date,
+                        accounts=[dict(account=original.receivable_account,
+                            party_type=party_type,party=original.student if party_type else None,
+                            reference_type=reference,reference_name=fee if reference else None,
+                            debit_in_account_currency=1,cost_center=original.cost_center),
+                            dict(account=cash,credit_in_account_currency=1,
+                                 cost_center=original.cost_center)]))
+                    try:
+                        journal.insert(ignore_permissions=True)
+                    except frappe.ValidationError as exc:
+                        assert 'Student/Fees Journal Entries require' in str(exc),str(exc)
+                        attempts+=1
+                    else:
+                        raise AssertionError('Direct Student/Fees journal bypass accepted')
+                finally:
+                    frappe.db.rollback(save_point='student_journal_containment')
+            assert before=={dt:frappe.db.count(dt) for dt in before}
+            return {'real_native_insert_denials':attempts,'journal_and_gl_counts_unchanged':True}
+        check('native-student-journal-refund-bypass-denied',traced(student_journal_refund_bypass_denied))
+        def native_unequal_solar_installments():
+            # Keep this positive native posting test at the END: it appends a
+            # new synthetic Owner billing-policy version, and must not change
+            # the earlier legacy billing/cashier/correction fixtures.
+            from datetime import date
+            from toefl_house.finance import installments as fin_inst
+            from toefl_house.finance import shamsi as solar
+            frappe.set_user('Administrator')
+            enrollment=odcp_learners['installment']['program_enrollment']
+            assert not frappe.db.exists('Fees',
+                {'program_enrollment':enrollment,'docstatus':('!=',2)})
+            posting=frappe.utils.add_days(frappe.utils.today(),1)
+            # Governing versions are strictly monotone: the existing
+            # synthetic Finance journey already adds a version effective
+            # today. Exercise tomorrow's effective version under a test-only
+            # simulated tomorrow clock, never backdate/overwrite the policy.
+            # Both Owner command and issuance read this same mock site date.
+            with patch('frappe.utils.today',return_value=posting):
+                version=as_user('course_owner',lambda:billp.set_billing_policy_version(
+                    'native_solar_inst_policy_0001','SYN-BILLING',posting,
+                    'SYN independently authorized 60/40 Solar-month finance fixture',
+                    90,30,'any',1,2,0,'Solar Hijri Month',0,25,1))
+                assert int(version['governing_allow_unequal_installments'])==1,version
+                # Find the next contractual 25th; an already-past 25th in
+                # this Solar month is not a future first due date.
+                solar_month=solar.month_key(date.fromisoformat(posting))
+                candidate_dates=solar.monthly_due_dates(solar_month,3,0,25)
+                first_due=next(d for d in candidate_dates
+                               if d>=date.fromisoformat(posting))
+                expected_dates=solar.monthly_due_dates(
+                    solar.month_key(first_due),2,0,25)
+                count_before=frappe.db.count('GL Entry')
+                result=as_user('finance_officer',lambda:fin_inst.issue_tuition_installment_plan(
+                    'native_solar_6040_plan_00001',enrollment,fin['fee_structure'],
+                    posting,str(first_due),2,shares=[60,40]))
+                rows=frappe.db.get_all('Fees',
+                    filters={'program_enrollment':enrollment,'docstatus':1},
+                    fields=['name','docstatus','grand_total','outstanding_amount',
+                            'due_date','th_installment_sequence','th_installment_count'],
+                    order_by='th_installment_sequence asc')
+                assert len(rows)==2,('Expected exactly two submitted native Fees',rows)
+                amounts=[round(float(r.grand_total),2) for r in rows]
+                assert amounts==[15000.0,10000.0],(amounts,result)
+                assert round(sum(amounts),2)==25000.0,amounts
+                assert [str(r.due_date) for r in rows]==[str(d) for d in expected_dates],(rows,expected_dates)
+                assert [int(r.th_installment_sequence) for r in rows]==[1,2],rows
+                assert all(int(r.th_installment_count)==2 for r in rows),rows
+                assert all(round(float(r.outstanding_amount),2)==amount
+                           for r,amount in zip(rows,amounts)),rows
+                for row in rows:
+                    gl=frappe.db.get_all('GL Entry',
+                        filters={'voucher_type':'Fees','voucher_no':row.name,
+                                 'is_cancelled':0},
+                        fields=['debit','credit'])
+                    assert len(gl)>0,(row.name,'No native GL posting')
+                    debit=round(sum(float(x.debit) for x in gl),2)
+                    credit=round(sum(float(x.credit) for x in gl),2)
+                    assert debit==credit,(row.name,debit,credit)
+                assert frappe.db.count('GL Entry')>count_before
+                replay=as_user('finance_officer',lambda:fin_inst.issue_tuition_installment_plan(
+                    'native_solar_6040_plan_00001',enrollment,fin['fee_structure'],
+                    posting,str(first_due),2,shares=[60,40]))
+                assert replay==result,('Installment replay is not idempotent',replay,result)
+                assert frappe.db.count('Fees',{'program_enrollment':enrollment,
+                                               'docstatus':('!=',2)})==2
+                assert denied(lambda:as_user('finance_officer',
+                    lambda:fin_inst.issue_tuition_installment_plan(
+                        'native_solar_6040_repeat_001',enrollment,fin['fee_structure'],
+                        posting,str(first_due),2,shares=[60,40])))
+                assert frappe.db.count('Fees',{'program_enrollment':enrollment,
+                                               'docstatus':('!=',2)})==2
+                return {'native_fees':[r.name for r in rows],'amounts_afn':amounts,
+                        'due_dates':expected_dates,'submitted':True,
+                        'gl_balanced':True,'same_key_replay':True,
+                        'different_key_duplicate_denied':True}
+        check('native-finance-unequal-solar-installment-posting-and-gl',
+              traced(native_unequal_solar_installments))
+        from initial_assessment import run as qualify_initial_assessment
+        check('native-owner-complete-initial-assessment-snapshot', traced(
+            lambda: qualify_initial_assessment(users['course_owner'], users['finance_manager'])))
+        # Run last: preserve earlier acceptance baselines and retain the new
+        # synthetic Company as reproducible concurrent accounting evidence.
+        from tuition_refund_races import run as qualify_refund_races
+        check('native-tuition-refund-real-concurrent-transactions', traced(qualify_refund_races))
+        def deferred_refund_recovery_server_gate():
+            before={dt:frappe.db.count(dt) for dt in ('Journal Entry','Payment Entry','GL Entry','TH Placement Operation','TH Placement Audit Event')}
+            methods=('request_tuition_refund_reversal','approve_tuition_refund_reversal',
+                     'deny_tuition_refund_reversal','reverse_tuition_refund')
+            refused=0
+            for label in ('receptionist','finance_manager','general_manager','teacher_one','course_owner'):
+                session=login(label)
+                try:
+                    for method in methods:
+                        response=session.post(base+'/api/method/toefl_house.finance.tuition_refund_reversal_commands.'+method,
+                            json={'enable':True,'ignore_permissions':True},timeout=40)
+                        assert response.status_code==403,(label,method,response.status_code)
+                        assert response.json().get('exc_type')=='PermissionError'
+                        assert 'Paid refund recovery is not available in this release' in response.text
+                        refused+=1
+                finally:session.close()
+            frappe.db.rollback()
+            assert before=={dt:frappe.db.count(dt) for dt in before}
+            return dict(five_role_http_refusals=refused,business_records_unchanged=True,client_flags_cannot_enable=True)
+        check('native-deferred-refund-recovery-server-gate',traced(deferred_refund_recovery_server_gate))
         report['status']='pass'
 
     except Exception as exc:

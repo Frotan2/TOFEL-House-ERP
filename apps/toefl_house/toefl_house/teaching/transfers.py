@@ -21,6 +21,11 @@ Nothing is deleted and nothing is rewritten: attendance, assessment results,
 financial references and instructor assignments still point at the class
 they happened in, and the transfer row carries the counts and identifiers of
 those records so any later audit can find them by name.
+
+Scope (Owner addendum 2026-10-28): only a same-level "Class" transfer —
+same program, same branch, same term, different class, with levels proven
+equal — may be requested or executed. Every other kind remains refused by
+_transfer_scope_authorized, regardless of the policy switches.
 """
 from datetime import date, timedelta
 import json
@@ -41,21 +46,74 @@ MAX_SESSIONS = 200
 TERMINAL_CLASS = ("Completed", "Cancelled")
 TRANSFER_KINDS = ("Class", "Time", "Program", "Branch")
 
-# Release decision D5 remains DEFERRED in docs/owner-decisions.json. An
-# effective-dated class-operations allow_transfers toggle is a *business term*,
-# never independent Owner approval to unlock the deferred transfer lifecycle.
-# Only a reviewed code change citing an explicit superseding Owner decision may
-# change this release authorization boundary. Synthetic tests can inject
-# approval locally; live requests may not set or override this flag.
-def _transfer_scope_authorized():
+# Release decision D5 remains DEFERRED in docs/owner-decisions.json, EXCEPT
+# for the narrow scope the Owner's 2026-10-28 addendum explicitly grants:
+# controlled transfers between classes at the same academic level
+# (docs/owner-decisions.json, owner_policy_addenda_2026_10_28
+# .student_operations: same_level_transfer_allowed=true, and the setup
+# preset's transfers_between_classes_same_level=true, with
+# transfer_requires_capacity_and_auditable_academic_approval=true and
+# other_advanced_transfers_remain_deferred=true).
+#
+# The boundary implemented below is deliberately narrower than "same level"
+# alone, because the transfer machinery itself classifies what changes:
+#   * "Class"  = same program, same branch, same term, different class
+#     (parallel sections) — the only kind this addendum activates;
+#   * "Program" (different program), "Branch" (different branch) and "Time"
+#     (different term) are the advanced kinds that remain deferred, even
+#     when the class-operations policy switches for them are on, and even
+#     when two different programs happen to map to one level row.
+# An effective-dated class-operations allow_transfers toggle is a *business
+# term*, never independent Owner approval to unlock any other kind.
+# Synthetic tests can inject approval locally; live requests may not set or
+# override this flag. The function still ends in `return False`: with no
+# proven same-level Class facts, or for any other kind, it refuses.
+def _program_level(program):
+    """The TH Program Level anchored to a native program, or None.
+
+    A level row links exactly one native program (its own validate refuses
+    a second level for the same program), so a program's level is a
+    function of its program name. An unresolvable program proves nothing
+    and therefore cannot prove sameness.
+    """
+    if not program:
+        return None
+    return frappe.db.get_value(
+        "TH Program Level", {"native_program": program}, "name")
+
+
+def _same_level(source, target):
+    """True only when the two classes' levels are proven equal.
+
+    Both programs must resolve to an existing TH Program Level row.
+    Matching program names alone are not evidence of a configured level.
+    Different program names remain subject to the same level-row check;
+    an unresolvable program always fails closed.
+    """
+    source_program = source.get("program") if source else None
+    target_program = target.get("program") if target else None
+    if not source_program or not target_program:
+        return False
+    # A native program name alone does not prove an Owner-anchored level.
+    # Require both class programs to resolve to the same actual level row.
+    source_level = _program_level(source_program)
+    target_level = _program_level(target_program)
+    return bool(source_level) and source_level == target_level
+
+
+def _transfer_scope_authorized(source=None, target=None, kind=None):
+    if kind == "Class" and _same_level(source, target):
+        return True
     return False
 
 
-def _require_transfer_scope():
-    if not _transfer_scope_authorized():
+def _require_transfer_scope(source=None, target=None, kind=None):
+    if not _transfer_scope_authorized(source, target, kind):
         raise frappe.ValidationError(
-            "Owner decision D5 has not authorized class transfers; "
-            "a class-operations policy switch alone cannot activate them")
+            "Only Owner-approved same-level class transfers are authorized "
+            "(Owner addendum 2026-10-28); cross-level, cross-program, "
+            "branch, time and other advanced transfers remain deferred "
+            "under decision D5")
 
 
 
@@ -349,7 +407,6 @@ def request_class_transfer(request_key, student, from_group, to_group, reason,
     from toefl_house.api import _execute
 
     def work(actor):
-        _require_transfer_scope()
         terms = class_operations.require_operations(
             feature="allow_transfers",
             message="Transfers are not permitted by the governing "
@@ -365,6 +422,13 @@ def request_class_transfer(request_key, student, from_group, to_group, reason,
         _lock(GROUP, target)
         evidence, _seats = _eligibility(student_name, source, target,
                                         effective_day, terms)
+        # The scope gate runs AFTER eligibility is proven, on the proven
+        # facts (not on client input): policy-switch refusals keep their
+        # own messages, and only a proven same-level Class transfer may
+        # proceed to a request row. The gate is re-checked at approval
+        # under lock, because the world may have moved since the request.
+        _require_transfer_scope(evidence["source"], evidence["target"],
+                                evidence["kind"])
         preserved = preserved_evidence(student_name, source)
         doc = frappe.get_doc({
             "doctype": TRANSFER, "student": student_name,
@@ -410,7 +474,6 @@ def approve_class_transfer(request_key, transfer, override=""):
     from toefl_house.api import _execute
 
     def work(actor):
-        _require_transfer_scope()
         terms = class_operations.require_operations(
             feature="allow_transfers",
             message="Transfers are not permitted by the governing "
@@ -435,6 +498,11 @@ def approve_class_transfer(request_key, transfer, override=""):
         effective_day = str(row["effective_date"])
         evidence, _seats = _eligibility(student, source, target,
                                         effective_day, terms)
+        # Re-check the narrow scope at execution time, on the live facts
+        # re-proven under lock: a request that was same-level when filed
+        # must not execute if its classes have since changed kind/level.
+        _require_transfer_scope(evidence["source"], evidence["target"],
+                                evidence["kind"])
         seat = capacity.assert_seat_available(target, student, override)
         # Executing the transfer IS a roster change, so it obeys the same owner
         # window as add/move/remove. Without this, an approved transfer would

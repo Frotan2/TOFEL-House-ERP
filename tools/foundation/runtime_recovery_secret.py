@@ -7,7 +7,7 @@ import sys
 def main():
     import frappe
     from frappe.utils.password import get_decrypted_password, set_encrypted_password
-    allowed = (["prepare", "foundation.localhost"], ["verify", "recovery.localhost"])
+    allowed = (["prepare", "foundation.localhost"], ["verify", "restore-recovery.localhost"])
     if os.environ.get("GITHUB_ACTIONS") != "true" or sys.argv[1:] not in allowed:
         raise SystemExit("Disposable source/recovery sites only")
     frappe.init(site=sys.argv[2], sites_path=str(Path.cwd()))

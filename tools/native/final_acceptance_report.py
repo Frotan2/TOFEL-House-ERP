@@ -62,12 +62,15 @@ REQUIRED_JOURNEYS = {
         "teaching-attendance-atomic-rollback",
     ),
     "finance": (
+        "reception-native-http-cash-receipt-correction-handover",
         "finance-tuition-happy-path",
         "finance-placement-happy-path",
         "book-native-stock-catalog-and-receipt",
         "book-native-unauthorized-role-denied",
         "book-native-mixed-service-invoice-denied",
         "book-native-no-stock-update-denied",
+        "book-native-unconfigured-price-denied",
+        "book-native-oversell-beyond-bin-denied",
         "book-native-sale-posts-invoice-stock-and-ledger",
         "book-native-payment-settles-invoice",
         "book-native-return-restocks-and-credits",
@@ -75,6 +78,10 @@ REQUIRED_JOURNEYS = {
         "book-http-cashier-sale-payment-return-refund",
         "book-native-converted-student-can-buy-only-books",
         "book-native-placement-item-still-denied",
+        "book-native-return-warehouse-and-rate-abuse-denied",
+        "book-native-return-cancel-reverses-stock",
+        "book-native-program-subgroup-sale",
+        "book-native-stock-ledger-reconciliation",
     ),
     "desks_and_branch_permissions": (
         "role-desk-hosted-qualification",
@@ -171,6 +178,21 @@ def _verify_role_page_css(observation):
         raise ValueError("Role Page CSS differs from the installed app asset")
 
 
+def _verify_reception_cash(observation):
+    if not isinstance(observation, dict):
+        raise ValueError("Reception cash reconciliation is missing")
+    names = [observation.get(key) for key in ("receipt", "amended_receipt", "transfer")]
+    if any(not isinstance(name, str) or not name or len(name) > 140 for name in names) or len(set(names)) != 3:
+        raise ValueError("Reception cash posting identities are incomplete")
+    for key, expected in (("immediate_student_reduction", 100), ("handover_student_change", 0),
+                          ("counter_net", 0), ("main_cash_increase", 100)):
+        if type(observation.get(key)) not in (int, float) or observation[key] != expected:
+            raise ValueError("Reception native cash reconciliation differs: " + key)
+    for key in ("idempotent", "temporary_shares_removed", "unauthorized_read_denied", "second_handover_denied"):
+        if observation.get(key) is not True:
+            raise ValueError("Reception cash control is unverified: " + key)
+
+
 def verify_report(evidence: dict, commit: str) -> dict:
     """Validate real executed check receipts, not source-level test names."""
     if not commit or len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
@@ -210,6 +232,7 @@ def verify_report(evidence: dict, commit: str) -> dict:
     validate_configuration_http(receipts["role-desk-configuration-http-denials"].get("observation"), denied=True)
     validate_book_reconciliation(receipts["book-native-return-cash-refund-reconciliation"].get("observation"))
     validate_book_http(receipts["book-http-cashier-sale-payment-return-refund"].get("observation"))
+    _verify_reception_cash(receipts["reception-native-http-cash-receipt-correction-handover"].get("observation"))
     return {
         "scope": "HOSTED SYNTHETIC NATIVE ERP JOURNEYS ONLY",
         "commit": commit,

@@ -104,30 +104,39 @@ Do not distribute the package as an approved product yet.
 Then open the folder `product → windows` and do the steps below **in order**.
 Do not skip or reorder steps — later steps prove earlier ones survived.
 
-### Source line endings (automatic; no manual cleanup)
+### Source line endings and the prebuilt image (automatic; no manual cleanup)
 
 - Fresh Git checkouts pin product build inputs to UTF-8/LF; the Windows
-  `.cmd` launchers intentionally stay CRLF for `cmd.exe`.
-- `Install` and `Repair` run `Normalize Product Sources.ps1` before building.
-  It scans the Dockerfile's `COPY` sources and build-control files, removes
-  UTF-8 BOMs and normalizes CRLF/CR to LF only for recognized text sources.
-  It does **not** traverse `product/data`, credentials, or backups. Unknown
-  binary inputs with CR/BOM bytes fail safely instead of being rewritten.
-- If source bytes were changed, `Install` builds the image and `Repair`
-  rebuilds it before restarting services. `Repair` also rebuilds an old image
-  that lacks the verified `source-eol=lf-v1` marker, even if the worktree is
-  already LF. Allow the image-build time on that first recovery run.
-- If the source check reports an error, stop and contact engineering; do not
-  run a broad line-ending converter or edit the runtime-data directory.
+  `.cmd` launchers intentionally stay CRLF for `cmd.exe`, and their flow is
+  linear single-line `IF ... GOTO` labels with no multi-line blocks or `FOR`
+  commands so they parse identically under either ending.
+- The customer `Install` and `Repair` scripts **never build** the application
+  on the customer PC and never normalize or compile sources there. They
+  verify the prebuilt `release\toefl-house-erp-app.tar` checksum and release
+  manifest **before** any credential, import or service change, then import
+  the verified image and confirm the loaded image identity (exact tag plus
+  source-revision/version labels). A missing or failed archive is a safe
+  refusal with provider-contact guidance, never a source build.
+- The provider bakes the verified `source-eol=lf-v1` marker into the image at
+  build time; the Windows verifier requires it on both the archive config
+  and the loaded image before startup or repair is permitted.
+- If any verification reports an error, stop and contact engineering; do not
+  run a broad line-ending converter, build the image yourself, or edit the
+  runtime-data directory.
 
 ---
 
 ## Step 1 — Install (once)
 
-- **Action:** double-click `Install TOEFL House ERP.cmd`. Keep the window open.
-- **Expected:** it checks Docker Desktop, asks nothing, builds for 20–60
-  minutes the first time, then says it is finishing inside the app
-  ("site setup can take 15-40 minutes on first run"). Finally it prints a box
+- **Action:** on the disposable test PC only, double-click
+  `Install TOEFL House ERP.cmd` (or choose **Install** in the graphical
+  launcher). Keep the window open.
+- **Expected:** it checks Docker Desktop, asks nothing, verifies the
+  prebuilt package integrity **before** creating any local credentials,
+  refuses safely if the image or manifest is missing or fails its check,
+  then imports the verified image (this can take several minutes) and says
+  it is finishing inside the app ("site setup can take 15-40 minutes on
+  first run"). Nothing is compiled on this computer. Finally it prints a box
   with **Username: Administrator** and a **Password**, opens your browser at
   `http://127.0.0.1:8000`, and ends with "Install finished".
 - **Evidence 1:** screenshot/photo of the printed login box **and** of the
@@ -209,7 +218,8 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
 ## Step 8 — Repair
 
 - **Action:** double-click `Repair TOEFL House ERP.cmd`, wait (a few minutes).
-- **Expected:** it restarts services, waits, then opens the browser and says
+- **Expected:** it re-verifies the packaged image, reloads it only after the
+  checks pass, restarts services, waits, then opens the browser and says
   "Repair complete". It never deletes data.
 - **Also true after a PC or Docker Desktop restart:** the ERP comes back by
   itself the next time Docker Desktop runs; if anything still misbehaves after

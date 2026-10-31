@@ -80,7 +80,9 @@ class FinanceContainmentWiringTests(unittest.TestCase):
     def test_native_book_sale_is_stock_only_and_role_checked(self):
         source = FINANCE.read_text(encoding="utf-8")
         for clause in ('def _native_book_sale_allowed(doc, method=None):',
-                       'item.item_group != "Books"',
+                       # Books or any program sub-group below it (GE/EAP/…)
+                       # — nested-set subtree, never an exact-name accident.
+                       'books.book_item_group_ok(item.item_group)',
                        'int(item.is_stock_item or 0) != 1',
                        'int(item.is_sales_item or 0) != 1',
                        'getattr(doc, "update_stock", 0)',
@@ -143,10 +145,10 @@ class FinanceContainmentWiringTests(unittest.TestCase):
 
         tuition = body("issue_tuition_fees")
         self.assertIn("for update", tuition)
-        self.assertIn('"fee_structure": fs_name', tuition,
-                      "duplicate tuition is per enrollment and fee plan, not enrollment alone")
+        self.assertIn('frappe.db.exists(FEES, {"program_enrollment": pe_name,', tuition,
+                      "duplicate tuition must cover all Fees for the enrollment")
         self.assertLess(tuition.index("for update"),
-                        tuition.index("Tuition is already billed for this enrollment on this fee plan"),
+                        tuition.index("Tuition is already billed for this enrollment;"),
                         "the enrollment must be locked before the duplicate-billing check")
         placement = body("issue_placement_fee")
         self.assertIn("for update", placement)

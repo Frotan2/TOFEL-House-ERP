@@ -9,10 +9,19 @@ on:
   push:
     branches:
       - main
+      # Qualification-only release candidate; tagged publication remains gated.
+      - work
+      # Release-critical fixes must qualify before integration, not first
+      # discover image/runtime failures after reaching main.
+      - 'fix/**'
     tags:
       - "v*"
     paths:
       - .github/workflows/product-image.yml
+      # Changing native qualification policy must also recheck the exact
+      # customer-image release gate before packaging.
+      - .github/workflows/native-lifecycle.yml
+      - .github/workflows/windows-customer-package.yml
       # The final retired-branch cleanup changes the release source revision;
       # qualify its exact main SHA rather than only an earlier integration head.
       - .github/workflows/retire-merged-branches.yml
@@ -20,7 +29,32 @@ on:
       - .gitattributes
       - .dockerignore
       - tests/foundation/test_product_packaging.py
+      # Package contents and their delivery contracts must qualify the image
+      # on the same revision, even when application code is unchanged.
+      - tools/release/export_offline_runtime.py
+      - tools/release/windows-prerequisites.json
+      - tools/release/create_customer_package.py
+      - "tools/release/Build Customer Installer.ps1"
+      - tools/release/windows/**
+      - tests/foundation/test_customer_exe.ps1
+      - tests/foundation/test_offline_runtime.ps1
+      - tests/foundation/test_customer_package_manifest.py
+      - tests/foundation/test_customer_install_package.py
+      - tests/foundation/test_windows_delivery_finalization.py
+      - tests/foundation/test_windows_backup_discovery.py
+      - tests/foundation/test_windows_package_hashing.py
+      - tests/security/test_setuptools_windows_boundary_2026_10_24.py
       - tests/foundation/test_native_restore_rehearsal.py
+      # Foundation recovery fixture must qualify the exact deliverable SHA,
+      # not just run isolated source checks on a different branch.
+      - tools/foundation/runtime_install.py
+      - tools/foundation/runtime_encryption_key.py
+      - tools/foundation/runtime_recovery_secret.py
+      - tools/foundation/runtime_recovery_session.py
+      - tools/foundation/runtime_isolation.py
+      - tests/foundation/test_foundation_disposable_restore.py
+      - tests/foundation/test_native_meta_contract.py
+      - tests/foundation/test_encryption_key_recovery.py
       # The native restore rehearsal must also keep the actual desktop image
       # build green; changes to the disposable runner cannot silently skip it.
       - tools/native/runtime_restore.py
@@ -32,9 +66,24 @@ on:
       # Changes to finance acceptance tests must also qualify the deliverable
       # that the customer is about to receive, not only the fast Owned suite.
       - tests/finance/**
+      # Initial course catalog/fee and Owner policy regressions must qualify
+      # the exact customer image, not only the quick Python test runner.
+      - tests/setup/**
+      # Release trigger contracts are themselves part of qualification.
+      - tests/foundation/test_release_workflow_triggers.py
+      - tests/foundation/test_windows_update_path.py
+      # Security-triage deltas and their regression tests are release inputs.
+      # A new advisory decision must qualify the actual customer image.
+      - docs/engineering/evidence/sec-deps-01/**
+      - tests/security/**
+      # Payroll regression contracts are release-critical: a change to the
+      # additive/finance-approval guard must qualify the customer image too.
+      - tests/teaching/test_compensation_guards.py
+      - tests/teaching/test_compensation.py
       - tools/native/migrate_restore_site.py
       - tools/native/policy_restart_check.py
       - tools/native/browser_role_acceptance.py
+      - tools/native/product_update_host_probe.py
       # The Dockerfile COPYs these helpers into the production image. A change
       # to their security checks must rebuild the image on this PR, not merely
       # pass the fast Python suite.
@@ -48,14 +97,27 @@ on:
       - tools/foundation/realtime-locks/**
       # Desk markdown input cap (showdown GHSA-rmmh-p597-ppvv), executed in the image build.
       - tools/foundation/secure_markdown.py
+      - tools/foundation/secure_deepmerge.py
+      - tools/foundation/deepmerge-hashes.json
+      - tools/foundation/secure_uri_decoder.py
+      - tools/foundation/decoder/**
+      - tools/native/tuition_refund_accounting_probe.py
       - tools/foundation/fix_setup_sidebar.py
       - product/**
       - apps/**
       - docs/engineering/foundation-version-matrix.json
       - docs/engineering/LAUNCH-RUNBOOK.md
       - docs/PRODUCT.md
+      - docs/CUSTOMER-UPDATES.md
+      - docs/engineering/SAFE-UPDATES.md
       - docs/owner-decisions.json
+      - tools/release/export_offline_runtime.py
+      - tools/release/windows-prerequisites.json
       - tools/release/create_customer_package.py
+      - "tools/release/Build Customer Installer.ps1"
+      - tools/release/windows/**
+      - tests/foundation/test_customer_exe.ps1
+      - tests/foundation/test_offline_runtime.ps1
       - tools/release/verify_ci_gates.py
   workflow_dispatch:
 
@@ -66,7 +128,7 @@ permissions:
   attestations: write
 
 concurrency:
-  group: product-image-${{ github.ref }}
+  group: product-image-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -181,6 +243,47 @@ jobs:
           label=$(docker image inspect --format '{{index .Config.Labels "org.toefl-house.source-eol"}}' toefl-house-erp-app:ci)
           test "$label" = "lf-v1"
           echo "::notice title=Image EOL contract::entrypoint/Python shebangs, copied text inputs, and source-eol label verified in the built image"
+      - name: Verify shipped deepmerge distributions and emitted asset identities
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint python3 toefl-house-erp-app:ci -c '
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0, "/product")
+          from secure_deepmerge import secure, receipt
+          root = Path("/home/frappe/bench/apps")
+          secure(root, verify_only=True, apps=True)
+          actual = receipt(root, assets=True)
+          expected = json.loads(Path("/build/deepmerge-distribution.json").read_text())
+          assert actual == expected, "Shipped code/assets differ from the pre-export build receipt"
+          print(json.dumps(actual, indent=2))
+          ' > "$RUNNER_TEMP/deepmerge-distribution-image.json"
+      - name: Keep shipped dependency identity evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: deepmerge-distribution-image
+          path: ${{ runner.temp }}/deepmerge-distribution-image.json
+          if-no-files-found: error
+      - name: Verify shipped URI decoder and hostile inputs
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint python3 toefl-house-erp-app:ci -c '
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0, "/product")
+          from secure_uri_decoder import secure, receipt
+          root = Path("/home/frappe/bench/apps")
+          actual = receipt(root, secure(root, verify=True))
+          expected = json.loads(Path("/build/uri-decoder-distribution.json").read_text())
+          assert actual == expected, "Shipped decoder differs from the pre-export receipt"
+          print(json.dumps(actual, indent=2))
+          ' > "$RUNNER_TEMP/uri-decoder-distribution-image.json"
+      - name: Keep shipped URI decoder evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: uri-decoder-distribution-image
+          path: ${{ runner.temp }}/uri-decoder-distribution-image.json
+          if-no-files-found: error
       - name: Report image footprint
         run: |
           set -euo pipefail
@@ -758,6 +861,14 @@ jobs:
           act status | grep -q 'Site operational mode: REFUSED'
           echo "::notice title=Owner site-mode lifecycle::REFUSED -> verified backup/restore -> PRODUCTION mode; production authorization remains REJECT -> REFUSED"
           TOEFL_FIRST_BOOT
+      - name: Independently observe real hosted Docker identity without exposing its API to the engine
+        run: |
+          set -euo pipefail
+          docker run --rm --user root \
+            --mount type=bind,source=/var/run/docker.sock,target=/run/th-update-docker.sock,readonly \
+            --volume "$PWD/product:/product-root:ro" \
+            --volume "$PWD/tools/native/product_update_host_probe.py:/probe.py:ro" \
+            --entrypoint python3 toefl-house-erp-app:local /probe.py
       - name: Browser UI acceptance (real headless Chromium, real login flow)
         # Container health, API calls and unit tests cannot prove the
         # operator actually sees a working UI. This drives a real headless
@@ -1708,6 +1819,14 @@ jobs:
           docker tag toefl-house-erp-app:ci toefl-house-erp-app:local
           docker save --output "$image_archive" toefl-house-erp-app:local
           docker image inspect toefl-house-erp-app:ci --format '{{json .Config.Labels}}' > "$image_labels"
+          # A large offline EXE must not depend on the optional GitHub ZIP
+          # (<2 GiB). Preserve ZIP output only for the separate tagged legacy
+          # release path, which still fails if it exceeds that limit.
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            ZIP_OPTION=()
+          else
+            ZIP_OPTION=(--no-zip)
+          fi
           python3 tools/foundation/annotated_step.py "Customer package assembly" -- python3 tools/release/create_customer_package.py \
             --output "$package_root" \
             --image-archive "$image_archive" \
@@ -1715,11 +1834,33 @@ jobs:
             --version "$TOEFL_HOUSE_RELEASE_VERSION" \
             --source-revision "$GITHUB_SHA" \
             --gate-evidence "$RUNNER_TEMP/toefl-house-ci-gates.json" \
-            --provider-attestation "GitHub Actions artifact attestation"
-          test -s "$package_root"/*.zip
+            --provider-attestation "GitHub Actions artifact attestation" \
+            "${ZIP_OPTION[@]}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            test -s "$package_root"/*.zip
+          fi
+          test -s "$package_root/TOEFL-House-ERP-Customer-$TOEFL_HOUSE_RELEASE_VERSION/product/release/ci-gates.json"
           echo "::notice title=Customer package::version $TOEFL_HOUSE_RELEASE_VERSION; image archive, checksum, manifest and allowlisted GUI included"
-      - name: Attest customer package provenance
+      - name: Export pinned offline database and cache images
         if: success()
+        run: |
+          python3 tools/foundation/annotated_step.py "Offline runtime export" -- python3 tools/release/export_offline_runtime.py --compose product/docker-compose.yml \
+            --output "$RUNNER_TEMP/toefl-house-offline-runtime" --source-revision "$GITHUB_SHA"
+      - name: Publish provider runtime inputs
+        if: success()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: TOEFL-House-ERP-Offline-Runtime-${{ env.TOEFL_HOUSE_RELEASE_VERSION }}
+          path: ${{ runner.temp }}/toefl-house-offline-runtime/
+          if-no-files-found: error
+          compression-level: 0
+      - name: Attest customer release manifest provenance
+        if: success()
+        uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
+        with:
+          subject-path: '${{ runner.temp }}/toefl-house-customer-package/TOEFL-House-ERP-Customer-${{ env.TOEFL_HOUSE_RELEASE_VERSION }}/product/release/release-manifest.json'
+      - name: Attest tagged legacy ZIP provenance
+        if: success() && startsWith(github.ref, 'refs/tags/v')
         uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
         with:
           subject-path: '${{ runner.temp }}/toefl-house-customer-package/*.zip'
@@ -1728,13 +1869,7 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: TOEFL-House-ERP-Customer-${{ env.TOEFL_HOUSE_RELEASE_VERSION }}
-          path: |
-            ${{ runner.temp }}/toefl-house-customer-package/*.zip
-            ${{ runner.temp }}/toefl-house-customer-package/*.zip.sha256
-            ${{ runner.temp }}/toefl-house-customer-package/*/product/release/release-manifest.json
-            ${{ runner.temp }}/toefl-house-customer-package/*/product/release/release-manifest.json.sha256
-            ${{ runner.temp }}/toefl-house-customer-package/*/product/release/ci-gates.json
-            ${{ runner.temp }}/toefl-house-customer-package/*/product/release/ci-gates.json.sha256
+          path: ${{ runner.temp }}/toefl-house-customer-package/TOEFL-House-ERP-Customer-${{ env.TOEFL_HOUSE_RELEASE_VERSION }}/
           if-no-files-found: error
           compression-level: 0
       - name: Publish tagged customer release
@@ -1888,3 +2023,58 @@ jobs:
           if ($idempotentExit -ne 0) {
             throw "normalizer was not idempotent: expected exit 0 on an already-clean tree, got $idempotentExit"
           }
+
+  offline-windows-installer:
+    needs: image
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Download this revision's qualified provider inputs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = 'ci-' + $env:GITHUB_SHA.Substring(0,12)
+          $kit = Join-Path $env:RUNNER_TEMP 'qualified-kit'
+          $runtime = Join-Path $env:RUNNER_TEMP 'offline-runtime'
+          gh run download $env:GITHUB_RUN_ID --repo $env:GITHUB_REPOSITORY --name "TOEFL-House-ERP-Customer-$version" --dir $kit
+          if ($LASTEXITCODE -ne 0) { throw 'Qualified kit download failed.' }
+          gh run download $env:GITHUB_RUN_ID --repo $env:GITHUB_REPOSITORY --name "TOEFL-House-ERP-Offline-Runtime-$version" --dir $runtime
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned runtime download failed.' }
+      - name: Fetch hash-pinned official Windows prerequisites on the provider runner
+        shell: pwsh
+        run: |
+          $catalog = Get-Content -LiteralPath 'tools/release/windows-prerequisites.json' -Raw | ConvertFrom-Json
+          $destination = Join-Path $env:RUNNER_TEMP 'prerequisites'
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          foreach ($entry in @($catalog.wsl, $catalog.docker)) {
+            $file = Join-Path $destination $entry.filename
+            Invoke-WebRequest -Uri $entry.url -OutFile $file
+            if ((Get-FileHash -LiteralPath $file).Hash -ine $entry.sha256) { throw 'Official prerequisite checksum mismatch.' }
+          }
+      - name: Assemble the actual single-file offline TEST installer
+        shell: powershell
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'customer-installer'
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          $output = Join-Path $destination 'TOEFL-House-ERP-Setup-TEST.exe'
+          & 'tools/release/Build Customer Installer.ps1' -Package (Join-Path $env:RUNNER_TEMP 'qualified-kit') -RuntimeBundle (Join-Path $env:RUNNER_TEMP 'offline-runtime') -WslInstaller (Join-Path $env:RUNNER_TEMP 'prerequisites/wsl-x64.msi') -DockerInstaller (Join-Path $env:RUNNER_TEMP 'prerequisites/Docker Desktop Installer.exe') -OutputExe $output
+          if (-not (Test-Path -LiteralPath $output -PathType Leaf)) { throw 'Offline installer was not produced.' }
+          $verification = Start-Process -FilePath $output -ArgumentList '--verify-payload' -Wait -PassThru
+          if ($verification.ExitCode -ne 0) { throw 'Assembled executable payload verification failed.' }
+          $hash = (Get-FileHash -LiteralPath $output).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText($output + '.sha256', $hash + '  TOEFL-House-ERP-Setup-TEST.exe' + [Environment]::NewLine)
+      - name: Attest offline TEST installer provenance
+        uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
+        with:
+          subject-path: '${{ runner.temp }}/customer-installer/*.exe'
+      - name: Publish single-file offline TEST installer
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: TOEFL-House-ERP-Offline-Setup-TEST-${{ github.sha }}
+          path: ${{ runner.temp }}/customer-installer/
+          if-no-files-found: error
+          compression-level: 0

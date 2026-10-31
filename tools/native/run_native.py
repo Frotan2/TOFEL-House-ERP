@@ -218,7 +218,8 @@ def main():
             ROOT/'tools/foundation/secure_frappe_python.py',benchdir/'apps/frappe'])
         run('install-frappe-python-security-deps',[lab/'tools/bin/uv','pip','install','--python',
             benchdir/'env/bin/python','--no-deps','--upgrade','GitPython==3.2.1',
-            'Pillow==13.0.0','PyJWT==2.15.1','pypdf==6.21.2'])
+            'Pillow==13.0.0','PyJWT==2.15.1','pypdf==6.21.4','oauthlib==4.0.0',
+            'filelock==4.2.4'])
         run('refresh-frappe-security-metadata',[lab/'tools/bin/uv','pip','install','--python',
             benchdir/'env/bin/python','--no-deps','--reinstall','--editable',
             benchdir/'apps/frappe'])
@@ -235,6 +236,9 @@ def main():
         run('fix-setup-sidebar-lifecycle',[benchdir/'env/bin/python',ROOT/'tools/foundation/fix_setup_sidebar.py',benchdir/'apps/frappe'])
         run('patch-hrms-editor-dependencies',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_hrms.py',benchdir/'apps/hrms'])
         run('lock-banking-dependencies',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_hrms.py',benchdir/'apps/erpnext','--banking'])
+        run('install-education-frontend-frozen',['yarn','install','--frozen-lockfile','--non-interactive'],cwd=benchdir/'apps/education/frontend')
+        run('secure-deepmerge-installed-sources',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_deepmerge.py',benchdir/'apps','--apps'])
+        run('secure-uri-decoder-installed-sources',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_uri_decoder.py',benchdir/'apps'])
         run('pip-check',[lab/'tools/bin/uv','pip','check','--python',benchdir/'env/bin/python'])
         for site in ('placement-test.localhost','placement-second.localhost'):
             create_site('new-'+site,site,dbpw)
@@ -252,6 +256,16 @@ def main():
         run('security-site-acceptance',
             [benchdir/'env/bin/python',ROOT/'tools/native/security_acceptance.py'],benchdir/'sites')
         run('native-acceptance',[benchdir/'env/bin/python',ROOT/'tools/native/native_checks.py'],benchdir/'sites')
+        # Research native credit/payout semantics in its own NEW database with
+        # no owned app installed. Never relax the owned Student Pay/JE guards.
+        create_site('new-refund-accounting-research-site','refund-probe.localhost',dbpw)
+        for app in ('erpnext','education'):
+            bench('install-refund-probe-'+app,'--site','refund-probe.localhost','install-app',app)
+        for setting in ('allow_tests','toefl_house_synthetic_only'):
+            bench('guard-refund-probe-'+setting,'--site','refund-probe.localhost','set-config',setting,'1','--parse')
+        run('native-refund-accounting-research',
+            [benchdir/'env/bin/python',ROOT/'tools/native/tuition_refund_accounting_probe.py'],benchdir/'sites',
+            env_overrides={'TUITION_PROBE_REPORT':str(evidence/'tuition-refund-native-accounting.json')})
         # Assert the complete set of executed business receipts before treating
         # the native suite as product-facing hosted acceptance. CI still cannot
         # approve Owner Windows, backup/restore or real student operations.
@@ -317,7 +331,8 @@ def main():
         temp_before={p.name for p in Path('/tmp').glob('toefl-house-native-restore-*')}
         failure_payload=json.dumps({
             'site':failure_site,'backup_set':backup_set,'encryption_key':wrong_backup_key,
-            'db_root_password':rootpw,'admin_password':adminpw})
+            'db_root_password':rootpw,'admin_password':adminpw,
+            'target':'disposable'})
         failure_rc=run_refusal('restore-wrong-key-must-fail',
             [benchdir/'env/bin/python',ROOT/'product/restore.py'],cwd=failure_bench,
             input_text=failure_payload,
@@ -367,7 +382,8 @@ def main():
         }
         restore_payload=json.dumps({'site':restore_site,'backup_set':backup_set,
                                     'encryption_key':backup_encryption_key,
-                                    'db_root_password':rootpw,'admin_password':adminpw})
+                                    'db_root_password':rootpw,'admin_password':adminpw,
+                                    'target':'disposable'})
         run('restore-placement-test-with-files',
             [benchdir/'env/bin/python',ROOT/'product/restore.py'],cwd=restore_bench,
             input_text=restore_payload,
@@ -535,6 +551,8 @@ def main():
                 assert not changed, (name,changed)
         run('verify-final-hrms-editor',[benchdir/'env/bin/python',
             ROOT/'tools/foundation/secure_hrms.py',benchdir/'apps/hrms','--verify'])
+        run('verify-final-deepmerge-sources',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_deepmerge.py',benchdir/'apps','--apps','--verify','--report',evidence/'deepmerge-distribution.json'])
+        run('verify-final-uri-decoder-sources',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_uri_decoder.py',benchdir/'apps','--verify','--report',evidence/'uri-decoder-distribution.json'])
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']=redact(str(exc));print(report['failure'],flush=True)

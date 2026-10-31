@@ -34,6 +34,7 @@ DAY_TABLE = "TH Academic Calendar Day"
 DAY_KINDS = ("Holiday", "Closed", "Working Day")
 BLOCKING_KINDS = ("Holiday", "Closed")
 _DESCRIPTION_LIMIT = 140
+_MAX_ACTIVE_CALENDARS = 100
 
 
 def validate_day_kind(value):
@@ -102,6 +103,14 @@ def teaching_refusal(day, teaching_days, plan):
     kind = (plan or {}).get(day, "")
     if is_blocking_kind(kind):
         return f"{day} is a {kind} day in the academic calendar"
+    # Institution-wide weekly closure: Friday only. An authorized explicit
+    # "Working Day" exception in the audited academic calendar can reopen
+    # a particular Friday, but merely listing Fri in a legacy teaching-days
+    # policy never silently creates a recurring Friday timetable.
+    if weekday_code(day) == "Fri":
+        if kind == "Working Day":
+            return ""  # one audited dated exception, not a recurring weekly rule
+        return f"{day} is Friday, the institution's weekly holiday"
     if teaching_days is not None and not weekday_matches(day, teaching_days):
         return (f"{day} is a {weekday_code(day)} and the class-operations "
                 "policy does not teach on that weekday")
@@ -186,9 +195,16 @@ def calendar_plan(start_day, end_day, academic_year="", branch=""):
     end = parse_day(end_day)
     if end < start:
         raise ValueError("Calendar range end precedes its start")
+    # Fetch one extra record so reaching the query cap cannot quietly omit
+    # an Owner-defined closure and turn an unsafe teaching date into "open".
     calendars = frappe.get_all(
         CALENDAR, filters={"status": "Active"},
-        fields=["name", "branch", "academic_year"], limit_page_length=100)
+        fields=["name", "branch", "academic_year"],
+        limit_page_length=_MAX_ACTIVE_CALENDARS + 1)
+    if len(calendars) > _MAX_ACTIVE_CALENDARS:
+        raise frappe.ValidationError(
+            "More than 100 active academic calendars; scheduling is blocked "
+            "until the calendar configuration is consolidated")
     rows_by_date = {}
     for row in calendars:
         if row.get("academic_year") and row.get("academic_year") != (academic_year or ""):

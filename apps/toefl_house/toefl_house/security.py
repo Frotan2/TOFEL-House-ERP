@@ -52,6 +52,7 @@ KIND_ROLES = {
     "transition_class": "Teaching Scheduler",
     "schedule_session": "Teaching Scheduler",
     "record_attendance": "Attendance Recorder",
+    "record_instructor_attendance": "Instructor",
     "add_class_member": "Teaching Scheduler",
     "move_class_member": "Teaching Scheduler",
     "remove_class_member": "Teaching Scheduler",
@@ -85,6 +86,9 @@ KIND_ROLES = {
     "issue_placement_fee": "Finance Officer",
     # Cashier day close: records counted cash against the native ledger.
     "reconcile_cashier_day": "Finance Officer",
+    "record_reception_collection": "Reception",
+    "accept_reception_handover": "Finance Officer",
+    "correct_reception_collection": "Course Owner",
     # D2 teaching compensation: contracts and payroll calculation are the
     # finance/payroll side; skill-area assignment facts stay teaching ops.
     "create_teaching_contract": "Finance Officer",
@@ -104,6 +108,17 @@ KIND_ROLES = {
     "request_fees_correction": "Finance Officer",
     "approve_fees_correction": "Finance Officer",
     "deny_fees_correction": "Finance Officer",
+    # Tuition refund authorities are distinct: the requester is Finance
+    # Officer, the approver is General Manager, and the payer is
+    # Finance Manager. No actor is required to hold another staff role.
+    # Native tuition payouts are permitted only through the atomic,
+    # independently authorized paired credit-and-payment command; direct
+    # Student Pay outside that pair remains blocked. Production remains HOLD.
+    "request_tuition_refund": "Finance Officer",
+    "approve_tuition_refund": "General Manager",
+    "deny_tuition_refund": "General Manager",
+    "void_tuition_refund": "General Manager",
+    "pay_tuition_refund": "Finance Manager",
     # Assessment commands require authorized academic / teaching roles.
     "open_assessment_book": "Academic Manager",
     "record_assessment_marks": "Instructor",
@@ -129,6 +144,7 @@ DOCTYPES = {
     "TH Enrollment Exit",
     "TH Instructor Contract", "TH Teaching Assignment",
     "TH Correction Policy", "TH Correction Request",
+    "TH Tuition Refund Request",
     "TH Attendance Correction Request",
     # Mission 3 class operations (guarded operational records).
     "TH Class Transfer", "TH Class Waiting List",
@@ -281,6 +297,7 @@ TEACHING_COMMANDS = {
     "transition_class": "Student Group",
     "schedule_session": "Course Schedule",
     "record_attendance": "Student Attendance",
+    "record_instructor_attendance": "Student Attendance",
     # a roster addition may also consume an approved capacity override
     "add_class_member": ("Student Group", "TH Capacity Approval"),
     "move_class_member": "Student Group",
@@ -353,6 +370,14 @@ FINANCE_COMMANDS = {
     # with is_return=1) inside the guarded context
     "approve_invoice_correction": "Sales Invoice",
     "approve_fees_correction": "Fees",
+    # Issue #115: only the pay command writes a native money document
+    # (Payment Entry, once a verified native mechanism exists — until
+    # then it refuses before any money movement). The request/approve/
+    # deny commands write the TH Tuition Refund Request control record,
+    # which ProtectedRecord guards via DOCTYPES + KIND_ROLES; as a
+    # draft-only record it has no cancel or post-submit-edit seam, so
+    # it needs no doc_events guard (same as TH Correction Request).
+    "pay_tuition_refund": "Payment Entry",
     # the close records counted cash against the ledger; it posts nothing
     "reconcile_cashier_day": "TH Cashier Day",
 }

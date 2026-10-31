@@ -60,6 +60,8 @@ def _execute(kind, request_key, payload, work):
 
 def _execute_once(kind, request_key, payload, work):
     actor = authorize(KIND_ROLES[kind])
+    from toefl_house.command_scope import authorize_command_scope
+    authorize_command_scope(kind, payload, actor)
     try:
         validate_request_key(request_key)
     except ValueError as exc:
@@ -74,7 +76,9 @@ def _execute_once(kind, request_key, payload, work):
         row = frappe.db.get_value(OP, op_name, ["actor", "input_hash", "status", "result_json"], as_dict=True, for_update=True)
         if not row or row.actor != actor or row.input_hash != input_hash or row.status != "Complete":
             raise frappe.ValidationError("Idempotency key conflicts with an existing request")
-        return json.loads(row.result_json)
+        result = json.loads(row.result_json)
+        authorize_command_scope(kind, payload, actor, result=result)
+        return result
 
     if frappe.db.exists(OP, op_name):
         return existing()
@@ -86,6 +90,7 @@ def _execute_once(kind, request_key, payload, work):
         except frappe.DuplicateEntryError:
             return existing()
         result, event = work(actor)
+        authorize_command_scope(kind, payload, actor, result=result)
         frappe.get_doc(dict(doctype=AUDIT, actor=actor, operation=op.name, synthetic=record_synthetic_flag(),
                             action=kind, **event)).insert(ignore_permissions=True)
         op.status = "Complete"

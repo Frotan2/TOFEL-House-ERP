@@ -80,7 +80,8 @@ def work():
                             filters={"parenttype": LEVEL},
                             order_by="effective_from asc", limit=LIMIT_QUEUES * 4)
     active_enrollments = project_rows("setup", ENROLLMENT,
-                                      ["name", "program", "docstatus"],
+                                      ["name", "program", "enrollment_date",
+                                       "docstatus"],
                                       filters={"docstatus": 1}, limit=LIMIT_QUEUES * 4)
     years = project_rows("setup", YEAR, YEAR_FIELDS,
                          order_by="year_start_date asc", limit=LIMIT_QUEUES)
@@ -331,6 +332,12 @@ def work():
             row_actions.append(guided_action(
                 "Course Owner", "toefl_house.academic.set_next_level",
                 "Set progression", {"level": level["code"], "next_level": ""}))
+            if (current_year and level.get("native_program")
+                    and any(row.get("item") for row in fee_types)
+                    and not issuable_plans(plans_by_program, level["native_program"], current_year)):
+                row_actions.append(guided_action(
+                    "Course Owner", "toefl_house.academic.set_level_fee_component",
+                    "Define fee plan", {"level": level["code"], "academic_year": current_year}))
             if not usage.get(level.get("native_program")):
                 # Refusal-free by construction: retire appears only when no
                 # submitted enrollment runs on the level.
@@ -536,6 +543,16 @@ def work():
         "action": guided_action("Course Owner", "toefl_house.academic.create_academic_year",
                                 "Define academic year", {}),
     }, {
+        "id": "new-room",
+        "person": "Define a teaching room",
+        "detail": "A native Room with an explicit seating limit.",
+        "status": "Ready", "stage": "Setup",
+        "stage_definition": "Room capacity is checked when scheduling a class.",
+        "next": "Enter the room name, seating limit and reason.",
+        "next_role": "Course Owner", "waiting_since": None,
+        "action": guided_action("Course Owner", "toefl_house.academic.create_room",
+                                "Define teaching room", {}),
+    }, {
         "id": "new-fee-type",
         "person": "Define a fee type",
         "detail": "A Fee Category record; Education creates its accounting Item.",
@@ -650,15 +667,17 @@ def _grading_items(policies, versions, today):
         return [{
             "id": "grading-policy",
             "person": "Grading policy",
-            "detail": "No grading rules are configured.",
+            "detail": "This new site has no approved grading policy version yet.",
             "status": "Not decided",
             "stage": "Grading",
-            "stage_definition": ("Grade scales, cutoffs and result "
-                               "computation are owner decision D1, which "
-                               "has not been made. Nothing in the product "
-                               "computes or interprets grades."),
-            "next": ("The Course Owner decides the grading policy; until "
-                     "then desks show recorded scores only."),
+            "stage_definition": ("Grade scales, cutoffs and assessment components "
+                               "must be configured and approved for this site. "
+                               "The guarded grading and progression commands "
+                               "exist, but no missing policy is inferred and "
+                               "native operational acceptance remains required."),
+            "next": ("Create a graded graded assessment policy and complete "
+                     "the numeric Owner setup. Do not publish grades until "
+                     "the native plan, permissions and results are verified."),
             "next_role": "Course Owner",
             "waiting_since": None,
             "action": guided_action(
@@ -717,11 +736,11 @@ def _grading_items(policies, versions, today):
             "status": readiness.capitalize(),
             "stage": "Assessment policy",
             "stage_definition": ("Computed configuration readiness only. "
-                                 "Versions carry reference facets; no runtime "
-                                 "grading, assessment or student-progression "
-                                 "consumer is implemented/qualified, and D1 "
-                                 "remains deferred. Nothing here activates a "
-                                 "grade or promotion rule."),
+                                 "Guarded assessment and progression commands "
+                                 "exist, but require approved effective-dated "
+                                 "facets, native plans, permissions, and "
+                                 "real-site acceptance. Readiness here never "
+                                 "publishes grades or promotes a student."),
             "next": _assessment_next(policy, readiness, governing),
             "next_role": "Course Owner",
             "waiting_since": None,
@@ -770,6 +789,8 @@ def _assessment_actions(policy, readiness):
     so they are offered everywhere the version action is.
     """
     code = policy["code"]
+    from toefl_house.setup_presets.owner_policy_forms import graded_template_family_codes
+    graded = policy.get("family") in graded_template_family_codes()
     retired = readiness == "retired"
     if retired:
         primary = guided_action(
@@ -778,21 +799,35 @@ def _assessment_actions(policy, readiness):
         return [primary] if primary else []
     version_action = guided_action(
         "Course Owner", "toefl_house.academic.set_assessment_policy_version",
-        "Add version", {"policy": code})
-    facet_actions = [guided_action("Course Owner", endpoint, label,
-                                   {"policy": code})
-                     for endpoint, label in FACET_ACTIONS]
+        "Change passing mark / retake wait", {"policy": code})
+    weight_action = (guided_action(
+        "Course Owner",
+        "toefl_house.setup_presets.owner_policy_forms.revise_grading_weights",
+        "Change skill / exam weights", {"policy": code})
+        if graded else None)
+    # JSON facet commands remain guarded server APIs, but are not exposed
+    # as raw schema editors in the nontechnical Owner workspace. Simple
+    # scalar revisions are appended in one version through the command above.
     retire_action = guided_action(
         "Course Owner", "toefl_house.academic.set_assessment_policy_status",
         "Retire policy", {"policy": code, "active": "0"})
     if readiness == "incomplete":
-        ordered = [version_action] + facet_actions + [retire_action]
+        # A human-friendly numeric form constructs the initial seven
+        # academic facets on the server; never make the Owner type JSON.
+        guided_initial = guided_action(
+            "Course Owner",
+            "toefl_house.setup_presets.owner_policy_forms.configure_initial_assessment",
+            "Set up grading (simple form)", {"policy": code})
+        ordered = ([guided_initial, retire_action]
+                   if graded else [retire_action])
     elif readiness == "configured":
         validate_action = guided_action(
             "Course Owner", "toefl_house.academic.validate_assessment_policy",
             "Validate policy", {"policy": code})
-        ordered = ([validate_action, version_action] + facet_actions
-                   + [retire_action])
+        ordered = ([validate_action, version_action, weight_action,
+                    retire_action] if graded else
+                   [validate_action, retire_action])
     else:
-        ordered = [version_action] + facet_actions + [retire_action]
+        ordered = ([version_action, weight_action, retire_action]
+                   if graded else [retire_action])
     return [action for action in ordered if action]

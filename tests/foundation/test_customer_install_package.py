@@ -15,8 +15,8 @@ WINDOWS = ROOT / "product" / "windows"
 
 
 def read_utf8(path: Path) -> str:
-    # Windows Python otherwise uses the process ANSI code page. The shipped
-    # Dari guide is UTF-8 and must be testable on the same host customers use.
+    # Windows Python may use a legacy ANSI code page. Customer-facing
+    # guides are explicitly UTF-8, even when the installed system uses English.
     return path.read_text(encoding="utf-8")
 
 
@@ -40,10 +40,10 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("shell.Run command, 0, False", SHORTCUT)
         self.assertIn("product\\windows\\TOEFL House ERP.ps1", SHORTCUT)
         self.assertIn("System.Windows.Forms", GUI)
-        self.assertIn("param([switch]$SmokeTest)", GUI)
+        self.assertIn("param([switch]$SmokeTest, [switch]$AutoInstall)", GUI)
         self.assertIn("Windows GUI controls initialized", GUI)
         for button in ('"Install"', '"Open / Start"', '"Repair"', '"Stop"',
-                       '"Get Docker Desktop"', '"View Administrator Login"',
+                       '"Prepare This Computer"', '"View Administrator Login"',
                        '"Check This PC"', '"Owner Readiness Guide"', '"How to Use"',
                        '"Copy Safe Support Status"'):
             self.assertIn(button, GUI)
@@ -99,10 +99,11 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn('Start-LauncherAction "Repair"', GUI)
         self.assertNotIn('$repair.Add_Click({ Start-LauncherAction "Repair" })', GUI)
 
-    def test_daily_guide_includes_dari_staff_instructions(self):
-        for word in ("صاحب کورس", "ریسپشنیست", "شاگرد", "حاضری",
-                     "فروش کتاب", "شهریه", "پشتیبانی"):
-            self.assertIn(word, DAILY_GUIDE)
+    def test_daily_guide_uses_english_staff_instructions(self):
+        for word in ("Owner", "Reception", "Finance", "Teacher",
+                     "Book", "tuition", "support"):
+            self.assertIn(word.lower(), DAILY_GUIDE.lower())
+        self.assertNotRegex(DAILY_GUIDE, r"[\u0600-\u06FF\u200c]")
 
     def test_incomplete_customer_folder_never_attempts_source_build(self):
         # Even a developer checkout is NOT a verified customer package.  The
@@ -166,15 +167,15 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn('Result "Production authorization" "NOT VERIFIED"', CHECK_PC)
         self.assertIn('Get-PSDrive', CHECK_PC)
         self.assertIn('DriveType]::Fixed', CHECK_PC)
-        self.assertIn('volume inspect "toefl-house-erp_db-data"', CHECK_PC)
-        self.assertIn("$dbVolumeVerified = $dbVolumePresent", CHECK_PC)
-        self.assertNotIn("$dbVolumeVerified = $true", CHECK_PC)
+        self.assertIn('volume ls --format "{{.Name}}"', CHECK_PC)
+        self.assertIn('if ($LASTEXITCODE -eq 0)', CHECK_PC)
+        self.assertIn('$_.Trim() -ceq "toefl-house-erp_db-data"', CHECK_PC)
         self.assertIn('sites\\toeflhouse.localhost', CHECK_PC)
         self.assertIn("Get-ChildItem -LiteralPath $sitesRoot -Force", CHECK_PC)
         self.assertIn('secrets\\db.env', CHECK_PC)
         self.assertIn('$siteConfigPresent = Test-Path', CHECK_PC)
         self.assertIn('elseif ($secretPresent -and -not $siteConfigPresent)', CHECK_PC)
-        self.assertIn('elseif ($secretPresent -and -not $dbVolumeVerified)', CHECK_PC)
+        self.assertIn('elseif ($secretPresent -and (-not $dbVolumeVerified -or -not $dbVolumePresent))', CHECK_PC)
         self.assertIn('BLOCKED: credentials exist but site configuration is missing.', CHECK_PC)
         self.assertIn('NOT VERIFIED: credentials exist but the database volume could not be confirmed.', CHECK_PC)
         self.assertIn('BLOCKED: existing site/database but credential file missing', CHECK_PC)
@@ -257,7 +258,7 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("docker compose up -d --no-build", INSTALL)
         self.assertLess(INSTALL.index("Verify Package Image.ps1"),
                         INSTALL.index('docker load -i "release\\toefl-house-erp-app.tar"'))
-        self.assertIn("Get-FileHash -LiteralPath $Archive -Algorithm SHA256", VERIFY)
+        self.assertIn("Get-ProductFileSha256 -LiteralPath $Archive", VERIFY)
         self.assertIn("^[0-9a-fA-F]{64}$", VERIFY)
         self.assertIn("SHA-256 check", VERIFY)
         self.assertNotIn("docker load", VERIFY)
@@ -293,14 +294,16 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn('"product/windows/Verify Package Image.ps1"', PACKAGER)
         self.assertIn("reparse", PACKAGER.lower())
         self.assertIn("product\\data", PACKAGER)
-        self.assertIn("Get-FileHash", PACKAGER)
+        self.assertIn("Get-ProductFileSha256", PACKAGER)
         self.assertNotIn("Copy-Item -Recurse", PACKAGER)
         self.assertNotIn("docker volume rm", PACKAGER)
         self.assertNotIn("docker system prune", PACKAGER)
         self.assertNotIn("Remove-Item", PACKAGER)
-        # No backup/activation scripts are included in the deliverable.
+        # Deliver the guarded backup tools, never customer data or activation.
         section = PACKAGER.split("$files = @(", 1)[1].split("\n    )", 1)[0]
-        for forbidden in ("Backup TOEFL House ERP", "Activate TOEFL House ERP",
+        for required in ("Backup TOEFL House ERP.cmd", "Backup TOEFL House ERP.ps1"):
+            self.assertIn(required, section)
+        for forbidden in ("Activate TOEFL House ERP",
                           "Deactivate TOEFL House ERP", "data/secrets", "site_config.json"):
             self.assertNotIn(forbidden, section)
 

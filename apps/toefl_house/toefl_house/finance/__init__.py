@@ -80,9 +80,12 @@ def _placement_fee_item():
 
 def guard_fees(doc, method=None):
     require_operational()
-    if finance_command_active(FEES):
-        return
-    raise frappe.ValidationError("Fees requires an authorized finance command")
+    if not finance_command_active(FEES):
+        raise frappe.ValidationError("Fees requires an authorized finance command")
+    if method in {"before_cancel", "on_trash", "before_update_after_submit"}:
+        from toefl_house.finance.tuition_refund_native import protect_fee
+
+        protect_fee(doc, method)
 
 
 def _native_book_sale_allowed(doc, method=None):
@@ -113,6 +116,12 @@ def _native_book_sale_allowed(doc, method=None):
         return False
     if not getattr(doc, "company", None) or not getattr(doc, "customer", None):
         return False
+    # Company User Permission binds the native book path exactly as it
+    # binds guarded finance commands (PR #90): has_permission's doctype
+    # verdict alone is not the Company boundary.
+    from toefl_house.finance import books
+    if not books.user_value_permitted(user, "Company", doc.company):
+        return False
     is_return = int(getattr(doc, "is_return", 0) or 0) == 1
     original = getattr(doc, "return_against", None)
     if is_return:
@@ -142,16 +151,29 @@ def _native_book_sale_allowed(doc, method=None):
         code = getattr(row, "item_code", None)
         if not code or not getattr(row, "warehouse", None):
             return False
+        # A Warehouse-scoped login sells and restocks only its own
+        # warehouses; child-row warehouses are not part of the parent
+        # document's permission verdict.
+        if not books.user_value_permitted(user, "Warehouse", row.warehouse):
+            return False
         item = frappe.db.get_value(
             "Item", code,
             ["item_group", "is_stock_item", "is_sales_item", "disabled"],
             as_dict=True,
         )
-        if (not item or item.item_group != "Books"
+        if (not item or not books.book_item_group_ok(item.item_group)
                 or int(item.is_stock_item or 0) != 1
                 or int(item.is_sales_item or 0) != 1
                 or int(item.disabled or 0) != 0):
             return False
+    # A *new* sale must be billed at the configured native selling price
+    # and covered by the warehouse bin. Cancellation and post-submit
+    # edits skip both checks so a later price change or empty bin can
+    # never trap a legitimate sale against reversal.
+    creating = int(getattr(doc, "docstatus", 0) or 0) == 0 and method not in (
+        "before_cancel", "before_update_after_submit")
+    if creating and not is_return and not books.book_sale_terms_ok(doc):
+        return False
     # A tax line on a book sale must come from the owner's native tax
     # configuration; a hand-added rate is refused (finance.taxes owns the rule).
     from toefl_house.finance import taxes
@@ -193,6 +215,20 @@ def resolved_billable_components(pe, fs_name):
     installment plan call this, so a split plan can never price a charge
     differently from the one-payment route.
     """
+    # A single enrollment must never choose arbitrarily between two live
+    # tuition plans for the same native Program/year. This guard is shared
+    # by one-bill AND Solar Hijri installment issuance, not just Owner Setup.
+    active_plans = frappe.db.get_all(
+        FEE_STRUCTURE,
+        filters={"program": pe.program, "academic_year": pe.academic_year,
+                 "docstatus": ("!=", 2)},
+        fields=["name"], limit_page_length=2)
+    if len(active_plans) != 1 or active_plans[0]["name"] != fs_name:
+        raise frappe.ValidationError(
+            "Tuition Fee Structure is missing, cancelled or ambiguous for "
+            "this program and academic year; Finance must review the catalog "
+            "before issuing any native Fees")
+
     components = frappe.db.get_all("Fee Component",
                                    filters={"parent": fs_name, "parenttype": FEE_STRUCTURE},
                                    fields=["fees_category", "amount"], order_by="idx")
@@ -200,6 +236,15 @@ def resolved_billable_components(pe, fs_name):
         raise frappe.ValidationError("Fee structure has no configured components")
 
     from toefl_house.academic import rules
+    try:
+        rules.validate_component_rows([
+            {"category": row.fees_category, "amount": row.amount}
+            for row in components
+        ])
+    except ValueError as exc:
+        raise frappe.ValidationError(
+            "Fee Structure has a duplicate, missing or invalid fee component; "
+            "resolve it before billing") from exc
     # "status" must be part of the fetched fields: resolve_charge_discount
     # re-checks each row's status and a row without the key is not
     # eligible (found by the first hosted odcp-discount run: the field
@@ -288,15 +333,22 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
             raise frappe.ValidationError("Unknown fee structure")
         if fs.program != pe.program or fs.academic_year != pe.academic_year:
             raise frappe.ValidationError("Fee structure does not match the enrollment program/year")
+        # The enrollment lock serializes concurrent single/plan writers.
+        # Never accept a second tuition bill on a *different* Fee Structure:
+        # the same student otherwise acquires two independent receivables
+        # for one program enrollment without any approved new contract.
         if frappe.db.exists(FEES, {"program_enrollment": pe_name,
-                                   "fee_structure": fs_name, "docstatus": ("!=", 2)}):
+                                   "docstatus": ("!=", 2)}):
             raise frappe.ValidationError(
-                "Tuition is already billed for this enrollment on this fee plan")
+                "Tuition is already billed for this enrollment; "
+                "Finance must use the audited correction process")
 
         fee_components, applied_discounts, gross_total = \
             resolved_billable_components(pe, fs_name)
 
         company = fs.company or COMPANY
+        from toefl_house.finance.company_scope import require_finance_company
+        require_finance_company(company)
         # The framework prefills an empty `currency` field from the system
         # default; set the company's currency explicitly so the receivable is
         # never denominated in the wrong currency.
@@ -381,6 +433,8 @@ def issue_placement_fee(request_key, case, customer, posting_date, due_date):
             raise frappe.ValidationError("Unknown placement case")
         if not frappe.db.exists(CUSTOMER, customer_name):
             raise frappe.ValidationError("Unknown customer")
+        from toefl_house.finance.company_scope import require_finance_company
+        require_finance_company(COMPANY)
         item_code = _placement_fee_item()
         rate = frappe.db.get_value("Item Price",
                                    {"item_code": item_code,

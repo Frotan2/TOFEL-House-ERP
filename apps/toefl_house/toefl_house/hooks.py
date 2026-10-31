@@ -5,8 +5,19 @@ app_description = "TOEFL House institute operations on the native ERP stack: pla
 app_email = "toeflhouse@toeflhouse.localhost"
 app_license = "MIT"
 required_apps = ["erpnext", "education", "foundation_security"]
+
+# The native controller keeps all date, duplication and holiday validation.
+# Only roster membership inside a guarded teaching command uses the owned
+# request-local seam; Education's module-global accessor is never replaced.
+override_doctype_class = {
+    "Student Attendance": "toefl_house.teaching.native_attendance.THStudentAttendance",
+}
+extend_doctype_class = {
+    "Item": ["toefl_house.academic.native_fee_item.FeeItemPermissionMixin"],
+}
 after_install = "toefl_house.install.after_install"
 after_migrate = "toefl_house.install.after_migrate"
+setup_wizard_success = "toefl_house.academic.native_setup.setup_wizard_success"
 # Release navigation is deliberately split by the native framework boundary.
 # Workspaces remain only TH Receipts and TH Finance.  They pass Frappe's
 # workspace module gate and do not grant document permission.  D10's
@@ -16,6 +27,12 @@ after_migrate = "toefl_house.install.after_migrate"
 # `app_home` routes the TOEFL House app tile to the role-filtered command centre;
 # every individual page remains independently Page-role-gated server-side.
 app_home = "/app/th-command-centre"
+# The app tile is not the native login destination. Route staff at login and
+# root-page resolution too; native Page and document permissions remain intact.
+get_website_user_home_page = "toefl_house.navigation.staff_home_page"
+on_login = "toefl_house.navigation.on_login"
+boot_session = "toefl_house.navigation.boot_session"
+after_request = "toefl_house.navigation.after_request"
 _COMMAND_PAGES = (
     "th-administration-control-centre",
     "th-command-centre",
@@ -35,7 +52,7 @@ _DESK_PAGES = (
 )
 page_js.update({name: "public/js/th_role_desks.js" for name in _DESK_PAGES})
 fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception", "Instructor"]]]},
-            {"dt": "Custom Field", "filters": [["dt", "in", ["Sales Invoice", "Fee Structure", "Fees", "Student Group", "Student Applicant", "Course Schedule"]]]}]
+            {"dt": "Custom Field", "filters": [["dt", "in", ["Sales Invoice", "Fee Structure", "Fees", "Student Group", "Student Applicant", "Course Schedule", "Payment Entry"]]]}]
 has_permission = {
     name: "toefl_house.permissions.has_permission"
     for name in ("TH Placement Item Revision", "TH Placement Key Revision", "TH Placement Audit Event",
@@ -47,6 +64,7 @@ has_permission = {
                  "TH Admission Decision", "TH Instructor Contract",
                  "TH Teaching Assignment", "TH Correction Policy",
                  "TH Correction Request", "TH Attendance Correction Request",
+                 "TH Tuition Refund Request",
                  "TH Cashier Day",
                  "TH Enrollment Exit",
                  "TH Academic Program", "TH Program Level",
@@ -123,6 +141,7 @@ permission_query_conditions = {
         ("TH Teaching Assignment", "assignment"),
         ("TH Correction Policy", "correction_policy"),
         ("TH Correction Request", "correction_request"),
+        ("TH Tuition Refund Request", "tuition_refund_request"),
         ("TH Cashier Day", "cashier_day"),
         ("TH Attendance Correction Request", "attendance_correction"),
         ("TH Enrollment Exit", "enrollment_exit"),
@@ -167,6 +186,10 @@ permission_query_conditions["Student Group"] = "toefl_house.permissions.branch_q
 permission_query_conditions["Student Applicant"] = "toefl_house.permissions.branch_query_student_applicant"
 permission_query_conditions["Program Enrollment"] = "toefl_house.permissions.branch_query_program_enrollment"
 override_whitelisted_methods = {
+    "toefl_house.finance.tuition_refund_reversal_commands.request_tuition_refund_reversal": "toefl_house.finance.refund_feature_gate.disabled_paid_recovery",
+    "toefl_house.finance.tuition_refund_reversal_commands.approve_tuition_refund_reversal": "toefl_house.finance.refund_feature_gate.disabled_paid_recovery",
+    "toefl_house.finance.tuition_refund_reversal_commands.deny_tuition_refund_reversal": "toefl_house.finance.refund_feature_gate.disabled_paid_recovery",
+    "toefl_house.finance.tuition_refund_reversal_commands.reverse_tuition_refund": "toefl_house.finance.refund_feature_gate.disabled_paid_recovery",
     "frappe.integrations.oauth2_logins.login_via_office365": "toefl_house.social_login.login_via_office365",
     "education.education.api.enroll_student": "toefl_house.admission.deny_enroll_student",
     # The pinned renderer constructor is guarded for *all* paths by the
@@ -294,9 +317,32 @@ doc_events = {
     # Customer refunds settle credit notes only; every other native payment
     # type passes through untouched (finance.refunds.guard_payment_entry).
     "Payment Entry": {
+        "before_validate": "toefl_house.finance.tuition_refund_native.guard_payment",
         "validate": "toefl_house.finance.refunds.guard_payment_entry",
         "before_cancel": "toefl_house.finance.refunds.guard_payment_entry",
         "before_update_after_submit": "toefl_house.finance.refunds.guard_payment_entry",
+        "on_trash": ["toefl_house.finance.tuition_refund_native.guard_payment",
+                     "toefl_house.finance.collections.guard_collection_fields"],
+    },
+    "Journal Entry": {
+        "before_validate": "toefl_house.finance.student_journals.guard_student_journal",
+        "validate": "toefl_house.finance.student_journals.guard_student_journal",
+        "before_cancel": "toefl_house.finance.student_journals.guard_student_journal",
+        "before_update_after_submit": "toefl_house.finance.student_journals.guard_student_journal",
+        "on_trash": "toefl_house.finance.student_journals.guard_student_journal",
+    },
+    # Book stock integrity (finance.books): receipts need a positive
+    # purchase cost, issues/corrections are approved adjustments. Stock
+    # documents with no Books lines pass untouched.
+    "Stock Entry": {
+        "validate": "toefl_house.finance.books.guard_stock_entry",
+        "before_cancel": "toefl_house.finance.books.guard_stock_entry",
+        "before_update_after_submit": "toefl_house.finance.books.guard_stock_entry",
+    },
+    "Stock Reconciliation": {
+        "validate": "toefl_house.finance.books.guard_stock_reconciliation",
+        "before_cancel": "toefl_house.finance.books.guard_stock_reconciliation",
+        "before_update_after_submit": "toefl_house.finance.books.guard_stock_reconciliation",
     },
     # The cashier day close is a control record: command-only on all seams.
     "TH Cashier Day": {

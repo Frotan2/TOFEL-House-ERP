@@ -24,13 +24,14 @@ import frappe
 from datetime import datetime, timedelta
 
 from toefl_house.operations import portal_policy
+from toefl_house.operations.portal_dates import with_solar_date
 
 _fallback_consents = []  # offline in-memory consents when frappe stub not fully wired
 
 # Allow-listed fields for guardian projection (subset of student portal + guardian-specific)
 GUARDIAN_FIELDS = {
     "Student": ["name", "student_name", "student_email_id", "date_of_birth", "customer"],
-    "Course Schedule": ["name", "student_group", "course", "room", "schedule_date", "from_time", "to_time"],
+    "Course Schedule": ["name", "student_group", "course", "room", "schedule_date", "from_time", "to_time", "th_session_status"],
     "Student Attendance": ["name", "student", "student_group", "course_schedule", "date", "status"],
     "Assessment Result": ["name", "student", "assessment_plan", "grade", "posting_date"],
     "Fees": ["name", "student", "program", "academic_year", "grand_total", "outstanding_amount", "due_date"],
@@ -253,6 +254,15 @@ def _assert_guardian_scope(user, requested_student=None):
     return (guardian, children)
 
 
+def _require_authorized_child(user, student):
+    """A child-specific endpoint must never turn a missing ID into a query."""
+    if not isinstance(student, str) or not student.strip():
+        raise frappe.ValidationError("Student is required")
+    student = student.strip()
+    _assert_guardian_scope(user, requested_student=student)
+    return student
+
+
 # ---- Public portal endpoints ----
 
 @frappe.whitelist()
@@ -275,7 +285,7 @@ def get_my_children():
 def get_child_schedule(student=None):
     _require_portal_enabled()
     user = frappe.session.user
-    guardian, _ = _assert_guardian_scope(user, requested_student=student)
+    student = _require_authorized_child(user, student)
     # Resolve child's enrolled groups
     try:
         roster = frappe.get_all(
@@ -294,16 +304,16 @@ def get_child_schedule(student=None):
             order_by="schedule_date asc",
             limit_page_length=100,
         )
-        return schedules
     except Exception:
         return []
+    return with_solar_date(schedules, "schedule_date", "schedule_date_shamsi")
 
 
 @frappe.whitelist()
 def get_child_attendance(student=None):
     _require_portal_enabled()
     user = frappe.session.user
-    _assert_guardian_scope(user, requested_student=student)
+    student = _require_authorized_child(user, student)
     try:
         rows = frappe.get_all(
             "Student Attendance",
@@ -312,9 +322,9 @@ def get_child_attendance(student=None):
             order_by="date desc",
             limit_page_length=100,
         )
-        return rows
     except Exception:
         return []
+    return with_solar_date(rows, "date", "date_shamsi")
 
 
 @frappe.whitelist()
@@ -322,7 +332,7 @@ def get_child_grades(student=None):
     """Approved grades only. Still requires valid consent."""
     _require_portal_enabled()
     user = frappe.session.user
-    _assert_guardian_scope(user, requested_student=student)
+    student = _require_authorized_child(user, student)
     try:
         rows = frappe.get_all(
             "Assessment Result",
@@ -341,7 +351,7 @@ def get_child_fees(student=None):
     """Fee balances — only for verified child with valid consent."""
     _require_portal_enabled()
     user = frappe.session.user
-    _assert_guardian_scope(user, requested_student=student)
+    student = _require_authorized_child(user, student)
     try:
         fees = frappe.get_all(
             "Fees",

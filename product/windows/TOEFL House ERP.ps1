@@ -1,4 +1,4 @@
-param([switch]$SmokeTest)
+param([switch]$SmokeTest, [switch]$AutoInstall)
 # TOEFL House ERP - Windows graphical launcher.
 # A customer uses the root .vbs shortcut; no console, Git or typed commands.
 # Supports Windows PowerShell 5.1 and the existing guarded CMD lifecycle.
@@ -9,8 +9,10 @@ Add-Type -AssemblyName System.Drawing
 
 $productRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $worker = Join-Path $PSScriptRoot "Run TOEFL House ERP.ps1"
+$guiPath = Join-Path $PSScriptRoot "TOEFL House ERP.ps1"
 $credentialFile = Join-Path $productRoot "data\sites\toeflhouse.localhost\private\first-run-credentials.txt"
 $guideFile = Join-Path $PSScriptRoot "OWNER ACCEPTANCE GUIDE.txt"
+$handbookFile = Join-Path $PSScriptRoot "OWNER HANDBOOK.txt"
 $dailyGuideFile = Join-Path $PSScriptRoot "DAILY USE GUIDE.txt"
 $updaterStrings = Join-Path $PSScriptRoot "updater-strings.json"
 $updateResultFile = Join-Path $productRoot "data\updates\last-result.json"
@@ -77,20 +79,21 @@ $install = New-LauncherButton "Install" 30 229 145
 $open = New-LauncherButton "Open / Start" 185 229 145
 $repair = New-LauncherButton "Repair" 340 229 145
 $stop = New-LauncherButton "Stop" 495 229 145
-$dockerButton = New-LauncherButton "Get Docker Desktop" 30 285 205
+$dockerButton = New-LauncherButton "Prepare This Computer" 30 285 205
 $credentials = New-LauncherButton "View Administrator Login" 248 285 222
 $logButton = New-LauncherButton "View Details" 485 285 155
 $checkButton = New-LauncherButton "Check This PC" 30 339 165
 $guideButton = New-LauncherButton "Owner Readiness Guide" 205 339 235
 $dailyGuideButton = New-LauncherButton "How to Use" 450 339 190
 $copyStatusButton = New-LauncherButton "Copy Safe Support Status" 30 395 275
+$handbookButton = New-LauncherButton "Owner Handbook" 315 395 220
 # Updates are deliberately separate from Install and Repair: a customer can
 # check for a signed release without any lifecycle action being reachable.
 $updateButton = New-LauncherButton "Check for Updates" 30 451 269
 $installUpdateButton = New-LauncherButton "Install Update" 309 451 220
 
 $disclaimer = New-Object System.Windows.Forms.Label
-$disclaimer.Text = "Docker Desktop must be installed once. Real business use requires owner configuration and release approval."
+$disclaimer.Text = "Windows setup uses the included installers. Real business use requires owner configuration and release approval."
 $disclaimer.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $disclaimer.ForeColor = [System.Drawing.Color]::FromArgb(96, 105, 119)
 $disclaimer.Location = New-Object System.Drawing.Point(30, 524)
@@ -130,7 +133,8 @@ function Get-UpdaterCatalog {
         return $null
     }
     if ($null -eq $catalog -or $catalog.schema_version -ne 1 -or
-        $catalog.document_type -cne "toefl-house-erp-updater-strings") {
+        $catalog.document_type -cne "toefl-house-erp-updater-strings" -or
+        $catalog.language -cne "en" -or $catalog.fallback -cne "en") {
         return $null
     }
     return $catalog
@@ -143,7 +147,7 @@ function Get-UpdaterText([string]$Section, [string]$Key) {
     if ($null -eq $entries) { return $null }
     $entry = $entries.$Key
     if ($null -eq $entry) { return $null }
-    if (-not ($entry.en -is [string]) -or -not ($entry.fa -is [string])) { return $null }
+    if (-not ($entry.en -is [string]) -or [string]::IsNullOrWhiteSpace($entry.en)) { return $null }
     return $entry
 }
 
@@ -167,13 +171,13 @@ function Get-UpdateResult {
     if ($null -eq $entry) { return $null }
     $version = ""
     if ([string]$result.version -match '^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$') { $version = [string]$result.version }
-    return [pscustomobject]@{ en = $entry.en; fa = $entry.fa; version = $version; status = [string]$result.status }
+    return [pscustomobject]@{ en = $entry.en; version = $version; status = [string]$result.status }
 }
 
 function Show-UpdateResult {
     $result = Get-UpdateResult
     if ($null -eq $result) { return "" }
-    $body = $result.en + [Environment]::NewLine + [Environment]::NewLine + $result.fa
+    $body = $result.en
     if ($result.version) {
         $body = $body + [Environment]::NewLine + [Environment]::NewLine + "Version: " + $result.version
     }
@@ -187,11 +191,12 @@ function Show-UpdateResult {
 }
 
 function Set-Busy([bool]$busy) {
-    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton, $dailyGuideButton, $copyStatusButton, $updateButton, $installUpdateButton)) {
+    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton, $handbookButton, $dailyGuideButton, $copyStatusButton, $updateButton, $installUpdateButton)) {
         $button.Enabled = -not $busy
     }
     $credentials.Enabled = (-not $busy) -and (Test-Path -LiteralPath $credentialFile -PathType Leaf)
     $guideButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $guideFile -PathType Leaf)
+    $handbookButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $handbookFile -PathType Leaf)
     $dailyGuideButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $dailyGuideFile -PathType Leaf)
     # A finished, read-only status is safe to copy even if the child process
     # is still closing, and even if Docker cannot be reached on this PC.
@@ -206,9 +211,12 @@ function Set-Busy([bool]$busy) {
 
 function Test-DockerClient {
     if (Get-Command docker -ErrorAction SilentlyContinue) { return $true }
-    if (Test-Path -LiteralPath $dockerCli -PathType Leaf) {
-        $env:PATH = (Split-Path -Parent $dockerCli) + ";" + $env:PATH
-        return $true
+    foreach ($bin in @("$env:ProgramFiles\Docker\Docker\resources\bin",
+                       "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin")) {
+        if (Test-Path -LiteralPath (Join-Path $bin 'docker.exe') -PathType Leaf) {
+            $env:PATH = $bin + ';' + $env:PATH
+            return $true
+        }
     }
     return $false
 }
@@ -218,8 +226,8 @@ function Start-LauncherAction([string]$action) {
     # Any attempted lifecycle action invalidates the previous PC check.
     $script:lastCheckPath = ""
     Set-Busy $false
-    if ($action -ne "Check" -and -not (Test-DockerClient)) {
-        $status.Text = "Docker Desktop is not installed. Click 'Get Docker Desktop', finish its Windows installer, then return here."
+    if ($action -ne "Check" -and $action -ne "Install" -and $action -ne "Prepare" -and -not (Test-DockerClient)) {
+        $status.Text = "Select Prepare This Computer to install the included Windows prerequisites."
         return
     }
     if ($action -eq "Install" -and -not (Test-Path -LiteralPath (Join-Path $productRoot "release\toefl-house-erp-app.tar"))) {
@@ -292,6 +300,15 @@ $guideButton.Add_Click({
         Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $guideFile + '"')
     } else {
         $status.Text = "Owner readiness guide missing; ask your provider for a complete package."
+    }
+})
+$handbookButton.Add_Click({
+    # Offline no-code Owner operating guide. Reading it changes no student,
+    # payment, account, Docker volume, backup or operational release setting.
+    if (Test-Path -LiteralPath $handbookFile -PathType Leaf) {
+        Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $handbookFile + '"')
+    } else {
+        $status.Text = "Owner handbook is missing. Ask your provider for a complete installer."
     }
 })
 $dailyGuideButton.Add_Click({
@@ -380,8 +397,7 @@ $installUpdateButton.Add_Click({
     }
 })
 $dockerButton.Add_Click({
-    [System.Diagnostics.Process]::Start("https://www.docker.com/products/docker-desktop/") | Out-Null
-    $status.Text = "Install Docker Desktop for Windows, complete WSL 2 setup if prompted, and restart Windows if required. Reopen this app."
+    Start-LauncherAction "Prepare"
 })
 $credentials.Add_Click({
     if (Test-Path -LiteralPath $credentialFile -PathType Leaf) {
@@ -412,20 +428,11 @@ $timer.Add_Tick({
     if ($null -eq $script:process) { return }
     try {
         if (Test-Path -LiteralPath $script:stdoutPath -PathType Leaf) {
-            # The update worker writes the same progress line in English and in
-            # Dari. Show both, so a Dari-speaking owner never depends on the
-            # English line to know what the computer is doing.
+            # Display the latest English stage from the controlled worker.
             $tail = @(Get-Content -LiteralPath $script:stdoutPath -Tail 100 -ErrorAction SilentlyContinue)
             $stages = @($tail | Where-Object { $_ -match '^\[TH_STAGE\]\s+(.+)$' })
-            $stagesFa = @($tail | Where-Object { $_ -match '^\[TH_STAGE-FA\]\s+(.+)$' })
             if ($stages.Count -gt 0) {
-                $english = ($stages[-1] -replace '^\[TH_STAGE\]\s+', "")
-                if ($stagesFa.Count -gt 0) {
-                    $dari = ($stagesFa[-1] -replace '^\[TH_STAGE-FA\]\s+', "")
-                    $status.Text = $english + [Environment]::NewLine + $dari
-                } else {
-                    $status.Text = $english
-                }
+                $status.Text = $stages[-1] -replace '^\[TH_STAGE\]\s+', ''
             }
         }
         # Refresh the Copy button from the complete report itself, not only
@@ -440,8 +447,13 @@ $timer.Add_Tick({
         $script:process.Dispose()
         $script:process = $null
         Set-Busy $false
-        if ($exitCode -eq 0) {
-            if ($completedAction -eq "Stop") {
+        if ($exitCode -eq 3010) {
+            $status.Text = "Windows setup needs a restart. Save your work, restart Windows, then reopen TOEFL House ERP and click Install."
+            [System.Windows.Forms.MessageBox]::Show($status.Text, "Restart required") | Out-Null
+        } elseif ($exitCode -eq 0) {
+            if ($completedAction -eq "Prepare") {
+                $status.Text = "Windows prerequisites are prepared. Select Install to continue."
+            } elseif ($completedAction -eq "Stop") {
                 $status.Text = "TOEFL House ERP has stopped safely. Your data remains stored."
             } elseif ($completedAction -eq "Check") {
                 $script:lastCheckPath = $script:stdoutPath
@@ -460,6 +472,17 @@ $timer.Add_Tick({
                     [System.Diagnostics.Process]::Start("http://127.0.0.1:8000/") | Out-Null
                 }
             } else {
+                if ($completedAction -eq "Install") {
+                    try {
+                        $shell = New-Object -ComObject WScript.Shell
+                        $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'TOEFL House ERP.lnk'))
+                        $shortcut.TargetPath = $powershellExe
+                        $shortcut.Arguments = '-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $guiPath + '" -AutoInstall'
+                        $shortcut.WorkingDirectory = $productRoot
+                        $shortcut.Save()
+                    } catch { # A restricted Desktop does not invalidate a successful installation.
+                    }
+                }
                 $status.Text = "TOEFL House ERP is ready. Opening in your browser."
                 [System.Diagnostics.Process]::Start("http://127.0.0.1:8000/") | Out-Null
             }
@@ -495,9 +518,11 @@ if ($SmokeTest) {
         $updateButton.Text -ne "Check for Updates" -or
         $installUpdateButton.Text -ne "Install Update" -or
         $guideButton.Text -ne "Owner Readiness Guide" -or
+        $handbookButton.Text -ne "Owner Handbook" -or
         $dailyGuideButton.Text -ne "How to Use" -or
         $copyStatusButton.Text -ne "Copy Safe Support Status" -or
         -not (Test-Path -LiteralPath $guideFile -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $handbookFile -PathType Leaf) -or
         -not (Test-Path -LiteralPath $dailyGuideFile -PathType Leaf)) {
         throw "Graphical lifecycle actions were not initialized."
     }
@@ -531,6 +556,13 @@ if ($SmokeTest) {
     exit 0
 }
 Set-Busy $false
+if ($AutoInstall) {
+    $form.Add_Shown({
+        if (Test-Path -LiteralPath (Join-Path $productRoot 'data\secrets\db.env')) {
+            Start-LauncherAction "Start"
+        } else { Start-LauncherAction "Install" }
+    })
+}
 $timer.Start()
 [void]$form.ShowDialog()
 $timer.Stop()

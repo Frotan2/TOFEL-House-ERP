@@ -1,0 +1,18 @@
+{
+  "index.js": {
+    "upstream": "12440c84957c1990ea2d5e33dc0091722dc1dc1585c6d20e0c780e568ffa9d30",
+    "patched": "2270f84aba34ce469af96e5ebf9d6703854b1463f6450b50c12bd958500ae07e"
+  },
+  "dist/cjs.js": {
+    "upstream": "2e5160f84a1141bd927264afe4d15766f1e6cf07daef182b37ff53fea121de7d",
+    "patched": "a18bc1bcb0a285eed2280c1aae3c23bd9cd61bf3c3038dc06706bbbee19c9f42"
+  },
+  "dist/umd.js": {
+    "upstream": "f33e6596482d1fb5c7c427f8ef92f2aa849eea9223acd974176b2fb27ddbf73a",
+    "patched": "ac73e83bcfefd4e39e9a2bee3d7ec478b3ba558c2ef71647d691b9737f6360e8"
+  },
+  "package.json": {
+    "upstream": "f56978e7a6da1a3c6edee41abb54f98584a2fa2680458c48db820ae772fef0c9",
+    "patched": "f56978e7a6da1a3c6edee41abb54f98584a2fa2680458c48db820ae772fef0c9"
+  }
+}

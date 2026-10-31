@@ -229,7 +229,7 @@ frappe.provide("toefl_house.command_pages");
 			title: "TOEFL House Teaching Scheduling",
 			description: "Create native class, session, roster and skill-assignment facts through guarded commands. The page performs no native list or link lookup.",
 			commands: [
-				{ label: "Create student group", method: "toefl_house.teaching.create_student_group", dispatches: ["create_student_group"], fields: [data("group_name", "Synthetic group name", { reqd: 1 }), data("program", "Program", { reqd: 1 }), data("academic_year", "Academic year", { reqd: 1 }), data("academic_term", "Academic term"), integer("max_strength", "Maximum strength", { reqd: 1 }), date("class_start_date", "Class start date"), date("class_end_date", "Class end date (blank = use level duration policy)"), select("delivery_mode", "Delivery mode", DELIVERY_MODES, { default: "On-site" }), data("branch", "Branch")] },
+				{ label: "Create student group", method: "toefl_house.teaching.create_student_group", dispatches: ["create_student_group"], fields: [data("group_name", "Synthetic group name", { reqd: 1 }), data("program", "Program", { reqd: 1 }), data("academic_year", "Academic year", { reqd: 1 }), data("academic_term", "Academic term"), integer("max_strength", "Maximum strength", { reqd: 1 }), date("class_start_date", "Class start date"), date("class_end_date", "Class end date (blank = use level duration policy)"), select("delivery_mode", "Delivery mode", DELIVERY_MODES, { default: "On-site" }), data("branch", "Branch"), data("students", "Student IDs (optional)", { description: "Comma-separated Student IDs with submitted enrollments; leave blank for the full intake." })] },
 				{ label: "Add class member", method: "toefl_house.teaching.add_class_member", dispatches: ["add_class_member"], fields: [data("student_group", "Student group", { reqd: 1 }), data("student", "Student", { reqd: 1 }), data("override", "Capacity override (only when full)")] },
 				{ label: "Move class member", method: "toefl_house.teaching.move_class_member", dispatches: ["move_class_member"], fields: [data("student_group", "Student group", { reqd: 1 }), data("student", "Student", { reqd: 1 }), data("to_group", "Target student group", { reqd: 1 })] },
 				{ label: "Remove class member", method: "toefl_house.teaching.remove_class_member", dispatches: ["remove_class_member"], fields: [data("student_group", "Student group", { reqd: 1 }), data("student", "Student", { reqd: 1 }), note("reason", "Reason", { reqd: 1 })] },
@@ -816,7 +816,9 @@ frappe.provide("toefl_house.command_pages");
 	toefl_house.command_pages.stylesheet = STYLESHEET;
 	toefl_house.command_pages.factLabels = FACT_LABELS;
 	Object.entries(PAGE_SURFACES).forEach(([name, surface]) => {
-		frappe.pages[name] = frappe.pages[name] || {};
+		// Attach only to a native Page wrapper; unopened-page placeholders
+		// prevent Frappe's router from constructing the destination page.
+		if (!frappe.pages[name] || !frappe.pages[name].tagName) return;
 		frappe.pages[name].on_page_load = (wrapper) => {
 			if (surface.admin) {
 				renderAdminPage(wrapper, surface);

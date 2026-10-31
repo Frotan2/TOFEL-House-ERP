@@ -11,6 +11,7 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 from tools.release.create_customer_package import ALLOWED_FILES, MATRIX_FILE, create_package
@@ -145,6 +146,28 @@ class CustomerPackageManifestTests(unittest.TestCase):
         self.assertEqual(saved["qualification"]["real_owner_windows"], "NOT_VERIFIED")
         self.assertFalse((package / "product" / "data").exists())
         self.assertFalse((package / "apps").exists())
+
+    def test_offline_exe_provider_receives_verified_folder_without_legacy_zip(self):
+        package, archive, manifest = self.create(include_zip=False)
+        self.assertIsNone(archive)
+        self.assertTrue((package / "product/release/toefl-house-erp-app.tar").is_file())
+        self.assertTrue((package / "product/release/release-manifest.json").is_file())
+        self.assertTrue((package / "product/release/ci-gates.json").is_file())
+        self.assertEqual(manifest["source_revision"], self.revision)
+        self.assertFalse(list(package.parent.glob("*.zip")))
+        self.assertFalse(list(package.parent.glob("*.zip.sha256")))
+
+    def test_delivered_zip_contains_the_working_backup_launcher_and_script(self):
+        package, archive, _manifest = self.create()
+        with zipfile.ZipFile(archive) as bundle:
+            for filename in ("Backup TOEFL House ERP.cmd", "Backup TOEFL House ERP.ps1"):
+                relative = "product/windows/" + filename
+                self.assertEqual(bundle.read(package.name + "/" + relative),
+                                 (self.source / relative).read_bytes())
+                preparer = (ROOT / "product/windows/Prepare Customer Package.ps1").read_text()
+                self.assertIn('"' + relative + '"', preparer)
+            launcher = bundle.read(package.name + "/product/windows/Backup TOEFL House ERP.cmd")
+            self.assertIn(b"Backup TOEFL House ERP.ps1", launcher)
 
     def test_image_identity_mismatch_fails_before_package_creation(self):
         with self.assertRaisesRegex(ValueError, "source revision"):
@@ -360,6 +383,12 @@ class CustomerPackageManifestTests(unittest.TestCase):
         env = dict(os.environ, TH_TEST_VERIFY_SCRIPT=str(ROOT / "product/windows/Verify Package Image.ps1"),
                    TH_TEST_RELEASE=str(release), TH_TEST_DOCKER_EXIT=str(docker_exit),
                    TH_TEST_INSPECT=json.dumps(inspect) if not isinstance(inspect, str) else inspect)
+        # Python can inherit PowerShell 7's module path, which is incompatible
+        # with the explicitly selected Windows PowerShell 5.1 subprocess.
+        # Let that shell construct its own standard module search path.
+        for key in list(env):
+            if key.casefold() == "psmodulepath":
+                del env[key]
         command = r"""
 function docker {
     if ($args[0] -ne 'image' -or $args[1] -ne 'inspect' -or $args[2] -ne 'toefl-house-erp-app:local') {

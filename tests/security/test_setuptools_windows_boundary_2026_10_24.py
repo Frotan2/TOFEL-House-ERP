@@ -54,6 +54,14 @@ class SetuptoolsWindowsBoundaryTests(unittest.TestCase):
         for relative in launchers:
             with self.subTest(relative=relative):
                 body = (ROOT / relative).read_text(encoding="utf-8")
+                # The encrypted backup runs the existing Linux interpreter
+                # inside Docker. Exempt only this complete fixed invocation;
+                # any Windows Python/pip/uv command must still fail below.
+                container_backup = (
+                    'Invoke-Compose @("run", "--rm", "--no-deps", "--entrypoint",\n'
+                    '            "/home/frappe/bench/env/bin/python", "web", "/product/backup.py")'
+                )
+                body = body.replace(container_backup, "Invoke-Compose container-backup")
                 self.assertNotRegex(body, prohibited)
 
     def test_customer_allowlist_contains_no_windows_python_payload(self):

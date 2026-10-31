@@ -1,16 +1,52 @@
 # Academic assessment, grading and progression
 
-Status: **implemented and exercisable offline** (Mission B04/B05). No academic
-value — no weight, pass mark, attendance minimum, attempt limit or promotion
-rule — is written in code. Every value an academic decision depends on is an
+Status: **implemented and exercisable offline** (Mission B04/B05), with
+Owner-approved retake safety bounds under independent release qualification.
+Grading weights and pass thresholds remain policy configuration; the explicit
+Owner-approved retake cap (one retake) and minimum wait (seven calendar days)
+are now also enforced as lower/upper safety bounds in code. Every value an academic decision depends on is an
 Owner-configured facet of an effective-dated assessment policy, or a record the
 native Education app already owns. An unconfigured policy is an explicit,
 explained refusal.
 
-Owner decision **D1** (grading policy deferred) is therefore *not* overridden
-here. What this slice adds is the machinery that consumes the policy the Owner
-configures; the policy itself is still the Owner's to supply. See
+The initial GE/EAP grading and retake parameters now have an
+Owner-approved numeric guided configuration path; a proposal is not an
+active version until the Owner confirms it and the native references pass
+validation. Existing guarded grading and progression commands are not
+proof of installed-site or production qualification. See
 [Remaining Owner inputs](#remaining-owner-inputs).
+
+## Approved retake and best-result policy (28 October 2026)
+
+The Course Owner approved the student-protective implementation:
+
+- First assessment books are **class-wide and unique** for the class and level.
+- Each approved retake book records exactly **one named failed student** in
+  `TH Assessment Book.retake_student`. The Academic Manager opens it through
+  `open_assessment_book(..., retake_student="STUDENT-ID")`; the instructor
+  records marks only for that student. Submission, approval, native result
+  creation and publication cannot include classmates.
+- A Retake decision follows a Failed published result, at least seven days
+  after publication, and is consumed by one second-attempt book for that
+  student. A new policy version does not restart the attempt allowance.
+  An abandoned book remains a protected hold until an independently authorized
+  cancellation/replacement feature is audited; deleting/recreating its record
+  is not a supported recovery.
+- The governing result is chosen only from current Published, finite results.
+  An earned **Pass always outranks a Fail**. Among Passes choose the highest
+  overall percentage; if none passed, choose the highest valid percentage.
+  Ties resolve to earliest publication, attempt ordinal, then result ID.
+  Historical revisions are never deleted or overwritten.
+- Earlier `latest`/`first` policy versions remain readable for historical
+  audit, but **new** assessment policy authoring only accepts `best`. The
+  Owner-approved Pass-preserving selection is authoritative.
+- A student's accepted promotion remains valid if another student retakes.
+  An academic correction to that same student's own published result can
+  still require a new, independently authorized progression decision.
+
+This is **not live-production acceptance**. Migration of the new book field,
+native ERPNext Assessment Result behavior, role separation, report integrity,
+and Windows staff/browser tests must pass before activation.
 
 ## 1. Native boundary
 

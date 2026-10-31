@@ -400,6 +400,125 @@ def _add_days(date_value, days):
     return (start + datetime.timedelta(days=int(days))).isoformat()
 
 
+# --- Academic retake policy (Owner addendum 2026-10-28, mission policy) ---
+# The retakes facet is Owner-configured, but the mission policy bounds it
+# from both sides and never relaxes it: at most ONE retake (two attempts in
+# total) and at least SEVEN days after the original publication, whatever
+# the facet says. A facet that is stricter still governs.
+MISSION_MIN_WAIT_DAYS = 7
+MISSION_MAX_TOTAL_ATTEMPTS = 2
+
+
+def effective_retake_rules(retakes):
+    """The facet's retake rules bounded by the mission policy (never relaxed)."""
+    if not retakes:
+        raise ValueError(
+            "This assessment policy version configures no retake rules; "
+            "retakes fail closed until the Course Owner defines them")
+    limit = retakes.get("max_attempts")
+    wait = int(retakes.get("wait_days") or 0)
+    return {
+        "max_attempts": (MISSION_MAX_TOTAL_ATTEMPTS if limit is None
+                         else min(int(limit), MISSION_MAX_TOTAL_ATTEMPTS)),
+        "wait_days": max(wait, MISSION_MIN_WAIT_DAYS),
+        "scope": retakes.get("scope"),
+        "governing": retakes.get("governing"),
+    }
+
+
+def wait_until_for_retake(wait_days, published_on):
+    """First date a retake may start, under the mission's 7-day floor."""
+    return _add_days(str(published_on)[:10], max(int(wait_days or 0),
+                                                 MISSION_MIN_WAIT_DAYS))
+
+
+def retake_gate(retakes, *, outcome, attempts_made, last_attempt_on, on_date,
+                prior_retake=False, retake_exists=False):
+    """The full retake authorization check for one judged result.
+
+    ``retake_state`` alone checks only the facet's count and wait; this gate
+    additionally enforces the mission policy: the judged result must be a
+    Fail (initial failure only), no retake may already have been approved
+    for this attempt, and no retake attempt may already exist. The wait
+    and count themselves use the mission-bounded rules from
+    ``effective_retake_rules``.
+    """
+    if not retakes:
+        raise ValueError(
+            "This assessment policy version configures no retake rules; "
+            "retakes fail closed until the Course Owner defines them")
+    if outcome != "Fail":
+        return {"allowed": False, "max_attempts": retakes.get("max_attempts"),
+                "attempts_made": int(attempts_made),
+                "reason": "Retakes are only permitted after a failed attempt; "
+                          f"this result is {outcome}"}
+    if prior_retake:
+        return {"allowed": False, "max_attempts": retakes.get("max_attempts"),
+                "attempts_made": int(attempts_made),
+                "reason": "A retake has already been approved for this attempt"}
+    if retake_exists:
+        return {"allowed": False, "max_attempts": retakes.get("max_attempts"),
+                "attempts_made": int(attempts_made),
+                "reason": "A retake attempt already exists for this student and level"}
+    effective = effective_retake_rules(retakes)
+    state = retake_state(effective, attempts_made=attempts_made,
+                         last_attempt_on=last_attempt_on, on_date=on_date)
+    if not state["allowed"]:
+        return state
+    return dict(state, effective_max_attempts=effective["max_attempts"],
+                effective_wait_days=effective["wait_days"])
+
+
+def _attempt_field(row, field):
+    if isinstance(row, dict):
+        return row.get(field)
+    getter = getattr(row, "get", None)
+    if callable(getter):
+        return getter(field)
+    return getattr(row, field, None)
+
+
+def select_best_attempt(attempts):
+    """The best VALID published attempt, as a read-time selection.
+
+    Valid means Published (never Superseded, draft or cancelled) with
+    a finite overall percentage. An existing Pass always outranks a Fail:
+    a student must not lose earned progression eligibility because a later
+    class assessment or an unusual component rubric gives a higher-percent
+    failure. Within Passes, or if no Pass exists, take the highest percentage;
+    tie-break by earliest publication, attempt ordinal and stable name.
+    Selection reads records only and never changes original evidence.
+    """
+    candidates = []
+    for row in attempts or []:
+        if _attempt_field(row, "status") != "Published":
+            continue
+        try:
+            percent = _decimal(_attempt_field(row, "overall_percent"),
+                               "Overall percent")
+        except (ValueError, TypeError):
+            continue
+        outcome = _attempt_field(row, "outcome")
+        if outcome not in ("Pass", "Fail"):
+            # An Incomplete assessment can never displace a completed
+            # published result or become progression evidence.
+            continue
+        candidates.append((outcome == "Pass", percent, row))
+    if not candidates:
+        return None
+    def sort_key(item):
+        passing, percent, row = item
+        published = str(_attempt_field(row, "published_on") or "")
+        try:
+            attempt = int(_attempt_field(row, "attempt") or 0)
+        except (ValueError, TypeError):
+            attempt = 0
+        return (not passing, -percent, published, attempt,
+                str(_attempt_field(row, "name") or ""))
+    candidates.sort(key=sort_key)
+    return candidates[0][2]
+
+
 def snapshot_digest(snapshot):
     """The audit fingerprint of a calculation snapshot (canonical bytes)."""
     return digest(snapshot)

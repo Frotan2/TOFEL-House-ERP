@@ -35,7 +35,9 @@ if errorlevel 1 goto :failed
 echo [TH_STAGE] Loading the verified application image for repair...
 docker load -i "release\toefl-house-erp-app.tar"
 if errorlevel 1 goto :failed
-docker image inspect toefl-house-erp-app:local >nul 2>nul
+rem A bare tag-existence check cannot prove exact-version identity: bind
+rem the loaded image to the verified manifest labels before any restart.
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1" -VerifyLoadedImage
 if errorlevel 1 goto :failed
 goto :sourcesready
 :sourcesready
@@ -50,13 +52,8 @@ echo  Waiting until TOEFL House ERP answers after repair...
 set READY_TRIES=300
 :waitready
 powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 10" >nul 2>nul
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-web 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-db 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-redis-queue 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-redis-cache 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-socketio 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
-docker inspect --format "{{.State.Status}}" toefl-house-erp-worker 2>nul | findstr /x /c:"running" >nul || goto :waitservices
-docker inspect --format "{{.State.Status}}" toefl-house-erp-scheduler 2>nul | findstr /x /c:"running" >nul || goto :waitservices
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Test Existing Installation.ps1" -CheckServices >nul 2>nul
+if errorlevel 1 goto :waitservices
 goto :ready
 :waitservices
 set /a READY_TRIES-=1

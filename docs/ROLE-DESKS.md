@@ -1,5 +1,26 @@
 # Role Desks — the daily-work product layer
 
+## Tuition refund case work — 30 October 2026 qualification
+
+Finance and General Manager desks now project a bounded refund-case queue.
+Normal native read/list permissions and an explicit current Company/Student
+Branch scope check precede evidence and action prefills; these reads do not
+use elevated `get_all`. Missing refund migration displays unavailable status.
+The existing desk/acting-role pattern applies: the designated daily requester
+holds **Finance Manager + Finance Officer**, while a minimal Finance Manager
+payer needs no Finance Officer role. An Officer-only account remains a backend
+command authority, not a Finance desk audience. General Manager sees approval
+and denial; the requester cannot approve and the approver cannot pay.
+
+Approval/payout dialogs display escaped recipient, original bill, exact amount,
+reason and approval context; these display values grant no authority and are
+not sent as editable command facts. Paid rows display the immutable native
+credit and payout identifiers as text, not clickable native-document links.
+This adds no independent cancellation action. Real Windows backend projection,
+scope and accounting tests supplement unit tests; final installed browser
+acceptance, payout receipt, net financial reporting and paired reversal remain
+release requirements. This section does not sign off those requirements.
+
 Date: 2026-09-19
 
 This document specifies the role product layer built on top of the qualified

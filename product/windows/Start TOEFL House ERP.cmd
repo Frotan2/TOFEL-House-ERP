@@ -13,7 +13,12 @@ if errorlevel 1 goto :startdaemon
 goto :up
 :startdaemon
 echo  Starting Docker Desktop - this can take a minute...
+if exist "%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe" goto :startuserdocker
 start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+goto :desktopstarted
+:startuserdocker
+start "" "%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe"
+:desktopstarted
 set DAEMON_TRIES=60
 :waitdaemon
 powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5" >nul 2>nul
@@ -37,13 +42,8 @@ echo  Waiting until TOEFL House ERP answers...
 set READY_TRIES=60
 :waitready
 powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 10" >nul 2>nul
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-web 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-db 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-redis-queue 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-redis-cache 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
-docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-socketio 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
-docker inspect --format "{{.State.Status}}" toefl-house-erp-worker 2>nul | findstr /x /c:"running" >nul || goto :waitservices
-docker inspect --format "{{.State.Status}}" toefl-house-erp-scheduler 2>nul | findstr /x /c:"running" >nul || goto :waitservices
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Test Existing Installation.ps1" -CheckServices >nul 2>nul
+if errorlevel 1 goto :waitservices
 goto :ready
 :waitservices
 set /a READY_TRIES-=1

@@ -107,6 +107,21 @@ class WiringTests(unittest.TestCase):
         self.assertIn("policy-configured approver role", source)
         self.assertIn("Partial corrections await owner-defined terms", source)
 
+    def test_every_native_correction_command_preserves_company_scope(self):
+        source = CORRECTIONS.read_text()
+        functions = {n.name: n for n in ast.walk(ast.parse(source))
+                     if isinstance(n, ast.FunctionDef)}
+        for name in ("request_invoice_correction", "approve_invoice_correction",
+                     "deny_invoice_correction", "request_fees_correction",
+                     "approve_fees_correction", "deny_fees_correction"):
+            with self.subTest(command=name):
+                self.assertIn("_require_target_company(",
+                              ast.get_source_segment(source, functions[name]))
+        for name in ("request_invoice_correction", "request_fees_correction"):
+            with self.subTest(money=name):
+                self.assertIn("_validate_correction_amount(requested_amount)",
+                              ast.get_source_segment(source, functions[name]))
+
     def test_credit_note_path_is_native_only(self):
         """The only money artifact comes from erpnext make_sales_return; the
         module itself creates only the two TH framework doctypes."""
@@ -120,6 +135,32 @@ class WiringTests(unittest.TestCase):
         controllers = (APP / "controllers.py").read_text()
         self.assertIn('self.doctype == "TH Correction Policy"', controllers)
         self.assertIn('self.doctype == "TH Correction Request"', controllers)
+
+
+class CorrectionAmountTests(unittest.TestCase):
+    """Exercise the real pure amount check in isolation from the Frappe DB."""
+
+    def test_v1_full_correction_amount_does_not_round_extra_decimals(self):
+        from decimal import Decimal, InvalidOperation
+        from types import SimpleNamespace
+
+        tree = ast.parse(CORRECTIONS.read_text(encoding="utf-8"))
+        fn = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                  and node.name == "_validate_correction_amount")
+        isolated = ast.Module(body=[fn], type_ignores=[])
+        namespace = {
+            "Decimal": Decimal, "InvalidOperation": InvalidOperation,
+            "frappe": SimpleNamespace(ValidationError=ValueError),
+        }
+        exec(compile(ast.fix_missing_locations(isolated), str(CORRECTIONS), "exec"),
+             namespace)
+        validate = namespace["_validate_correction_amount"]
+        for valid in (0.01, 100, 100.0, 1.25):
+            self.assertEqual(validate(valid), float(valid))
+        for bad in (True, False, 0, -1, None, "100", 1.001, 2.005,
+                    float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=repr(bad)), self.assertRaises(ValueError):
+                validate(bad)
 
 
 class DocTypeShapeTests(unittest.TestCase):

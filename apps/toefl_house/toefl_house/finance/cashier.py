@@ -31,6 +31,8 @@ rather than a second invented limit. No active policy means no closes.
 # name ``date`` is the argument, and ``date.fromisoformat`` would be an
 # AttributeError on the string (caught only by the native run, 2026-10-24).
 from datetime import date as _date
+from decimal import Decimal, InvalidOperation
+from math import isfinite
 import frappe
 
 from toefl_house.api import _execute
@@ -62,23 +64,48 @@ def assert_command_context():
 
 
 def _counted(value, what):
-    """Cashier-entered amount with a business-language refusal."""
+    """Require physical drawer counts in exact native minor units.
+
+    Never round an entered fractional cent into or out of a variance. Native
+    ledger balances can still be rounded for display by _stored_money.
+    """
     try:
-        return _money(value, what)
+        amount = _money(value, what)
+        precise = Decimal(str(value).strip())
+        if precise != precise.quantize(Decimal("0.01")):
+            raise ValueError(f"{what} must have at most two decimal places")
+        return amount
+    except InvalidOperation as exc:
+        raise frappe.ValidationError(f"{what} must have at most two decimal places") from exc
     except ValueError as exc:
         raise frappe.ValidationError(str(exc)) from exc
 
 
-def _money(value, what):
+def _finite_money(value, what):
     if isinstance(value, bool):
         raise ValueError(f"{what} must be an amount")
     try:
         amount = round(float(value), 2)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{what} must be an amount") from exc
+    if not isfinite(amount):
+        raise ValueError(f"{what} must be a finite amount")
+    return amount
+
+
+def _money(value, what):
+    amount = _finite_money(value, what)
     if amount < 0:
         raise ValueError(f"{what} cannot be negative")
     return amount
+
+
+def _stored_money(value, what):
+    """Signed ledger balances and variances must also be finite."""
+    try:
+        return _finite_money(value, what)
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
 
 
 def _company_permitted(company, user=None):
@@ -184,9 +211,9 @@ def validate_close(doc):
         if account in seen:
             raise frappe.ValidationError(f"{account} is counted twice in one close")
         seen.add(account)
-        expected = round(float(row.get("expected_amount") or 0), 2)
+        expected = _stored_money(row.get("expected_amount"), f"Expected amount for {account}")
         counted = _counted(row.get("counted_amount"), f"Counted amount for {account}")
-        stored_variance = round(float(row.get("variance") or 0), 2)
+        stored_variance = _stored_money(row.get("variance"), f"Variance for {account}")
         variance = round(counted - expected, 2)
         if abs(variance - stored_variance) > TOLERANCE:
             raise frappe.ValidationError(
@@ -198,11 +225,11 @@ def validate_close(doc):
         total_counted += counted
     if seen != set(drawers):
         raise frappe.ValidationError("Cashier close must include every enabled Cash/Bank drawer")
-    if abs(round(float(doc.get("total_expected") or 0), 2) - round(total_expected, 2)) > TOLERANCE:
+    if abs(_stored_money(doc.get("total_expected"), "Close total expected") - round(total_expected, 2)) > TOLERANCE:
         raise frappe.ValidationError("The close total expected does not match its drawers")
-    if abs(round(float(doc.get("total_counted") or 0), 2) - round(total_counted, 2)) > TOLERANCE:
+    if abs(_stored_money(doc.get("total_counted"), "Close total counted") - round(total_counted, 2)) > TOLERANCE:
         raise frappe.ValidationError("The close total counted does not match its drawers")
-    if abs(round(float(doc.get("total_variance") or 0), 2)
+    if abs(_stored_money(doc.get("total_variance"), "Close total variance")
            - round(total_counted - total_expected, 2)) > TOLERANCE:
         raise frappe.ValidationError("The close total variance does not match its drawers")
 
@@ -237,6 +264,21 @@ def reconcile_cashier_day(request_key, company, date, counts):
     ``counts`` is a list of ``{account, counted_amount, note}``. The expected
     amount is computed here from the ledger; the caller cannot supply it.
     """
+    # Frappe's HTTP form encoding may deliver an array as a serialized JSON
+    # string. Treat that as a transport detail, not a second public schema.
+    # Reject oversized payloads and non-lists before obtaining any locks.
+    if isinstance(counts, str):
+        if len(counts) > 20000:
+            raise frappe.ValidationError("Cash drawer count request is too large")
+        try:
+            import json
+            counts = json.loads(counts)
+        except (ValueError, TypeError) as exc:
+            raise frappe.ValidationError("Cash drawer counts are invalid") from exc
+    if not isinstance(counts, list):
+        raise frappe.ValidationError("Cash drawer counts must be a list")
+    if len(counts) > MAX_DRAWERS:
+        raise frappe.ValidationError("Too many cash drawers in this close")
     def work(actor):
         day = str(date or "").strip()
         try:
@@ -375,6 +417,39 @@ def _resolve_companies(companies):
             if row.get("name") and _company_permitted(row.get("name"))]
 
 
+def _balance_drift_after_close(snapshot, current):
+    """Compare each stored drawer with its current native GL balance.
+
+    A native cancellation may flip an existing GL Entry's is_cancelled flag
+    without inserting a newer active entry. Offset movements between drawers
+    can also leave the company total unchanged. Neither case is detected by
+    checking only post-close GL creation timestamps.
+    """
+    saved = {}
+    for row in snapshot:
+        account = row.get("account")
+        if not isinstance(account, str) or not account or account in saved:
+            return True
+        try:
+            saved[account] = _stored_money(
+                row.get("expected_amount"), f"Stored close amount for {account}")
+        except frappe.ValidationError:
+            return True
+    current_by_account = {row["account"]: row.get("closing") for row in current}
+    if (not saved or len(snapshot) != len(saved)
+            or len(current_by_account) != len(current)
+            or set(saved) != set(current_by_account)):
+        return True
+    try:
+        return any(
+            abs(saved[name] - _stored_money(
+                current_by_account[name], f"Current GL amount for {name}")) > TOLERANCE
+            for name in saved
+        )
+    except frappe.ValidationError:
+        return True
+
+
 def cashier_position(day=None, companies=None):
     """Read-only drawer position and close state, for the finance desk.
 
@@ -401,9 +476,19 @@ def cashier_position(day=None, companies=None):
         close = dict(closes[0]) if closes else None
         drift = False
         if close:
-            # A posting dated on or before the closed day but created after
-            # the close means the counted figures no longer match the books.
-            drift = bool(frappe.db.sql(
+            # Re-check every drawer against the immutable close snapshot.
+            # Cancelled historical postings may change balances without a
+            # later active GL row, and opposite movements may offset in total.
+            saved_rows = frappe.db.get_all(
+                COUNT,
+                filters={"parent": close["name"], "parenttype": DAY},
+                fields=["account", "expected_amount"],
+                limit_page_length=MAX_DRAWERS + 1,
+            )
+            drift = _balance_drift_after_close(saved_rows or [], balances)
+            # Preserve the separate audit signal for subsequent backdated GL
+            # postings, including balance-neutral postings.
+            drift = drift or bool(frappe.db.sql(
                 """select 1 from `tabGL Entry`
                    where company = %s and posting_date <= %s
                      and is_cancelled = 0 and creation > %s

@@ -36,7 +36,7 @@ Machine protocol (no free-text log parsing):
   (or stdout).  Secrets are never echoed.
 * The Windows launcher only acts on ``decision == "allow"``.
 * Every human message is a stable code from :data:`MESSAGE_CODES`; the
-  bilingual English/Dari catalog lives in
+  English-language catalog lives in
   ``product/windows/updater-strings.json`` and is verified by tests.
 """
 from __future__ import annotations
@@ -55,6 +55,11 @@ import tarfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from typing import Mapping, Sequence
+
+if __package__:
+    from . import update_host
+else:
+    import update_host
 
 PRODUCT = "TOEFL House ERP"
 DOCUMENT_UPDATE = "toefl-house-erp-update"
@@ -85,7 +90,7 @@ MAX_BACKUP_MAX_AGE_HOURS = 24
 MAX_RECOVERY_MAX_AGE_HOURS = 168
 # A verified transaction is short-lived: apply must follow the image-phase
 # authorization quickly, and revalidates everything it can re-read.
-TRANSACTION_SCHEMA_VERSION = 1
+TRANSACTION_SCHEMA_VERSION = 2
 DOCUMENT_TRANSACTION = "toefl-house-erp-update-transaction"
 TRANSACTION_TTL_MINUTES = 30
 TRANSACTION_PHASES = ("manifest", "authorized")
@@ -95,6 +100,17 @@ TRANSACTION_PHASES = ("manifest", "authorized")
 TRANSACTION_ID = re.compile(r"^[0-9a-f]{32}$")
 TRANSACTION_RECORDS_DIR = "authorizations"
 TRANSACTION_CONSUMED_DIR = "consumed"
+# Two-person recovery authorization (see validate_recovery_authorization).
+# Schema 1 recovery documents carried a single signature over two literal
+# role strings ("owner" / "toefl-house-support") and therefore proved only
+# that one recovery-key holder signed.  Schema 2 requires two distinct
+# trusted keys, bound in the trust store to distinct approver identities and
+# roles, signing the identical document bytes.  A single-signature document
+# is refused for a migrating update; it is not upgraded or excused.
+RECOVERY_AUTHORIZATION_SCHEMA_VERSION = 2
+RECOVERY_APPROVER_ROLES = ("course-owner", "general-manager", "recovery-authority")
+RECOVERY_REQUEST_ID = re.compile(r"^[0-9a-f]{32}$")
+RECOVERY_CONSUMED_DIR = "consumed-recovery-requests"
 ENGINE_AUTH_KEY_NAME = "engine-auth.key"
 ENGINE_AUTH_KEY_BYTES = 32
 SAFE_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
@@ -166,6 +182,7 @@ ORPHAN_CHECKS = (
 # Every code the engine can emit.  The Windows catalog must define English and
 # Dari text for each one; tests/foundation/test_update_engine.py enforces it.
 MESSAGE_CODES = frozenset({
+    "preflight.host.unavailable",
     "trust.not_provisioned",
     "trust.invalid",
     "trust.key_expired",
@@ -208,6 +225,9 @@ MESSAGE_CODES = frozenset({
     "preflight.recovery.authorization_missing",
     "preflight.recovery.authorization_invalid",
     "preflight.recovery.authorization_expired",
+    "preflight.recovery.approval_missing",
+    "preflight.recovery.approval_invalid",
+    "preflight.recovery.request_replayed",
     "preflight.recovery.binding_mismatch",
     "preflight.recovery.key_custody_unverified",
     "preflight.recovery.rehearsal_unverified",
@@ -525,10 +545,24 @@ def _load_trust_store(path: Path, *, now: datetime) -> dict:
     for entry in keys:
         entry = _require_object(entry, "trust key")
         _require_exact_keys(entry, ("key_id", "algorithm", "purposes", "modulus_b64", "exponent_b64",
-                                    "not_before_utc", "not_after_utc"),
+                                    "not_before_utc", "not_after_utc",
+                                    "approver_identity", "approver_role"),
                             ("key_id", "algorithm", "purposes", "modulus_b64", "exponent_b64",
                              "not_before_utc", "not_after_utc"), "trust key", code="trust.invalid")
         key_id = _text(entry["key_id"], "trust.key_id", pattern=KEY_ID, maximum=64)
+        # Approver binding is optional for manifest keys, but a recovery key
+        # without it cannot satisfy two-person recovery: the engine refuses
+        # such a key at recovery-validation time, so an unbound key never
+        # silently counts as an independent approver.
+        approver_identity = entry.get("approver_identity")
+        approver_role = entry.get("approver_role")
+        if (approver_identity is None) != (approver_role is None):
+            raise refuse("trust.invalid",
+                         "a trust key approver binding must carry both identity and role")
+        if approver_identity is not None:
+            approver_identity = _text(approver_identity, "trust.approver_identity", maximum=140)
+            if approver_role not in RECOVERY_APPROVER_ROLES:
+                raise refuse("trust.invalid", "a trust key approver role is not supported")
         if key_id in seen:
             raise refuse("trust.invalid", "trust store contains a duplicate key id")
         seen.add(key_id)
@@ -559,6 +593,8 @@ def _load_trust_store(path: Path, *, now: datetime) -> dict:
         parsed.append({
             "key_id": key_id,
             "algorithm": entry["algorithm"],
+            "approver_identity": approver_identity,
+            "approver_role": approver_role,
             "purposes": tuple(purposes),
             "modulus": modulus,
             "exponent": exponent,
@@ -1213,28 +1249,70 @@ def validate_backup_receipt(path: Path, *, site: str, backup_dir: Path, now: dat
     return {"receipt": receipt, "sha256": sha256_file(path), "age_hours": age_hours}
 
 
+def _recovery_consumed_marker(state_dir: Path | None, request_id: str) -> Path | None:
+    """Durable single-use marker for a recovery request, or ``None``.
+
+    Anti-replay only holds when the caller supplies the durable engine state
+    folder (the normal customer path, via ``--state-dir``).  Without it the
+    check is skipped and the transaction single-use marker remains the only
+    replay protection; callers must not present a stateless validation as
+    replay proof.
+    """
+    if state_dir is None:
+        return None
+    folder = Path(state_dir) / RECOVERY_CONSUMED_DIR
+    if folder.is_symlink():
+        raise refuse("preflight.recovery.request_replayed",
+                     "the recovery request store is unsafe")
+    return folder / (request_id + ".json")
+
+
 def validate_recovery_authorization(path: Path, signature_path: Path, store: dict, *, site: str,
-                                    receipt_sha256: str, now: datetime, max_age_hours: int) -> dict:
+                                    receipt_sha256: str, now: datetime, max_age_hours: int,
+                                    signature_path_2: Path | None = None,
+                                    state_dir: Path | None = None) -> dict:
+    """Validate a two-person recovery authorization, before any mutation.
+
+    Schema 1 documents are refused outright: they carried one signature over
+    two literal role strings, so they cannot prove two independent people
+    approved.  Schema 2 binds, in one document signed by both approvers:
+
+    * ``request_id`` — a single-use identifier, consumed at apply time;
+    * ``operation`` / ``scope`` / ``site`` — exactly ``site-update`` here;
+    * ``backup_receipt_sha256`` — the verified backup receipt;
+    * ``approvals`` — exactly two entries, one Course Owner and one General
+      Manager or designated recovery authority, with distinct identities,
+      distinct roles and distinct trusted key ids;
+    * two detached RSA signatures over the identical document bytes, each by
+      a trust-store key whose stored approver identity and role match the
+      approval entry for that key.  A key without an approver binding, a
+      duplicate identity or key, a self-approval (the same person twice), a
+      swapped signature, an altered document, an expired window or a replayed
+      request id is refused before any migration, restore or data mutation.
+    """
     document = load_json_file(path, "recovery authorization")
     _require_exact_keys(document, (
-        "schema_version", "document_type", "site", "scope", "issued_utc", "expires_utc",
-        "owner_key_custody_verified", "rehearsal_restore_verified", "backup_receipt_sha256",
-        "authorized_by", "attested_by",
+        "schema_version", "document_type", "site", "scope", "operation", "request_id",
+        "issued_utc", "expires_utc", "owner_key_custody_verified",
+        "rehearsal_restore_verified", "backup_receipt_sha256", "approvals",
     ), (
-        "schema_version", "document_type", "site", "scope", "issued_utc", "expires_utc",
-        "owner_key_custody_verified", "rehearsal_restore_verified", "backup_receipt_sha256",
-        "authorized_by", "attested_by",
+        "schema_version", "document_type", "site", "scope", "operation", "request_id",
+        "issued_utc", "expires_utc", "owner_key_custody_verified",
+        "rehearsal_restore_verified", "backup_receipt_sha256", "approvals",
     ), "recovery authorization", code="preflight.recovery.authorization_invalid")
-    if (document["schema_version"] != ENGINE_SCHEMA_VERSION
+    if (document["schema_version"] != RECOVERY_AUTHORIZATION_SCHEMA_VERSION
             or document["document_type"] != DOCUMENT_RECOVERY):
         raise refuse("preflight.recovery.authorization_invalid",
-                     "recovery authorization header is not supported")
-    if document["site"] != site or document["scope"] != "site-update":
+                     "single-signature recovery authorization is superseded; "
+                     "a two-person recovery authorization is required")
+    if document["site"] != site or document["scope"] != "site-update" \
+            or document["operation"] != "site-update":
         raise refuse("preflight.recovery.binding_mismatch",
-                     "recovery authorization is for another site or scope")
-    if document["authorized_by"] != "owner" or document["attested_by"] != "toefl-house-support":
-        raise refuse("preflight.recovery.authorization_invalid",
-                     "recovery authorization signer identity is invalid")
+                     "recovery authorization is for another site, scope or operation")
+    request_id = document["request_id"]
+    if not isinstance(request_id, str) or not RECOVERY_REQUEST_ID.fullmatch(request_id):
+        raise refuse("preflight.recovery.approval_invalid",
+                     "recovery request identifier is malformed")
     if not _boolean(document["owner_key_custody_verified"], "recovery.owner_key_custody_verified"):
         raise refuse("preflight.recovery.key_custody_unverified",
                      "Owner encryption-key custody is not verified")
@@ -1256,15 +1334,73 @@ def validate_recovery_authorization(path: Path, signature_path: Path, store: dic
     if (now - issued) > timedelta(hours=max_age_hours):
         raise refuse("preflight.recovery.authorization_expired",
                      "recovery authorization is too old for this release")
-    envelope = _load_signature_envelope(signature_path, DOCUMENT_RECOVERY_SIGNATURE,
-                                        code="preflight.recovery.authorization_invalid",
-                                        label="recovery signature")
-    key = select_key(store, envelope["key_id"], "recovery-authorization", now=now)
+    approvals = document["approvals"]
+    if not isinstance(approvals, list) or len(approvals) != 2:
+        raise refuse("preflight.recovery.approval_invalid",
+                     "recovery requires exactly two approvers")
+    parsed_approvals = []
+    for entry in approvals:
+        entry = _require_object(entry, "recovery approval")
+        _require_exact_keys(entry, ("approver_identity", "approver_role", "key_id"),
+                            ("approver_identity", "approver_role", "key_id"),
+                            "recovery approval", code="preflight.recovery.approval_invalid")
+        identity = _text(entry["approver_identity"], "recovery.approver_identity", maximum=140)
+        role = entry["approver_role"]
+        key_id = _text(entry["key_id"], "recovery.approver_key_id", pattern=KEY_ID, maximum=64)
+        if role not in RECOVERY_APPROVER_ROLES:
+            raise refuse("preflight.recovery.approval_invalid",
+                         "recovery approver role is not supported")
+        parsed_approvals.append({"approver_identity": identity, "approver_role": role,
+                                 "key_id": key_id})
+    identities = [entry["approver_identity"].lower() for entry in parsed_approvals]
+    if len(set(identities)) != 2 or len({entry["key_id"] for entry in parsed_approvals}) != 2:
+        raise refuse("preflight.recovery.approval_invalid",
+                     "recovery approvers must be two distinct people with distinct keys")
+    roles = {entry["approver_role"] for entry in parsed_approvals}
+    if roles != {"course-owner"} | (roles & {"general-manager", "recovery-authority"}) \
+            or "course-owner" not in roles or len(roles) != 2:
+        raise refuse("preflight.recovery.approval_invalid",
+                     "recovery requires one Course Owner and one independent "
+                     "General Manager or designated recovery authority")
+    if signature_path_2 is None:
+        raise refuse("preflight.recovery.approval_missing",
+                     "the second recovery approval signature is missing")
     raw = path.read_bytes()
-    if not rsa_pkcs1v15_sha256_verify(key["modulus"], key["exponent"], raw, envelope["signature"]):
-        raise refuse("preflight.recovery.authorization_invalid",
-                     "recovery authorization signature did not verify")
-    return {"sha256": hashlib.sha256(raw).hexdigest(), "expires_utc": expires.isoformat()}
+    envelopes = []
+    for signature_file in (signature_path, signature_path_2):
+        envelope = _load_signature_envelope(signature_file, DOCUMENT_RECOVERY_SIGNATURE,
+                                            code="preflight.recovery.authorization_invalid",
+                                            label="recovery signature")
+        envelopes.append(envelope)
+    if envelopes[0]["key_id"] == envelopes[1]["key_id"]:
+        raise refuse("preflight.recovery.approval_invalid",
+                     "both recovery approvals must be signed by distinct keys")
+    approval_by_key = {entry["key_id"]: entry for entry in parsed_approvals}
+    for envelope in envelopes:
+        # Purpose is checked before any approval-name comparison, so a
+        # manifest-only key still fails with trust.key_unknown, as before.
+        key = select_key(store, envelope["key_id"], "recovery-authorization", now=now)
+        approval = approval_by_key.get(envelope["key_id"])
+        if approval is None:
+            raise refuse("preflight.recovery.approval_invalid",
+                         "a recovery signature key is not one of the named approvers")
+        if key.get("approver_identity") is None or key.get("approver_role") is None:
+            raise refuse("preflight.recovery.approval_invalid",
+                         "a recovery signing key is not bound to an approver identity")
+        if (key["approver_identity"] != approval["approver_identity"]
+                or key["approver_role"] != approval["approver_role"]):
+            raise refuse("preflight.recovery.approval_invalid",
+                         "a recovery signature key does not match its named approver")
+        if not rsa_pkcs1v15_sha256_verify(key["modulus"], key["exponent"], raw,
+                                          envelope["signature"]):
+            raise refuse("preflight.recovery.authorization_invalid",
+                         "recovery authorization signature did not verify")
+    marker = _recovery_consumed_marker(state_dir, request_id)
+    if marker is not None and marker.is_file():
+        raise refuse("preflight.recovery.request_replayed",
+                     "this recovery request was already used")
+    return {"sha256": hashlib.sha256(raw).hexdigest(), "expires_utc": expires.isoformat(),
+            "request_id": request_id, "approvals": parsed_approvals}
 
 
 # --------------------------------------------------------------------------
@@ -1302,6 +1438,70 @@ def _host_facts(request: Mapping[str, object]) -> dict:
         "site_credentials_present": _boolean(facts["site_credentials_present"], "host.site_credentials_present"),
         "site_config_present": _boolean(facts["site_config_present"], "host.site_config_present"),
     }
+
+
+def _observe_host() -> dict:
+    try:
+        return update_host.observe()
+    except update_host.ObservationError:
+        raise refuse("preflight.host.unavailable", "the trusted live host observer is unavailable") from None
+
+
+def _live_identity(request: Mapping[str, object], manifest: dict, *,
+                   transaction: dict | None = None) -> dict:
+    """Read a privileged local broker, never caller-carried host snapshots.
+
+    The broker can only inspect fixed Docker objects and installation files.
+    It cannot accept an API path or perform a Docker mutation. Its Unix peer
+    credentials authenticate root; the migrating frappe process cannot read
+    the raw Docker socket or impersonate that peer.
+    """
+    observation = _observe_host()
+    if observation.get("schema_version") != 1:
+        raise refuse("preflight.host.unavailable", "unsupported live host observation")
+    facts = _host_facts({"host": observation.get("facts")})
+    installed = request.get("installed") if transaction is None else transaction["installed"]
+    if (not isinstance(installed, dict) or facts["image_id"] != installed.get("image_id")
+            or facts["image_labels"] != installed.get("image_labels")):
+        raise refuse("apply.installed_mismatch", "the actual installed container image changed")
+    identity = observation.get("identity")
+    fields = {"storage_sha256", "credentials_sha256", "site_config_sha256"}
+    if (not isinstance(identity, dict) or set(identity) != fields
+            or any(not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)
+                   for value in identity.values())):
+        raise refuse("preflight.host.unavailable", "live installation identity is incomplete")
+    required_free = max(manifest["requirements"]["minimum_free_bytes"], MIN_FREE_BYTES_FLOOR)
+    if (facts["disk_free_bytes"] < required_free or not facts["volume_present"]
+            or not facts["volume_verified"] or not facts["site_credentials_present"]
+            or not facts["site_config_present"] or not facts["image_present"]):
+        raise refuse("apply.host_unsafe", "the actual installation is no longer safe to update")
+    states = observation.get("states")
+    expected = {key: "running" for key in update_host.CONTAINERS}
+    if transaction is not None:
+        expected.update({key: "exited" for key in ("web", "worker", "scheduler", "socketio")})
+    if states != expected:
+        raise refuse("apply.host_unsafe", "actual service states do not match the update phase")
+    journal = observation.get("journal")
+    if not isinstance(journal, dict):
+        raise refuse("apply.journal_unsafe", "the actual update journal is unavailable")
+    if transaction is None:
+        if journal.get("phase") not in JOURNAL_TERMINAL_STATES:
+            raise refuse("apply.journal_unsafe", "the actual update journal is unfinished")
+        expected_image = installed.get("image_id")
+        expected_labels = installed.get("image_labels")
+    else:
+        if (journal.get("phase") != "applying"
+                or journal.get("version") != manifest["version"]
+                or journal.get("transaction_id") != transaction["transaction_id"]):
+            raise refuse("apply.journal_unsafe", "the actual journal belongs to another update phase")
+        if identity != transaction.get("host_identity"):
+            raise refuse("apply.host_unsafe", "actual storage or site credentials changed after authorization")
+        expected_image = transaction["target"].get("image_config_digest")
+        expected_labels = manifest["image"]["labels"]
+    if (observation.get("tag_image_id") != expected_image
+            or observation.get("tag_image_labels") != expected_labels):
+        raise refuse("apply.installed_mismatch", "the actual tagged image does not match this update phase")
+    return dict(identity)
 
 
 def preflight(request: Mapping[str, object], *, now: datetime,
@@ -1354,6 +1554,26 @@ def authorize(request: Mapping[str, object], *, now: datetime,
     return response
 
 
+def recheck(request: Mapping[str, object], *, now: datetime,
+            state_dir: Path | None = None) -> dict:
+    """Revalidate an issued image authorization before any host mutation."""
+    supplied = _require_object(request.get("transaction"), "transaction")
+    transaction_id = supplied.get("transaction_id")
+    if not isinstance(transaction_id, str) or not TRANSACTION_ID.fullmatch(transaction_id):
+        raise refuse("transaction.invalid", "the transaction identifier is malformed")
+    transaction = _load_persisted_transaction(state_dir, transaction_id, now=now)
+    if transaction["phase"] != "authorized":
+        raise refuse("transaction.invalid", "an image authorization is required")
+    response, context = _evaluate({**request, "action": "authorize"}, now=now, action="authorize",
+                                  require_archive=True, state_dir=state_dir)
+    response["action"] = "recheck"
+    if response["decision"] == "allow":
+        assert context is not None
+        _bind_transaction(transaction, context)
+        response["transaction"] = transaction
+    return response
+
+
 def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
               require_archive: bool, state_dir: Path | None = None) -> tuple[dict, dict | None]:
     """Shared read-only evaluation for the manifest and image phases."""
@@ -1361,7 +1581,7 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
     allowed = ("action", "now_utc", "site", "product_root", "host_updater_version",
                "trust_store", "channel", "manifest", "signature", "archive",
                "backup_receipt", "backup_dir", "recovery_authorization",
-               "recovery_signature", "installed", "journal_state", "host")
+               "recovery_signature", "recovery_signature_2", "installed", "journal_state", "host")
     required = ("action", "site", "product_root", "host_updater_version", "trust_store",
                 "channel", "manifest", "signature", "installed", "host")
     if action == "authorize":
@@ -1504,9 +1724,11 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
     recovery_needed = (manifest["database"]["migration"] == "supported"
                        or requirements["recovery_required"])
     if recovery_needed:
-        if not request.get("recovery_authorization") or not request.get("recovery_signature"):
-            blockers.append(_block("preflight.recovery.authorization_missing",
-                                   "signed Owner recovery/key-custody authorization is not present"))
+        if (not request.get("recovery_authorization") or not request.get("recovery_signature")
+                or not request.get("recovery_signature_2")):
+            blockers.append(_block("preflight.recovery.approval_missing",
+                                   "two-person recovery authorization is not present: "
+                                   "both approval signatures are required"))
         elif receipt_details is None:
             blockers.append(_block("preflight.recovery.binding_mismatch",
                                    "recovery authorization cannot be bound without a verified backup"))
@@ -1518,7 +1740,10 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
                     resolve_inside(product_root, request["recovery_signature"],
                                    "request.recovery_signature"),
                     store, site=SITE_NAME, receipt_sha256=receipt_details["sha256"], now=now,
-                    max_age_hours=requirements["recovery_max_age_hours"])
+                    max_age_hours=requirements["recovery_max_age_hours"],
+                    signature_path_2=resolve_inside(product_root, request["recovery_signature_2"],
+                                                    "request.recovery_signature_2"),
+                    state_dir=state_dir)
             except UpdateError as error:
                 blockers.append(_block(error.code, error.detail))
             except (OSError, ValueError):
@@ -1527,8 +1752,10 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
 
     context = None
     if not blockers:
+        host_identity = _live_identity(request, manifest)
         context = _build_context(request, product_root, manifest, identity, receipt_details,
                                  recovery_details, now)
+        context["host_identity"] = host_identity
         if require_archive and (identity is None or context is None):
             blockers.append(_block("release.archive.missing", "the downloaded image archive is required here"))
             context = None
@@ -1587,6 +1814,8 @@ def _build_context(request: Mapping[str, object], product_root: Path, manifest: 
             "backup_receipt_sha256": None if receipt_details is None else receipt_details["sha256"],
             "backup_set": None if receipt_details is None else receipt_details["receipt"].get("backup_set"),
             "recovery_authorization_sha256": None if recovery_details is None else recovery_details["sha256"],
+            "recovery_request_id": None if recovery_details is None else recovery_details.get("request_id"),
+            "recovery_approvals": None if recovery_details is None else recovery_details.get("approvals"),
         },
         "migration": {
             "mode": manifest["database"]["migration"],
@@ -1714,6 +1943,7 @@ def _issue_transaction(context: dict, *, phase: str, now: datetime) -> dict:
         "issued_utc": parse_utc_iso(now),
         "expires_utc": parse_utc_iso(expires),
         "installed": dict(context["installed"]),
+        "host_identity": dict(context["host_identity"]),
         "target": dict(context["target"]),
         "evidence": dict(context["evidence"]),
         "migration": dict(context["migration"]),
@@ -1726,7 +1956,7 @@ def _load_transaction(value: object, *, now: datetime) -> dict:
         raise refuse("transaction.missing", "no verified update transaction was supplied")
     document = _require_object(value, "transaction")
     fields = ("schema_version", "document_type", "phase", "transaction_id", "site", "issued_utc",
-              "expires_utc", "installed", "target", "evidence", "migration")
+              "expires_utc", "installed", "target", "evidence", "migration", "host_identity")
     _require_exact_keys(document, fields, fields, "transaction", code="transaction.invalid")
     if (document["schema_version"] != TRANSACTION_SCHEMA_VERSION
             or document["document_type"] != DOCUMENT_TRANSACTION):
@@ -1746,7 +1976,7 @@ def _load_transaction(value: object, *, now: datetime) -> dict:
         raise refuse("transaction.invalid", "the transaction is dated in the future")
     if expires <= now:
         raise refuse("transaction.expired", "the verified update transaction has expired")
-    for name in ("installed", "target", "evidence", "migration"):
+    for name in ("installed", "target", "evidence", "migration", "host_identity"):
         document[name] = _require_object(document[name], f"transaction.{name}")
     return document
 
@@ -1758,7 +1988,7 @@ def _bind_transaction(transaction: dict, context: dict) -> None:
     archive identity it saw is empty.  Everything it did establish must match
     exactly; the image fields are the ones this phase adds.
     """
-    for section in ("installed", "evidence", "migration"):
+    for section in ("installed", "evidence", "migration", "host_identity"):
         if transaction[section] != context[section]:
             raise refuse("transaction.mismatch",
                          f"the update transaction does not match the current {section} evidence")
@@ -1971,12 +2201,12 @@ def apply_update(request: Mapping[str, object], *, now: datetime,
         _require_exact_keys(request, (
             "action", "site", "product_root", "manifest", "signature", "trust_store", "sites_dir", "bench",
             "host_updater_version", "migrate_replays", "command_timeout_seconds", "transaction", "archive",
-            "installed", "backup_receipt", "backup_dir", "recovery_authorization", "recovery_signature",
-            "host", "journal_state",
+            "backup_receipt", "backup_dir", "recovery_authorization", "recovery_signature",
+            "recovery_signature_2",
         ), (
             "action", "site", "product_root", "manifest", "signature", "trust_store", "sites_dir", "bench",
-            "host_updater_version", "transaction", "archive", "installed", "backup_receipt",
-            "recovery_authorization", "recovery_signature", "host", "journal_state",
+            "host_updater_version", "transaction", "archive", "backup_receipt",
+            "recovery_authorization", "recovery_signature",
         ), "request")
         if request["action"] != "apply":
             raise refuse("engine.request_invalid", "request action is not apply")
@@ -2066,6 +2296,7 @@ def apply_update(request: Mapping[str, object], *, now: datetime,
     if manifest["database"]["migration"] == "supported":
         try:
             for _ in range(migrate_replays):
+                _live_identity(request, manifest, transaction=transaction)
                 runner.migrate(SITE_NAME)
         except UpdateError as error:
             return _apply_report("failed", "migrating", blockers=[_block(error.code, error.detail)],
@@ -2101,6 +2332,10 @@ def apply_update(request: Mapping[str, object], *, now: datetime,
     lost_pages = [page for page in ROLE_DESK_PAGES if page not in pages]
     if lost_pages:
         blockers.append(_block("apply.role_desk_missing", "missing role desks: " + ",".join(lost_pages)))
+    try:
+        _live_identity(request, manifest, transaction=transaction)
+    except UpdateError as error:
+        blockers.append(_block(error.code, error.detail))
     status = "succeeded" if not blockers else "failed"
     return _apply_report(status, "verified" if status == "succeeded" else "verify-data",
                          blockers=blockers, counts_before=counts_before, counts_after=counts_after,
@@ -2151,13 +2386,6 @@ def _rebind_apply(request: Mapping[str, object], product_root: Path, transaction
             or identity["config_digest"] != target.get("image_config_digest")):
         raise refuse("apply.archive_mismatch", "the image identity does not match the authorized release")
 
-    installed = _require_object(request.get("installed"), "installed")
-    authorized_installed = transaction["installed"]
-    for name in ("version", "release_sequence", "source_revision", "image_id", "image_labels"):
-        if installed.get(name) != authorized_installed.get(name):
-            raise refuse("apply.installed_mismatch",
-                         f"the installed {name} changed since the update was authorized")
-
     evidence = transaction["evidence"]
     receipt_path = resolve_inside(product_root, request["backup_receipt"], "request.backup_receipt")
     if sha256_file(receipt_path) != evidence.get("backup_receipt_sha256"):
@@ -2169,38 +2397,24 @@ def _rebind_apply(request: Mapping[str, object], product_root: Path, transaction
                                         "request.recovery_authorization")
     if sha256_file(authorization_path) != evidence.get("recovery_authorization_sha256"):
         raise refuse("apply.evidence_mismatch", "the recovery authorization changed after authorization")
-    validate_recovery_authorization(
-        authorization_path,
-        resolve_inside(product_root, request["recovery_signature"], "request.recovery_signature"),
-        store, site=SITE_NAME, receipt_sha256=evidence.get("backup_receipt_sha256"), now=now,
-        max_age_hours=manifest["requirements"]["recovery_max_age_hours"])
+    if evidence.get("recovery_authorization_sha256") is not None:
+        if not request.get("recovery_signature_2"):
+            raise refuse("preflight.recovery.approval_missing",
+                         "the second recovery approval signature is missing at apply time")
+        revalidated = validate_recovery_authorization(
+            authorization_path,
+            resolve_inside(product_root, request["recovery_signature"], "request.recovery_signature"),
+            store, site=SITE_NAME, receipt_sha256=evidence.get("backup_receipt_sha256"), now=now,
+            max_age_hours=manifest["requirements"]["recovery_max_age_hours"],
+            signature_path_2=resolve_inside(product_root, request["recovery_signature_2"],
+                                            "request.recovery_signature_2"))
+        if revalidated.get("request_id") != evidence.get("recovery_request_id"):
+            raise refuse("apply.evidence_mismatch",
+                         "the recovery request changed after authorization")
 
-    # Re-read the host and journal state now, not at authorize time: a change
-    # since the authorization (a lost volume, a stopped service, a half-finished
-    # update, a replaced image) must stop the migration before it starts.
-    journal_state = request.get("journal_state", "idle")
-    if journal_state not in JOURNAL_TERMINAL_STATES:
-        raise refuse("apply.journal_unsafe", "the update journal is not in a finished state")
-    facts = _host_facts(request)
-    required_free = max(manifest["requirements"]["minimum_free_bytes"], MIN_FREE_BYTES_FLOOR)
-    if facts["disk_free_bytes"] < required_free:
-        raise refuse("apply.host_unsafe", "free disk space changed after authorization")
-    if not facts["volume_present"] or not facts["volume_verified"]:
-        raise refuse("apply.host_unsafe", "the database volume changed after authorization")
-    if not facts["site_credentials_present"] or not facts["site_config_present"]:
-        raise refuse("apply.host_unsafe", "the site files changed after authorization")
-    if not facts["image_present"]:
-        raise refuse("apply.host_unsafe", "the installed image disappeared after authorization")
-    if facts["image_id"] != transaction["installed"].get("image_id"):
-        raise refuse("apply.installed_mismatch",
-                     "the installed image identity changed after authorization")
-    if facts["image_labels"] != transaction["installed"].get("image_labels"):
-        raise refuse("apply.installed_mismatch",
-                     "the installed image labels changed after authorization")
-    unhealthy = [name for name, value in facts["services"].items() if value is not True]
-    if unhealthy:
-        raise refuse("apply.host_unsafe",
-                     "services changed after authorization: " + ",".join(sorted(unhealthy)))
+    # No host, installed-image or journal snapshot is accepted in apply JSON.
+    # Query the independently authenticated broker after all evidence hashing.
+    _live_identity(request, manifest, transaction=transaction)
 
 
 def _consume_transaction(state_dir: Path, transaction: dict) -> None:
@@ -2211,6 +2425,34 @@ def _consume_transaction(state_dir: Path, transaction: dict) -> None:
     before any migration.  A replay would otherwise need a fresh authorization,
     which needs every piece of evidence again.
     """
+    # A recovery approval is single-use for the whole update attempt, not
+    # merely for one transaction phase: once apply starts, the request id is
+    # spent even if the migration then fails, so a retry needs fresh
+    # approvals from both approvers.  A later preflight with the same
+    # request id is refused by validate_recovery_authorization.
+    request_id = (transaction.get("evidence") or {}).get("recovery_request_id")
+    if request_id:
+        recovery_folder = state_dir / RECOVERY_CONSUMED_DIR
+        try:
+            recovery_folder.mkdir(parents=True, exist_ok=True)
+            recovery_marker = recovery_folder / (request_id + ".json")
+            with recovery_marker.open("x", encoding="utf-8", newline="\n") as handle:
+                json.dump({
+                    "schema_version": 1,
+                    "document_type": "toefl-house-erp-recovery-request-use",
+                    "request_id": request_id,
+                    "consumed_utc": parse_utc_iso(datetime.now(timezone.utc)),
+                    "transaction_id": transaction["transaction_id"],
+                }, handle, sort_keys=True)
+                handle.write("\n")
+        except FileExistsError:
+            raise refuse("transaction.replayed", "this recovery request was already used") from None
+        except OSError:
+            raise refuse("transaction.invalid",
+                         "the recovery request could not be recorded; nothing was migrated") from None
+    # Consume the recovery approval before the transaction marker. If the
+    # process crashes between writes, the approval must remain spent;
+    # otherwise a new transaction could reuse the same two signatures.
     folder = state_dir / TRANSACTION_CONSUMED_DIR
     try:
         folder.mkdir(parents=True, exist_ok=True)
@@ -2229,7 +2471,6 @@ def _consume_transaction(state_dir: Path, transaction: dict) -> None:
     except OSError:
         raise refuse("transaction.invalid",
                      "the update transaction could not be recorded; nothing was migrated") from None
-
 
 def _apply_report(status: str, phase: str, *, blockers: list[dict] | None = None,
                   counts_before: dict | None = None, counts_after: dict | None = None,
@@ -2312,6 +2553,9 @@ def run(request: Mapping[str, object], *, now: datetime | None = None,
         if action == "apply":
             response = apply_update(request, now=now, state_dir=state_dir)
             return response, 0 if response["status"] == "succeeded" else 5
+        if action == "recheck":
+            response = recheck(request, now=now, state_dir=state_dir)
+            return response, 0 if response["decision"] == "allow" else 3
         if action == "authorize":
             response = authorize(request, now=now, state_dir=state_dir)
             return response, 0 if response["decision"] == "allow" else 3

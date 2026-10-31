@@ -1,21 +1,14 @@
 name: Windows customer package smoke
 
+# This is an exact-source release gate, not a best-effort path-filtered smoke.
+# Product image requires Windows evidence on the same SHA; a source-only push
+# must never leave the required Windows check absent because it missed a filter.
 on:
   push:
-    paths:
-      - "TOEFL House ERP.vbs"
-      - docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md
-      - "product/windows/**"
-      - "product/update_engine.py"
-      - "product/update_entrypoint.sh"
-      - "product/updates/**"
-      - "tests/foundation/test_update_engine.py"
-      - "tests/foundation/test_update_bundle.py"
-      - "tests/foundation/test_windows_update_path.py"
-      - "docs/CUSTOMER-UPDATES.md"
-      - "docs/engineering/SAFE-UPDATES.md"
-      - "tests/foundation/test_customer_install_package.py"
-      - ".github/workflows/windows-customer-package.yml"
+    branches:
+      - main
+      - work
+      - 'fix/**'
   workflow_dispatch:
 
 permissions:
@@ -29,6 +22,16 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
+      - name: Compile and exercise real single-file Windows setup
+        shell: powershell
+        run: |
+          & powershell.exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File 'tests/foundation/test_customer_exe.ps1'
+          if ($LASTEXITCODE -ne 0) { throw "Customer EXE extraction tests failed." }
+      - name: Exercise offline runtime integrity and identity refusals
+        shell: powershell
+        run: |
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'tests/foundation/test_offline_runtime.ps1'
+          if ($LASTEXITCODE -ne 0) { throw "Offline runtime tests failed." }
       - name: Parse all customer PowerShell launchers
         shell: pwsh
         run: |
@@ -36,6 +39,9 @@ jobs:
           $paths = @(
             'product/windows/TOEFL House ERP.ps1',
             'product/windows/Run TOEFL House ERP.ps1',
+            'product/windows/Prepare This PC.ps1',
+            'product/windows/Import Offline Runtime.ps1',
+            'tools/release/Build Customer Installer.ps1',
             'product/windows/Check This PC.ps1',
             'product/windows/Verify Package Image.ps1',
             'product/windows/Prepare Customer Package.ps1',
@@ -58,11 +64,37 @@ jobs:
           $ErrorActionPreference = 'Stop'
           & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "product/windows/Update TOEFL House ERP.ps1" -SmokeTest
           if ($LASTEXITCODE -ne 0) { throw "Windows updater refused its fail-closed smoke." }
+      - name: Exercise actual updater failure and recovery handlers with synthetic services
+        shell: powershell
+        run: |
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'tests/foundation/windows_update_failure_probe.ps1'
+          if ($LASTEXITCODE -ne 0) { throw "Updater failure/recovery probe failed." }
       - name: Initialize Windows GUI without opening a desktop window
         shell: powershell
         run: |
           & powershell.exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File 'product/windows/TOEFL House ERP.ps1' -SmokeTest
           if ($LASTEXITCODE -ne 0) { throw "Windows GUI initialization failed." }
+      - name: Verify real PowerShell storage-inventory decisions
+        shell: powershell
+        run: |
+          python -m unittest tests.foundation.test_windows_pc_inventory -v
+          if ($LASTEXITCODE -ne 0) { throw "PC storage inventory regression failed." }
+      - name: Verify Windows delivery finalization contracts
+        shell: powershell
+        run: |
+          python -m unittest tests.foundation.test_windows_delivery_finalization tests.foundation.test_windows_backup_discovery tests.foundation.test_windows_package_hashing -v
+          if ($LASTEXITCODE -ne 0) { throw "Windows delivery finalization regression failed." }
+      - name: Verify exact service and HTTP readiness decisions
+        shell: powershell
+        run: |
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'tests/foundation/test_windows_service_readiness.ps1'
+          if ($LASTEXITCODE -ne 0) { throw "Service readiness regression failed." }
+      - name: Execute Windows-only manifest, verifier and preparer contracts
+        # These skip on Linux; exercise them on the same OS as the customer kit.
+        shell: powershell
+        run: |
+          python -m unittest tests.foundation.test_customer_package_manifest -v
+          if ($LASTEXITCODE -ne 0) { throw "Windows customer package manifest tests failed." }
       - name: Exercise clean offline package with a synthetic image
         shell: powershell
         run: |
@@ -100,6 +132,12 @@ jobs:
                       return 0;
                   }
                   if (args[0] == "inspect") {
+                      if (args.Length >= 3 && args[2] == "{{json .State}}") {
+                          // Match the LF-only stream emitted by the real Docker CLI.
+                          for (int index = 3; index < args.Length; index++)
+                              Console.Write("{\"Status\":\"running\",\"Health\":{\"Status\":\"healthy\"}}\n");
+                          return 0;
+                      }
                       Console.WriteLine(args.Length >= 3 && args[2].Contains("State.Status")
                           ? "running" : "healthy");
                       return 0;
@@ -143,6 +181,7 @@ jobs:
             'product/windows/Check This PC.ps1',
             'product/windows/Test Existing Installation.ps1',
             'product/windows/OWNER ACCEPTANCE GUIDE.txt',
+            'product/windows/OWNER HANDBOOK.txt',
             'product/windows/DAILY USE GUIDE.txt',
             'product/release/toefl-house-erp-app.tar',
             'product/release/toefl-house-erp-app.tar.sha256',
@@ -164,6 +203,10 @@ jobs:
           $ownerGuide = [System.IO.File]::ReadAllText((Join-Path $kit 'product/windows/OWNER ACCEPTANCE GUIDE.txt'))
           if ($ownerGuide -notmatch 'RELEASE DECISION: NO-GO' -or $ownerGuide -notmatch 'PRESERVATION') {
             throw "Customer kit omitted its Owner hold and safe first-check guidance."
+          }
+          $handbook = [System.IO.File]::ReadAllText((Join-Path $kit 'product/windows/OWNER HANDBOOK.txt'))
+          if ($handbook -notmatch 'NO-GO' -or $handbook -notmatch 'Check for Updates' -or $handbook -notmatch 'Install Update') {
+            throw "Customer kit omitted its Owner handbook or its gated-update guidance."
           }
           # A corrupt first-run kit must be rejected before creating local data.
           # Use a separate synthetic copy so the valid package stays unchanged.
@@ -208,7 +251,40 @@ jobs:
           # Exercise the customer-facing CMD paths without real Docker or databases.
           $fakeCurl = 'public class FakeCurl { public static int Main(string[] args) { return 0; } }'
           Add-Type -TypeDefinition $fakeCurl -OutputAssembly (Join-Path $fakeDir 'curl.exe') -OutputType ConsoleApplication
+          # The structured PowerShell readiness probe performs a real loopback
+          # HTTP request. Supply an explicit disposable HTTP fixture rather
+          # than bypassing that part of the production probe.
+          $fakeHttp = @'
+          using System;
+          using System.Net;
+          using System.Net.Sockets;
+          using System.Text;
+          public class ReadyHttp {
+              public static void Main() {
+                  var listener = new TcpListener(IPAddress.Loopback, 8000);
+                  listener.Start();
+                  while (true) {
+                      using (var client = listener.AcceptTcpClient()) {
+                          var stream = client.GetStream();
+                          stream.ReadTimeout = 5000;
+                          var buffer = new byte[8192];
+                          try {
+                              stream.Read(buffer, 0, buffer.Length);
+                              var response = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK");
+                              stream.Write(response, 0, response.Length);
+                          } catch (System.IO.IOException) { }
+                      }
+                  }
+              }
+          }
+          '@
+          $fakeHttpPath = Join-Path $fakeDir 'ready-http.exe'
+          Add-Type -TypeDefinition $fakeHttp -OutputAssembly $fakeHttpPath -OutputType ConsoleApplication
+          $fakeHttpProcess = Start-Process -FilePath $fakeHttpPath -PassThru -WindowStyle Hidden
+          Start-Sleep -Milliseconds 250
+          if ($fakeHttpProcess.HasExited) { throw 'Synthetic loopback HTTP listener could not start.' }
           $env:TH_GUI_MODE = '1'
+          try {
           foreach ($task in @('Install', 'Start', 'Stop', 'Repair')) {
             if ($task -eq 'Start') {
               # Fake Docker cannot create Frappe data. Model the successful
@@ -233,6 +309,9 @@ jobs:
             if (($output | Out-String) -match 'Username: Administrator|Password: ') {
               throw "Headless execution leaked the initial Administrator credentials."
             }
+          }
+          } finally {
+            if (-not $fakeHttpProcess.HasExited) { Stop-Process -Id $fakeHttpProcess.Id -ErrorAction Stop }
           }
           if (-not (Test-Path -LiteralPath (Join-Path $kit 'product/data/secrets/db.env') -PathType Leaf)) {
             $productData = Join-Path $kit 'product/data'
@@ -285,7 +364,9 @@ jobs:
             Write-Host "::error::Update refusal did not explain the disabled channel."
             throw "Update refusal did not explain the disabled channel."
           }
-          if ($updateText -notmatch '\p{IsArabic}') { throw "Update refusal was not shown in Dari." }
+          if ($updateText -notmatch 'Your data was not changed\.' -or $updateText -match '\p{IsArabic}') {
+            throw "Update refusal must explain data preservation in the approved English interface."
+          }
           $updateResult = Join-Path $kit 'product/data/updates/last-result.json'
           if (-not (Test-Path -LiteralPath $updateResult -PathType Leaf)) {
             Write-Host "::error::Update refusal did not record a safe result."

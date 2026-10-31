@@ -81,6 +81,16 @@ DESKS = {
 # through a desk, including sensitive internals (answers, hashes, seeds, keys,
 # payroll detail, result_json). Tested by tests/desk.
 PROJECTION_FIELDS = {
+    ("finance", "TH Tuition Refund Request"): [
+        "name", "student", "company", "fees", "requested_amount", "approved_amount",
+        "reason", "evidence", "approval_evidence", "status", "requested_by",
+        "approved_by", "paying_user", "credit_journal", "payment_entry", "modified", "voided_by", "void_reason", "voided_on",
+    ],
+    ("management", "TH Tuition Refund Request"): [
+        "name", "student", "company", "fees", "requested_amount", "approved_amount",
+        "reason", "evidence", "approval_evidence", "status", "requested_by",
+        "approved_by", "paying_user", "credit_journal", "payment_entry", "modified", "voided_by", "void_reason", "voided_on",
+    ],
     ("reception", "TH Placement Decision"): [
         "name", "attempt", "status", "released_at", "expires_at",
         "course_code", "internal_level",
@@ -133,12 +143,15 @@ PROJECTION_FIELDS = {
     # the pinned native Student Group (education 93bc70757533) has no
     # `active` column — `disabled` is its native archive flag.
     ("academic", "Student Group"): [
-        "name", "student_group_name", "program", "academic_year",
+        "name", "student_group_name", "program", "academic_year", "academic_term",
         "max_strength", "course", "disabled", "th_class_status",
+    ],
+    ("academic", "Student Group Student"): [
+        "name", "parent", "student", "active",
     ],
     ("academic", "Course Schedule"): [
         "name", "student_group", "instructor", "course", "room",
-        "from_time", "to_time", "schedule_date",
+        "from_time", "to_time", "schedule_date", "th_session_status",
     ],
     ("academic", "TH Teaching Assignment"): [
         "name", "student_group", "skill", "instructor", "contract",
@@ -149,7 +162,7 @@ PROJECTION_FIELDS = {
         "status", "docstatus",
     ],
     ("academic", "Program Enrollment"): [
-        "name", "student", "student_name", "program", "academic_year",
+        "name", "student", "student_name", "program", "academic_year", "academic_term",
         "enrollment_date", "docstatus",
     ],
     ("finance", "Fees"): [
@@ -167,7 +180,8 @@ PROJECTION_FIELDS = {
     ("finance", "Payment Entry"): [
         "name", "payment_type", "party_type", "party", "paid_amount",
         "received_amount", "paid_from_account_currency", "company",
-        "posting_date", "docstatus",
+        "posting_date", "docstatus", "paid_to", "paid_to_account_currency",
+        "th_reception_collector", "th_collection_fees", "th_collection_handover",
     ],
     ("finance", "TH Correction Request"): [
         "name", "sales_invoice", "fees", "correction_policy", "reason",
@@ -327,7 +341,12 @@ PROJECTION_FIELDS = {
     ],
     ("reception", "Fees"): [
         "name", "student", "program", "due_date", "grand_total",
-        "outstanding_amount", "currency", "docstatus",
+        "outstanding_amount", "currency", "company", "docstatus",
+    ],
+    ("reception", "Payment Entry"): [
+        "name", "party", "received_amount", "paid_to", "paid_to_account_currency",
+        "company", "posting_date", "docstatus", "th_reception_collector",
+        "th_collection_fees", "th_collection_handover",
     ],
     ("reception", "Sales Invoice"): [
         "name", "customer", "grand_total", "outstanding_amount",
@@ -498,7 +517,7 @@ PROJECTION_FIELDS = {
     ],
     ("teacher", "Course Schedule"): [
         "name", "student_group", "instructor", "course", "room",
-        "from_time", "to_time", "schedule_date",
+        "from_time", "to_time", "schedule_date", "th_session_status",
     ],
     ("teacher", "Student Group Student"): [
         "name", "parent", "student", "student_name", "group_roll_number",
@@ -595,12 +614,22 @@ BRANCH_CHAIN_FILTERS = ("Student", "Student Group Student", "Student Attendance"
 _CHAIN_LIMIT = 10000  # bounded scope resolution; truncation is fail-closed
 
 
-def _branch_allowed_names(doctype, branches):
+def _branch_allowed_names(doctype, branches, *, require_complete=False):
     """Document names a branch-scoped viewer may see, resolved through the
     class -> branch and roster -> student chains."""
-    groups = [row["name"] for row in frappe.get_all(
+    # Enrollment queues make numeric/roster claims. A truncated scope chain
+    # must report an error, not masquerade as an exact empty intake.
+    strict = require_complete or doctype == "Program Enrollment"
+
+    def checked(rows):
+        if strict and len(rows) >= _CHAIN_LIMIT:
+            raise frappe.ValidationError(
+                "Branch enrollment scope exceeds the safe read limit; narrow the scope or contact an administrator")
+        return rows
+
+    groups = [row["name"] for row in checked(frappe.get_all(
         "Student Group", filters={"th_branch": ("in", branches)},
-        fields=["name"], limit_page_length=_CHAIN_LIMIT)]
+        fields=["name"], limit_page_length=_CHAIN_LIMIT))]
     if doctype == "Student Group Student":
         if not groups:
             return []
@@ -613,12 +642,54 @@ def _branch_allowed_names(doctype, branches):
         return [row["name"] for row in frappe.get_all(
             doctype, filters={"student_group": ("in", groups)},
             fields=["name"], limit_page_length=_CHAIN_LIMIT)]
-    roster = [row["student"] for row in frappe.get_all(
+    roster = [row["student"] for row in checked(frappe.get_all(
         "Student Group Student", filters={"parent": ("in", groups), "active": 1},
-        fields=["student"], limit_page_length=_CHAIN_LIMIT)] if groups else []
+        fields=["student"], limit_page_length=_CHAIN_LIMIT))] if groups else []
     if doctype == "Student":
         return roster
-    if doctype in ("Program Enrollment", "Fees", "TH Enrollment Exit"):
+    if doctype == "Program Enrollment":
+        # A new/late learner may have a submitted enrollment before any class
+        # roster exists. Authorize that intake only through an already
+        # branch-checked admission for the *same* student, program, year and
+        # term. A student's old applicant branch cannot authorize a different
+        # intake or a student now rostered in a foreign branch.
+        # Finding one in-scope roster is insufficient when the same learner
+        # also has an active foreign or branchless roster. Re-read *all*
+        # memberships before using roster-based enrollment evidence.
+        all_roster = checked(frappe.get_all(
+            "Student Group Student", filters={"student": ("in", roster), "active": 1},
+            fields=["student", "parent"], limit_page_length=_CHAIN_LIMIT)) if roster else []
+        parents = sorted({r["parent"] for r in all_roster if r.get("parent")})
+        parent_rows = checked(frappe.get_all(
+            "Student Group", filters={"name": ("in", parents)},
+            fields=["name", "th_branch"], limit_page_length=_CHAIN_LIMIT)) if parents else []
+        parent_branch = {row["name"]: row.get("th_branch") for row in parent_rows}
+        memberships = {}
+        for row in all_roster:
+            memberships.setdefault(row["student"], set()).add(parent_branch.get(row.get("parent")))
+        confined = {student for student, facts in memberships.items()
+                    if facts and facts <= set(branches)}
+        names = {row["name"] for row in checked(frappe.get_all(
+            doctype, filters={"student": ("in", sorted(confined))},
+            fields=["name"], limit_page_length=_CHAIN_LIMIT))} if confined else set()
+        admissions = _branch_allowed_names("TH Admission Decision", branches, require_complete=True)
+        if admissions:
+            rows = checked(frappe.get_all(
+                "TH Admission Decision", filters={"name": ("in", admissions)},
+                fields=["native_student", "program", "academic_year", "academic_term"],
+                limit_page_length=_CHAIN_LIMIT))
+            intakes = {(r.get("native_student"), r.get("program"), r.get("academic_year"),
+                        r.get("academic_term") or "") for r in rows if r.get("native_student")}
+            students = sorted({r[0] for r in intakes})
+            candidates = checked(frappe.get_all(
+                doctype, filters={"student": ("in", students)},
+                fields=["name", "student", "program", "academic_year", "academic_term"],
+                limit_page_length=_CHAIN_LIMIT)) if students else []
+            names.update(r["name"] for r in candidates
+                         if (r.get("student"), r.get("program"), r.get("academic_year"),
+                             r.get("academic_term") or "") in intakes)
+        return sorted(names)
+    if doctype in ("Fees", "TH Enrollment Exit"):
         if not roster:
             return []
         return [row["name"] for row in frappe.get_all(
@@ -645,18 +716,67 @@ def _branch_allowed_names(doctype, branches):
                     fields=["name"], limit_page_length=_CHAIN_LIMIT)}
         return sorted(names)
     if doctype == "TH Admission Decision":
-        applicants = [row["name"] for row in frappe.get_all(
+        applicants = [row["name"] for row in checked(frappe.get_all(
             "Student Applicant", filters={"th_branch": ("in", branches)},
-            fields=["name"], limit_page_length=_CHAIN_LIMIT)]
+            fields=["name"], limit_page_length=_CHAIN_LIMIT))]
         names = set()
         for field, values in (("student_applicant", applicants),
                               ("existing_student", roster),
                               ("native_student", roster)):
             if values:
-                names |= {row["name"] for row in frappe.get_all(
+                names |= {row["name"] for row in checked(frappe.get_all(
                     doctype, filters={field: ("in", values)},
-                    fields=["name"], limit_page_length=_CHAIN_LIMIT)}
-        return sorted(names)
+                    fields=["name"], limit_page_length=_CHAIN_LIMIT))}
+        if not names:
+            return []
+        candidate_rows = checked(frappe.get_all(
+            doctype, filters={"name": ("in", sorted(names))},
+            fields=["name", "student_applicant", "existing_student", "native_student"],
+            limit_page_length=_CHAIN_LIMIT))
+        # All linked student memberships matter, not merely the branch whose
+        # roster caused this admission to appear in the candidate set.
+        linked_students = sorted({
+            row.get(field) for row in candidate_rows
+            for field in ("existing_student", "native_student") if row.get(field)
+        })
+        roster_rows = checked(frappe.get_all(
+            "Student Group Student",
+            filters={"student": ("in", linked_students), "active": 1},
+            fields=["student", "parent"], limit_page_length=_CHAIN_LIMIT
+        )) if linked_students else []
+        if len(roster_rows) >= _CHAIN_LIMIT:
+            return []  # Truncation must never hide a foreign membership.
+        parent_names = sorted({row["parent"] for row in roster_rows if row.get("parent")})
+        parent_rows = checked(frappe.get_all(
+            "Student Group", filters={"name": ("in", parent_names)},
+            fields=["name", "th_branch"], limit_page_length=_CHAIN_LIMIT
+        )) if parent_names else []
+        if len(parent_rows) >= _CHAIN_LIMIT:
+            return []
+        parent_branch = {row["name"]: row.get("th_branch") for row in parent_rows}
+        student_branches = {}
+        for row in roster_rows:
+            student_branches.setdefault(row["student"], set()).add(
+                parent_branch.get(row.get("parent")))
+        allowed_applicants = set(applicants)
+        allowed_branches = set(branches)
+        eligible = []
+        for row in candidate_rows:
+            applicant = row.get("student_applicant")
+            if applicant and applicant not in allowed_applicants:
+                continue
+            related = set()
+            for field in ("existing_student", "native_student"):
+                student = row.get(field)
+                if student:
+                    related.update(student_branches.get(student, set()))
+            if related - allowed_branches:
+                continue
+            # A valid intake branch can authorize a first enrollment before
+            # any class exists, but no branch-less candidate is exposed.
+            if applicant in allowed_applicants or related:
+                eligible.append(row["name"])
+        return sorted(eligible)
     return []
 
 
@@ -726,6 +846,42 @@ def _assert_projection(desk, doctype, fields):
     if [field for field in fields if field not in allow]:
         raise frappe.ValidationError(f"Fields outside the {desk}/{doctype} projection allow-list")
     return allow
+
+
+def collection_schema_ready():
+    """Hide cash actions until the supported field migration has completed."""
+    check = getattr(frappe.db, "has_column", None)
+    return callable(check) and check("Payment Entry", "th_collection_handover")
+
+
+def refund_case_rows(desk, fields):
+    """Normal native read/list authority, including the refund Branch chain.
+
+    A refund has no flat Branch column. Never route these case/evidence reads
+    through an elevated get_all projection that cannot enforce that chain.
+    """
+    slugs = {"finance": "th-finance-desk", "management": "th-operations-desk"}
+    if desk not in slugs:
+        raise frappe.PermissionError("Refund cases require the Finance or General Manager desk")
+    require_desk_audience(slugs[desk])
+    _assert_projection(desk, "TH Tuition Refund Request", fields)
+    check = getattr(frappe.db, "has_column", None)
+    if (not callable(check) or not check("TH Tuition Refund Request", "credit_journal")
+            or not check("TH Tuition Refund Request", "voided_on")):
+        return None
+    rows = frappe.get_list("TH Tuition Refund Request", fields=list(fields),
+                           order_by="modified desc, name desc", limit_page_length=LIMIT_QUEUES + 1)
+    # Recheck the same command scope before exposing evidence or prefills.
+    # A native list permission alone must never become action authority.
+    from toefl_house.command_scope import authorize_command_scope
+    visible = []
+    for row in rows:
+        try:
+            authorize_command_scope("approve_tuition_refund", {"request": row["name"]}, frappe.session.user)
+        except frappe.PermissionError:
+            continue
+        visible.append(row)
+    return visible
 
 
 def project_rows(desk, doctype, fields, filters=None, order_by=None, limit=LIMIT_QUEUES,

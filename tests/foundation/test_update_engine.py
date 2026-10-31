@@ -170,6 +170,7 @@ class UpdateFixture:
         self.recovery_required = recovery_required
         self.signing = RsaKey(base, "release-key")
         self.support = RsaKey(base, "support-key")
+        self.manager = RsaKey(base, "manager-key")
         self.trust_store_rel = "release/trusted-publisher-keys.json"
         self.channel_rel = "release/update-channels.json"
         self.write_trust_store()
@@ -187,7 +188,12 @@ class UpdateFixture:
             self.signing.trust_entry("release-2026a", ("update-manifest",)),
         ]
         if include_support and keys is None:
-            entries = list(entries) + [self.support.trust_entry("support-2026a", ("recovery-authorization",))]
+            entries = list(entries) + [
+                {**self.support.trust_entry("support-2026a", ("recovery-authorization",)),
+                 "approver_identity": "course-owner", "approver_role": "course-owner"},
+                {**self.manager.trust_entry("manager-2026a", ("recovery-authorization",)),
+                 "approver_identity": "general-manager", "approver_role": "general-manager"},
+            ]
         if key_override:
             entries = [{**entry, **key_override} for entry in entries]
         store = {
@@ -325,21 +331,29 @@ class UpdateFixture:
 
     def write_recovery_authorization(self, *, issued: datetime | None = None,
                                      expires: datetime | None = None, mutate: dict | None = None,
-                                     key: RsaKey | None = None, key_id: str = "support-2026a") -> None:
+                                     key: RsaKey | None = None, key_id: str = "support-2026a",
+                                     second_key: RsaKey | None = None,
+                                     second_key_id: str = "manager-2026a") -> None:
         issued = issued or (NOW - timedelta(hours=1))
         expires = expires or (NOW + timedelta(days=2))
         document = {
-            "schema_version": 1,
+            "schema_version": 2,
             "document_type": engine.DOCUMENT_RECOVERY,
             "site": engine.SITE_NAME,
             "scope": "site-update",
+            "operation": "site-update",
+            "request_id": "a" * 32,
             "issued_utc": iso(issued),
             "expires_utc": iso(expires),
             "owner_key_custody_verified": True,
             "rehearsal_restore_verified": True,
             "backup_receipt_sha256": self.receipt_sha256,
-            "authorized_by": "owner",
-            "attested_by": "toefl-house-support",
+            "approvals": [
+                {"approver_identity": "course-owner", "approver_role": "course-owner",
+                 "key_id": "support-2026a"},
+                {"approver_identity": "general-manager", "approver_role": "general-manager",
+                 "key_id": "manager-2026a"},
+            ],
         }
         if mutate:
             document.update(mutate)
@@ -351,6 +365,12 @@ class UpdateFixture:
         self.authorization_signature_rel = "data/update/evidence/recovery-authorization.json.sig"
         (self.product_root / self.authorization_signature_rel).write_text(
             json.dumps(envelope), encoding="utf-8")
+        second_signature = (second_key or self.manager).sign(raw)
+        second_envelope = signature_envelope(engine.DOCUMENT_RECOVERY_SIGNATURE,
+                                             second_key_id, second_signature)
+        self.authorization_signature_2_rel = "data/update/evidence/recovery-authorization-2.sig"
+        (self.product_root / self.authorization_signature_2_rel).write_text(
+            json.dumps(second_envelope), encoding="utf-8")
 
     # -- requests --------------------------------------------------------
     def installed(self, **overrides) -> dict:
@@ -387,6 +407,30 @@ class UpdateFixture:
         facts.update(overrides)
         return facts
 
+    def live_observation(self) -> dict:
+        applying = getattr(self, "live_applying", False)
+        installed = self.installed()
+        states = {key: "running" for key in engine.update_host.CONTAINERS}
+        journal = {"phase": "idle"}
+        image_id = installed["image_id"]
+        labels = installed["image_labels"]
+        if applying:
+            states.update({key: "exited" for key in ("web", "worker", "scheduler", "socketio")})
+            journal = {"phase": "applying", "version": self.version,
+                       "transaction_id": self.live_transaction_id}
+            image_id = self.identity["config_digest"]
+            labels = self.identity["labels"]
+        result = {"schema_version": 1, "facts": self.host(),
+                  "identity": {key: value * 64 for key, value in (
+                      ("storage_sha256", "a"), ("credentials_sha256", "b"), ("site_config_sha256", "c"))},
+                  "states": states, "journal": journal,
+                  "tag_image_id": image_id, "tag_image_labels": labels}
+        # Independent simulated host state: never derive this from a request's
+        # caller-editable host/installed/journal fields.
+        for key, value in getattr(self, "live_changes", {}).items():
+            result[key] = value
+        return result
+
     def preflight_request(self, **overrides) -> dict:
         request = {
             "action": "preflight",
@@ -402,6 +446,7 @@ class UpdateFixture:
             "backup_receipt": getattr(self, "receipt_rel", ""),
             "recovery_authorization": getattr(self, "authorization_rel", ""),
             "recovery_signature": getattr(self, "authorization_signature_rel", ""),
+            "recovery_signature_2": getattr(self, "authorization_signature_2_rel", ""),
             "installed": self.installed(),
             "journal_state": "idle",
             "host": self.host(),
@@ -444,7 +489,11 @@ class UpdateEngineBase(unittest.TestCase):
         self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
 
     def fixture(self, **overrides) -> UpdateFixture:
-        return UpdateFixture(self.tmp / "fixture", **overrides)
+        fixture = UpdateFixture(self.tmp / "fixture", **overrides)
+        observer = patch.object(engine, "_observe_host", side_effect=fixture.live_observation)
+        observer.start()
+        self.addCleanup(observer.stop)
+        return fixture
 
 
 class TrustStoreTests(UpdateEngineBase):
@@ -795,8 +844,9 @@ class BackupEvidenceTests(UpdateEngineBase):
 class RecoveryAuthorizationTests(UpdateEngineBase):
     def test_missing_owner_authorization_refuses_the_update(self):
         fixture = self.fixture()
-        self.assertIn("preflight.recovery.authorization_missing",
-                      codes(fixture.preflight(recovery_authorization="", recovery_signature="")))
+        self.assertIn("preflight.recovery.approval_missing",
+                      codes(fixture.preflight(recovery_authorization="", recovery_signature="",
+                                              recovery_signature_2="")))
 
     def test_forged_authorization_signature_is_refused(self):
         fixture = self.fixture()
@@ -957,20 +1007,23 @@ class ApplyTests(UpdateEngineBase):
             "transaction": transaction,
             "archive": str((self.fixture.staging / "toefl-house-erp-app.tar")
                            .relative_to(self.fixture.product_root)),
-            "installed": self.fixture.installed(),
             "backup_receipt": self.fixture.receipt_rel,
             "backup_dir": str(self.fixture.backup_dir.relative_to(self.fixture.product_root)),
             "recovery_authorization": self.fixture.authorization_rel,
             "recovery_signature": self.fixture.authorization_signature_rel,
-            "journal_state": "idle",
-            "host": self.fixture.host(),
+            "recovery_signature_2": self.fixture.authorization_signature_2_rel,
         }
         request.update(overrides)
         return request
 
     def apply(self, **overrides) -> dict:
-        return engine.apply_update(self.apply_request(**overrides), now=NOW,
-                                   state_dir=self.fixture.state_dir)
+        request = self.apply_request(**overrides)
+        self.fixture.live_applying = True
+        self.fixture.live_transaction_id = request["transaction"]["transaction_id"]
+        try:
+            return engine.apply_update(request, now=NOW, state_dir=self.fixture.state_dir)
+        finally:
+            self.fixture.live_applying = False
 
     def blocker_codes(self, report: dict) -> set[str]:
         return {item["code"] for item in report["blockers"]}
@@ -1014,6 +1067,10 @@ class ApplyTests(UpdateEngineBase):
         report = self.apply()
         self.assertIn("apply.apps_missing", {item["code"] for item in report["blockers"]})
 
+        # The first apply consumed the recovery request id by design: a
+        # second update attempt needs fresh approvals from both approvers,
+        # not a replay of the first authorization.
+        self.fixture.write_recovery_authorization(mutate={"request_id": "e" * 32})
         self.state["apps"] = list(engine.REQUIRED_APPS)
         self.state["pages"] = list(engine.ROLE_DESK_PAGES[:-1])
         self.write_state()
@@ -1053,7 +1110,7 @@ class ApplyTests(UpdateEngineBase):
 
 
 class ProtocolTests(UpdateEngineBase):
-    def test_cli_uses_request_and_response_documents(self):
+    def test_cli_refuses_without_trusted_observer_using_response_document(self):
         fixture = self.fixture()
         request = fixture.preflight_request()
         request_path = self.tmp / "request.json"
@@ -1063,10 +1120,11 @@ class ProtocolTests(UpdateEngineBase):
             [sys.executable, str(PRODUCT / "update_engine.py"),
              "--request", str(request_path), "--response", str(response_path)],
             capture_output=True, text=True, timeout=120)
-        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertEqual(completed.returncode, 3, completed.stdout + completed.stderr)
         self.assertEqual(completed.stdout, "")
         response = json.loads(response_path.read_text())
-        self.assertEqual(response["decision"], "allow", response["blockers"])
+        self.assertEqual(response["decision"], "refuse", response["blockers"])
+        self.assertIn("preflight.host.unavailable", codes(response))
         self.assertEqual(response["document_type"], engine.DOCUMENT_RESPONSE)
 
     def test_cli_reads_request_path_from_environment(self):
@@ -1079,8 +1137,8 @@ class ProtocolTests(UpdateEngineBase):
             capture_output=True, text=True, timeout=120,
             env={**os.environ, "TH_UPDATE_REQUEST": str(request_path),
                  "TH_UPDATE_RESPONSE": str(response_path)})
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(json.loads(response_path.read_text())["decision"], "allow")
+        self.assertEqual(completed.returncode, 3, completed.stderr)
+        self.assertIn("preflight.host.unavailable", codes(json.loads(response_path.read_text())))
 
     def test_missing_request_is_a_safe_failure(self):
         completed = subprocess.run(
@@ -1114,18 +1172,18 @@ class ProtocolTests(UpdateEngineBase):
 
 
 class CatalogTests(unittest.TestCase):
-    def test_every_engine_message_has_english_and_dari_text(self):
+    def test_every_engine_message_has_english_text(self):
         catalog = json.loads((ROOT / "product/windows/updater-strings.json").read_text(encoding="utf-8"))
         self.assertEqual(catalog["schema_version"], 1)
         self.assertEqual(catalog["document_type"], "toefl-house-erp-updater-strings")
         messages = catalog["messages"]
         missing = sorted(engine.MESSAGE_CODES - set(messages))
-        self.assertEqual(missing, [], f"missing bilingual updater messages: {missing}")
+        self.assertEqual(missing, [], f"missing English updater messages: {missing}")
         for code, entry in messages.items():
             with self.subTest(code=code):
-                self.assertEqual(set(entry), {"en", "fa"}, code)
+                self.assertEqual(set(entry), {"en"}, code)
                 self.assertTrue(entry["en"].strip(), code)
-                self.assertTrue(entry["fa"].strip(), code)
+                self.assertNotRegex(entry["en"], r"[\u0600-\u06FF\u200c]", code)
                 self.assertNotIn("git ", entry["en"].lower(), code)
 
     def test_catalog_has_no_duplicate_or_unknown_codes(self):
@@ -1142,7 +1200,11 @@ class ManifestInvariantTests(UpdateEngineBase):
     """A manifest cannot waive its own safety requirements (BLOCKER A)."""
 
     def fixture(self, **overrides) -> UpdateFixture:
-        return UpdateFixture(self.tmp / "fixture", **overrides)
+        fixture = UpdateFixture(self.tmp / "fixture", **overrides)
+        observer = patch.object(engine, "_observe_host", side_effect=fixture.live_observation)
+        observer.start()
+        self.addCleanup(observer.stop)
+        return fixture
 
     def with_requirement(self, name: str, value) -> dict:
         fixture = self.fixture()
@@ -1373,7 +1435,7 @@ class TransactionBindingTests(ApplyTests):
         installed = {**self.fixture.installed(), "image_id": "sha256:" + "7" * 64}
         report = self.apply(transaction=transaction, installed=installed)
         self.assertEqual(report["status"], "failed")
-        self.assertIn("apply.installed_mismatch", self.blocker_codes(report))
+        self.assertIn("engine.request_invalid", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
     def test_apply_refuses_when_the_backup_receipt_changed(self):
@@ -1411,30 +1473,30 @@ class AuthenticatedAuthorizationTests(ApplyTests):
                                       "org.toefl-house.release-version": "2099.01.01"}}
         report = self.apply(transaction=transaction, installed=installed)
         self.assertEqual(report["status"], "failed")
-        self.assertIn("apply.installed_mismatch", self.blocker_codes(report))
+        self.assertIn("engine.request_invalid", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
-    def test_changing_the_actual_docker_image_is_refused(self):
+    def test_caller_carried_image_snapshot_is_refused(self):
         transaction = self.transaction()
         report = self.apply(transaction=transaction,
                             host=self.fixture.host(image_id="sha256:" + "8" * 64))
         self.assertEqual(report["status"], "failed")
-        self.assertIn("apply.installed_mismatch", self.blocker_codes(report))
+        self.assertIn("engine.request_invalid", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
     def test_changing_the_journal_after_authorization_is_refused(self):
         transaction = self.transaction()
         report = self.apply(transaction=transaction, journal_state="applying")
         self.assertEqual(report["status"], "failed")
-        self.assertIn("apply.journal_unsafe", self.blocker_codes(report))
+        self.assertIn("engine.request_invalid", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
-    def test_losing_the_database_volume_after_authorization_is_refused(self):
+    def test_caller_carried_volume_snapshot_is_refused(self):
         transaction = self.transaction()
         report = self.apply(transaction=transaction,
                             host=self.fixture.host(volume_present=False))
         self.assertEqual(report["status"], "failed")
-        self.assertIn("apply.host_unsafe", self.blocker_codes(report))
+        self.assertIn("engine.request_invalid", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
     def test_stopping_a_service_after_authorization_is_refused(self):
@@ -1442,7 +1504,7 @@ class AuthenticatedAuthorizationTests(ApplyTests):
         services = {**self.fixture.host()["services"], "db": False}
         report = self.apply(transaction=transaction, host=self.fixture.host(services=services))
         self.assertEqual(report["status"], "failed")
-        self.assertIn("apply.host_unsafe", self.blocker_codes(report))
+        self.assertIn("engine.request_invalid", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
     def test_the_use_marker_is_durable_not_per_run(self):

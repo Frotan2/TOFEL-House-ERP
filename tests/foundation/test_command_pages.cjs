@@ -221,7 +221,7 @@ const client = {
 	window: { crypto: { getRandomValues(bytes) { for (let i = 0; i < bytes.length; i++) bytes[i] = i + 1; return bytes; } } },
 	$: jq,
 	frappe: {
-		pages: {}, user_roles: ["Placement Invigilator"],
+		pages: { "th-placement-invigilation": { tagName: "DIV" } }, user_roles: ["Placement Invigilator"],
 		provide(dotted) { let target = client; for (const part of dotted.split(".")) target = target[part] ||= {}; },
 		// Frappe's real signature is require(paths, callback?) - the callback is
 		// optional, and app asset loading legitimately passes none.

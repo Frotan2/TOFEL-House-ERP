@@ -26,14 +26,16 @@ below, so every domain resolves history by one implementation.
 import json
 import math
 import re
+from decimal import Decimal, InvalidOperation
 
 from toefl_house.configuration import rules as foundation
 
 CODE_PATTERN = re.compile(r"[A-Z0-9][A-Z0-9-]{1,31}")
-DURATION_UNITS = ("Month", "Week", "Day")
+DURATION_UNITS = ("Month", "Week", "Day", "Solar Hijri Month")
 # Numeric ceiling: one year in the smallest unit is already far beyond any
 # real TOEFL House level; this is a typo guard, not business policy.
-DURATION_MAX = {"Month": 24.0, "Week": 104.0, "Day": 730.0}
+DURATION_MAX = {"Month": 24.0, "Week": 104.0, "Day": 730.0,
+                "Solar Hijri Month": 24.0}
 TITLE_MAX = 140
 REASON_MAX = 500
 
@@ -81,6 +83,15 @@ def validate_sequence(value):
     return value
 
 
+def validate_room_capacity(value):
+    """Positive native room capacity; no unlimited or guessed seating."""
+    if isinstance(value, str) and value.strip().isdigit():
+        value = int(value.strip())
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 1000:
+        raise ValueError("Room capacity must be a whole number between 1 and 1000")
+    return value
+
+
 def validate_duration_value(value, unit):
     if isinstance(value, str):
         try:
@@ -90,10 +101,14 @@ def validate_duration_value(value, unit):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("Duration must be a number")
     value = float(value)
+    if not math.isfinite(value):
+        raise ValueError("Duration must be finite")
     if unit not in DURATION_UNITS:
-        raise ValueError("Duration unit must be Month, Week or Day")
+        raise ValueError("Duration unit must be Month, Week, Day or Solar Hijri Month")
     if value <= 0:
         raise ValueError("Duration must be greater than zero")
+    if unit == "Solar Hijri Month" and not value.is_integer():
+        raise ValueError("Solar Hijri month duration must be a whole number")
     if value > DURATION_MAX[unit]:
         raise ValueError(
             f"Duration of {value:g} {unit.lower()}s looks like a typo; "
@@ -139,7 +154,7 @@ def duration_label(row):
     value = float(row.get("duration_value") or 0)
     unit = str(row.get("duration_unit") or "").lower()
     number = f"{value:g}"
-    if float(value).is_integer() and unit in ("month", "week", "day") and value == 1:
+    if float(value).is_integer() and unit in ("month", "week", "day", "solar hijri month") and value == 1:
         return f"{number} {unit}"
     return f"{number} {unit}s" if unit else ""
 
@@ -151,25 +166,28 @@ def check_version_appends(rows, new_effective_from):
 
 
 def validate_fee_amount(value):
-    """A fee component amount: positive number, bounded by a typo guard.
+    """A positive fee in exact, two-decimal native currency units.
 
-    The ceiling is not business policy — it exists so a slipped keystroke
-    cannot silently define a nine-figure charge. The Owner's real amounts
-    are data; this only refuses implausible input.
+    Fee Structure amounts are policy inputs for *posted* Fees and GL. They
+    must not silently introduce fractional minor units that differ after
+    downstream rounding. The Owner supplies the amount; this is solely
+    numeric and native-accounting input validation.
     """
-    if isinstance(value, str):
-        try:
-            value = float(value.strip())
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Fee amount must be a number") from exc
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, (str, int, float, Decimal)):
         raise ValueError("Fee amount must be a number")
-    value = float(value)
-    if value <= 0:
+    try:
+        money = Decimal(str(value).strip())
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise ValueError("Fee amount must be a number") from exc
+    if not money.is_finite():
+        raise ValueError("Fee amount must be finite")
+    if money <= 0:
         raise ValueError("Fee amount must be greater than zero")
-    if value > 100_000_000:
+    if money > Decimal("100000000"):
         raise ValueError("Fee amount looks like a typo; the maximum accepted is 100000000")
-    return value
+    if money != money.quantize(Decimal("0.01")):
+        raise ValueError("Fee amount must have at most two decimal places")
+    return float(money)
 
 
 def validate_component_rows(rows):
@@ -294,6 +312,8 @@ def validate_discount_percentage(value):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("Discount percentage must be a number")
     val = float(value)
+    if not math.isfinite(val):
+        raise ValueError("Discount percentage must be finite")
     if val <= 0:
         raise ValueError("Discount percentage must be greater than zero")
     if val > 100.0:
@@ -340,7 +360,14 @@ def apply_charge_discount(gross, discount_percentage):
     amount itself. One application per line — stacking is unrepresentable by
     construction, because a single percentage is supplied here at most once.
     """
-    g = float(gross)
+    if isinstance(gross, bool):
+        raise ValueError("Gross fee must be a finite number")
+    try:
+        g = float(gross)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise ValueError("Gross fee must be a finite number") from exc
+    if not math.isfinite(g):
+        raise ValueError("Gross fee must be a finite number")
     if g < 0:
         raise ValueError("Fee amount must not be negative")
     percent = validate_discount_percentage(discount_percentage)
@@ -368,7 +395,10 @@ def resolve_charge_discount(rules_list, fee_category=None, program=None, student
         beneficiary = rule.get("student")
         if beneficiary and beneficiary != student:
             continue
-        percent = float(rule.get("discount_percentage") or 0)
+        # A malformed active discount must never silently become the
+        # winning rule and corrupt a native tuition charge. Invalid legacy
+        # percentages require Owner correction before issuing new Fees.
+        percent = validate_discount_percentage(rule.get("discount_percentage"))
         if 50 < percent < 100 or (percent == 100 and not beneficiary):
             continue
         eligible.append(rule)
@@ -420,7 +450,10 @@ PERCENT_MAX = 100.0
 PASS_MINIMUM_KINDS = ("percent", "grade")
 PROGRESSION_EVIDENCE_KINDS = ("assessment_pass", "attendance", "approval")
 RETAKE_SCOPES = ("full", "partial")
-RETAKE_GOVERNING = ("latest", "best", "first")
+RETAKE_GOVERNING = ("best",)
+# Historical policy versions must stay readable without admitting these
+# retired choices into new academic policy authoring.
+RETAKE_LEGACY_GOVERNING = ("latest", "first")
 PROGRESSION_NEXT = "next"
 
 
@@ -696,7 +729,7 @@ def validate_progression(mapping):
                          for position, entry in enumerate(requires, start=1)]}
 
 
-def validate_retakes(mapping):
+def validate_retakes(mapping, *, allow_legacy=False):
     body = _facet_object(mapping, "Retakes")
     _refuse_unknown(body, {"max_attempts", "wait_days", "scope",
                            "governing"},
@@ -717,10 +750,12 @@ def validate_retakes(mapping):
             "Retake scope must be one of " + ", ".join(RETAKE_SCOPES))
     cleaned["scope"] = scope
     governing = body.get("governing")
-    if governing not in RETAKE_GOVERNING:
+    choices = (RETAKE_GOVERNING + RETAKE_LEGACY_GOVERNING
+               if allow_legacy else RETAKE_GOVERNING)
+    if governing not in choices:
         raise ValueError(
             "Retake governing attempt must be one of "
-            + ", ".join(RETAKE_GOVERNING))
+            + ", ".join(choices))
     cleaned["governing"] = governing
     return cleaned
 
@@ -767,6 +802,31 @@ def canonical_facet(name, raw, components=None):
                       ensure_ascii=True)
 
 
+def canonical_initial_facets(raw):
+    """Validate an explicit initial snapshot without seven dated writes.
+
+    Every facet must be supplied, including deliberately absent ones. This
+    creates no defaults and cannot amend an existing policy version.
+    """
+    if isinstance(raw, str):
+        if len(raw) > 65536:
+            raise ValueError("Initial assessment configuration is too large")
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Initial assessment configuration must be an object") from exc
+    if not isinstance(raw, dict) or set(raw) != set(ASSESSMENT_FACETS):
+        raise ValueError("Initial assessment configuration must explicitly supply all seven facets")
+    if len(json.dumps(raw)) > 65536:
+        raise ValueError("Initial assessment configuration is too large")
+    result = {}
+    for name in ASSESSMENT_FACETS:
+        result[name] = canonical_facet(
+            name, raw[name], parse_facet("components", result.get("components")))
+    validate_policy_facets(result)
+    return result
+
+
 def validate_policy_facets(facets):
     """Validate every facet present on one version row, coherently.
 
@@ -793,7 +853,7 @@ def validate_policy_facets(facets):
     if "progression" in parsed:
         parsed["progression"] = validate_progression(parsed["progression"])
     if "retakes" in parsed:
-        parsed["retakes"] = validate_retakes(parsed["retakes"])
+        parsed["retakes"] = validate_retakes(parsed["retakes"], allow_legacy=True)
     if "level_mapping" in parsed:
         parsed["level_mapping"] = validate_level_mapping(
             parsed["level_mapping"])

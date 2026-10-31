@@ -13,20 +13,96 @@ $scriptPath = Join-Path $PSScriptRoot "Backup TOEFL House ERP.ps1"
 $compose = @("compose", "-f", "product/docker-compose.yml")
 $sourceDrive = $null
 $destinationDrive = $null
-$sourceDir = Join-Path $repoRoot "product\data\sites\$site\private\backups"
-$backupStartedUtc = (Get-Date).ToUniversalTime().AddSeconds(-5)
+function ConvertTo-BackupFilePath {
+    param([string]$Path)
+    if ($Path.StartsWith("\\?\")) { return $Path }
+    if ($Path -notmatch "^[A-Za-z]:\\") { throw "Backup file path must be on a local Windows drive." }
+    return "\\?\" + [System.IO.Path]::GetFullPath($Path)
+}
+$sourceDir = ConvertTo-BackupFilePath (Join-Path $repoRoot "product\data\sites\$site\private\backups")
 $mutex = New-Object System.Threading.Mutex($false, "Local\TOEFLHouseERPBackup")
 $mutexHeld = $false
 $transcriptPath = Join-Path $repoRoot "product\data\logs\backup-schedule.log"
 $transcriptStarted = $false
 $backupRunStarted = $false
 $backupCompleted = $false
+$taskRegistrationStarted = $false
 $recoveryPublicKeyTempPath = $null
 $recoveryPublicKeyContainerPath = $null
 $gnupgHomeContainer = $null
 $recoveryConfigSourcePath = $null
 $siteConfigSidecarPath = $null
 $exitCode = 0
+
+function Find-NewNativeBackupSet {
+    param([string]$Directory, [hashtable]$PreviousNames, [int]$Attempts = 50)
+    $Directory = ConvertTo-BackupFilePath $Directory
+    # Docker Desktop can publish host directory/mtime metadata asynchronously.
+    # Bind to names absent before this run, never to a host clock cutoff.
+    for ($attempt = 0; $attempt -lt $Attempts; $attempt++) {
+        $databases = @(Get-ChildItem -LiteralPath $Directory -Filter "*-database-enc.sql.gz" -File |
+            Where-Object { -not $PreviousNames.ContainsKey($_.Name) })
+        if ($databases.Count -gt 1) {
+            throw "Backup refused: multiple new native database sets appeared; no set was selected."
+        }
+        if ($databases.Count -eq 1) {
+            $database = $databases[0]
+            $setName = $database.Name -replace "-database-enc\.sql\.gz$", ""
+            if (-not [regex]::IsMatch($setName, "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$")) {
+                throw "Backup refused: the native backup set has an unsafe name."
+            }
+            $sidecars = @(Get-ChildItem -LiteralPath $Directory -Filter "$setName-site_config_backup*.json" -File |
+                Where-Object { -not $PreviousNames.ContainsKey($_.Name) })
+            if ($sidecars.Count -gt 1) {
+                throw "Backup refused: multiple configuration sidecars appeared for the new native set."
+            }
+            $archivesReady = $true
+            foreach ($suffix in @("-files-enc.tar", "-private-files-enc.tar")) {
+                $archive = Get-Item -LiteralPath ([IO.Path]::Combine($Directory, $setName + $suffix)) -ErrorAction SilentlyContinue
+                if (-not $archive -or $archive.Length -le 0 -or $PreviousNames.ContainsKey($archive.Name)) {
+                    $archivesReady = $false
+                }
+            }
+            if ($sidecars.Count -eq 1 -and $database.Length -gt 0 -and
+                $sidecars[0].Length -gt 0 -and $archivesReady) {
+                return @{ Database = $database; Sidecar = $sidecars[0]; Base = $setName }
+            }
+        }
+        if ($attempt + 1 -lt $Attempts) { Start-Sleep -Milliseconds 200 }
+    }
+    throw "Backup refused: no unique complete new native backup set became visible; existing files were preserved."
+}
+
+function Get-BackupFileHash {
+    param([string]$LiteralPath, [ValidateSet("SHA256")][string]$Algorithm = "SHA256")
+    $stream = [IO.File]::OpenRead((ConvertTo-BackupFilePath $LiteralPath))
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try {
+        return @{ Hash = [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace("-", "") }
+    }
+    finally { $hasher.Dispose(); $stream.Dispose() }
+}
+
+function Get-NextBackupStart {
+    param([string]$Time, [DateTime]$Now = (Get-Date))
+    $clock = [DateTime]::ParseExact($Time, "HH:mm", [Globalization.CultureInfo]::InvariantCulture)
+    $next = $Now.Date.Add($clock.TimeOfDay)
+    if ($next -le $Now) { $next = $next.AddDays(1) }
+    return $next
+}
+
+function Get-BackupTaskUserSid {
+    param([string]$Identity)
+    if (-not $Identity) { return "" }
+    try {
+        if ($Identity.StartsWith("S-1-")) {
+            return ([Security.Principal.SecurityIdentifier]::new($Identity)).Value
+        }
+        return ([Security.Principal.NTAccount]::new($Identity)).Translate(
+            [Security.Principal.SecurityIdentifier]).Value
+    }
+    catch { return "" }
+}
 
 function Invoke-Compose {
     param([string[]]$Arguments)
@@ -36,10 +112,25 @@ function Invoke-Compose {
     }
 }
 
+function Invoke-ComposeCapture {
+    param([string[]]$Arguments)
+    $previousPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell 5.1 turns redirected native stderr progress into
+        # ErrorRecords. Keep it as captured output and judge the exit code.
+        $ErrorActionPreference = "Continue"
+        $lines = @(& docker @compose @Arguments 2>&1)
+        $nativeExitCode = $LASTEXITCODE
+    }
+    finally { $ErrorActionPreference = $previousPreference }
+    return @{ Output = @($lines | ForEach-Object { [string]$_ }); ExitCode = $nativeExitCode }
+}
+
 function Get-OwnerBackupPolicy {
-    $output = & docker @compose exec -T web /build/tools/bin/bench --site $site execute `
-        "toefl_house.operations.owner_configuration.current_backup_policy" 2>&1
-    if ($LASTEXITCODE -ne 0) {
+    $captured = Invoke-ComposeCapture @("exec", "-T", "web", "/build/tools/bin/bench", "--site", $site,
+        "execute", "toefl_house.operations.owner_configuration.current_backup_policy")
+    $output = $captured.Output
+    if ($captured.ExitCode -ne 0) {
         throw "Could not read the Course Owner backup policy from ERPNext."
     }
     $jsonLine = @($output | ForEach-Object { [string]$_ } |
@@ -56,9 +147,10 @@ function Get-OwnerBackupPolicy {
 }
 
 function Get-OwnerRecoveryPublicKeyB64 {
-    $output = & docker @compose exec -T web /build/tools/bin/bench --site $site execute `
-        "toefl_house.operations.owner_configuration.current_backup_public_key_b64" 2>&1
-    if ($LASTEXITCODE -ne 0) {
+    $captured = Invoke-ComposeCapture @("exec", "-T", "web", "/build/tools/bin/bench", "--site", $site,
+        "execute", "toefl_house.operations.owner_configuration.current_backup_public_key_b64")
+    $output = $captured.Output
+    if ($captured.ExitCode -ne 0) {
         throw "Could not read the Course Owner's public recovery key from ERPNext."
     }
     $keyLine = @($output | ForEach-Object { ([string]$_).Trim() } |
@@ -118,7 +210,7 @@ function Get-ArtifactSuffixes {
 
 function Get-ManifestSha256 {
     param([string]$Path)
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    return (Get-BackupFileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
 function Test-ExactBackupSetFiles {
@@ -285,11 +377,11 @@ function Verify-ExistingBackup {
     $taskTrigger = $task.Triggers[0]
     try { $taskStart = [DateTime]::Parse([string]$taskTrigger.StartBoundary) }
     catch { throw "The scheduled task has an invalid daily start time." }
-    $expectedTaskUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $expectedTaskUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     if ([int]$taskTrigger.DaysInterval -ne 1 -or
         $taskStart.ToString("HH:mm", [Globalization.CultureInfo]::InvariantCulture) -ne [string]$policy.schedule_time -or
-        [string]$task.Principal.LogonType -notmatch "Interactive" -or
-        -not ([string]$task.Principal.UserId).Equals($expectedTaskUser, [StringComparison]::OrdinalIgnoreCase)) {
+        [string]$task.Principal.LogonType -ne "Interactive" -or
+        (Get-BackupTaskUserSid ([string]$task.Principal.UserId)) -ne $expectedTaskUserSid) {
         throw "The scheduled task does not match the current Owner-selected daily time and interactive Docker user identity."
     }
     $expectedRoot = Join-Path ([string]$receipt.backup_drive) "TOEFL-House-ERP-Backups"
@@ -359,7 +451,7 @@ function Verify-ExistingBackup {
         }
         $path = Join-Path $backupPath ([string]$item.name)
         if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or
-            (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne [string]$item.sha256 -or
+            (Get-BackupFileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne [string]$item.sha256 -or
             (Get-Item -LiteralPath $path -Force).Length -ne [long]$item.bytes) {
             throw "Copied backup artifact failed SHA-256/size verification: $($item.name)"
         }
@@ -479,36 +571,25 @@ try {
             "execute", "frappe.db.set_single_value('System Settings', 'encrypt_backup', 1)")
 
         Write-Host "Creating full encrypted backup..."
-        $backupStartedUtc = (Get-Date).ToUniversalTime().AddSeconds(-5)
+        $previousNativeNames = @{}
+        Get-ChildItem -LiteralPath $sourceDir -File | ForEach-Object { $previousNativeNames[$_.Name] = $true }
         $backupRunStarted = $true
         Invoke-Compose @("run", "--rm", "--no-deps", "--entrypoint",
             "/home/frappe/bench/env/bin/python", "web", "/product/backup.py")
 
-        $database = Get-ChildItem -LiteralPath $sourceDir -Filter "*-database-enc.sql.gz" -File |
-            Where-Object { $_.LastWriteTimeUtc -ge $backupStartedUtc } |
-            Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
-        if (-not $database) {
-            throw "Backup refused: no new encrypted database artifact was produced."
-        }
-        $base = $database.Name -replace "-database-enc\.sql\.gz$", ""
-        if (-not [regex]::IsMatch($base, "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$")) {
-            throw "Backup refused: the native backup set has an unsafe name."
-        }
+        $nativeSet = Find-NewNativeBackupSet -Directory $sourceDir -PreviousNames $previousNativeNames
+        $database = $nativeSet.Database
+        $base = $nativeSet.Base
         $setRoot = Join-Path $backupRoot $base
         if (Test-Path -LiteralPath $setRoot) {
             throw "Backup refused: refusing to overwrite an existing backup set named $base."
         }
         $recoveryConfigName = "$base-site-config.gpg"
-        $recoveryConfigSourcePath = Join-Path $sourceDir $recoveryConfigName
+        $recoveryConfigSourcePath = [IO.Path]::Combine($sourceDir, $recoveryConfigName)
         if (Test-Path -LiteralPath $recoveryConfigSourcePath) {
             throw "Backup refused: a recovery artifact with this backup-set name already exists."
         }
-        $sidecars = @(Get-ChildItem -LiteralPath $sourceDir -Filter "$base-site_config_backup*.json" -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.LastWriteTimeUtc -ge $backupStartedUtc })
-        if ($sidecars.Count -ne 1) {
-            throw "Backup refused: expected exactly one new Frappe site-config recovery sidecar for this backup set."
-        }
-        $siteConfigSidecar = $sidecars[0]
+        $siteConfigSidecar = $nativeSet.Sidecar
         $siteConfigSidecarPath = $siteConfigSidecar.FullName
         if (($siteConfigSidecar.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or
             $siteConfigSidecar.Length -le 0) {
@@ -531,14 +612,16 @@ try {
         New-Item -ItemType Directory -Path $temporaryRoot | Out-Null
         try {
             Invoke-Compose @("exec", "-T", "web", "mkdir", "-m", "700", "-p", $gnupgHomeContainer)
-            $copyOutput = & docker @compose cp $recoveryPublicKeyTempPath "web:$recoveryPublicKeyContainerPath" 2>&1
-            if ($LASTEXITCODE -ne 0) {
+            $copyResult = Invoke-ComposeCapture @("cp", $recoveryPublicKeyTempPath, "web:$recoveryPublicKeyContainerPath")
+            if ($copyResult.ExitCode -ne 0) {
                 throw "Could not transfer the Owner public recovery key into the disposable container GPG home."
             }
             Invoke-Compose @("exec", "-T", "web", "gpg", "--batch", "--homedir", $gnupgHomeContainer,
                 "--import", $recoveryPublicKeyContainerPath)
-            $keyListing = & docker @compose exec -T web gpg --batch --homedir $gnupgHomeContainer --with-colons --list-keys 2>&1
-            if ($LASTEXITCODE -ne 0) {
+            $keyResult = Invoke-ComposeCapture @("exec", "-T", "web", "gpg", "--batch", "--homedir",
+                $gnupgHomeContainer, "--with-colons", "--list-keys")
+            $keyListing = $keyResult.Output
+            if ($keyResult.ExitCode -ne 0) {
                 throw "GPG could not enumerate the imported Owner recovery public key."
             }
             $fingerprints = @($keyListing | ForEach-Object {
@@ -565,8 +648,10 @@ try {
             if (-not (Test-Path -LiteralPath $recoveryConfigSourcePath -PathType Leaf)) {
                 throw "GPG did not create the encrypted site-config recovery artifact."
             }
-            $configPackets = & docker @compose exec -T web gpg --batch --homedir $gnupgHomeContainer --list-packets $containerRecoveryConfig 2>&1
-            if ($LASTEXITCODE -ne 0 -or
+            $configResult = Invoke-ComposeCapture @("exec", "-T", "web", "gpg", "--batch", "--no-tty",
+                "--homedir", $gnupgHomeContainer, "--list-only", "--list-packets", $containerRecoveryConfig)
+            $configPackets = $configResult.Output
+            if ($configResult.ExitCode -ne 0 -or
                 -not ($configPackets -match ":pubkey enc packet:") -or
                 -not ($configPackets -match "(?im)\bkeyid\s+(?:$recipientIdPattern)\b")) {
                 throw "The site-config recovery artifact is not an OpenPGP public-key encryption packet for the configured Owner key."
@@ -574,7 +659,7 @@ try {
 
             $requiredCopyBytes = [long](Get-Item -LiteralPath $recoveryConfigSourcePath).Length
             foreach ($suffix in (Get-NativeArtifactSuffixes)) {
-                $requiredCopyBytes += [long](Get-Item -LiteralPath (Join-Path $sourceDir "$base$suffix")).Length
+                $requiredCopyBytes += [long](Get-Item -LiteralPath ([IO.Path]::Combine($sourceDir, "$base$suffix"))).Length
             }
             $marginBytes = [long][Math]::Max(67108864, [Math]::Ceiling($requiredCopyBytes * 0.05))
             $currentBackupDisk = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" |
@@ -587,7 +672,7 @@ try {
             $artifacts = @()
             foreach ($suffix in (Get-NativeArtifactSuffixes)) {
                 $name = "$base$suffix"
-                $source = Join-Path $sourceDir $name
+                $source = [IO.Path]::Combine($sourceDir, $name)
                 if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
                     throw "Backup refused: required encrypted artifact is missing: $name"
                 }
@@ -597,14 +682,16 @@ try {
                     throw "Backup refused: required encrypted artifact is empty or unsafe: $name"
                 }
                 $containerPath = "/home/frappe/bench/sites/$site/private/backups/$name"
-                $packetOutput = & docker @compose exec -T web gpg --list-packets $containerPath 2>&1
-                if ($LASTEXITCODE -ne 0 -or -not ($packetOutput -match ":symkey enc packet:")) {
+                $packetResult = Invoke-ComposeCapture @("exec", "-T", "web", "gpg", "--batch", "--no-tty",
+                    "--list-only", "--list-packets", $containerPath)
+                $packetOutput = $packetResult.Output
+                if ($packetResult.ExitCode -ne 0 -or -not ($packetOutput -match ":symkey enc packet:")) {
                     throw "Backup refused: GPG did not verify actual native encryption packets for $name"
                 }
                 $destination = Join-Path $temporaryRoot $name
                 Copy-Item -LiteralPath $source -Destination $destination
-                $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
-                $destinationHash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
+                $sourceHash = (Get-BackupFileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
+                $destinationHash = (Get-BackupFileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
                 $bytes = (Get-Item -LiteralPath $destination).Length
                 if ($destinationHash -ne $sourceHash -or $bytes -le 0) {
                     throw "Backup verification failed for $name"
@@ -623,8 +710,8 @@ try {
 
             $configDestination = Join-Path $temporaryRoot $recoveryConfigName
             Copy-Item -LiteralPath $recoveryConfigSourcePath -Destination $configDestination
-            $configSourceHash = (Get-FileHash -LiteralPath $recoveryConfigSourcePath -Algorithm SHA256).Hash.ToLowerInvariant()
-            $configDestinationHash = (Get-FileHash -LiteralPath $configDestination -Algorithm SHA256).Hash.ToLowerInvariant()
+            $configSourceHash = (Get-BackupFileHash -LiteralPath $recoveryConfigSourcePath -Algorithm SHA256).Hash.ToLowerInvariant()
+            $configDestinationHash = (Get-BackupFileHash -LiteralPath $configDestination -Algorithm SHA256).Hash.ToLowerInvariant()
             $configBytes = (Get-Item -LiteralPath $configDestination).Length
             if ($configDestinationHash -ne $configSourceHash -or $configBytes -le 0) {
                 throw "Encrypted site-config recovery artifact failed copy and size verification."
@@ -676,7 +763,7 @@ try {
 
         foreach ($item in $artifacts) {
             $copiedPath = Join-Path $setRoot $item.name
-            if ((Get-FileHash -LiteralPath $copiedPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $item.sha256 -or
+            if ((Get-BackupFileHash -LiteralPath $copiedPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $item.sha256 -or
                 (Get-Item -LiteralPath $copiedPath).Length -ne [long]$item.bytes) {
                 throw "Post-write integrity verification failed for $($item.name)"
             }
@@ -690,8 +777,7 @@ try {
         }
         Remove-Item -LiteralPath $siteConfigSidecarPath -Force
 
-        $scheduleAt = [DateTime]::ParseExact([string]$policy.schedule_time, "HH:mm",
-            [Globalization.CultureInfo]::InvariantCulture)
+        $scheduleAt = Get-NextBackupStart -Time ([string]$policy.schedule_time)
         $action = New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe") `
             -Argument ("-NoProfile -ExecutionPolicy Bypass -File `"{0}`"" -f $scriptPath)
         $trigger = New-ScheduledTaskTrigger -Daily -At $scheduleAt
@@ -699,11 +785,15 @@ try {
             -LogonType Interactive -RunLevel Limited
         $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
             -ExecutionTimeLimit (New-TimeSpan -Hours 3)
+        $taskRegistrationStarted = $true
         Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
             -Principal $principal -Settings $settings `
             -Description "Owner-configured encrypted TOEFL House ERP local backup" -Force | Out-Null
+        Enable-ScheduledTask -TaskName $taskName -ErrorAction Stop | Out-Null
         $registered = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
-        $expectedTaskUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+        # Task Scheduler may store MACHINE\user as just user. Compare the
+        # immutable Windows SID rather than widening accepted identities.
+        $expectedTaskUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
         $expectedPowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
         $registeredTrigger = if ($registered -and @($registered.Triggers).Count -eq 1) { $registered.Triggers[0] } else { $null }
         $registeredStart = $null
@@ -713,8 +803,8 @@ try {
         }
         if (-not $registered -or $registered.State -eq "Disabled" -or
             @($registered.Actions).Count -ne 1 -or @($registered.Triggers).Count -ne 1 -or
-            -not ([string]$registered.Principal.UserId).Equals($expectedTaskUser, [StringComparison]::OrdinalIgnoreCase) -or
-            [string]$registered.Principal.LogonType -notmatch "Interactive" -or
+            (Get-BackupTaskUserSid ([string]$registered.Principal.UserId)) -ne $expectedTaskUserSid -or
+            [string]$registered.Principal.LogonType -ne "Interactive" -or
             -not ([string]$registered.Actions[0].Execute).Equals($expectedPowerShell, [StringComparison]::OrdinalIgnoreCase) -or
             -not ([string]$registered.Actions[0].Arguments).Contains($scriptPath) -or
             -not $registeredStart -or [int]$registeredTrigger.DaysInterval -ne 1 -or
@@ -780,13 +870,17 @@ catch {
     }
 }
 finally {
+    if ($taskRegistrationStarted -and -not $backupCompleted) {
+        try { Disable-ScheduledTask -TaskName $taskName -ErrorAction Stop | Out-Null }
+        catch { Write-Warning "The unverified backup schedule could not be disabled; ask support to check the Windows task." }
+    }
     if ($backupRunStarted -and $siteConfigSidecarPath -and
         (Test-Path -LiteralPath $siteConfigSidecarPath -PathType Leaf)) {
         Write-Warning "The current run's plaintext Frappe site-config sidecar remains at its original location because a verified separate-drive copy was not committed. It and all pre-existing backup material were preserved; secure this file before activation."
     }
     if ($gnupgHomeContainer) {
         try {
-            & docker @compose exec -T web rm -rf -- $gnupgHomeContainer 2>&1 | Out-Null
+            Invoke-ComposeCapture @("exec", "-T", "web", "rm", "-rf", "--", $gnupgHomeContainer) | Out-Null
         }
         catch { }
     }

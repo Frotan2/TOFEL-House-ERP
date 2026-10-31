@@ -13,13 +13,15 @@ import secure_frappe_python as security  # noqa: E402
 
 
 class FrappePythonSecurityOverlayUnitTests(unittest.TestCase):
-    def test_reviewed_pyproject_changes_only_the_four_reviewed_requirements(self):
+    def test_reviewed_pyproject_changes_only_the_six_reviewed_requirements(self):
         source = (
             b'[project]\ndependencies = [\n'
+            b'    "filelock~=3.20.1",\n'
             b'    "GitPython~=3.1.45",\n'
             b'    "Pillow~=12.3.0",\n'
             b'    "PyJWT~=2.13.0",\n'
             b'    "pypdf==6.15.0",\n'
+            b'    "oauthlib~=3.3.1",\n'
             b']\n'
         )
         digest = hashlib.sha256(source).hexdigest()
@@ -29,10 +31,12 @@ class FrappePythonSecurityOverlayUnitTests(unittest.TestCase):
             updated,
             (
                 b'[project]\ndependencies = [\n'
+                b'    "filelock~=4.2.4",\n'
                 b'    "GitPython~=3.2.1",\n'
                 b'    "Pillow~=13.0.0",\n'
                 b'    "PyJWT~=2.15.1",\n'
-                b'    "pypdf==6.21.2",\n'
+                b'    "pypdf==6.21.4",\n'
+                b'    "oauthlib~=4.0.0",\n'
                 b']\n'
             ),
         )
@@ -55,7 +59,9 @@ class FrappePythonSecurityOverlayUnitTests(unittest.TestCase):
                 "GitPython": "3.2.1",
                 "Pillow": "13.0.0",
                 "PyJWT": "2.15.1",
-                "pypdf": "6.21.2",
+                "pypdf": "6.21.4",
+                "oauthlib": "4.0.0",
+                "filelock": "4.2.4",
             },
         )
 
@@ -71,7 +77,9 @@ class FrappePythonSecurityOverlayWiringTests(unittest.TestCase):
                 "GitPython==3.2.1",
                 "Pillow==13.0.0",
                 "PyJWT==2.15.1",
-                "pypdf==6.21.2",
+                "pypdf==6.21.4",
+                "oauthlib==4.0.0",
+                "filelock==4.2.4",
             ):
                 self.assertIn(package, source)
             self.assertIn("--reinstall", source)

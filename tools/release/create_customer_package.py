@@ -32,6 +32,8 @@ ALLOWED_FILES = (
     "product/docker-compose.yml",
     "product/windows/TOEFL House ERP.ps1",
     "product/windows/Run TOEFL House ERP.ps1",
+    "product/windows/Prepare This PC.ps1",
+    "product/windows/Import Offline Runtime.ps1",
     "product/windows/Check This PC.ps1",
     "product/windows/OWNER ACCEPTANCE GUIDE.txt",
     "product/windows/OWNER HANDBOOK.txt",
@@ -40,6 +42,8 @@ ALLOWED_FILES = (
     "product/windows/Install TOEFL House ERP.cmd",
     "product/windows/Start TOEFL House ERP.cmd",
     "product/windows/Stop TOEFL House ERP.cmd",
+    "product/windows/Backup TOEFL House ERP.cmd",
+    "product/windows/Backup TOEFL House ERP.ps1",
     "product/windows/Repair TOEFL House ERP.cmd",
     "product/windows/Test Fresh Installation.ps1",
     "product/windows/Test Existing Installation.ps1",
@@ -280,9 +284,14 @@ def create_package(
     source_revision: str,
     gate_evidence: Path,
     provider_attestation: str,
-) -> tuple[Path, Path, dict]:
+    include_zip: bool = True,
+) -> tuple[Path, Path | None, dict]:
     source = source.resolve()
     output = output.resolve()
+    # Resolve() follows symlinks. Reject the supplied archive path first so
+    # callers cannot bypass the regular-file input boundary with an alias.
+    if image_archive.is_symlink():
+        raise ValueError("a regular prebuilt image archive is required (symlink rejected)")
     image_archive = image_archive.resolve()
     if not HEX40.fullmatch(source_revision):
         raise ValueError("source revision must be a full 40-character commit SHA")
@@ -370,8 +379,12 @@ def create_package(
 This package contains a provider-built Linux application image. The customer
 does not build Frappe, compile Docker images, use Git, or run database commands.
 
-1. Install Docker Desktop for Windows 10/11 (64-bit) and complete WSL 2 setup.
-2. Extract this complete folder to a local drive and double-click TOEFL House ERP.vbs.
+This folder is an engineering kit, not the final single-file customer delivery.
+The provider must assemble the offline Setup EXE with signed Windows prerequisites
+and the pinned database/cache images before customer handover.
+
+1. Use the provider-supplied Setup EXE and follow its Windows setup dialogs.
+2. For engineering inspection of this kit, double-click TOEFL House ERP.vbs.
 3. Use Install on a genuinely new computer, then use Open / Start on later days.
 4. Open the included Owner Handbook from the GUI, then use the Owner Readiness
    Guide and DAILY USE GUIDE.txt. They are acceptance instructions, not
@@ -387,7 +400,10 @@ authorization is REJECT. Do not enter real student, payroll or financial data
 until the owner gates are separately approved.
 """
         write_utf8(package / "READ ME FIRST.txt", instructions)
-        archive_zip = make_zip(package)
+        # Provider-side single-EXE assembly consumes the verified folder
+        # directly. A multi-gigabyte archive must never be forced through the
+        # legacy 2 GiB GitHub ZIP release limit before offline EXE assembly.
+        archive_zip = make_zip(package) if include_zip else None
         return package, archive_zip, manifest
     except Exception:
         # Keep the failure recoverable and obvious; never delete an existing
@@ -407,6 +423,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gate-evidence", type=Path, required=True,
                         help="passing exact-SHA receipt from verify_ci_gates.py --output")
     parser.add_argument("--provider-attestation", default="GitHub Actions artifact attestation")
+    parser.add_argument("--no-zip", action="store_true",
+                        help="create only the verified folder for the offline Windows EXE provider pipeline")
     args = parser.parse_args(argv)
     try:
         labels = load_json(args.image_labels)
@@ -419,11 +437,12 @@ def main(argv: list[str] | None = None) -> int:
             source_revision=args.source_revision,
             gate_evidence=args.gate_evidence,
             provider_attestation=args.provider_attestation,
+            include_zip=not args.no_zip,
         )
         print(json.dumps({
             "package": str(package),
-            "archive": str(archive),
-            "archive_sha256": sha256(archive),
+            "archive": str(archive) if archive else None,
+            "archive_sha256": sha256(archive) if archive else None,
             "image_archive_sha256": manifest["image"]["sha256"],
             "version": manifest["version"],
             "source_revision": manifest["source_revision"],

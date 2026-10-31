@@ -42,6 +42,8 @@ def _seed_skills():
 
 
 def after_migrate():
+    from toefl_house.academic.native_setup import ensure_fee_component_root
+    ensure_fee_component_root()
     frappe.db.add_unique("TH Placement Item Revision", ["family", "revision"], "th_item_family_revision")
     frappe.db.add_unique("TH Placement Key Revision", ["item_revision", "key_version"], "th_key_item_version")
     frappe.db.add_unique("TH Placement Blueprint Revision", ["code", "revision"], "th_blueprint_code_revision")
@@ -116,6 +118,7 @@ def after_migrate():
     # D3 correction framework lookups.
     frappe.db.add_index("TH Correction Policy", ["status"], "th_correction_policy_status")
     frappe.db.add_index("TH Correction Request", ["sales_invoice"], "th_correction_request_invoice")
+    frappe.db.add_index("TH Tuition Refund Request", ["fees"], "th_tuition_refund_fees")
     # Cashier day closes: the duplicate-day lock reads (company, date).
     frappe.db.add_index("TH Cashier Day", ["company", "date"], "th_cashier_day_company_date")
     frappe.db.add_index("TH Cashier Day", ["date"], "th_cashier_day_date")

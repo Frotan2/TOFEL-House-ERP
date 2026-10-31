@@ -40,11 +40,11 @@ case "$SERVICE" in
         ;;
     web)
         # Wait for database and Redis, then reconcile static assets after any
-        # interrupted asset copy, then start gunicorn. The working directory is
-        # /home/frappe/bench/sites so frappe.app resolves sites from there.
+        # interrupted asset copy, then start same-origin ingress and its
+        # supervised Gunicorn child (cwd sites/, private loopback port 8001).
         run_frappe 'python3 -c "import sys; sys.path.insert(0, \"/product\"); from bootstrap import wait_for_endpoints; wait_for_endpoints()"'
         run_frappe 'python3 -c "import sys; sys.path.insert(0, \"/product\"); from bootstrap import ensure_web_assets; ensure_web_assets()"'
-        exec su -s /bin/sh frappe -c 'cd /home/frappe/bench/sites && exec /home/frappe/bench/env/bin/gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 120 --pythonpath /product wsgi:application'
+        exec su -s /bin/sh frappe -c 'exec node /product/web.cjs'
         ;;
     worker)
         # Background job worker. Runs after web is healthy.
@@ -56,7 +56,7 @@ case "$SERVICE" in
         ;;
     socketio)
         # Socket.IO realtime server. Runs after web is healthy.
-        exec su -s /bin/sh frappe -c 'node apps/frappe/socketio.js'
+        exec su -s /bin/sh frappe -c 'exec node /product/realtime.cjs'
         ;;
     *)
         echo "Unknown service: $SERVICE" >&2

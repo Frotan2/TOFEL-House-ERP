@@ -74,8 +74,17 @@ def create_program(request_key, code, title, description=""):
             clean_description = rules.validate_reason(description)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
+        # The immutable DocType metadata row is a reliable transaction
+        # mutex even before the first Academic Program exists. Serialize
+        # distinct-code creates so two owners cannot race past the duplicate
+        # title check and create parallel program families.
+        frappe.db.get_value("DocType", PROGRAM, "name", for_update=True)
         if frappe.db.exists(PROGRAM, clean_code):
             raise frappe.ValidationError(f"Program {clean_code} already exists")
+        if frappe.db.exists(PROGRAM, {"title": clean_title}):
+            raise frappe.ValidationError(
+                "A program with this name already exists; choose the existing "
+                "program instead of creating another identifier")
         doc = frappe.get_doc({
             "doctype": PROGRAM, "code": clean_code, "title": clean_title,
             "status": "Active", "description": clean_description,
@@ -122,6 +131,11 @@ def create_level(request_key, family, code, title, sequence,
                 f"Program {clean_family} is retired; reactivate it before adding levels")
         if frappe.db.exists(LEVEL, clean_code):
             raise frappe.ValidationError(f"Level {clean_code} already exists")
+        if frappe.db.exists(LEVEL, {"family": family_doc.name,
+                                    "title": clean_title}):
+            raise frappe.ValidationError(
+                "A level with this name already exists in the selected "
+                "program; choose it rather than creating another ID")
         siblings = frappe.db.get_all(LEVEL, filters={"family": family_doc.name},
                                      fields=["code", "sequence"])
         if any(int(row["sequence"]) == clean_sequence for row in siblings):
@@ -134,10 +148,23 @@ def create_level(request_key, family, code, title, sequence,
                 family_of=lambda c: _family_of(c),
                 next_of=lambda c: _next_of(c))
 
+        native_title = f"{family_doc.title} — {clean_title}"
+        if (frappe.db.exists("Course", {"course_name": native_title})
+                or frappe.db.exists(NATIVE_PROGRAM,
+                                    {"program_name": native_title})
+                or frappe.db.exists(NATIVE_PROGRAM,
+                                    {"program_abbreviation": clean_code})):
+            raise frappe.ValidationError(
+                "A native Course or Education Program already uses this "
+                "name or level identifier. Review the academic catalog; "
+                "never create duplicate curriculum for a new level")
+        course = frappe.get_doc({"doctype": "Course", "course_name": native_title})
+        course.insert(ignore_permissions=True)
         native = frappe.get_doc({
             "doctype": NATIVE_PROGRAM,
-            "program_name": f"{family_doc.title} — {clean_title}",
+            "program_name": native_title,
             "program_abbreviation": clean_code,
+            "courses": [{"course": course.name, "required": 1}],
         })
         native.insert(ignore_permissions=True)
         doc = frappe.get_doc({
@@ -163,6 +190,33 @@ def create_level(request_key, family, code, title, sequence,
         {"family": family, "code": code, "title": title, "sequence": sequence,
          "duration_value": duration_value, "duration_unit": duration_unit,
          "effective_from": effective_from, "next_level": next_level}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def create_room(request_key, room_name, seating_capacity, reason):
+    """Create a new native teaching room without broad native write grants."""
+    def work(actor):
+        try:
+            clean_name = rules.validate_title(room_name, "Room name")
+            clean_capacity = rules.validate_room_capacity(seating_capacity)
+            clean_reason = configuration_rules.validate_change_reason(reason)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        # Native Room uses an internal naming series, not room_name as its
+        # identity. Serialize this narrow creation path before label lookup.
+        frappe.db.get_value("DocType", "Room", "name", for_update=True)
+        if frappe.db.exists("Room", {"room_name": clean_name}):
+            raise frappe.ValidationError("This room already exists; its capacity was not changed")
+        doc = frappe.get_doc({"doctype": "Room", "room_name": clean_name,
+                              "seating_capacity": clean_capacity})
+        doc.insert(ignore_permissions=True)
+        result = {"name": doc.name, "room_name": clean_name,
+                  "seating_capacity": clean_capacity, "reason": clean_reason}
+        return result, {"target": f"Room:{doc.name}", "before_hash": "",
+                        "after_hash": digest(result)}
+    return configuration_audit.execute(
+        "create_room", request_key,
+        {"room_name": room_name, "seating_capacity": seating_capacity, "reason": reason}, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -390,6 +444,9 @@ def create_fee_type(request_key, name, description=""):
             raise frappe.ValidationError(str(exc)) from exc
         if frappe.db.exists(FEE_CATEGORY, clean_name):
             raise frappe.ValidationError(f"Fee type {clean_name} already exists")
+        if frappe.db.exists("Item", clean_name):
+            raise frappe.ValidationError(
+                f"An accounting Item named {clean_name} already exists; choose a different fee type name")
         if not frappe.db.exists("Item Group", "Fee Component"):
             raise frappe.ValidationError(
                 "The native 'Fee Component' item group is missing, so fee types "
@@ -399,7 +456,8 @@ def create_fee_type(request_key, name, description=""):
             "doctype": FEE_CATEGORY, "category_name": clean_name,
             "description": clean_description,
         })
-        doc.insert(ignore_permissions=True)
+        with configuration_rules.fee_item_context(actor, clean_name):
+            doc.insert(ignore_permissions=True)
         result = {"name": doc.name,
                   "item": frappe.db.get_value(FEE_CATEGORY, doc.name, "item")}
         return result, {
@@ -445,6 +503,11 @@ def set_level_fee_component(request_key, level, academic_year, fee_category, amo
                 f"Fee type {fee_category} does not exist yet; define it first")
         structure = _managed_fee_structure(level_doc.native_program, academic_year, company)
         rows = structure.get("components") or []
+        categories = [row.get("fees_category") for row in rows]
+        if any(not category for category in categories) or len(categories) != len(set(categories)):
+            raise frappe.ValidationError(
+                "The existing Fee Structure has missing or repeated fee categories; "
+                "Finance must review it before any tuition changes")
         for row in rows:
             if row.get("fees_category") == fee_category:
                 if float(row.get("amount") or 0) == float(clean_amount):
@@ -534,17 +597,37 @@ def _managed_fee_structure(native_program, academic_year, company=""):
     the Owner's policy behind cancel/amend churn. More than one editable
     structure for the same key is a configuration conflict this refuses.
     """
+    # Submitted structures remain part of the active pricing identity.
+    # Ignoring them and selecting only drafts can create a second plan for
+    # the same native Program/academic year, later selectable at issuance.
     found = frappe.db.get_all(
         FEE_STRUCTURE,
         filters={"program": native_program, "academic_year": academic_year,
-                 "docstatus": 0},
-        fields=["name"], order_by="name asc", limit=2)
+                 "docstatus": ("!=", 2)},
+        fields=["name", "docstatus"], order_by="name asc", limit=2)
     if len(found) > 1:
         raise frappe.ValidationError(
-            f"More than one editable fee structure exists for {native_program} "
-            f"in {academic_year}; keep exactly one so billing is unambiguous")
+            f"More than one active fee structure exists for {native_program} "
+            f"in {academic_year}; resolve the duplicate before editing tuition")
     if found:
-        return frappe.get_doc(FEE_STRUCTURE, found[0]["name"], for_update=True)
+        if int(found[0]["docstatus"]) != 0:
+            raise frappe.ValidationError(
+                f"Fee structure {found[0]['name']} is submitted; never create a "
+                "parallel draft or change this published tuition in place")
+        structure = frappe.get_doc(FEE_STRUCTURE, found[0]["name"], for_update=True)
+        # An explicit company must never silently edit another company's
+        # already-created fee plan. A plan is keyed by program/year and its
+        # company is immutable here; changing it requires a separate reviewed
+        # Finance migration rather than retargeting existing tuition policy.
+        # Resolve the company even for an existing plan. With two companies,
+        # an omitted Company is ambiguous and must not silently target one.
+        requested_company = _resolve_company(company)
+        if structure.company != requested_company:
+            raise frappe.ValidationError(
+                f"Fee plan {structure.name} belongs to company "
+                f"{structure.company}; it cannot be edited as company "
+                f"{requested_company}")
+        return structure
     company_name = _resolve_company(company)
     receivable = frappe.db.get_value(
         "Company", company_name, "default_receivable_account")
@@ -554,12 +637,15 @@ def _managed_fee_structure(native_program, academic_year, company=""):
             "Finance must set it before fee plans can be configured")
     doc = frappe.get_doc({
         "doctype": FEE_STRUCTURE,
+        "docstatus": 0,
         "naming_series": FEE_STRUCTURE_NAMING,
         "program": native_program, "academic_year": academic_year,
         "company": company_name, "receivable_account": receivable,
         "components": [],
     })
-    doc.insert(ignore_permissions=True)
+    # Native Fee Structure requires at least one component. Return the new
+    # document unsaved; the caller appends its first component before save()
+    # performs native insertion and validation in the same transaction.
     return doc
 
 
@@ -679,7 +765,10 @@ def create_discount_rule(request_key, code, title, discount_percentage,
         doc = frappe.get_doc({
             "doctype": DISCOUNT_RULE, "code": clean_code, "title": clean_title,
             "discount_percentage": clean_percent, "precedence": clean_precedence,
-            "status": "Active", "fee_category": clean_category or None,
+            # New rule is a draft, not an approved award. A named student
+            # and explicit activation are mandatory before any tuition Fees
+            # can consume it. Never create a broadly active discount.
+            "status": "Retired", "fee_category": clean_category or None,
             "program": clean_program or None, "student": clean_student or None,
             "description": clean_description,
         })
@@ -717,6 +806,23 @@ def set_discount_rule_status(request_key, code, active):
             raise frappe.ValidationError(str(exc)) from exc
 
         doc = _discount_rule_doc(clean_code, for_update=True)
+        if flag:
+            if not doc.student:
+                raise frappe.ValidationError(
+                    "Activating a discount requires one named Student; "
+                    "global discount templates must remain inactive")
+            if not doc.description or len(doc.description.strip()) < 8:
+                raise frappe.ValidationError(
+                    "Activating a discount requires a recorded approval reason")
+            if not frappe.db.exists("Student", doc.student):
+                raise frappe.ValidationError(
+                    "The named discount Student no longer exists")
+            try:
+                rules.validate_discount_award(
+                    doc.discount_percentage, doc.student, doc.description,
+                    active=True)
+            except ValueError as exc:
+                raise frappe.ValidationError(str(exc)) from exc
         doc.status = "Active" if flag else "Retired"
         doc.save(ignore_permissions=True)
         result = {
@@ -798,6 +904,12 @@ def create_assessment_policy(request_key, family, code, title,
         if frappe.db.exists(ASSESSMENT_POLICY, clean_code):
             raise frappe.ValidationError(
                 f"Assessment policy {clean_code} already exists")
+        if frappe.db.exists(ASSESSMENT_POLICY, {
+                "family": family_doc.name, "title": clean_title}):
+            raise frappe.ValidationError(
+                "This program already has an assessment policy with that "
+                "name. Choose the existing policy rather than creating "
+                "duplicate rules")
         doc = frappe.get_doc({
             "doctype": ASSESSMENT_POLICY, "family": family_doc.name,
             "code": clean_code, "title": clean_title, "status": "Active",
@@ -817,7 +929,9 @@ def create_assessment_policy(request_key, family, code, title,
 
 @frappe.whitelist(methods=["POST"])
 def set_assessment_policy_version(request_key, policy, effective_from,
-                                  reason, grading_scale=""):
+                                  reason, grading_scale="", initial_facets=None,
+                                  passing_score=None, retake_wait_days=None,
+                                  skill_weights=None):
     """Append an effective-dated assessment policy version (D1 configuration).
 
     The version carries the reusable native Grading Scale LINK plus the
@@ -826,7 +940,9 @@ def set_assessment_policy_version(request_key, policy, effective_from,
     Owner through the facet commands. Native per-group Assessment Plans
     are scheduled instances, not reusable policy, and are never referenced
     here (A-D1-1). Facets carry forward unchanged; a change reason is
-    mandatory; backdated or same-day versions are refused.
+    mandatory; backdated or same-day versions are refused. A NEW policy may
+    supply all seven initial facets in this same version, avoiding artificial
+    effective dates. Initialization cannot change an already versioned policy.
     """
     def work(actor):
         try:
@@ -847,10 +963,6 @@ def set_assessment_policy_version(request_key, policy, effective_from,
             raise frappe.ValidationError(
                 f"The program family {doc.family} is retired; reactivate it "
                 "before adding a version")
-        if clean_scale and not frappe.db.exists(GRADING_SCALE, clean_scale):
-            raise frappe.ValidationError(
-                f"Grading scale {clean_scale} does not exist; define it "
-                "natively first")
         versions = [row.as_dict() for row in (doc.get("versions") or [])]
         try:
             configuration_rules.check_appends(
@@ -858,10 +970,100 @@ def set_assessment_policy_version(request_key, policy, effective_from,
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         current = configuration_rules.latest_version(versions)
+        # A blank optional field means keep the last approved scale, NOT
+        # erase it silently on a policy revision. Historical grades and
+        # future assessment books must continue to use the pinned scale.
+        effective_scale = clean_scale or (
+            (current.get("grading_scale") or "") if current else "")
+        if effective_scale and not frappe.db.exists(GRADING_SCALE, effective_scale):
+            raise frappe.ValidationError(
+                f"Grading scale {effective_scale} does not exist; define it "
+                "natively first")
         carried = _carried_facets(versions)
+        if initial_facets is not None:
+            if versions:
+                raise frappe.ValidationError(
+                    "Initial assessment configuration requires a new policy with no versions")
+            try:
+                carried = rules.canonical_initial_facets(initial_facets)
+            except ValueError as exc:
+                raise frappe.ValidationError(str(exc)) from exc
+            _validate_initial_assessment_references(carried, doc.family, effective_scale)
+        elif passing_score is not None or retake_wait_days is not None:
+            # Ordinary Owner revisions change scalar values in ONE new,
+            # effective-dated policy version. Never ask the owner to edit
+            # internal JSON or append multiple artificial same-day versions.
+            if not versions:
+                raise frappe.ValidationError(
+                    "Use the guided initial assessment form for a new policy")
+            from toefl_house.setup_presets.owner_policy_forms import graded_template_family_codes
+            if frappe.db.get_value(PROGRAM, doc.family, "code") not in graded_template_family_codes():
+                raise frappe.ValidationError(
+                    "Numeric pass/retake revision is for graded templates only")
+            from toefl_house.setup_presets.owner_policy_forms import whole_number
+            try:
+                if passing_score is not None:
+                    pass_rules = rules.parse_facet(
+                        "pass_rules", carried.get("pass_rules"))
+                    if not isinstance(pass_rules, dict) or not pass_rules.get("overall"):
+                        raise ValueError(
+                            "This policy has no pass rules to revise safely")
+                    pass_rules["overall"] = {
+                        "kind": "percent",
+                        "value": whole_number(passing_score, "Pass mark", 1, 100),
+                    }
+                    components = rules.parse_facet(
+                        "components", carried.get("components"))
+                    carried["pass_rules"] = rules.canonical_facet(
+                        "pass_rules", pass_rules, components)
+                if retake_wait_days is not None:
+                    retakes = rules.parse_facet("retakes", carried.get("retakes"))
+                    if not isinstance(retakes, dict) or not retakes.get("max_attempts"):
+                        raise ValueError(
+                            "This policy has no retake rules to revise safely")
+                    retakes["wait_days"] = whole_number(
+                        retake_wait_days, "Retake wait", 7, 365)
+                    carried["retakes"] = rules.canonical_facet("retakes", retakes)
+                rules.validate_policy_facets(carried)
+            except ValueError as exc:
+                raise frappe.ValidationError(str(exc)) from exc
+        if skill_weights is not None:
+            if initial_facets is not None or not versions:
+                raise frappe.ValidationError(
+                    "Change skill weights only on an existing graded assessment "
+                    "policy; use the initial guided form for the first version")
+            from toefl_house.setup_presets.owner_policy_forms import graded_template_family_codes
+            if frappe.db.get_value(PROGRAM, doc.family, "code") not in graded_template_family_codes():
+                raise frappe.ValidationError(
+                    "Only graded assessment policies support this weight editor")
+            components = rules.parse_facet("components", carried.get("components"))
+            old_weights = rules.parse_facet("weights", carried.get("weights"))
+            if (not isinstance(skill_weights, list) or len(skill_weights) != 12
+                    or not isinstance(old_weights, list)
+                    or not isinstance(components, list)
+                    or {entry.get("component") for entry in skill_weights
+                        if isinstance(entry, dict)}
+                    != {entry.get("component") for entry in old_weights}):
+                raise frappe.ValidationError(
+                    "The proposed skill distribution must cover exactly "
+                    "the 12 existing graded assessment components")
+            try:
+                from decimal import Decimal, InvalidOperation
+                try:
+                    total = sum(Decimal(str(entry["weight"]))
+                                for entry in skill_weights)
+                except (KeyError, TypeError, InvalidOperation) as exc:
+                    raise ValueError("Every component needs a numeric weight") from exc
+                if total != 100:
+                    raise ValueError("Assessment weights must total exactly 100 percent")
+                carried["weights"] = rules.canonical_facet(
+                    "weights", skill_weights, components)
+                rules.validate_policy_facets(carried)
+            except ValueError as exc:
+                raise frappe.ValidationError(str(exc)) from exc
         before = configuration_audit.latest_after_hash(doc.name)
         row = {"effective_from": clean_from,
-               "grading_scale": clean_scale or None,
+               "grading_scale": effective_scale or None,
                "reason": clean_reason, "set_by": actor,
                "set_on": frappe.utils.now_datetime()}
         row.update(carried)
@@ -883,8 +1085,44 @@ def set_assessment_policy_version(request_key, policy, effective_from,
 
     payload = {"policy": policy, "effective_from": effective_from,
                "reason": reason, "grading_scale": grading_scale}
+    # Preserve the original payload shape for replay of pre-existing receipts.
+    if initial_facets is not None:
+        payload["initial_facets"] = initial_facets
+    if passing_score is not None:
+        payload["passing_score"] = passing_score
+    if retake_wait_days is not None:
+        payload["retake_wait_days"] = retake_wait_days
+    if skill_weights is not None:
+        payload["skill_weights"] = skill_weights
     return configuration_audit.execute(
         "set_assessment_policy_version", request_key, payload, work)
+
+
+def _validate_initial_assessment_references(carried, family, scale):
+    """Apply the same native-reference checks as the individual facet actions."""
+    facets = rules.validate_policy_facets(carried)
+    for component in facets.get("components") or []:
+        criteria = component.get("criteria")
+        if criteria and not frappe.db.exists(ASSESSMENT_CRITERIA, criteria):
+            raise frappe.ValidationError(f"Assessment criteria {criteria} does not exist")
+    codes = _grade_codes_of_scale(scale)
+    if codes is not None:
+        _refuse_unknown_grade_codes(facets.get("pass_rules") or {}, codes, scale)
+    progression = facets.get("progression") or {}
+    target = progression.get("target")
+    levels = list((facets.get("level_mapping") or {}).get("levels") or [])
+    if target and target != rules.PROGRESSION_NEXT:
+        levels.append(target)
+    for code in levels:
+        if _level_doc(code).family != family:
+            raise frappe.ValidationError(f"Level {code} is outside the {family} program family")
+    for evidence in progression.get("requires") or []:
+        if evidence.get("kind") == "assessment_pass":
+            if not frappe.db.exists(ASSESSMENT_POLICY, {"code": evidence.get("policy")}):
+                raise frappe.ValidationError(f"Unknown assessment policy: {evidence.get('policy')}")
+        elif evidence.get("kind") == "approval":
+            if not frappe.db.exists("Role", evidence.get("role")):
+                raise frappe.ValidationError(f"Unknown role: {evidence.get('role')}")
 
 
 def _append_facet_version(doc, actor, clean_from, clean_reason, scale,

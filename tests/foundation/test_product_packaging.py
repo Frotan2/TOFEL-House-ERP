@@ -285,7 +285,7 @@ class DesktopContract(unittest.TestCase):
         self.assertIn("database-enc.sql.gz", body)
         self.assertIn("files-enc.tar", body)
         self.assertIn("private-files-enc.tar", body)
-        self.assertIn("Get-FileHash", body)
+        self.assertIn("Get-BackupFileHash", body)
         self.assertIn("SHA256", body)
         self.assertIn("manifest.json", body)
         self.assertIn("$manifest.source_site -ne $site", body)
@@ -295,7 +295,10 @@ class DesktopContract(unittest.TestCase):
         self.assertIn("ReparsePoint", body)
         self.assertIn("only manifest.json and exactly four safe encrypted payload files", body)
         self.assertIn("A plaintext Frappe site-config sidecar remains in the native backup folder", body)
-        self.assertIn("$expectedTaskUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name", body)
+        self.assertIn("$expectedTaskUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value", body)
+        self.assertIn("Get-BackupTaskUserSid", body)
+        self.assertIn("$taskRegistrationStarted -and -not $backupCompleted", body)
+        self.assertIn("Disable-ScheduledTask -TaskName $taskName", body)
         self.assertIn("$task.Principal.UserId", body)
         self.assertIn("$registered.Principal.UserId", body)
         self.assertIn("-LogonType Interactive", body)
@@ -454,8 +457,9 @@ class LineEndingContract(unittest.TestCase):
             "product/bootstrap.py", "product/activate.py", "product/restore.py",
             "product/backup.py", "product/native_gpg.py", "product/native_db.py",
             "product/wsgi.py", "product/entrypoint.sh", "product/perf_baseline.py",
+            "product/web.cjs", "product/realtime.cjs",
             # Signed update engine + its container entrypoint (Issue #40).
-            "product/update_engine.py", "product/update_entrypoint.sh",
+            "product/update_engine.py", "product/update_host.py", "product/update_entrypoint.sh",
             "tools/foundation/secure_weasyprint.py", "tools/foundation/secure_frappe_python.py",
             "tools/foundation/secure_hrms.py",
             "tools/foundation/hrms-locks", "tools/foundation/banking-locks",
@@ -463,6 +467,9 @@ class LineEndingContract(unittest.TestCase):
             "tools/foundation/secure_realtime.py", "tools/foundation/realtime-locks",
             # Desk markdown input cap (showdown GHSA-rmmh-p597-ppvv), reviewed 2026-10-19.
             "tools/foundation/secure_markdown.py",
+              "tools/foundation/secure_deepmerge.py", "tools/foundation/deepmerge-hashes.json",
+            # Exact upstream decoder body plus legacy CommonJS compatibility adapter.
+            "tools/foundation/secure_uri_decoder.py", "tools/foundation/decoder",
             # Setup wizard lacks sidebar DOM until native setup completes.
             "tools/foundation/fix_setup_sidebar.py",
         }
@@ -470,7 +477,7 @@ class LineEndingContract(unittest.TestCase):
         self.assertEqual(len(copy_rows), len(expected), "COPY syntax must stay source/destination only")
 
         text_suffixes = {
-            ".py", ".sh", ".js", ".json", ".css", ".md", ".txt", ".toml",
+            ".py", ".sh", ".js", ".cjs", ".json", ".css", ".md", ".txt", ".toml",
             ".yaml", ".yml", ".html", ".xml", ".csv", ".svg", ".jinja", ".jinja2",
         }
         copy_files = set()
@@ -512,13 +519,22 @@ class LineEndingContract(unittest.TestCase):
                 audited_tracked.append(relative)
 
         if audited_tracked:
-            result = subprocess.run(
-                ["git", "ls-files", "--eol", "--", *sorted(audited_tracked)],
-                cwd=ROOT, capture_output=True, text=True, check=True).stdout
+            # Windows CreateProcess has a finite command-line length. A single
+            # git invocation with every COPY source eventually raises WinError
+            # 206 as the package grows, before checking a single EOL contract.
+            # Audit the full set in bounded batches instead; no file is skipped.
             eol_by_path = {}
-            for line in result.splitlines():
-                prefix, rel = line.split("\t", 1)
-                eol_by_path[rel] = prefix.split()
+            ordered_tracked = sorted(audited_tracked)
+            for start in range(0, len(ordered_tracked), 32):
+                batch = ordered_tracked[start:start + 32]
+                result = subprocess.run(
+                    ["git", "ls-files", "--eol", "--", *batch],
+                    cwd=ROOT, capture_output=True, text=True, check=True).stdout
+                for line in result.splitlines():
+                    prefix, rel = line.split("\t", 1)
+                    self.assertNotIn(rel, eol_by_path,
+                                     f"Git EOL probe returned duplicate path: {rel}")
+                    eol_by_path[rel] = prefix.split()
             for relative in audited_tracked:
                 eol = eol_by_path.get(relative)
                 self.assertIsNotNone(eol, f"git ls-files --eol omitted {relative}")
@@ -981,7 +997,7 @@ class EntrypointContract(unittest.TestCase):
                             r"(?m)^[^#\n]*chmod\s+0?777")
         self.assertIn("exec su -s /bin/sh frappe -c 'python3 /product/bootstrap.py'", entrypoint_text)
         self.assertNotIn("exec run_frappe '", entrypoint_text)
-        self.assertIn("exec /home/frappe/bench/env/bin/gunicorn", entrypoint_text)
+        self.assertIn("exec node /product/web.cjs", entrypoint_text)
 
         # Bootstrap remains a one-shot: restart "no", db.env secret isolated.
         bootstrap = re.search(r"^  bootstrap:\n(.*?)(?=^  [^ \n]+:\n)",
@@ -1154,7 +1170,7 @@ class BootstrapLogicContract(unittest.TestCase):
         self.assertIn("from bootstrap import ensure_web_assets; ensure_web_assets()",
                       entrypoint)
         self.assertLess(entrypoint.index("ensure_web_assets; ensure_web_assets()"),
-                        entrypoint.index("exec /home/frappe/bench/env/bin/gunicorn"))
+                        entrypoint.index("exec node /product/web.cjs"))
 
     def test_web_asset_recovery_restores_provider_seed_without_compilation(self):
         from unittest.mock import patch
@@ -1191,21 +1207,25 @@ class BootstrapLogicContract(unittest.TestCase):
 
     def test_readiness_waits_require_a_successful_page(self):
         # Readiness must never accept an HTTP error page. Install uses a
-        # fail-closed curl probe; the daily/recovery launchers use the Docker
-        # web healthcheck, whose probe is itself curl --fail.
+        # fail-closed curl probe; all launchers also use one structured,
+        # exact-state probe that accepts Docker's real LF-only output.
         install = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text()
         self.assertIn("curl --fail --silent http://127.0.0.1:8000/ ", install)
         for name in ("Start", "Repair"):
             text = (PRODUCT / "windows" / f"{name} TOEFL House ERP.cmd").read_text()
-            self.assertIn("State.Health.Status", text, name)
-            self.assertIn('findstr /x /c:"healthy"', text, name)
+            self.assertIn('Test Existing Installation.ps1" -CheckServices', text, name)
+            self.assertNotIn('findstr /x /c:"healthy"', text, name)
+        probe = (PRODUCT / "windows" / "Test Existing Installation.ps1").read_text()
+        self.assertIn('"{{json .State}}"', probe)
+        self.assertIn('$state.Health.Status -cne "healthy"', probe)
+        self.assertIn('[int]$response.StatusCode -ne 200', probe)
 
     def test_web_server_pins_the_product_site(self):
         # Regression (product-image run 36758667184): frappe resolves the site
         # from the Host header unless frappe.app._site is set; 127.0.0.1 is no
         # site name, so every Owner request failed.
-        entry = (PRODUCT / "entrypoint.sh").read_text()
-        self.assertIn("--pythonpath /product", entry)
+        entry = (PRODUCT / "web.cjs").read_text()
+        self.assertIn('"--pythonpath", "/product"', entry)
         self.assertIn("wsgi:application", entry)
         self.assertNotIn("frappe.app:application", entry)
         wsgi = (PRODUCT / "wsgi.py").read_text()
@@ -1233,9 +1253,9 @@ class BootstrapLogicContract(unittest.TestCase):
         # the sites path must resolve the way the entrypoint expects
         # (gunicorn runs with cwd = the sites directory)
         self.assertIn('os.environ.get("SITES_PATH", ".")', wsgi)
-        entry = (PRODUCT / "entrypoint.sh").read_text()
-        self.assertLess(entry.index("cd /home/frappe/bench/sites"),
-                        entry.index("exec /home/frappe/bench/env/bin/gunicorn"))
+        ingress = (PRODUCT / "web.cjs").read_text()
+        self.assertIn('cwd: "/home/frappe/bench/sites"', ingress)
+        self.assertIn('"--bind", "127.0.0.1:8001"', ingress)
 
     def test_credentials_written_once_with_owner_permissions(self):
         import tempfile
@@ -1520,7 +1540,9 @@ class DesktopRuntimeReliabilityContract(unittest.TestCase):
         # Each service case runs its own long-running process as frappe.
         self.assertIn("/build/tools/bin/bench --site toeflhouse.localhost worker", entrypoint_text)
         self.assertIn("/build/tools/bin/bench --site toeflhouse.localhost schedule", entrypoint_text)
-        self.assertIn("node apps/frappe/socketio.js", entrypoint_text)
+        self.assertIn("exec node /product/realtime.cjs", entrypoint_text)
+        self.assertIn('require("/home/frappe/bench/apps/frappe/socketio.js")',
+                      (PRODUCT / "realtime.cjs").read_text())
 
         # Only bootstrap mounts the db.env secret.
         bootstrap = re.search(r"^  bootstrap:\n(.*?)(?=^  [^ \n]+:\n)",
@@ -1555,8 +1577,8 @@ class DesktopRuntimeReliabilityContract(unittest.TestCase):
     def test_start_and_repair_require_healthy_web(self):
         for name in ("Start", "Repair"):
             text = (PRODUCT / "windows" / f"{name} TOEFL House ERP.cmd").read_text()
-            self.assertIn("State.Health.Status", text)
-            self.assertIn('findstr /x /c:"healthy"', text)
+            self.assertIn('Test Existing Installation.ps1" -CheckServices', text)
+            self.assertNotIn('findstr /x /c:"healthy"', text)
 
     def test_start_does_not_rebuild_on_every_daily_launch(self):
         text = (PRODUCT / "windows" / "Start TOEFL House ERP.cmd").read_text()

@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet("Install", "Start", "Repair", "Stop", "Check", "UpdateCheck", "UpdateInstall")]
+    [ValidateSet("Install", "Start", "Repair", "Stop", "Check", "UpdateCheck", "UpdateInstall", "Prepare")]
     [string]$Action
 )
 $ErrorActionPreference = "Stop"
@@ -47,6 +47,61 @@ if ($Action -eq "UpdateCheck" -or $Action -eq "UpdateInstall") {
     # The update script exits on every path; this line only runs if it ever
     # returns normally without a decision.
     exit 5
+}
+# Discover both supported Docker Desktop installation layouts in every new worker.
+foreach ($bin in @("$env:ProgramFiles\Docker\Docker\resources\bin",
+                   "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin")) {
+    if (Test-Path -LiteralPath (Join-Path $bin 'docker.exe')) { $env:PATH = $bin + ';' + $env:PATH }
+}
+if ($Action -eq 'Install') {
+    $productRoot = Join-Path $PSScriptRoot '..'
+    foreach ($relative in @('data\secrets\db.env', 'data\sites\toeflhouse.localhost\site_config.json')) {
+        if (Test-Path -LiteralPath (Join-Path $productRoot $relative)) {
+            [Console]::Error.WriteLine('Existing or partial ERP installation preserved. Use Open / Start or contact support.')
+            exit 1
+        }
+    }
+}
+if ($Action -eq 'Install') {
+    & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Verify Package Image.ps1')
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+}
+if ($Action -eq 'Install' -or $Action -eq 'Prepare') {
+    $engineReady = $false
+    if (Get-Command docker -ErrorAction SilentlyContinue) {
+        & docker info *> $null
+        $engineReady = $LASTEXITCODE -eq 0
+    }
+    # An installed but stopped Docker Desktop is not a missing prerequisite.
+    # The Install CMD launcher starts it and waits for a responding engine.
+    # Do not request Windows administrator privileges just to open Docker.
+    $desktopInstalled = [bool](@(
+        @("$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
+          "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe") |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+    ).Count -gt 0)
+    if ($Action -eq 'Install' -and -not $engineReady -and $desktopInstalled) {
+        Write-Output '[TH_STAGE] Docker Desktop is installed; checking its engine without changing Windows prerequisites...'
+    } elseif (-not $engineReady) {
+        $preparePath = Join-Path $PSScriptRoot 'Prepare This PC.ps1'
+        try {
+            Write-Output '[TH_STAGE] Preparing Windows from the included offline installers...'
+            $preparation = Start-Process -FilePath "$PSHOME\powershell.exe" -Verb RunAs -Wait -PassThru -ArgumentList @(
+                '-NoLogo', '-NoProfile', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass',
+                '-File', ('"' + $preparePath + '"')
+            )
+            if ($preparation.ExitCode -ne 0) { exit $preparation.ExitCode }
+        } catch {
+            [Console]::Error.WriteLine('Computer setup cancelled or could not start. No ERP installation was attempted.')
+            exit 1
+        }
+        # A newly installed CLI is not in this process's inherited PATH yet.
+        foreach ($bin in @("$env:ProgramFiles\Docker\Docker\resources\bin",
+                           "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin")) {
+            if (Test-Path -LiteralPath (Join-Path $bin 'docker.exe')) { $env:PATH = $bin + ';' + $env:PATH }
+        }
+    }
+    if ($Action -eq 'Prepare') { exit 0 }
 }
 $scriptPath = Join-Path $PSScriptRoot $scriptNames[$Action]
 if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {

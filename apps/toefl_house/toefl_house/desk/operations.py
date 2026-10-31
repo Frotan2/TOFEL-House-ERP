@@ -19,6 +19,7 @@ from toefl_house.desk import (
     viewer_roles,
 )
 from toefl_house.desk import lifecycle
+from toefl_house.desk.tuition_refunds import refund_sections
 try:
     from toefl_house.desk import analytics
 except Exception:
@@ -478,6 +479,12 @@ def _system_health():
                               filters={"seen": 0},
                               order_by="creation desc", limit=LIMIT_QUEUES)
     try:
+        # The virtual controller calls frappe.throw on an expected role
+        # denial. Catching that exception still leaves _server_messages in
+        # the successful desk response, opening a blocking browser modal.
+        # Choose the bounded registry projection before entering that path.
+        if not frappe.has_permission(RQ_JOB, "read"):
+            raise frappe.PermissionError("Use the bounded failed-job projection")
         failed_jobs = project_rows("management", RQ_JOB,
                                    RQ_JOB_FAILED_FIELDS,
                                    filters={"status": "failed"},
@@ -646,6 +653,7 @@ def work():
         "title": DESKS[SLUG]["title"],
         "sections": [
             *ops_analytics,
+            *refund_sections("management"),
             section("funnel", "Operation funnel — today\u2019s state", "facts", facts=funnel_facts,
                     empty_title="No operational preview items",
                     empty_body="The preview alone cannot prove all operational queues are empty; check scoped counts and source records."),

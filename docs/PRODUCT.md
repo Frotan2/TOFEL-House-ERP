@@ -15,9 +15,10 @@ the separate implementation/evidence/deferred/blocked states are in
 
 A Course Management ERP for the TOEFL House language institute. It supports
 intake, placement, admission, enrollment, teaching, tuition and compensation
-workflows. Academic grading and student progression decisions remain deferred
-by Owner decision D1: catalog level links exist, but no runtime grading or
-promotion rule is activated.
+workflows. Academic grading and progression are implemented as guarded workflows, but
+cannot operate without complete approved, effective-dated academic policies,
+correct native Education records and real-site acceptance. They are not
+automatically activated by the presence of a desk or a configuration record.
 
 **Foundation (native, authoritative, pinned, never patched):** Frappe,
 ERPNext, Education, Payments, HRMS. Exact commits and digests:
@@ -50,16 +51,14 @@ Applicant ─► Placement ─► Admission ─► Enrollment ─► Class / Sch
 | Placement | — (native gap: governed test bank, delivery, scoring) | `TH Placement *` (15 DocTypes), level/course recommendation | Implemented, bounded — see [PLACEMENT-SPEC.md](PLACEMENT-SPEC.md) |
 | Admission | Student Applicant | `TH Admission Decision` (review → decide → conditions → offer → convert), `TH Returning Student Policy` | Implemented |
 | Enrollment | Program Enrollment, Course Enrollment | `enrollment.enroll_in_program`; `TH Enrollment Exit` (+ fail-closed policy) for withdrawal/dismissal | Mechanism implemented; Owner decision D5 still defers withdrawal/transfer policy, so do not treat this as authorized until a superseding Owner decision is recorded |
-
 | Course / Program / Level | Program, Course, Academic Year/Term | `TH Academic Program`, `TH Program Level`, `TH Level Duration`, `TH Catalog Linkage Policy` (configuration over native Program/Course) | Implemented |
 | Class / Roster | Student Group (native roster + `max_strength`) | `create_student_group`, `add/move/remove_class_member`, `TH Roster Change Policy`, `TH Class Operations Policy`; `TH Capacity Approval`, `TH Class Waiting List` | Implemented — capacity is native `max_strength`; a deactivated roster row stays as history and still counts toward it, so seats are `capacity − rows − reserved offers` |
 | Class operations | Course Schedule, Student Group roster | `TH Academic Calendar`/`Day`, `TH Timetable Template`/`Slot` + `generate_timetable`, `postpone_session`, `schedule_replacement_session`, `cancel_session`, `TH Class Suspension`, `TH Class Transfer` | Implemented for class/time mobility under the pinned policy; program/branch moves are refused unless that version enables them; every approved move preserves native attendance, enrollment, assessment and finance rows |
 | Teacher | Instructor, Employee | `TH Instructor Contract`, `TH Teaching Assignment`, `TH Skill` | Implemented |
 | Schedule | Course Schedule (native overlap validation) | `schedule_session`; timetable generation and make-up/postponement commands | Implemented — instructor/room/student conflicts and calendar closures are refused before any write; a later calendar change never rewrites a session that already exists |
 | Attendance | Student Attendance (submitted, native statuses) | `record_attendance`; `TH Attendance Correction Request` (+ policy) | Implemented |
-| Assessment | Assessment Plan / Result / Grading Scale | `TH Assessment Policy` stores Owner-entered reference facets; native Education records remain authoritative | Carrier and validation implemented only; no runtime grading/assessment consumer is qualified and D1 remains deferred |
-| Progression | Program Enrollment (next level) | `set_next_level` maintains a catalog link; assessment-policy progression facet stores reference terms | No automatic promotion or progression decision consumer is implemented; D1 remains deferred |
-
+| Assessment | Assessment Plan / Result / Grading Scale | `TH Assessment Policy` with effective-dated facets, `academic.assessment` books, marks, approval, publishing and correction | Guarded runtime implemented; requires complete policies, native integration and installed-role acceptance before real use |
+| Progression | Program Enrollment (next level) | `set_next_level` catalog links and `academic.progression` eligibility, retake and decision commands | Guarded eligibility and decision runtime implemented; no autonomous enrollment or approved production progression is implied |
 | Fees / Payments | Fee Structure, Fees, Sales Invoice, Payment Entry, Pricing Rule | `issue_tuition_fees`, `issue_placement_fee`, `TH Billing Policy`, `TH Discount Rule`, `TH Correction Request` (+ policy) | Implemented; prices are native configuration |
 | Teacher compensation | Additional Salary → Salary Slip / Payroll Entry | `calculate_teaching_compensation`, `TH Contract Adjustment`, `TH Adjustment Posting Policy` | Calculation implemented; posting gated by owner policy |
 | Reporting | Native reports, Query Reports, dashboards | Role desks (read-only projections) | Native; no derived metrics defined |
@@ -76,10 +75,10 @@ Business terms are never invented as silent defaults. Where a qualified
 consumer exists, values live in the canonical native record (for example,
 Fee Structure, Price List or HRMS terms) or the domain's versioned TOEFL
 House policy record; versions are append-only and changes use a guarded, receipted,
-hash-audited command. An unconfigured consumer fails closed. A carrier or
-effective-dated version is **not** proof of runtime activation: D1 academic
-grading/progression, advanced guardian/identity, transfer, tax, derived
-metrics, and calendar policy remain deferred or have no qualified consumer.
+hash-audited command. An unconfigured consumer fails closed. A carrier or effective-dated version is **not** proof of runtime activation:
+assessment/progression have guarded consumers but require qualification;
+advanced guardian/identity, unapproved transfers, tax and some derived
+metrics remain deferred, blocked or without a qualified consumer.
 Native ERPNext tax configuration remains authoritative; refund corrections use
 the separate `TH Correction Policy`. `TH Owner Operations Policy` terms
 outside the explicitly bound local backup consumer are decision inputs only.
@@ -152,14 +151,16 @@ settings the same way (the site stays ACTIVE rather than half-deactivated).
 
 ### Native stock-book sales (engineering candidate)
 
-The native ERPNext book shop uses **Item Group** (the owner creates `Books`),
+The native ERPNext book shop uses **Item Group** (the owner creates `Books`,
+with optional program sub-groups such as GE or TOEFL Preparation below it),
 stock-enabled and sales-enabled **Item**, **Warehouse**, **Stock Entry**,
 **Sales Invoice**, **Payment Entry** and the native stock/general ledgers.
 Only Finance Officer users who also hold native Accounts User invoice creation
 permission can use normal stock-updating book invoices. A Finance Manager who
 also has Finance Officer and Accounts User receives **Book sales and stock**
 shortcuts in the Finance desk to native Item, Item Price, Bin, Stock Entry,
-Sales Invoice and Payment Entry screens *only when native rights for that
+Purchase Receipt, Sales Invoice, Payment Entry, Stock Ledger Entry and Stock
+Reconciliation screens *only when native rights for that
 DocType actually exist*. For example, native ERPNext requires Stock User to
 manage stock and Sales Master Manager to configure Item Price. A Finance
 Officer with Accounts User alone does not automatically get those rights;
@@ -169,10 +170,23 @@ A student/customer who has been admitted may buy a textbook without creating
 a tuition charge. The owner configures the items, prices, stock and warehouse
 in native ERPNext screens; no artificial product price or TH book ledger exists.
 
+Book sales bill only the configured native selling **Item Price**: a
+hand-typed rate or discount is refused (a lower rate requires a native
+Pricing Rule), and a sale cannot exceed the warehouse bin. Returns restock
+only the warehouse that sold the book, never credit above the sold rate, and
+a submitted return stays cancellable by an authorized user. Book stock
+receipts require a positive purchase cost; write-offs and count corrections
+require a Stock Manager or Finance Manager with a stated reason. Company and
+Warehouse User Permissions bind book sales, returns, refunds and stock
+documents. The full rule set, evidence and owner setup checklist are in
+[engineering/BOOK-INVENTORY-FINALIZATION-2026-10-26.md](engineering/BOOK-INVENTORY-FINALIZATION-2026-10-26.md).
+
 Synthetic native integration tests book-stock receipt, posted book invoice,
 receivable settlement by native Payment Entry, book return/credit and
 restocking, stock/GL posting, wrong-role and mixed-item denials, stock-update
-enforcement, and a converted-student purchase. Passing hosted tests cannot
+enforcement, a converted-student purchase, unconfigured-price and oversell
+denials, return warehouse/rate-abuse denials, return cancellation, program
+sub-group sales, and Bin-vs-stock-ledger reconciliation. Passing hosted tests cannot
 qualify actual users, stock warehouse setup, cashier UX, physical-device
 recovery or Owner Windows; issue #35 stays open until those gates pass.
 

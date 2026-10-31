@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-31",
+  "kind": "additive_advisory_delta_no_register_mutation",
+  "basis": "Foundation 41151189301 failed closed on freshly indexed advisories. Runtime graph verified in a network-isolated disposable pinned image on Windows; new hosted Native boundary preserves this exclusion. Python PDF/OAuth and banking redirect findings are fixed by actual version uplifts, not new risk dispositions.",
+  "packages": [
+    {
+      "package": "npm:glob",
+      "advisories": [
+        {
+          "id": "GHSA-3g3m-2fjr-6pw4",
+          "aliases": [
+            "CVE-2026-118773",
+            "1244013"
+          ],
+          "severity": "moderate",
+          "vulnerable_range": ">=9.0.0, <=14.0.1",
+          "first_patched": "14.0.2",
+          "summary": "AbortSignal cancellation bypass permits traversal after cancellation",
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "Pinned Frappe 988e54f3 executes socketio.js -> realtime/index.js, authenticate/utils and node_utils.js. Literal requires seed socket.io, @redis/client and cookie; the installed transitive production dependency graph contains 28 packages and neither glob nor minimatch. tools/native/security_acceptance.py now resolves and traverses that actual graph and fails if either package enters it. Product ingress product/web.cjs imports only node:http and node:child_process and launches fixed internal services. Remaining consumers are pinned asset build/lint tools (stylus, sucrase, rimraf, workbox-build, eslint/jake), operating on provider-owned source and patterns; no student/staff pattern input reaches them. This is availability-only build-tool reachability analysis, not a patched-version claim. Reassess if the runtime graph, ingress imports or build-input trust changes.",
+          "fix_path": "Upstream patched major version 14.0.2; retain scoped build-only restriction and the actual runtime dependency-boundary check. Do not blanket-approve new advisories or new runtime consumers."
+        }
+      ]
+    },
+    {
+      "package": "npm:minimatch",
+      "advisories": [
+        {
+          "id": "GHSA-g3hv-75wg-m249",
+          "aliases": [
+            "CVE-2026-118764",
+            "1244012"
+          ],
+          "severity": "moderate",
+          "vulnerable_range": "<11.0.1",
+          "first_patched": "11.0.1",
+          "summary": "Pattern preprocessing amplifies globparts and consumes resources",
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "Pinned Frappe 988e54f3 executes socketio.js -> realtime/index.js, authenticate/utils and node_utils.js. Literal requires seed socket.io, @redis/client and cookie; the installed transitive production dependency graph contains 28 packages and neither glob nor minimatch. tools/native/security_acceptance.py now resolves and traverses that actual graph and fails if either package enters it. Product ingress product/web.cjs imports only node:http and node:child_process and launches fixed internal services. Remaining consumers are pinned asset build/lint tools (stylus, sucrase, rimraf, workbox-build, eslint/jake), operating on provider-owned source and patterns; no student/staff pattern input reaches them. This is availability-only build-tool reachability analysis, not a patched-version claim. Reassess if the runtime graph, ingress imports or build-input trust changes.",
+          "fix_path": "Upstream patched major version 11.0.1; retain scoped build-only restriction and the actual runtime dependency-boundary check. Do not blanket-approve new advisories or new runtime consumers."
+        }
+      ]
+    }
+  ]
+}

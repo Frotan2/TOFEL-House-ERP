@@ -89,12 +89,17 @@ class DecisionTests(ProgressionCase):
         self.assertFalse(decision["eligible"])
 
     def test_a_permitted_retake_is_recorded_without_promoting(self):
-        # The owner's retake facet permits a same-level retake immediately, so
-        # the governed negative decision is allowed — and it does not promote.
+        # The mission policy bounds the facet: at most one retake and at
+        # least seven days after publication, whatever the facet says. The
+        # facet here says wait_days 0 / max_attempts 3, so the mission
+        # floor/cap govern instead — the decision is allowed only once
+        # seven days have elapsed since publication (2026-10-24), and it
+        # does not promote.
         self.h.seed_policy("SYN-GEN-ENG", effective_from="2026-10-01",
                            retakes={"max_attempts": 3, "wait_days": 0,
-                                    "scope": "full", "governing": "latest"})
+                                    "scope": "full", "governing": "best"})
         result = self.fail_the_class(effective_from="2026-10-01")["SYN-STU-1"]
+        self.h.today = "2026-10-31"
         decision = self.decide(result["name"], decision="Retake",
                                reason="One permitted retake of the level test")
         self.assertEqual(decision["decision"], "Retake")
@@ -105,7 +110,7 @@ class DecisionTests(ProgressionCase):
     def test_retake_is_refused_while_the_wait_window_is_open(self):
         self.h.seed_policy("SYN-GEN-ENG", effective_from="2026-10-01",
                            retakes={"max_attempts": 2, "wait_days": 14,
-                                    "scope": "full", "governing": "latest"})
+                                    "scope": "full", "governing": "best"})
         result = self.fail_the_class(effective_from="2026-10-01")["SYN-STU-1"]
         with self.assertRaises(ValidationError) as ctx:
             self.decide(result["name"], decision="Retake", reason="Immediate retake")

@@ -30,7 +30,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Unit",
-   "options": "Month\nWeek\nDay",
+   "options": "Month\nWeek\nDay\nSolar Hijri Month",
    "reqd": 1
   },
   {

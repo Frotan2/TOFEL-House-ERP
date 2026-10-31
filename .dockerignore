@@ -15,11 +15,14 @@ docs/*
 !product/native_gpg.py
 !product/native_db.py
 !product/wsgi.py
+!product/web.cjs
+!product/realtime.cjs
 !product/entrypoint.sh
 !product/perf_baseline.py
 # Signed update engine plus its container entrypoint (the customer image
 # verifies and migrates releases; nothing is built on the Windows PC).
 !product/update_engine.py
+!product/update_host.py
 !product/update_entrypoint.sh
 !tools/
 tools/*
@@ -36,6 +39,11 @@ tools/foundation/*
 !tools/foundation/realtime-locks/
 !tools/foundation/realtime-locks/**
 !tools/foundation/secure_markdown.py
+!tools/foundation/secure_deepmerge.py
+!tools/foundation/deepmerge-hashes.json
+!tools/foundation/secure_uri_decoder.py
+!tools/foundation/decoder/
+!tools/foundation/decoder/**
 !tools/foundation/fix_setup_sidebar.py
 **/__pycache__
 **/*.pyc

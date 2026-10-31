@@ -10,10 +10,21 @@ on:
       - .github/workflows/native-lifecycle.yml
       - apps/**
       - tools/native/**
+      # Recheck native security whenever an advisory disposition changes.
+      - docs/engineering/evidence/sec-deps-01/**
+      - tests/security/**
+      # Native HRMS evidence must be rerun when the payroll regression
+      # contracts change, even if application source is unchanged.
+      - tests/teaching/test_compensation_guards.py
+      - tests/teaching/test_compensation.py
       - tools/foundation/audit_stored_html.py
       - apps/foundation_security/**
       # The native installer executes both security patch helpers before build.
       - tools/foundation/secure_hrms.py
+      - tools/foundation/secure_deepmerge.py
+      - tools/foundation/deepmerge-hashes.json
+      - tools/foundation/secure_uri_decoder.py
+      - tools/foundation/decoder/**
       - tools/foundation/hrms-locks/**
       - tools/foundation/banking-locks/**
       - tools/foundation/secure_weasyprint.py
@@ -35,7 +46,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: native-lifecycle-${{ github.ref }}
+  group: native-lifecycle-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:

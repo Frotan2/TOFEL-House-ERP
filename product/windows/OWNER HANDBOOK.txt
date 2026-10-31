@@ -1,6 +1,6 @@
 TOEFL HOUSE ERP - OWNER HANDBOOK
 ================================
-Engineering release candidate handbook - English with Dari safety summary
+Engineering release candidate handbook - English edition
 
 READ THIS FIRST
 ---------------
@@ -17,63 +17,61 @@ Never enter real student, guardian, staff, salary, payment, or financial data
 into this engineering candidate.
 
 The current candidate does not provide public student/guardian portals,
-automatic notification delivery, custom Assessment/Progression, or an approved
-automatic updater. Do not ask staff to imitate those functions in spreadsheets
+automatic notification delivery, production-qualified academic assessment
+or progression, or an approved automatic updater. Do not ask staff to imitate those functions in spreadsheets
 or unofficial records.
 
-1. WHAT YOU SHOULD RECEIVE
---------------------------
-Receive the versioned customer ZIP and its .zip.sha256 file from the trusted
-provider's GitHub Release. The provider must identify the exact release version
-and source revision and provide the package fingerprint/attestation.
+1. DELIVERY: FINAL TARGET VERSUS ENGINEERING TEST KIT
+--------------------------------------------------
+The accepted customer delivery target is ONE offline, independently verified,
+provider-signed Windows Setup EXE. It must contain the application and verified
+prerequisites. An end customer must not download Docker or WSL separately,
+unpack nested ZIP files, build an image, run scripts or edit code.
 
-The complete ZIP contains:
-  * TOEFL House ERP.vbs - the normal Windows launcher.
-  * A provider-built Linux/amd64 application image; you do not build it.
-  * product/release/release-manifest.json and its checksum.
-  * product/release/ci-gates.json and its checksum.
-  * Owner Readiness Guide, Daily Use Guide, and this Owner Handbook.
+This target has NOT yet passed real clean-Windows acceptance. A source checkout,
+older GitHub Actions ZIP, folder-based kit or VBS launcher is an ENGINEERING
+FALLBACK, not a production installer. Do not mistake a file with an EXE
+extension, green CI check or successful test-machine login for approval.
 
-The CI receipt lists the four hosted engineering workflows and their run links.
-It does NOT prove your Windows PC, backup drive, recovery, staff devices, real
-cashier work, or production readiness.
-
-Do not use a ZIP from a chat forward, unknown website, or unapproved provider.
-Do not accept only a loose image, scripts, or source-code folder as the customer
-package. Do not extract and run individual files while leaving the rest behind.
+A legitimate release must provide a verified version, complete source
+revision, trusted publisher identity, package digest, release manifest and
+the matching exact-head test evidence. Do not accept an unidentified archive,
+a forwarded attachment or a separately distributed image and script.
 
 2. BEFORE ANY INSTALLATION
 --------------------------
-Use a separate, disposable Windows 10/11 64-bit practice PC with no existing
-TOEFL House customer data. Docker Desktop and WSL 2 must be installed and
-working; an administrator may be needed for that initial computer setup.
+Testing is permitted only on a clean, disposable 64-bit Windows 10/11 PC
+using invented records. Confirm virtualization, free space and Windows
+prerequisites with the provider; the provider is responsible for packaging
+them for a finished customer release.
 
-If the computer has EVER contained TOEFL House ERP data:
-  STOP. Do not reinstall, repair, reset a password, restore, or delete anything.
-  Open TOEFL House ERP.vbs and choose only "Check This PC" for a read-only
-  report. Contact trusted support before any other action.
+If this PC has EVER stored TOEFL House application data, STOP. Do not run
+Install, Repair, Restore, Update or Deactivate, reset passwords or remove data.
+Use the existing launcher only for "Check This PC" and "Copy Safe Support
+Status" where those actions are available, then contact trusted support.
 
-Never delete, rename, or move product/data, Docker volumes, database secrets,
-recovery keys, or backups. Never restore over an original site. Do not expose
-the service with a router port, public tunnel, or public web address.
+Never delete, rename, move or replace product/data, database volumes,
+private secrets, recovery keys or backups. Never restore over a live site.
+Do not expose the ERP through public ports, tunnels or websites.
 
-3. INSTALL AND OPEN ON THE PRACTICE PC
---------------------------------------
-[ ] Extract the COMPLETE ZIP to a local, non-synchronized drive.
-[ ] Double-click TOEFL House ERP.vbs.
-[ ] Choose "Check This PC" and save the safe summary. BLOCKED or NOT VERIFIED
-    must remain unchanged; do not reinstall just to make a warning disappear.
-[ ] On a genuinely fresh practice PC only, choose Install.
-[ ] When installation finishes, choose Open / Start.
-[ ] The browser should open the local login page, normally
-    http://127.0.0.1:8000/.
-[ ] Choose "View Administrator Login" privately only on this test computer.
-    Never photograph, email, or publish the password.
-[ ] Sign in and change the initial password. Give each practice staff member
-    an individual account and only the roles required for that job.
-
-If installation fails, record the step and safe message. Do not retry with
-Repair, database deletion, or a source build. Contact the provider.
+3. GRAPHICAL INSTALLATION: DISPOSABLE TEST MACHINE ONLY
+-------------------------------------------------------
+[ ] Obtain the complete, publisher-verified, version-matched test deliverable
+    from an authorized provider; do not use a GitHub source ZIP.
+[ ] If a qualified Setup EXE exists, double-click it and follow the ordinary
+    on-screen steps. Do not run a second installer over existing data.
+[ ] Until the EXE is qualified, the provider may use the complete folder-based
+    engineering test kit and its existing "TOEFL House ERP.vbs" GUI on a
+    disposable PC only. This is NOT the accepted customer delivery.
+[ ] Choose "Check This PC"; refuse installation if integrity, runtime or
+    preservation checks cannot be verified.
+[ ] On a confirmed new disposable site only, select "Install". The provider
+    records startup, restart, role and recovery evidence.
+[ ] Open the local browser login, normally http://127.0.0.1:8000/.
+[ ] View initial Administrator credentials privately, change the password,
+    and configure a separate least-privilege Course Owner role account.
+[ ] Never share, photograph or email passwords, secrets, financial records
+    or unredacted support logs.
 
 4. OWNER CONFIGURATION - INSIDE THE APPLICATION
 -----------------------------------------------
@@ -215,11 +213,29 @@ real guardian consent in practice records.
 [ ] Use Repair only when trusted support directs it after existing data has
     been assessed. Repair is not a reset button.
 
-There is no approved automatic update path in this candidate. PR #46 remains
-on hold. Do not install an updater, replace Docker volumes, import an unknown
-image, or copy a newer package over an existing installation. Preserve the
-current data and ask the provider for a separately approved migration/update
-procedure.
+Updates use only the launcher's separate "Check for Updates" and
+"Install Update" buttons. "Check for Updates" downloads the provider's
+signed release information, asks the safety engine whether this computer
+may update, and changes nothing. "Install Update" asks for confirmation,
+repeats every check, and only then installs the update. Every message is
+shown in English with the version number. No terminal, Git,
+Docker command or database command is ever needed.
+  The updater refuses before the first change unless the provider
+signature, exact version and upgrade path, existing site and database,
+free disk space, a verified encrypted backup on a separate drive, a
+signed Owner recovery authorization and the downloaded image identity
+all pass. The channel is currently disabled until the provider
+completes the release and Owner acceptance gates: "Check for Updates"
+explains that the provider has paused updates and changes nothing.
+  If an update stops, read the on-screen recovery steps: do not
+reinstall, do not delete data, do not reset Docker and do not restore
+over the live site. Keep the folder, copy the safe support status and
+contact trusted support. A failed update never restarts services
+automatically; recovery is directed by support from the retained
+previous image and the verified backup. Never replace Docker volumes,
+import an unknown image, or copy a newer package over an existing
+installation. This gated updater does not authorize live student or
+financial data; the release decision below stays NO-GO.
 
 11. BACKUP AND RECOVERY HOLD
 ----------------------------
@@ -258,55 +274,3 @@ ZIP does not authorize production. Keep the decision at NO-GO until the real
 Owner Windows installation, recovery, staff-device, cashier/stock, configuration,
 payroll and package acceptance gates are completed and the Owner gives explicit
 written approval.
-
-
-خلاصهٔ مهم برای صاحب کورس / DARI SAFETY SUMMARY
-===============================================
-
-این بسته فقط برای آزمایش انجینری است. وضعیت استفادهٔ واقعی: NO-GO / REJECT.
-تا تأیید کتبی و جداگانهٔ صاحب کورس، هیچ معلومات واقعی شاگرد، سرپرست، کارمند،
-معاش، پرداخت یا حسابداری وارد نکنید؛ فقط نام و ارقام تمرینی استفاده کنید.
-
-۱. بسته را فقط از سازندهٔ مورد اعتماد و از صفحهٔ نسخهٔ مشخص GitHub بگیرید.
-نسخه، Source Revision و فایل‌های checksum باید همراه باشند. تست سبز GitHub
-به معنی تأیید کمپیوتر واقعی، بکاپ، بازیابی یا استفادهٔ عملیاتی نیست.
-
-۲. روی کمپیوتری که قبلاً معلومات TOEFL House داشته، Install، Repair، Restore،
-تغییر رمز، حذف Docker volume یا حذف product/data انجام ندهید. فقط
-Check This PC را اجرا کنید و با پشتیبانی مورد اعتماد تماس بگیرید.
-
-۳. روی کمپیوتر جداگانهٔ تمرینی، کل بسته را Extract کنید و
-TOEFL House ERP.vbs را باز کنید. نخست Check This PC، سپس در کمپیوتر کاملاً
-جدید Install و بعد Open / Start را انتخاب کنید. برای کار روزانه به Git،
-PowerShell، Python یا دستور دیتابیس ضرورت نیست.
-
-۴. پالیسی‌ها، شهریه، صنف‌ها، استادها و صلاحیت کارمندان را فقط از صفحات مجاز
-داخل سیستم تنظیم کنید. اگر یک قیمت، فیصدی، شرط قبولی، معاش یا قاعده مشخص
-نشده است، خودتان عدد یا قاعدهٔ موقتی نسازید. هر کارمند حساب جدا و فقط
-صلاحیت وظیفهٔ خودش را داشته باشد.
-
-۵. جریان تمرینی: Applicant، Placement، Admission، Enrollment، Schedule،
-Attendance و بعد Billing و Payment. Assessment/Progression سفارشی و پورتال
-شاگرد/سرپرست در این نسخه فعال نیست. ارسال Email/SMS نیز با داشتن
-TH Alerting Policy ثابت نمی‌شود.
-
-۶. فروش کتاب فقط با Books، Warehouse و Update Stock در اسناد اصلی ERPNext
-انجام شود. کتاب و شهریه را در فاکتور فروش کتاب یک‌جا نکنید. برای برگشت کتاب
-Sales Return / Credit Note لازم است؛ این سند به‌تنهایی برگشت پول نقد نیست
-و پرداخت برگشت جداگانه لازم دارد. همه فقط با پول تمرینی انجام شود.
-
-۷. Additional Salary یا محاسبهٔ تدریس به معنی پرداخت معاش نیست. معاش واقعی،
-مالیه، شرایط پرداخت و Payroll باید جداگانه تأیید و در سیستم اصلی HRMS بررسی
-شود. در این نسخه Payroll واقعی اجرا نکنید.
-
-۸. Stop و شروع دوباره، حفظ معلومات بعد از Restart و Repair فقط روی کمپیوتر
-تمرینی آزمایش شود. مسیر Update خودکار تأیید نشده است. بکاپ واقعی، کلید
-بازیابی و Restore روی کمپیوتر صاحب کورس هنوز HOLD است؛ هیچ‌کدام را بدون
-پروسیجر جداگانه و اجازهٔ رسمی انجام ندهید.
-
-۹. برای پشتیبانی فقط Check This PC و Copy Safe Support Status را شریک کنید.
-رمز Administrator، db.env، کلید خصوصی، بکاپ خام، گزارش خام یا معلومات واقعی
-شاگردان و کارمندان را هرگز نفرستید.
-
-تصمیم نهایی تا تکمیل آزمایش واقعی Windows، بازیابی، دستگاه‌های کارمندان،
-فروش کتاب/صندوق، تنظیمات و تأیید کتبی صاحب کورس: NO-GO.

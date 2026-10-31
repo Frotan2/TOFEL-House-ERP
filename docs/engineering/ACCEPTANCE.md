@@ -1,3 +1,11 @@
+> **ARCHIVED EVIDENCE REGISTER — NOT CURRENT RELEASE STATUS.** This long-form
+> register retains dated test receipts and earlier branch findings for audit.
+> Do not interpret a prior `main` SHA, older PASS, old open-issue count or
+> past setup instruction as the current work-branch result. Current
+> authoritative entry points: [Documentation authority](../DOCUMENTATION.md),
+> [Release candidate](RELEASE-CANDIDATE.md), and exact-head GitHub checks.
+> **Production remains REJECT / NO-GO.**
+>
 > **2026-10-22 current-state snapshot:** current `main` contains the published
 > isolated-restore engineering release and only one open release issue:
 > [#12 — real Owner Windows lifecycle and recovery acceptance](https://github.com/Frotan2/TOFEL-House-ERP/issues/12).

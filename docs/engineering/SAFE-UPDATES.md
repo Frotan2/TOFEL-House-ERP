@@ -1,6 +1,6 @@
 # Safe updates — engineering design (Issue #40)
 
-Status: implementation complete and tested; **not activated for real school data**.
+Status: hardened implementation under qualification; **not activated for real school data**.
 The customer channel ships disabled and the release gates from #12/#36 still
 govern every production release. Nothing in this document changes the current
 hold posture in `README.md`, `VALIDATION.md`, `LAUNCH-RUNBOOK.md` or
@@ -37,14 +37,17 @@ Check for Updates
                                     archive identity, issues a 30-minute
                                     `authorized` transaction
 Install Update (confirmed)
+  -> docker load <archive verified by the installed engine>, with services running
+  -> verify candidate image ID, restore the installed Compose image tag
+  -> candidate engine preflight/authorize/recheck using the live host observer
   -> docker compose stop web worker scheduler socketio     (never -v)
-  -> docker load <verified archive>
-  -> engine apply: loads the `authorized` record from the durable engine state,
+  -> tag the verified candidate image for Compose
+  -> candidate engine apply: loads its `authorized` record from durable state,
      re-verifies the manifest signature, archive hash and identity, backup
      receipt, recovery authorization, installed image identity and labels,
      journal and host state, then records the census, `bench migrate` x2, the
      census again, apps, orphan rows and role desks
-  -> docker compose up -d --no-build, HTTP health, journal completed
+  -> guarded docker compose up -d --no-build --no-deps (application services only), HTTP health, journal completed
 ```
 
 `apply` accepts nothing but an `authorized` transaction, and a transaction can
@@ -57,18 +60,90 @@ document is refused (`transaction.unknown` / `transaction.tampered`) before any
 migration runs. The one-use marker is written to the same durable folder, so a
 replay from a later run folder is refused (`transaction.replayed`).
 
-At apply time the engine re-reads every mutable fact -- manifest signature,
-archive identity, backup receipt, recovery authorization, installed image
-identity and labels, journal state, database volume, services and disk space --
-and refuses with `transaction.mismatch`, `apply.installed_mismatch`,
-`apply.archive_mismatch`, `apply.evidence_mismatch`, `apply.host_unsafe` or
-`apply.journal_unsafe` if anything changed since the authorization was issued.
+The installed engine can use the earlier transaction protocol. Its signed
+archive authorization is only permission to import candidate image bytes; it
+does not authorize a migration. For every Check, the Windows launcher pins the
+installed image by immutable ID and executes a restricted, offline, read-only
+file-presence probe to distinguish legacy engines from broker-capable engines.
+Only a broker-capable image receives the Docker socket mount; this distinction
+is preserved for its second archive authorization at Install. Unexpected
+probe failures refuse the operation, never silently downgrade to legacy mode.
+The update engine entrypoint may repair its private request/transaction
+directories, but must not chown mounted customer sites or logs before the
+independent preflight. The candidate must issue a fresh transaction
+after independently observing the running Docker containers, database volume,
+image, journal and site files. It then rechecks immediately before service
+stop. The previous image ID is retained for a held recovery path. Any import,
+identity or tag failure records a recovery hold and never starts Compose.
+
+At apply time the engine re-reads signed release, image and recovery evidence.
+Host facts are obtained through the authenticated local broker described below,
+not through the request's earlier `host`, `installed` or `journal_state` fields.
+Those fields are rejected in apply requests. Changed evidence refuses the
+update before migration; a failure after migration starts requires recovery.
+
+### Independent live host observation (2026-10-25)
+
+`product/update_host.py` runs a small root broker inside the ephemeral engine
+container. It accepts only a fresh nonce over a fixed Unix socket; Linux peer
+credentials authenticate the root process. It exposes no API URL, shell command,
+Docker mutation or caller-selected path. Its fixed GET requests inspect the
+seven existing product containers, the original web image, the current image
+tag and the exact database volume/mount. The actual journal and site files are
+read from the fixed, read-only `/product-root` mount. No credential contents or
+raw Docker inspect documents are returned or logged.
+
+The raw Docker socket is mounted only for this broker. A `readonly` mount
+**does not** restrict Docker API operations. The broker therefore refuses to
+start unless socket ownership and permissions deny the frappe engine account
+access. The broker socket remains root-owned and restricted to that account's
+group; the client also checks the server's actual root UID via `SO_PEERCRED`.
+It is private to the ephemeral container and is not exposed over TCP. This
+privileged boundary requires independent security review and Docker Desktop
+qualification; unit tests are not authorization to enable the channel.
+
+Transaction schema 2 binds storage/container/mount identity and hashes of
+`db.env` and `site_config.json` to the authenticated authorization. Old schema
+1 transactions cannot be applied; a fresh complete check is required. All
+services must still be running at preflight/authorize and at the new `recheck`
+phase immediately before any host mutation. After the intentional stop/import,
+the actual original application containers must be stopped, the DB/Redis must
+still run, the loaded tag must match the verified candidate config digest and
+labels, and the on-disk journal must say `applying` for this exact transaction
+and target version. Docker containers for engine steps are selected by immutable
+image ID after the check. Missing/unavailable observations never fall back to
+caller-supplied booleans. Host state is queried after evidence hashing, before
+each migrate replay, and after data/role verification.
+
+A structured apply exit 5 must reach the launcher's failure handler. It is not
+an engine transport error that can be discarded. Any stop/import/apply failure
+leaves `recovery-required`; even `safe-abort` does not automatically restart
+Compose, since the refusal may mean storage vanished or was replaced. A
+best-effort tag restoration is not recovery proof. The journal `rolled-back`
+phase and the catalogue entries `updater.rollback_done` /
+`updater.rollback_blocked` are reserved for a future support-directed recovery
+step; no current code path restarts services automatically or reports an
+automatic rollback. Only a successful apply can
+reach the guarded Start path, which repeats the existing-installation preflight
+before Compose. It starts only the four application services with `--no-deps`,
+so bootstrap and DB/Redis are not recreated after the verified census. The
+current image ID must still match the verified candidate. No restore or
+deletion is performed automatically.
+
+Evidence added for this boundary: independent host-state mutation tests, a
+real Unix HTTP transport on unrestricted Linux runners, and a root/nobody
+privilege probe using a synthetic Docker HTTP socket. That probe proves raw
+socket denial and the restricted broker protocol. The Product-image pipeline
+also runs a read-only probe against the actual Docker daemon of its disposable
+synthetic deployment. Release-critical `fix/**` branches qualify through the
+same image pipeline before integration. These checks are **not real Docker
+Desktop, Windows update, Owner backup/restore, or production qualification**.
 
 Failures:
 
 | Outcome | Meaning | Host action |
 | --- | --- | --- |
-| `safe-abort` | the engine refused before the first migration | retag the previous image, start the previous version, journal `rolled-back` |
+| `safe-abort` | the engine refused before the first migration | best-effort retag of the previous image, **no automatic restart**, journal `recovery-required`, bilingual recovery steps; support directs recovery from the retained image and the verified backup |
 | `recovery-required` | a migration started, or the database changed | do **not** start the stack; journal `recovery-required`; show recovery steps |
 | interrupted | the journal is `prepared`/`applying` on the next run | refuse and show recovery steps |
 | `records_lost` / `apps_missing` / `role_desk_missing` | post-migration verification failed | `recovery-required`, never silently continue |
@@ -84,7 +159,7 @@ Failures:
 | `index.json` | same tool | Windows transport check only; never a trust decision |
 | `trust-store.json` | provider, installed separately | engine (`provisioned`, key validity window, RSA key shape) |
 | `backup-receipt.json` | `Backup TOEFL House ERP.ps1` | `product/activate.py` receipt validator (shared with activation) |
-| `recovery-authorization.json` + `.sig` | Owner + provider support | engine, bound to the receipt SHA-256 |
+| `recovery-authorization.json` + `.sig` + `-2.sig` | Course Owner **and** General Manager / designated recovery authority, each with their own offline key | engine, two-person schema-2: both signatures over identical bytes, bound to site, operation, backup receipt SHA-256 and a single-use request id |
 | `journal.json` | Windows updater | engine (`journal_state` must be terminal) |
 
 `release-manifest.json` (the customer *package* manifest) and `update.json` (the
@@ -126,6 +201,31 @@ extra local state has to be trusted.
   volume, and a replay from another run folder each stop the update before the
   first `bench migrate`.
 * A migration failure never reopens the application automatically.
+* Two-person recovery authorization is enforced, not recorded.  A migrating
+  update requires a schema-2 recovery document signed by two distinct
+  trusted keys, bound in the trust store to one Course Owner and one General
+  Manager or designated recovery authority, over identical document bytes
+  bound to the site, the `site-update` operation, the verified backup
+  receipt and a single-use `request_id`.  A single-signature (schema-1)
+  document, a self-approval, two Owners, a swapped or forged signature, an
+  unbound recovery key, an altered document, an expired window or a replayed
+  request id is refused before any migration.  The request id is consumed
+  when apply starts, so a failed or interrupted apply needs fresh approvals
+  from both approvers.  The recovery request is marked consumed **before**
+  the transaction-use marker is written, so a crash between the two writes
+  cannot leave the same signed approval reusable with a new transaction.
+  Provisioning a second recovery key with its approver
+  binding is a migration requirement for existing single-key installations:
+  until then, migrating updates are refused, by design.
+* Emergency administrator recovery is separately controlled and is **not**
+  two-person approved.  Direct use of `product/restore.py` on the production
+  site, or any OS/container-level restore, bypasses application approvals
+  by construction; it must be treated as an emergency-admin action, performed
+  only under a separately documented Owner procedure, logged outside the
+  application, and never presented as an approved two-person recovery.
+  `product/restore.py` remains un-authenticated at its own layer and is used
+  in CI only against disposable synthetic sites; production recovery must go
+  through the two-person update-engine gate plus a disposable rehearsal.
 * Every customer-visible message is a stable code with English and Dari text in
   `product/windows/updater-strings.json`; the Windows GUI only renders catalogue
   text and never free text from a log or result file.

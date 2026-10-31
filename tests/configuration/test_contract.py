@@ -61,6 +61,9 @@ class CodeValidationTests(unittest.TestCase):
 
     def test_duration_rejects_nonpositive_and_typos(self):
         self.assertEqual(rules.validate_duration_value("2", "Month"), 2.0)
+        self.assertEqual(rules.validate_duration_value(2, "Solar Hijri Month"), 2.0)
+        with self.assertRaisesRegex(ValueError, "whole number"):
+            rules.validate_duration_value(1.5, "Solar Hijri Month")
         with self.assertRaises(ValueError):
             rules.validate_duration_value(0, "Month")
         with self.assertRaises(ValueError):
@@ -70,6 +73,12 @@ class CodeValidationTests(unittest.TestCase):
             rules.validate_duration_value(30, "Month")
         with self.assertRaises(ValueError):
             rules.validate_duration_value(2, "Quarter")
+        for invalid in ("nan", "NaN", "inf", "-inf", "1e999",
+                        float("nan"), float("inf"), float("-inf")):
+            for unit in ("Day", "Month", "Solar Hijri Month"):
+                with self.subTest(invalid=repr(invalid), unit=unit):
+                    with self.assertRaisesRegex(ValueError, "finite"):
+                        rules.validate_duration_value(invalid, unit)
 
     def test_dates_are_real_calendar_dates(self):
         self.assertEqual(rules.parse_date("2026-07-01"), "2026-07-01")
@@ -133,7 +142,17 @@ class FeeRuleTests(unittest.TestCase):
     def test_fee_amount_bounds(self):
         self.assertEqual(rules.validate_fee_amount("5000"), 5000.0)
         self.assertEqual(rules.validate_fee_amount(1250.5), 1250.5)
-        for bad in (0, -1, "abc", None, True, 100_000_001):
+        self.assertEqual(rules.validate_fee_amount("0.01"), 0.01)
+        self.assertEqual(rules.validate_fee_amount("20.000"), 20.0)
+        self.assertEqual(rules.validate_fee_amount(100000000), 100000000.0)
+        for bad in ("0.001", "1.005", "20.009", "1e-10",
+                    0.0001, 1.234, 999.999):
+            with self.subTest(money=repr(bad)):
+                with self.assertRaisesRegex(ValueError, "two decimal places"):
+                    rules.validate_fee_amount(bad)
+        for bad in (0, -1, "abc", None, True, 100_000_001,
+                    "nan", "NaN", "inf", "-inf", "1e999",
+                    float("nan"), float("inf"), float("-inf")):
             with self.assertRaises(ValueError, msg=repr(bad)):
                 rules.validate_fee_amount(bad)
 
@@ -372,7 +391,8 @@ class DoctypeContractTests(unittest.TestCase):
         self.assertTrue(doc["istable"])
         self.assertEqual(doc["permissions"], [])
         fields = {field["fieldname"]: field for field in doc["fields"]}
-        self.assertEqual(fields["duration_unit"]["options"], "Month\nWeek\nDay")
+        self.assertEqual(fields["duration_unit"]["options"],
+                         "Month\nWeek\nDay\nSolar Hijri Month")
         for field in ("set_by", "set_on", "superseded_on"):
             self.assertTrue(fields[field].get("read_only"), field)
 

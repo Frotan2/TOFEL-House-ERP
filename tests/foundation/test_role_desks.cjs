@@ -104,6 +104,41 @@ function loadClient(frappeOverrides = {}) {
 
 const client = loadClient();
 const surfaces = client.toefl_house.role_desks.surfaces;
+assert.deepStrictEqual(Object.keys(client.frappe.pages), [], "shared script must not pre-create unopened native pages");
+{
+	const first = { tagName: "DIV" };
+	const navigation = loadClient({ pages: { "th-owner-cockpit": first } });
+	assert.strictEqual(Object.keys(navigation.frappe.pages).length, 1);
+	assert.strictEqual(navigation.frappe.pages["th-academic-setup"], undefined);
+	// Mirror pageview: after fetching the next Page, native add_page creates
+	// its wrapper, then the page_js file is evaluated in the same browser.
+	navigation.frappe.pages["th-academic-setup"] = { tagName: "DIV" };
+	vm.runInNewContext(fs.readFileSync(SCRIPT, "utf8"), navigation, { filename: SCRIPT });
+	assert.strictEqual(navigation.frappe.pages["th-owner-cockpit"], first);
+	assert.strictEqual(typeof navigation.frappe.pages["th-academic-setup"].on_page_load, "function");
+}
+// A guided action must either have a real, signature-reviewed dialog or
+// explicitly tell the user that the workflow is unavailable. Never ship a
+// button whose click handler silently returns without explanation.
+const uiSource = fs.readFileSync(SCRIPT, "utf8");
+assert(uiSource.includes("This command has no supported form yet. Nothing was submitted."),
+	"unsupported commands must show actionable, fail-closed feedback");
+const teacherFormFields = client.toefl_house.role_desks.actionFields["toefl_house.teaching.record_instructor_attendance"];
+assert(teacherFormFields && teacherFormFields.some(field => field.fieldname === "course_schedule"),
+    "Instructor form must target a native scheduled session");
+assert(uiSource.includes("new Set(ids).size !== ids.length"),
+    "Instructor must refuse duplicate roster identities");
+const teacherSource = fs.readFileSync(path.join(APP, "desk/teacher.py"), "utf8");
+assert(teacherSource.includes("toefl_house.teaching.record_instructor_attendance"),
+    "Instructor desk must use own-session command");
+const teacherSecurity = fs.readFileSync(path.join(APP, "security.py"), "utf8");
+assert(teacherSecurity.includes('"record_instructor_attendance": "Instructor"'),
+    "Instructor command must have a distinct role gate");
+const recorderFields = client.toefl_house.role_desks.actionFields["toefl_house.teaching.record_attendance"];
+assert(recorderFields && recorderFields.some((field) => field.fieldname === "course_schedule")
+	&& recorderFields.some((field) => field.fieldname === "statuses"),
+	"authorized Attendance Recorder needs a session and bounded roster marks");
+
 assert.deepStrictEqual(Object.keys(surfaces).sort(), Object.keys(EXPECTED).sort(),
 	"the desk surface set changed");
 
@@ -170,11 +205,15 @@ const actionFields = client.toefl_house.role_desks.actionFields;
 assert(Object.keys(actionFields).length >= 8, "guided actions went missing");
 
 const endpointFiles = {
+	"toefl_house.setup_presets.owner_policy_forms": ["setup_presets/owner_policy_forms.py"],
+	"toefl_house.setup_presets.api": ["setup_presets/api.py"],
 	"toefl_house.operations.owner_configuration": ["operations/owner_configuration.py"],
+	"toefl_house.setup_presets.native_grading_scale": ["setup_presets/native_grading_scale.py"],
 	"toefl_house.admission": ["admission/__init__.py"],
 	"toefl_house.enrollment": ["enrollment/__init__.py"],
 	"toefl_house.api": ["api.py"],
 	"toefl_house.finance.corrections": ["finance/corrections.py"],
+	"toefl_house.finance.tuition_refund_commands": ["finance/tuition_refund_commands.py"],
 	"toefl_house.academic": ["academic/__init__.py"],
 	"toefl_house.academic.catalog_linkage": ["academic/catalog_linkage.py"],
 	"toefl_house.admission.policies": ["admission/policies.py"],
@@ -183,6 +222,7 @@ const endpointFiles = {
 	"toefl_house.finance.policies": ["finance/policies.py"],
 	"toefl_house.finance.installments": ["finance/installments.py"],
 	"toefl_house.finance.cashier": ["finance/cashier.py"],
+	"toefl_house.finance.collections": ["finance/collections.py"],
 	"toefl_house.teaching": ["teaching/__init__.py"],
 	"toefl_house.teaching.policies": ["teaching/policies.py"],
 	"toefl_house.teaching.attendance_corrections": ["teaching/attendance_corrections.py"],
@@ -208,7 +248,26 @@ for (const [method, fields] of Object.entries(actionFields)) {
 	const signature = signatureOf(method);
 	assert.strictEqual(signature[0], "request_key", `${method} must be idempotent`);
 	// Array.from: `fields` comes from the vm realm and map() would keep its realm prototype.
-	assert.deepStrictEqual(Array.from(fields, (field) => field.fieldname), signature.slice(1),
+	if (method === "toefl_house.finance.cashier.reconcile_cashier_day") {
+		assert.deepStrictEqual(Array.from(fields, (field) => field.fieldname), ["company", "date"]);
+		assert.deepStrictEqual(signature.slice(1), ["company", "date", "counts"]);
+		continue;
+	}
+	if (method === "toefl_house.academic.set_assessment_policy_version") {
+		assert.deepStrictEqual(Array.from(fields, (field) => field.fieldname),
+			["policy", "passing_score", "retake_wait_days", "effective_from", "reason", "grading_scale"]);
+		assert.deepStrictEqual(signature.slice(1),
+			["policy", "effective_from", "reason", "grading_scale", "initial_facets", "passing_score", "retake_wait_days", "skill_weights"]);
+		continue;
+	}
+	if (method === "toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale") {
+		assert.deepStrictEqual(Array.from(fields, (field) => field.fieldname),
+			["grading_scale_name", "grade_a", "grade_b", "grade_c", "grade_d", "reason"]);
+		assert.deepStrictEqual(signature.slice(1), ["grading_scale_name", "intervals", "reason"]);
+		continue;
+	}
+	// Calls use named arguments; related UI fields may have a different display order.
+	assert.deepStrictEqual(Array.from(fields, (field) => field.fieldname).sort(), signature.slice(1).sort(),
 		`${method} dialog fields drift from the reviewed signature`);
 }
 
@@ -228,11 +287,26 @@ assert.strictEqual(decideGuard({ outcome: "Approved", conditions: "" }), null);
 
 /* The client may only call the desk projection endpoints and the registry. */
 const source = fs.readFileSync(SCRIPT, "utf8");
+const declaredActionKeys = Array.from(source.matchAll(/^\s*"(toefl_house\.[^"]+)": \[/gm), (match) => match[1]);
+assert.strictEqual(new Set(declaredActionKeys).size, declaredActionKeys.length,
+	"duplicate action definitions must not silently replace reviewed business forms");
+const amountGuardLines = source.split("\n").filter((line) => line.includes(".test(String(raw))"));
+assert.strictEqual(amountGuardLines.length, 1, "cash-count number validation must be identifiable");
+const amountPattern = vm.runInNewContext(amountGuardLines[0].trim().split(".test(String(raw))")[0].replace(/^!/, ""));
+for (const value of ["0", "1", "1.23", "5150.00"]) assert(amountPattern.test(value), `valid AFN count refused: ${value}`);
+for (const value of ["", "-1", "1.234", "1e3", "NaN", "Infinity", "\\d"]) assert(!amountPattern.test(value), `invalid AFN count accepted: ${value}`);
 for (const forbidden of [/frappe\.db\b/, /frappe\.client\b/, /frappe\.get_doc\b/, /frappe\.get_list\b/, /\bfetch\s*\(/, /XMLHttpRequest/, /frappe\.set_route\(\s*["']List/]) {
 	assert(!forbidden.test(source), `desk client contains a forbidden primitive: ${forbidden}`);
 }
 assert(source.includes("frappe.call({"), "desk client must talk to the server over guarded RPC");
 const allowedCalls = new Set([...Object.values(EXPECTED).map((shape) => shape.endpoint),
+	"toefl_house.desk.academic.attendance_records",
+	"toefl_house.desk.academic.enrollment_records",
+	"toefl_house.finance.collections.get_collection_receipt",
+	"toefl_house.teaching.compensation.get_contract_revision_form",
+	"toefl_house.setup_presets.api.preview_owner_initial_setup",
+	"toefl_house.setup_presets.owner_policy_forms.owner_form_options",
+	"toefl_house.setup_presets.installer.initialize_owner_catalog",
 	client.toefl_house.role_desks.registry,
 	...Object.keys(actionFields)]);
 for (const method of Object.keys(actionFields)) {
@@ -246,6 +320,21 @@ for (const method of Object.keys(actionFields)) {
 }
 for (const [, method] of source.matchAll(/method:\s*"([\w.]+)"/g)) {
 	assert(allowedCalls.has(method), `desk client calls an unreviewed endpoint: ${method}`);
+}
+
+/* A reviewed, GET-only Course Owner setup preflight may be called.
+ * The bridge must expose no mutation or write privilege. */
+const ownerPreviewSource = fs.readFileSync(path.join(APP, "setup_presets/api.py"), "utf8");
+assert(ownerPreviewSource.includes('def _owner():'), "setup preview has no user gate");
+assert(ownerPreviewSource.includes('"Course Owner" not in frappe.get_roles(actor)'),
+	"setup preview must require Course Owner");
+assert(ownerPreviewSource.includes('@frappe.whitelist(methods=["GET"])'),
+	"setup preview must remain GET-only");
+assert(ownerPreviewSource.includes('def preview_owner_initial_setup():'),
+	"setup preview has no reviewed entry point");
+for (const forbidden of [/frappe\.db\.set_value\(/, /frappe\.db\.commit\(/, /\.insert\(/,
+	/\.save\(/, /\.delete\(/, /@frappe\.whitelist\(methods=\["POST"\]\)/]) {
+	assert(!forbidden.test(ownerPreviewSource), "setup preview must not mutate data");
 }
 
 /* ------------------------------------------------------- behavior smoke */
@@ -398,7 +487,7 @@ function payloadWith(queueItems, factValue) {
 	};
 }
 
-function runScenario({ workPayload, failFirstWork = false, failLookup = false }) {
+function runScenario({ workPayload, failFirstWork = false, failLookup = false, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null, readableSources = [] }) {
 	const calls = [];
 	const dialogs = [];
 	const routed = [];
@@ -406,10 +495,11 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false })
 	const body = $("body").appendTo({ children: [] });
 	let workCalls = 0;
 	const frappe = {
-		pages: {},
+		pages: { "th-reception-desk": { tagName: "DIV" } },
 		provide() {},
 		require() {},
 		set_route(route) { routed.push(route); },
+		model: { can_read(doctype) { return readableSources.includes(doctype); } },
 		msgprint(opts) { printed.push(opts); },
 		ui: {
 			make_app_page() { return { body, main: { addClass() {} } }; },
@@ -417,12 +507,30 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false })
 				constructor(opts) { this.opts = opts; this.values = {}; dialogs.push(this); }
 				set_value(field, value) { this.values[field] = value; }
 				show() {}
-				hide() {}
+				hide() { this.hidden = true; }
 				submit(values) { this.opts.primary_action(values); }
 			},
 		},
 		call(opts) {
 			calls.push(opts);
+			if (opts.method === "toefl_house.desk.academic.attendance_records") {
+				opts.callback({ message: attendanceReply });
+				return;
+			}
+			if (opts.method === "toefl_house.finance.collections.get_collection_receipt" && cashReply) {
+				if (cashReadFails) { opts.error(); return; }
+				opts.callback({ message: cashCurrentReceipt || cashReply.receipt || cashReply });
+				return;
+			}
+			if (opts.method.startsWith("toefl_house.finance.collections.") && cashError) {
+				// Native request.js's 417 handler passes parsed JSON directly.
+				opts.error(cashError);
+				return;
+			}
+			if (opts.method.startsWith("toefl_house.finance.collections.") && cashReply) {
+				opts.callback({ message: cashReply });
+				return;
+			}
 			if (opts.method === "toefl_house.desk.available") {
 				opts.callback({ message: { desks: [{ slug: "th-finance-desk", title: "TOEFL House Finance Desk" }] } });
 				return;
@@ -630,6 +738,67 @@ const hostileItem = {
 	assert(serialize(failed.body).includes("Search failed"), "a failed lookup says so");
 }
 
+{
+	const receipt = { number: "PAY-001", status: "Issued", student_name: HOSTILE, amount: 100, currency: "AFN", synthetic: true };
+	const item = { ...hostileItem, action: { endpoint: "toefl_house.finance.collections.record_reception_collection",
+		label: "Issue cash receipt", args: { fees: "FEE-001", outstanding: 500, currency: "AFN" } } };
+	delete item.action.secondary;
+	const scenario = runScenario({ workPayload: payloadWith([item], "0"), cashReply: { receipt } });
+	findAll(scenario.body, "th-queue-action")[0].click();
+	const form = scenario.dialogs[0];
+	assert.strictEqual(form.values.fees, "FEE-001");
+	assert(form.opts.fields.some((field) => field.fieldname === "cash_context" && field.options.includes("500")));
+	form.submit({ request_key: "native-receipt-request", fees: "FEE-001", amount: 100 });
+	const request = scenario.calls.find((call) => call.method === item.action.endpoint);
+	assert.deepStrictEqual(Object.keys(request.args).sort(), ["amount", "fees", "request_key"]);
+	const numbered = scenario.dialogs[1];
+	assert.strictEqual(numbered.opts.primary_action_label, "Print receipt");
+	const markup = numbered.opts.fields[0].options;
+	assert(markup.includes("SYNTHETIC TEST RECEIPT") && markup.includes("PAY-001"));
+	assert(markup.includes("&lt;img") && !/<img\s/i.test(markup), "receipt facts must be escaped");
+}
+
+{
+	const item = { ...hostileItem, action: { endpoint: "toefl_house.finance.collections.record_reception_collection",
+		label: "Issue cash receipt", args: { fees: "FEE-001" } } };
+	delete item.action.secondary;
+	for (const kind of ["ValidationError", "PermissionError", "InternalServerError"]) {
+		const scenario = runScenario({ workPayload: payloadWith([item], "0"),
+			cashError: { exc_type: kind, exception: "frappe.exceptions." + kind + ": " + HOSTILE } });
+		findAll(scenario.body, "th-queue-action")[0].click();
+		const form = scenario.dialogs[0];
+		form.submit({ request_key: "keep-this-retry-reference", fees: "FEE-001", amount: 100 });
+		assert.strictEqual(form.hidden, undefined, "rejected commands must retain their form");
+		assert.strictEqual(scenario.printed.length, 1, "every rejection needs visible feedback");
+		assert(!/<img\s/i.test(scenario.printed[0].message), "error text must be escaped");
+		if (kind === "ValidationError") assert(scenario.printed[0].message.includes("&lt;img"));
+		else assert(!scenario.printed[0].message.includes("onerror"), "non-validation internals must stay private");
+		assert.strictEqual(scenario.workCalls, 1, "a rejected command must not pretend to refresh a successful result");
+	}
+}
+
+{
+	// An idempotent command keeps its original receipt, even after an Owner
+	// amendment. Printing must fetch current native status, not revive a void.
+	const item = { ...hostileItem, action: { endpoint: "toefl_house.finance.collections.record_reception_collection",
+		label: "Issue cash receipt", args: { fees: "FEE-001" } } };
+	delete item.action.secondary;
+	const original = { number: "PAY-OLD", status: "Issued", amount: 100, currency: "AFN", synthetic: true };
+	const scenario = runScenario({ workPayload: payloadWith([item], "0"), cashReply: { receipt: original },
+		cashCurrentReceipt: { ...original, status: "Void" } });
+	findAll(scenario.body, "th-queue-action")[0].click();
+	scenario.dialogs[0].submit({ request_key: "same-old-request", fees: "FEE-001", amount: 100 });
+	assert(scenario.calls.some((call) => call.method === "toefl_house.finance.collections.get_collection_receipt"),
+		"printing a saved command must re-read current native receipt status");
+	assert(scenario.dialogs[1].opts.fields[0].options.includes("VOID RECEIPT"), "a void receipt must never print as active");
+	const failedRead = runScenario({ workPayload: payloadWith([item], "0"), cashReply: { receipt: original }, cashReadFails: true });
+	findAll(failedRead.body, "th-queue-action")[0].click();
+	failedRead.dialogs[0].submit({ request_key: "same-old-request", fees: "FEE-001", amount: 100 });
+	assert.strictEqual(failedRead.dialogs[0].hidden, true, "the successful posting remains successful");
+	assert.strictEqual(failedRead.dialogs.length, 1, "never print a stale saved receipt when current status is unavailable");
+	assert(failedRead.printed[0].message.includes("posting was saved"), "do not invite a duplicate posting after a receipt read failure");
+}
+
 /* --------------------------------------------------------------- design */
 
 const stylesheet = fs.readFileSync(path.join(APP, "public/css/th_design_system.css"), "utf8");
@@ -642,5 +811,41 @@ assert(narrow && narrow[0].includes(".th-queue"), "queue tables must reflow on n
 assert(narrow && /display: block/.test(narrow[0]), "the narrow layout must stack, not squish");
 assert(stylesheet.includes(":focus-visible"), "keyboard focus must stay visible");
 
+{
+	const payload = payloadWith([], "2");
+	payload.sections[0].comparison = { title: "Attendance", rows: [{ label: "CLASS-A", value: 2, bar: false, drill: { attendance_group: "CLASS-A" } }] };
+	const scenario = runScenario({ workPayload: payload, attendanceReply: { rows: [{ name: "ATT-A", student: HOSTILE, student_group: "CLASS-A", status: "Present" }], truncated: false } });
+	const link = findAll(scenario.body, "th-drill-link")[0];
+	assert(link, "class attendance must offer its scoped source read");
+	link.click();
+	const read = scenario.calls.find((call) => call.method === "toefl_house.desk.academic.attendance_records");
+	assert.strictEqual(read.args.student_group, "CLASS-A");
+	assert.deepStrictEqual(scenario.routed, [], "attendance must not route to an unavailable native list");
+	const markup = scenario.dialogs[0].opts.fields[0].options;
+	assert(markup.includes("ATT-A") && markup.includes("&lt;img"));
+	assert(!markup.includes("<img"), "source record values must be escaped");
+}
+
+{
+	const payload = payloadWith([], "2");
+	payload.sections[0].facts[0].drill_path = "enrollment records list";
+	const denied = runScenario({ workPayload: payload });
+	findAll(denied.body, "btn-secondary").find((node) => node.texts.includes("View source records")).click();
+	assert.deepStrictEqual(denied.routed, [], "a descriptive source label must never become a Page route");
+	assert(denied.printed.some((message) => message.title === "Source access required"));
+	const allowed = runScenario({ workPayload: payload, readableSources: ["Program Enrollment"] });
+	findAll(allowed.body, "btn-secondary").find((node) => node.texts.includes("View source records")).click();
+	assert.deepStrictEqual(JSON.parse(JSON.stringify(allowed.routed)), [["List", "Program Enrollment"]]);
+	for (const source of ["List/Salary Slip", "List/" + HOSTILE, "__proto__"]) {
+		payload.sections[0].facts[0].drill_path = source;
+		const restricted = runScenario({ workPayload: payload });
+		findAll(restricted.body, "btn-secondary").find((node) => node.texts.includes("View source records")).click();
+		assert.deepStrictEqual(restricted.routed, []);
+		assert(!restricted.printed.some((message) => /<img/i.test(message.message)), "source messages must escape native labels");
+	}
+}
+
 console.log(`Role desk contract OK (${Object.keys(EXPECTED).length} desks, ` +
 	`${Object.keys(actionFields).length} guided actions)`);
+
+

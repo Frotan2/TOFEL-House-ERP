@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-28",
+  "kind": "additive_advisory_delta_no_register_mutation",
+  "basis": "Foundation runtime 40621526161 at release head 4f52eaa538a5f74e6789f99057a92ba8a420bdb9 failed closed with STACK-ADVISORY-UNTRIAGED npm:deepmerge 1243505, GHSA-gcqx-w48m-w2h4. Pinned upstream dependency analysis reported by independent reviewer and corroborated at immutable upstream yarn.lock commits; rationale and limitations in README.md.",
+  "packages": [
+    {
+      "package": "npm:deepmerge@4.3.1",
+      "advisories": [
+        {
+          "id": "GHSA-gcqx-w48m-w2h4",
+          "aliases": [
+            "CVE-2026-93753",
+            "1243505"
+          ],
+          "severity": "low",
+          "vulnerable_range": ">=4.2.0, <=4.3.1",
+          "first_patched": "none published as of 2026-10-28",
+          "summary": "mergeObject() accepts attacker-controlled keys that can poison the returned object's prototype.",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Pinned Education 93bc7075753369457919720690f80c6d2207b5f2 frontend/yarn.lock and HRMS a4768b441cff346def505e27f2a2229ee1e05b9b frontend/yarn.lock resolve deepmerge 4.3.1 transitively. In the editor chain, @tiptap/pm 2.2.3 -> prosemirror-trailing-node -> @remirror/core-helpers (3.0.0 Education; 2.0.3 HRMS): the pinned trailing-node implementation imports includes and uniqueArray, not deepMerge, and the reviewed production Vite bundle did not include deepmerge. HRMS also resolves deepmerge through @rollup/plugin-node-resolve 15.3.1 under workbox-build 7.3.0; this invocation is build-time deepMerge({}, defaults) with internally constructed objects, not attacker-controlled source objects. No reachable use of vulnerable mergeObject() with untrusted source keys was established on the inspected pinned dependency paths. See README.md; future dependency/call-path changes require new review.",
+          "fix_path": "No patched deepmerge version is published in the GitHub-reviewed advisory as of this assessment. Reassess on pinned Education/HRMS dependency updates or a newly reachable attacker-controlled deepMerge call; do not blanket-approve other deepmerge consumers. Preserve the fail-closed new-advisory gate."
+        }
+      ]
+    }
+  ]
+}

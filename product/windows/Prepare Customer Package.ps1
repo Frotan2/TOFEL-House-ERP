@@ -8,6 +8,25 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+function Get-ProductFileSha256 {
+    param([string]$LiteralPath)
+    $fullPath = [IO.Path]::GetFullPath($LiteralPath)
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT -and -not $fullPath.StartsWith("\\?\")) {
+        if ($fullPath.StartsWith("\\")) { $fullPath = "\\?\UNC\" + $fullPath.Substring(2) }
+        else { $fullPath = "\\?\" + $fullPath }
+    }
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    $stream = $null
+    try {
+        $stream = [IO.File]::OpenRead($fullPath)
+        return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        if ($stream) { $stream.Dispose() }
+        $algorithm.Dispose()
+    }
+}
+
 try {
     Add-Type -AssemblyName System.Windows.Forms
     if (-not $Destination) {
@@ -65,13 +84,18 @@ try {
         "product/docker-compose.yml",
         "product/windows/TOEFL House ERP.ps1",
         "product/windows/Run TOEFL House ERP.ps1",
+        "product/windows/Prepare This PC.ps1",
+        "product/windows/Import Offline Runtime.ps1",
         "product/windows/Check This PC.ps1",
         "product/windows/OWNER ACCEPTANCE GUIDE.txt",
+        "product/windows/OWNER HANDBOOK.txt",
         "product/windows/DAILY USE GUIDE.txt",
         "product/windows/Verify Package Image.ps1",
         "product/windows/Install TOEFL House ERP.cmd",
         "product/windows/Start TOEFL House ERP.cmd",
         "product/windows/Stop TOEFL House ERP.cmd",
+        "product/windows/Backup TOEFL House ERP.cmd",
+        "product/windows/Backup TOEFL House ERP.ps1",
         "product/windows/Repair TOEFL House ERP.cmd",
         "product/windows/Test Fresh Installation.ps1",
         "product/windows/Test Existing Installation.ps1",
@@ -137,12 +161,12 @@ try {
             throw "The exported image labels differ from the inspected application image."
         }
     }
-    $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = (Get-ProductFileSha256 -LiteralPath $archive)
     [System.IO.File]::WriteAllText(
         $checksum, $hash + "  toefl-house-erp-app.tar" + [Environment]::NewLine,
         [System.Text.UTF8Encoding]::new($false))
     $matrixPath = Join-Path $repositoryRoot "docs\engineering\foundation-version-matrix.json"
-    $matrixHash = (Get-FileHash -LiteralPath $matrixPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $matrixHash = (Get-ProductFileSha256 -LiteralPath $matrixPath)
     $matrix = Get-Content -LiteralPath $matrixPath -Raw | ConvertFrom-Json
     $dependencies = @($matrix.components | ForEach-Object {
         $row = [ordered]@{ name = $_.name }
@@ -179,7 +203,7 @@ try {
     $manifestText = $manifest | ConvertTo-Json -Depth 12
     [System.IO.File]::WriteAllText($manifestPath, $manifestText + [Environment]::NewLine,
         [System.Text.UTF8Encoding]::new($false))
-    $manifestHash = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $manifestHash = (Get-ProductFileSha256 -LiteralPath $manifestPath)
     [System.IO.File]::WriteAllText((Join-Path $releaseDir "release-manifest.json.sha256"),
         $manifestHash + "  release-manifest.json" + [Environment]::NewLine,
         [System.Text.UTF8Encoding]::new($false))
@@ -195,9 +219,12 @@ try {
     $instructions = @"
 TOEFL HOUSE ERP - CUSTOMER INSTALLATION ($Version)
 
-1. On the Windows 10/11 (64-bit) main computer, install Docker Desktop from
-   https://www.docker.com/products/docker-desktop/ and finish WSL 2 setup.
-   This one-time prerequisite may need administrator approval and a restart.
+This folder is an engineering kit, not the final one-file customer delivery.
+The provider must assemble the offline Setup EXE with the signed Windows
+prerequisites and database/cache images before customer handover.
+
+1. Use the provider-supplied Setup EXE on the Windows x64 main computer.
+   Follow its Windows permission/license dialogs and restart if requested.
 2. Keep this entire package together on a local drive, not inside OneDrive,
    a synchronized folder or a network share.
 3. Double-click "TOEFL House ERP.vbs". Select Install. No terminal commands,

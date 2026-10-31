@@ -34,7 +34,8 @@ import frappe
 
 INVOICE = "Sales Invoice"
 PAYMENT = "Payment Entry"
-TOLERANCE = 0.005
+TOLERANCE = 0.005  # native currency rounding, not stock quantity
+QUANTITY_TOLERANCE = 0.0000005  # _flt rounds stock quantities to six decimals
 CASH_ACCOUNT_TYPES = ("Cash", "Bank")
 
 
@@ -54,19 +55,55 @@ def return_quantities_ok(original_items, prior_returns, current_items):
     cumulative total per item must stay within ``original_items``.
     """
     original = {code: _flt(qty) for code, qty in (original_items or {}).items()}
+    if not original or not current_items or any(
+            not math.isfinite(qty) or qty <= 0 for qty in original.values()):
+        return False
     already = {}
     for rows in (prior_returns or []):
         for code, qty in rows.items():
-            already[code] = already.get(code, 0.0) + _flt(qty)
+            if code not in original:
+                return False
+            amount = _flt(qty)
+            if not math.isfinite(amount) or amount < 0:
+                return False
+            already[code] = already.get(code, 0.0) + amount
+            if not math.isfinite(already[code]):
+                return False
     running = dict(already)
     for code, qty in (current_items or {}).items():
         if code not in original:
             return False
         amount = _flt(qty)
-        if amount <= 0:
+        if not math.isfinite(amount) or amount <= 0:
             return False
         running[code] = running.get(code, 0.0) + amount
-        if running[code] - original[code] > TOLERANCE:
+        if not math.isfinite(running[code]):
+            return False
+        if running[code] - original[code] > QUANTITY_TOLERANCE:
+            return False
+    return True
+
+
+RATE_TOLERANCE = 0.01  # per-unit native currency rounding on restocked lines
+
+
+def return_rates_ok(original_rates, current_rates):
+    """A returned unit is never credited above the rate it was sold at.
+
+    Both maps are keyed by ``(item_code, warehouse)``. Without this cap a
+    one-of-two return could be credited at twice the sold rate, stay
+    inside the document grand-total ceiling, and still extract the whole
+    sale value for half the books.
+    """
+    if not current_rates:
+        return False
+    for key, rate in current_rates.items():
+        sold = _flt((original_rates or {}).get(key))
+        current = _flt(rate)
+        if not math.isfinite(sold) or sold <= 0 \
+                or not math.isfinite(current) or current <= 0:
+            return False
+        if current - sold > RATE_TOLERANCE:
             return False
     return True
 
@@ -76,7 +113,10 @@ def return_value_ok(original_grand_total, prior_credited, current_grand_total):
     original = abs(_flt(original_grand_total))
     already = abs(_flt(prior_credited))
     current = abs(_flt(current_grand_total))
-    if current <= 0:
+    # NaN makes all comparisons false; infinity can make a difference NaN.
+    # Neither may authorize the issue of a native credit note.
+    if (not all(math.isfinite(value) for value in (original, already, current))
+            or original <= 0 or current <= 0):
         return False
     return already + current - original <= TOLERANCE
 
@@ -193,6 +233,16 @@ def refund_permitted(doc, *, existing=False):
     company = getattr(doc, "company", None)
     if not company:
         return False
+    # A Company-scoped login may not refund another Company's credit note,
+    # matching the guarded finance-command boundary (PR #90). Native User
+    # Permission semantics: no Company rows means unrestricted.
+    actor = frappe.session.user
+    if not actor or actor == "Guest":
+        return False
+    if actor != "Administrator":
+        from toefl_house.finance import books
+        if not books.user_value_permitted(actor, "Company", company):
+            return False
     names = [row.get("reference_name") for row in (doc.get("references") or [])]
     notes = {}
     for name in names:
@@ -227,11 +277,30 @@ def refund_permitted(doc, *, existing=False):
 def guard_payment_entry(doc, method=None):
     """``Payment Entry`` seam: customer refunds must settle a credit note.
 
-    Receipts, supplier payments and every other native payment type pass
-    through untouched — the native validations remain the authority for them.
+    Unreviewed Student Pay disbursements are additionally denied (except
+    cancellation of previously submitted transactions). Receipts and
+    unrelated supplier payments remain subject to normal native controls.
     """
     from toefl_house.security import require_operational
+    from toefl_house.finance.student_payout_policy import student_pay_write_allowed
+
     require_operational()
+    from toefl_house.finance.tuition_refund_native import guard_payment
+
+    if guard_payment(doc, method):
+        return
+    if not student_pay_write_allowed(
+            getattr(doc, "payment_type", None),
+            getattr(doc, "party_type", None), method):
+        raise frappe.ValidationError(
+            "Student cash payouts are disabled until a General Manager-approved "
+            "tuition refund is independently executed by Finance through a "
+            "verified, native Fees refund workflow. Direct Student Pay is denied.")
+    previous = doc.get_doc_before_save() if callable(getattr(doc, "get_doc_before_save", None)) else None
+    protected = ("th_reception_collector", "th_collection_fees", "th_collection_handover", "th_collection_synthetic")
+    if any(getattr(doc, field, None) or (previous and previous.get(field)) for field in protected):
+        from toefl_house.finance.collections import guard_collection_fields
+        guard_collection_fields(doc, method)
     # Cancelling a submitted refund and editing its post-submit fields are
     # native reversal paths, not new money out: the credit note they settled
     # legitimately owes nothing by then, so only the settlement shape is
@@ -245,27 +314,51 @@ def guard_payment_entry(doc, method=None):
         "account with no unallocated remainder")
 
 
-def prior_returns_for(invoice):
-    """Already-submitted returns of an invoice: quantities and credited value."""
+def _effective_rate(row):
+    """Weighted net rate of one invoice line from its native amounts."""
+    get = row.get if isinstance(row, dict) else (
+        lambda key: getattr(row, key, None))
+    qty = abs(_flt(get("qty")))
+    for field in ("net_amount", "amount"):
+        amount = get(field)
+        if amount is not None and qty > 0 and math.isfinite(_flt(amount)):
+            if abs(_flt(amount)) > 0:
+                return abs(_flt(amount)) / qty
+            return 0.0
+    return abs(_flt(get("rate")))
+
+
+def prior_returns_for(invoice, exclude=None):
+    """Already-submitted returns of an invoice: quantities and credited value.
+
+    Quantities are keyed by ``(item_code, warehouse)``: restocking is a
+    warehouse fact, so a book sold from one branch warehouse can never be
+    "returned" into another. ``exclude`` drops the document being judged
+    itself — on its cancel/post-submit-edit seams it is already a
+    submitted prior return, and counting it twice would make every full
+    return uncancellable.
+    """
     rows = frappe.db.get_all(
         INVOICE,
         filters={"return_against": invoice, "docstatus": 1, "is_return": 1},
         fields=["name"],
-        limit_page_length=200,
+        limit_page_length=1000,
     )
     quantities = []
     credited = 0.0
     for row in (rows or []):
+        if exclude and row["name"] == exclude:
+            continue
         items = frappe.db.get_all(
             "Sales Invoice Item",
             filters={"parent": row["name"], "parenttype": INVOICE},
-            fields=["item_code", "qty"],
-            limit_page_length=200,
+            fields=["item_code", "qty", "warehouse"],
+            limit_page_length=1000,
         )
         per_item = {}
         for item in (items or []):
-            code = item["item_code"]
-            per_item[code] = per_item.get(code, 0.0) + abs(_flt(item["qty"]))
+            key = (item["item_code"], item.get("warehouse"))
+            per_item[key] = per_item.get(key, 0.0) + abs(_flt(item["qty"]))
         quantities.append(per_item)
         credited += abs(_flt(frappe.db.get_value(INVOICE, row["name"], "grand_total")))
     return quantities, credited
@@ -277,25 +370,50 @@ def book_return_permitted(doc, original):
     ``original`` is the source invoice's facts
     (``grand_total``, ``docstatus``, ``customer``, ``company``,
     ``update_stock``, ``th_placement_case``). Returns ``False`` when the
-    return would restock more than was sold or credit more than was billed.
+    return would restock more than was sold *from that warehouse*,
+    credit a unit above its sold rate, or credit more than was billed.
     """
-    original_items = {}
+    original_items, original_amounts, original_rates = {}, {}, {}
     for row in (frappe.db.get_all(
             "Sales Invoice Item",
             filters={"parent": original.get("name"), "parenttype": INVOICE},
-            fields=["item_code", "qty"],
-            limit_page_length=200) or []):
-        original_items[row["item_code"]] = \
-            original_items.get(row["item_code"], 0.0) + abs(_flt(row["qty"]))
-    current_items = {}
+            fields=["item_code", "qty", "warehouse", "rate", "amount",
+                    "net_amount"],
+            limit_page_length=1000) or []):
+        key = (row["item_code"], row.get("warehouse"))
+        qty = abs(_flt(row["qty"]))
+        original_items[key] = original_items.get(key, 0.0) + qty
+        original_amounts[key] = original_amounts.get(key, 0.0) \
+            + _effective_rate(row) * qty
+    for key, qty in original_items.items():
+        if qty > 0:
+            original_rates[key] = original_amounts[key] / qty
+    current_items, current_amounts, current_rates = {}, {}, {}
     for row in (doc.get("items") or []):
         code = row.get("item_code")
+        warehouse = row.get("warehouse")
         qty = abs(_flt(row.get("qty")))
-        if not code or qty <= 0:
+        if not code or not warehouse or qty <= 0:
             return False
-        current_items[code] = current_items.get(code, 0.0) + qty
-    prior, credited = prior_returns_for(original.get("name"))
+        key = (code, warehouse)
+        current_items[key] = current_items.get(key, 0.0) + qty
+        current_amounts[key] = current_amounts.get(key, 0.0) \
+            + _effective_rate(row) * qty
+    for key, qty in current_items.items():
+        if qty > 0:
+            current_rates[key] = current_amounts[key] / qty
+    # On cancel/post-submit-edit the return is itself a submitted prior
+    # return of the sale; judging it as an additional return on top of
+    # itself would refuse the authorized native reversal. Frappe sets
+    # docstatus=2 in memory *before* before_cancel hooks run (the
+    # database still holds 1, which is what prior_returns_for reads), so
+    # both submitted states mark "already a prior return".
+    exclude = doc.get("name") \
+        if int(doc.get("docstatus") or 0) in (1, 2) else None
+    prior, credited = prior_returns_for(original.get("name"), exclude=exclude)
     if not return_quantities_ok(original_items, prior, current_items):
+        return False
+    if not return_rates_ok(original_rates, current_rates):
         return False
     return return_value_ok(original.get("grand_total"), credited,
                            doc.get("grand_total") or 0)

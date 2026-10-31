@@ -10,6 +10,25 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+function Get-ProductFileSha256 {
+    param([string]$LiteralPath)
+    $fullPath = [IO.Path]::GetFullPath($LiteralPath)
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT -and -not $fullPath.StartsWith("\\?\")) {
+        if ($fullPath.StartsWith("\\")) { $fullPath = "\\?\UNC\" + $fullPath.Substring(2) }
+        else { $fullPath = "\\?\" + $fullPath }
+    }
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    $stream = $null
+    try {
+        $stream = [IO.File]::OpenRead($fullPath)
+        return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        if ($stream) { $stream.Dispose() }
+        $algorithm.Dispose()
+    }
+}
+
 function Get-PackageTarPath {
     # Git's GNU tar interprets C:\... as a remote archive even when quoted.
     # Sysnative reaches native System32 from a 32-bit PowerShell process; it
@@ -171,7 +190,7 @@ try {
         throw "The checksum file does not contain exactly one SHA-256 digest."
     }
     $expected = $Matches[1]
-    $actual = (Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash
+    $actual = (Get-ProductFileSha256 -LiteralPath $Archive)
     if (-not [string]::Equals($actual, $expected,
         [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "The customer image failed its SHA-256 check. No import is permitted."

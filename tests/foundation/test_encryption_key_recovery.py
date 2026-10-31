@@ -226,7 +226,7 @@ class ProbeContainmentTests(unittest.TestCase):
         self.assertIn('os.environ.get("GITHUB_ACTIONS") != "true"', PROBE)
         self.assertIn('("initialize", "foundation.localhost")', PROBE)
         self.assertIn('("verify", "restore.localhost")', PROBE)
-        self.assertIn('("verify", "recovery.localhost")', PROBE)
+        self.assertIn('("verify", "restore-recovery.localhost")', PROBE)
         self.assertNotIn('("verify", "foundation.localhost")', PROBE)
 
     def test_probe_never_reports_key_or_secret_plaintext(self):

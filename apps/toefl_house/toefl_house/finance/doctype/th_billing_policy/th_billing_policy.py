@@ -54,9 +54,12 @@ def validate(doc, method=None):
         count = int(count) if count not in (None, "") else 1
         interval = row.get("installment_interval_days")
         interval = int(interval) if interval not in (None, "") else 0
+        cadence, grace = billing.validate_shamsi_cadence(
+            row.get("installment_cadence") or "Days",
+            int(row.get("payment_grace_days") or 0))
         billing.validate_installment_terms(
             row.get("installments_allowed") or 0,
-            count if count >= 1 else 1, interval)
+            count if count >= 1 else 1, interval, cadence=cadence)
     _assert_versions_sound(doc)
 
 

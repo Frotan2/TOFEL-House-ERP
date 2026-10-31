@@ -24,6 +24,11 @@ CASES = (
     ("th-configuration", "owner", "Course Owner", "configuration.work", "TOEFL House Configuration"),
 )
 PAGE_API = "/api/method/frappe.desk.desk_page.getpage"
+LANDING_PAGES = {
+    "Reception": "th-reception-desk", "Academic Manager": "th-academic-desk",
+    "Finance Manager": "th-finance-desk", "General Manager": "th-operations-desk",
+    "Course Owner": "th-owner-cockpit", "Instructor": "th-teacher-desk",
+}
 
 
 def require_hosted():
@@ -56,15 +61,27 @@ def prepare():
         frappe.set_user("Administrator")
         if not frappe.is_setup_complete():
             from frappe.desk.page.setup_wizard.setup_wizard import setup_complete
-            year = frappe.utils.getdate().year
+            from toefl_house.finance.shamsi import (
+                fiscal_year_bounds, gregorian_to_shamsi,
+            )
+            solar_year = gregorian_to_shamsi(frappe.utils.getdate())[0]
+            fy_start, fy_end = fiscal_year_bounds(solar_year)
+            # The real Afghanistan test company must never use a Jan-Dec
+            # fiscal year simply because the CI host is Gregorian.
             setup_complete({
                 "language": "English", "timezone": "Asia/Kabul", "country": "Afghanistan",
                 "currency": "AFN", "company_name": "SYN Browser Institute", "company_abbr": "SBI",
-                "chart_of_accounts": "Standard", "fy_start_date": f"{year}-01-01",
-                "fy_end_date": f"{year}-12-31", "enable_telemetry": 0, "setup_demo": 0,
+                "chart_of_accounts": "Standard", "fy_start_date": fy_start.isoformat(),
+                "fy_end_date": fy_end.isoformat(), "enable_telemetry": 0, "setup_demo": 0,
             })
         if not frappe.is_setup_complete():
             raise RuntimeError("Native synthetic setup did not complete")
+        # Education can predate the native wizard. Its Fee Component leaf
+        # must not remain the non-group root of the wizard's item presets.
+        fee_group = frappe.get_doc("Item Group", "Fee Component")
+        if not fee_group.parent_item_group and not fee_group.is_group:
+            raise RuntimeError("The native fee accounting tree has a leaf root")
+        fee_group.save()
         for actor, role in sorted({(c[1], c[2]) for c in CASES}):
             frappe.get_doc({
                 "doctype": "User", "email": f"browser-{actor}@example.test",
@@ -99,8 +116,13 @@ def qualify(base_url: str, destination: Path):
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             try:
-                for slug, actor, role, method, title in CASES:
-                    context = browser.new_context(viewport={"width": 1440, "height": 1000})
+                browser_cases = [(case, False) for case in CASES] + [(CASES[0], True)]
+                for case, mobile in browser_cases:
+                    slug, actor, role, method, title = case
+                    suffix = "-mobile" if mobile else ""
+                    context_options = (dict(p.devices["Pixel 7"]) if mobile else
+                                       {"viewport": {"width": 1440, "height": 1000}})
+                    context = browser.new_context(**context_options)
                     page = context.new_page()
                     errors, failed_assets, console_errors = [], [], []
                     page.on("console", lambda msg: console_errors.append(str(msg.text)[:220])
@@ -123,21 +145,31 @@ def qualify(base_url: str, destination: Path):
                     page.on("response", check_response)
                     page.on("requestfailed", check_failure)
                     try:
-                        page.goto(base_url + "/login", wait_until="domcontentloaded", timeout=120_000)
+                        login_path = "/login?redirect-to=%2Fdesk" if mobile else "/login"
+                        page.goto(base_url + login_path, wait_until="domcontentloaded", timeout=120_000)
                         page.locator("#login_email").fill(f"browser-{actor}@example.test")
                         page.locator("#login_password").fill(password)
                         page.wait_for_function("typeof frappe !== 'undefined' && typeof frappe.call === 'function'")
-                        page.locator(".for-login .form-login .btn-login[type=submit]").click()
-                        page.wait_for_url("**/desk**", timeout=90_000)
-                        # Navigate through the live router so Page.getpage loads
-                        # and executes the installed page script in Chromium.
-                        page.wait_for_function("typeof frappe !== 'undefined' && typeof frappe.set_route === 'function'")
+                        landing = LANDING_PAGES[role]
+                        if slug != landing:
+                            # Owner's secondary configuration pages still need
+                            # explicit navigation, after proving natural login.
+                            page.locator(".for-login .form-login .btn-login[type=submit]").click()
+                            page.wait_for_url("**/desk/" + landing, timeout=90_000)
+                            page.locator(".th-page:visible .th-page-title").wait_for(state="visible")
+                            page.wait_for_function("typeof frappe.set_route === 'function'")
                         with page.expect_response(lambda r: urlsplit(r.url).path == PAGE_API, timeout=60_000) as page_reply:
                             with page.expect_response(lambda r: urlsplit(r.url).path == "/api/method/toefl_house.desk." + method,
                                                       timeout=60_000) as desk_reply, page.expect_response(
                                 lambda r: urlsplit(r.url).path == "/api/method/toefl_house.desk.available", timeout=60_000,
                             ) as registry_reply:
-                                page.evaluate("slug => frappe.set_route(slug)", slug)
+                                if slug == landing:
+                                    # Register responses BEFORE login. Forcing a
+                                    # route here previously hid the mobile bug.
+                                    page.locator(".for-login .form-login .btn-login[type=submit]").click()
+                                else:
+                                    page.evaluate("slug => frappe.set_route(slug)", slug)
+                        page.wait_for_url("**/desk/" + slug, timeout=90_000)
                         page_response = page_reply.value
                         page_data = page_response.json()
                         assert page_response.status == 200, (slug, "Page API", page_response.status)
@@ -161,14 +193,22 @@ def qualify(base_url: str, destination: Path):
                         assert not failed_assets, (slug, "failed assets", failed_assets)
                         identity = context.request.get(base_url + "/api/method/frappe.auth.get_logged_user")
                         assert identity.status == 200 and identity.json().get("message") == f"browser-{actor}@example.test"
-                        page.screenshot(path=str(destination / f"{slug}.png"), full_page=True)
+                        # A healthy Engine.IO listener alone missed the broken
+                        # same-origin route and container-local auth callback.
+                        page.wait_for_function("""typeof frappe !== 'undefined' &&
+                            frappe.realtime && frappe.realtime.socket &&
+                            frappe.realtime.socket.connected === true""", timeout=30_000)
+                        page.screenshot(path=str(destination / f"{slug}{suffix}.png"), full_page=True)
                         report["desks"].append({"page": slug, "role": role, "status": "pass", "sections": sections,
+                                                "mobile": mobile, "natural_login_landing": landing,
                                                 "page_api_status": 200, "desk_rpc_status": 200,
-                                                "javascript_errors": 0, "failed_assets": 0})
+                                                "javascript_errors": 0, "failed_assets": 0,
+                                                "authenticated_realtime_connected": True})
                         print("PASS Chromium " + slug, flush=True)
                     except Exception:
                         report["status"] = "fail"
                         report["failed_page"] = slug
+                        report["failed_mobile"] = mobile
                         # Safe, synthetic diagnostic: never log credentials,
                         # cookie, token, Student data, raw network bodies.
                         # Fail closed, preserve the screenshot and a bounded
@@ -188,6 +228,22 @@ def qualify(base_url: str, destination: Path):
                                     .filter(e => !!(e.offsetWidth || e.offsetHeight ||
                                                     e.getClientRects().length)).length,
                                 bodies: document.querySelectorAll('.page-content').length,
+                                hiddenAncestors: (() => {
+                                    const node = document.querySelector('.th-page');
+                                    const values = [];
+                                    let e = node;
+                                    for (let i = 0; e && i < 10; i++, e = e.parentElement) {
+                                        const style = getComputedStyle(e);
+                                        values.push({
+                                            tag: e.tagName.toLowerCase(),
+                                            classes: String(e.className || '').slice(0, 140),
+                                            display: style.display,
+                                            visibility: style.visibility,
+                                            hasRect: e.getClientRects().length > 0
+                                        });
+                                    }
+                                    return values;
+                                })(),
                                 title: document.title.slice(0, 120)
                             })""", slug)
                             report["failure_diagnostic"] = detail
@@ -209,7 +265,7 @@ def qualify(base_url: str, destination: Path):
                                       json.dumps(failed_assets[-8:]), flush=True)
                         except Exception:
                             report["failure_diagnostic"] = {"status": "probe-unavailable"}
-                        page.screenshot(path=str(destination / f"{slug}-failure.png"), full_page=True)
+                        page.screenshot(path=str(destination / f"{slug}{suffix}-failure.png"), full_page=True)
                         raise
                     finally:
                         if len(report["desks"]) < len(CASES) and errors:

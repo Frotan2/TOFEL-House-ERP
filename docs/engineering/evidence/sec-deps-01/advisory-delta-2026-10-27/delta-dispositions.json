@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-27",
+  "kind": "additive_advisory_delta_no_register_mutation",
+  "basis": "Foundation run 40519483121 failed closed for a newly indexed advisory. Actual pinned Frappe validator and OAuthLib server were probed on Windows; see README.md.",
+  "packages": [{
+    "package": "py:oauthlib@3.3.1",
+    "advisories": [{
+      "id": "GHSA-3jp2-3mrg-2vxc",
+      "aliases": ["CVE-2026-49272"],
+      "severity": "high",
+      "vulnerable_range": ">=3.3.0,<4.0.0",
+      "first_patched": "4.0.0",
+      "summary": "Device-code grant may issue a bearer token without validating the device code",
+      "runtime_disposition": "NOT_REACHABLE",
+      "runtime_disposition_evidence": "Pinned frappe@988e54f3 OAuthWebRequestValidator.validate_grant_type permits only authorization_code, refresh_token and password. The OpenID server registers device_code, but its real validator rejects that grant before token creation. Actual Windows runtime probe used successful synthetic client authentication and the unchanged Frappe grant validator: both missing and bogus device_code returned HTTP 400 unauthorized_client, with no token or persistence. tools/native/security_acceptance.py repeats this check in hosted Native acceptance. README.md records source and limits.",
+      "fix_path": "Upstream OAuthLib 4.0.0 is the advisory's patched release. This finding is closed by the existing pinned Frappe grant allowlist; no dependency override or device-flow enablement is introduced."
+    }]
+  }]
+}

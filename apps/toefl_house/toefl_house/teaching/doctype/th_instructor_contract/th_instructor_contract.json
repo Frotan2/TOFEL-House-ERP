@@ -12,6 +12,7 @@
     "compensation_model",
     "assignment_basis",
     "payment_frequency",
+    "earning_basis",
     "effective_start",
     "effective_end",
     "conditions",
@@ -54,6 +55,15 @@
       "label": "Payment Frequency",
       "fieldtype": "Data",
       "reqd": 1
+    },
+    {
+      "fieldname": "earning_basis",
+      "label": "Skill earning basis",
+      "fieldtype": "Select",
+      "options": "One-off\nSolar Hijri Monthly",
+      "default": "One-off",
+      "reqd": 1,
+      "description": "One-off per assignment, or once per complete Solar Hijri month. Fixed salary stays on native Salary Structure. Payment frequency does not change earning cadence."
     },
     {
       "fieldname": "effective_start",

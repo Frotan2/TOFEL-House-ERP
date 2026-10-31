@@ -50,6 +50,8 @@ class ProtectedRecord(Document):
             self._validate_correction_policy(before)
         if before and self.doctype == "TH Correction Request":
             self._validate_correction_request(before)
+        if before and self.doctype == "TH Tuition Refund Request":
+            self._validate_tuition_refund_request(before)
         if before and self.doctype in CONFIG_DOCTYPES:
             self._validate_config(before)
 
@@ -66,7 +68,7 @@ class ProtectedRecord(Document):
         if not (before.status == "Active" and self.status == "Superseded"):
             raise frappe.PermissionError("Illegal contract status transition")
         for field in ("instructor", "employee", "compensation_model", "assignment_basis",
-                      "payment_frequency", "effective_start",
+                      "payment_frequency", "earning_basis", "effective_start",
                       "conditions", "supersedes"):
             if before.get(field) != self.get(field):
                 raise frappe.PermissionError("Only the contract status may change on supersession")
@@ -158,6 +160,77 @@ class ProtectedRecord(Document):
             raise frappe.PermissionError("Recorded decision actor is immutable")
         if before.credit_note and self.credit_note != before.credit_note:
             raise frappe.PermissionError("Posted credit note reference is immutable")
+
+    def _validate_tuition_refund_request(self, before):
+        """Refund request facts are immutable; the decision is one-shot.
+
+        Allowed transitions: Requested -> Approved, Requested -> Denied,
+        Approved -> Paid or Voided. Paid requires a reconciled native credit/payment
+        pair owned by the authenticated payout command. Identity, amount, reason and
+        evidence never change after insert, and the recorded approver
+        never changes.
+        """
+        for field in ("student", "company", "fees", "requested_amount",
+                      "reason", "evidence", "requested_by"):
+            if before.get(field) != self.get(field):
+                raise frappe.PermissionError("Tuition refund request facts are immutable")
+        previous_amount = before.get("approved_amount")
+        if before.status == "Requested":
+            # Frappe v16 persists an empty Currency field as 0.0 when it
+            # sanitizes a new document for SQL. That numeric default is NOT
+            # a previously approved amount: allow its one-time GM approval,
+            # but refuse a Requested row with any prefilled positive amount.
+            if previous_amount not in (None, "", 0, 0.0):
+                raise frappe.PermissionError(
+                    "Unapproved tuition refund carries an unexpected approved amount")
+        elif previous_amount != self.approved_amount:
+            raise frappe.PermissionError("Tuition refund approved amount is immutable")
+        if (before.get("approval_evidence")
+                and before.approval_evidence != self.approval_evidence):
+            raise frappe.PermissionError("General Manager approval evidence is immutable")
+        if before.status == self.status:
+            raise frappe.PermissionError("Tuition refund decisions are one-shot")
+        if (before.status == "Requested" and self.status == "Approved"
+                and (not self.approved_by or self.approved_amount is None
+                     or not self.approval_evidence)):
+            raise frappe.PermissionError("Tuition refund approval evidence is required")
+        transitions = {
+            ("Requested", "Approved"): "approve_tuition_refund",
+            ("Requested", "Denied"): "deny_tuition_refund",
+            ("Approved", "Paid"): "pay_tuition_refund",
+            ("Approved", "Voided"): "void_tuition_refund",
+        }
+        required_command = transitions.get((before.status, self.status))
+        if not required_command:
+            raise frappe.PermissionError(
+                "Illegal or unsupported tuition refund request transition")
+        active_kind, actor = require_command(self.doctype)
+        if active_kind != required_command:
+            raise frappe.PermissionError(
+                "Tuition refund transition requires its exact authorized decision")
+        if self.status == "Paid":
+            if (not self.get("credit_journal") or not self.payment_entry or self.get("paying_user") != actor
+                    or actor == self.approved_by):
+                raise frappe.PermissionError("A Paid refund requires an independently executed native credit and payout")
+            from toefl_house.finance.tuition_refund_native import assert_paid_transition
+
+            assert_paid_transition(self)
+        elif self.status == "Voided":
+            if (self.get("voided_by") != actor or not isinstance(self.get("void_reason"), str)
+                    or not self.void_reason.strip() or len(self.void_reason) > 1000 or not self.get("voided_on")
+                    or self.payment_entry or self.get("credit_journal") or self.get("paying_user")):
+                raise frappe.PermissionError("Voiding requires management evidence and an unpaid approval")
+        elif self.approved_by != actor or self.payment_entry or self.get("credit_journal") or self.get("paying_user"):
+            raise frappe.PermissionError("Only the General Manager may decide an unpaid refund request")
+        if self.status != "Voided" and any(self.get(field) for field in ("voided_by", "void_reason", "voided_on")):
+            raise frappe.PermissionError("Approval withdrawal evidence requires its exact void transition")
+        if before.approved_by and self.approved_by != before.approved_by:
+            raise frappe.PermissionError("Recorded decision actor is immutable")
+        if before.payment_entry and self.payment_entry != before.payment_entry:
+            raise frappe.PermissionError("Posted refund payment reference is immutable")
+        for field in ("credit_journal", "paying_user"):
+            if before.get(field) and before.get(field) != self.get(field):
+                raise frappe.PermissionError("Posted refund accounting identity is immutable")
 
     def _validate_config(self, before):
         if before.code != self.code or before.revision != self.revision or before.owner != self.owner:

@@ -93,9 +93,12 @@ class S2CompensationTests(unittest.TestCase):
         self.contract_doc = _contract("C-1", [_adjustment("ADJ-1")])
         self.fresh_doc = None
         self.paid = {}
+        self.paid_rows = {}
         self.currency = "USD"
+        self.company_permissions = []  # HQ unrestricted unless explicitly scoped
         self.lock_order = []
         self.paid_queries = []
+        self.paid_sql_queries = []
         self.posted = []
         self.get_doc_calls = []
         previous = dict(sys.modules)
@@ -110,11 +113,22 @@ class S2CompensationTests(unittest.TestCase):
                 return []
             if "tabAdditional Salary" in query:
                 assert "for update" in query, "posting re-read must lock"
+                fake.paid_sql_queries.append(query)
                 fake.paid_queries.append((values[0], values[1]))
-                return [(day,) for day in fake.paid.get((values[0], values[1]), [])]
+                ref = (values[0], values[1])
+                if ref in fake.paid_rows:
+                    rows = fake.paid_rows[ref]
+                    if "disabled=0" in query:
+                        rows = [row for row in rows if not row["disabled"]]
+                    if "docstatus<2" in query:
+                        rows = [row for row in rows if row["docstatus"] < 2]
+                    return [(row["payroll_date"],) for row in rows]
+                return [(day,) for day in fake.paid.get(ref, [])]
             raise AssertionError(f"unexpected sql {query[:80]}")
 
         def get_all(doctype, filters=None, fields=None, **kwargs):
+            if doctype == "User Permission":
+                return list(fake.company_permissions)
             if doctype == CONTRACT:
                 return list(fake.contract_lists.pop(0))
             raise AssertionError(f"unexpected get_all {doctype}")
@@ -140,10 +154,16 @@ class S2CompensationTests(unittest.TestCase):
         stub.get_roles = lambda user: {"Finance Officer"}
         stub.whitelist = lambda **kwargs: (lambda func: func)
         stub.flags = SimpleNamespace()
+        def get_value(doctype, name, field=None, **kwargs):
+            if doctype == "Salary Component" and field == "type":
+                return "Deduction" if name == "SYN Contract Deduction" else "Earning"
+            return fake.currency
+
         stub.db = SimpleNamespace(
-            get_value=lambda doctype, name, field=None, **k: fake.currency,
+            get_value=get_value,
             exists=lambda doctype, name: True,
             get_all=get_all, sql=sql)
+        stub.get_all = get_all
         stub.get_doc = get_doc
         sys.modules["frappe"] = stub
 
@@ -171,6 +191,13 @@ class S2CompensationTests(unittest.TestCase):
             "effective_from": "2026-01-01", "orphan_posting": "skip"}
         posting.collect_orphan_contracts = lambda start, end, assigned: {}
         sys.modules["toefl_house.teaching.adjustment_posting"] = posting
+        finance_pkg = types.ModuleType("toefl_house.finance")
+        finance_pkg.__path__ = [str(APP / "finance")]
+        sys.modules["toefl_house.finance"] = finance_pkg
+        # A previously imported module must not retain another test's frappe
+        # object when this scripted runtime installs its own Frappe stub.
+        sys.modules.pop("toefl_house.finance.company_scope", None)
+        _load_real("toefl_house.finance.shamsi", APP / "finance/shamsi.py")
         self.comp = _load_real("toefl_house.teaching.compensation",
                                APP / "teaching/compensation.py")
 
@@ -178,6 +205,14 @@ class S2CompensationTests(unittest.TestCase):
         return self.comp.calculate_teaching_compensation(
             key, "2026-09-01", "2026-09-30", "SYN Teaching House",
             "SYN Teaching Pay", "SYN Contract Deduction")
+
+    def test_scoped_finance_officer_cannot_post_another_companys_payroll(self):
+        self.company_permissions = ["Other School"]
+        with self.assertRaisesRegex(
+                _PermissionError, "no finance authority for the selected company"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+        self.assertEqual(self.lock_order, [])
 
     def test_covering_contracts_locked_before_posting(self):
         self.assignments = [_assignment("A-2", "INS-B", "C-ZEBRA"),
@@ -273,6 +308,50 @@ class S2CompensationTests(unittest.TestCase):
         self.assertEqual(result["adjustments_posted"], 0)
         self.assertEqual(self.posted, [])
 
+    def test_component_types_fail_closed_before_creating_payroll_inputs(self):
+        with self.assertRaisesRegex(_ValidationError, "requires an Earning"):
+            self.comp.calculate_teaching_compensation(
+                "invalid-earning", "2026-09-01", "2026-09-30",
+                "SYN Teaching House", "SYN Contract Deduction", "")
+        with self.assertRaisesRegex(_ValidationError, "require a Deduction"):
+            self.comp.calculate_teaching_compensation(
+                "invalid-deduction", "2026-09-01", "2026-09-30",
+                "SYN Teaching House", "SYN Teaching Pay", "SYN Teaching Pay")
+        self.assertEqual(self.posted, [])
+
+    def test_teaching_and_adjustment_inputs_never_overwrite_salary_structure(self):
+        # Multiple one-off teaching facts for one employee/month/component
+        # must be additive HRMS inputs. Otherwise native Additional Salary
+        # refuses the second Submit as a duplicate overwrite.
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        self._calc()
+        self.assertEqual(len(self.posted), 2)
+        self.assertEqual({(item["ref_doctype"], item["ref_docname"]) for item in self.posted},
+                         {(ASSIGNMENT, "A-1"), (ADJUSTMENT, "ADJ-1")})
+        for item in self.posted:
+            self.assertEqual(item["overwrite_salary_structure_amount"], 0)
+            self.assertEqual(item["is_recurring"], 0)
+            # HRMS filters on Additional Salary.type during slip generation.
+            self.assertEqual(item["type"], "Earning")
+
+    def test_deduction_adjustments_reach_native_deduction_component(self):
+        self.contract_doc = _contract("C-1", [_adjustment("ADJ-D", kind="Deduction")])
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        self._calc()
+        self.assertEqual(len(self.posted), 2)
+        salary = next(item for item in self.posted
+                      if item["ref_doctype"] == ASSIGNMENT)
+        deduction = next(item for item in self.posted
+                         if item["ref_doctype"] == ADJUSTMENT)
+        self.assertEqual(salary["type"], "Earning")
+        self.assertEqual(deduction["type"], "Deduction")
+        self.assertEqual(deduction["salary_component"], "SYN Contract Deduction")
+        self.assertEqual(deduction["overwrite_salary_structure_amount"], 0)
+
     def test_posting_rereads_lock(self):
         self.contract_lists.append([SimpleNamespace(
             name="C-1", effective_start="2026-01-01", effective_end=None,
@@ -287,3 +366,71 @@ class S2CompensationTests(unittest.TestCase):
             self._calc()
         self.assertEqual(self.posted, [])
         self.assertEqual(self.lock_order, [])
+
+    def _monthly_calc(self, start, end, paid=()):
+        self.contract_doc.earning_basis = "Solar Hijri Monthly"
+        self.contract_doc.adjustments = []
+        self.contract_lists = [self.contract_lists[0][:], self.contract_lists[0][:]]
+        self.paid = {(ASSIGNMENT, "A-1"): list(paid)}
+        return self.comp.calculate_teaching_compensation(
+            "monthly-native-input", start, end, "SYN Teaching House", "SYN Teaching Pay")
+
+    def test_monthly_contract_pays_next_shamsi_month_after_previous_payment(self):
+        result = self._monthly_calc("2026-10-23", "2026-11-21", ["2026-10-22"])
+        self.assertEqual(len(self.posted), 1)
+        self.assertEqual(self.posted[0]["amount"], 200)
+        self.assertEqual(self.posted[0]["payroll_date"], "2026-11-21")
+        self.assertEqual(self.posted[0]["is_recurring"], 0)
+        self.assertEqual(result["already_compensated_prior_period"], {})
+
+    def test_monthly_contract_never_duplicates_payment_in_same_shamsi_month(self):
+        result = self._monthly_calc("2026-10-23", "2026-11-21", ["2026-11-05"])
+        self.assertEqual(self.posted, [])
+        self.assertEqual(result["skipped_existing"], 1)
+
+    def test_cancelled_or_disabled_inputs_do_not_block_monthly_replacement(self):
+        # Seed an otherwise matching monthly input in each excluded state.
+        # The SQL stub applies the production query's disabled/docstatus
+        # predicates, so neither historical row can suppress replacement.
+        self.paid_rows[(ASSIGNMENT, "A-1")] = [
+            {"payroll_date": "2026-11-21", "disabled": 1, "docstatus": 1},
+            {"payroll_date": "2026-11-21", "disabled": 0, "docstatus": 2},
+        ]
+        result = self._monthly_calc("2026-10-23", "2026-11-21")
+        self.assertEqual(len(self.posted), 1)
+        self.assertEqual(result["posted"]["INS-1"][0]["amount"], 200)
+        self.assertTrue(self.paid_sql_queries)
+        for query in self.paid_sql_queries:
+            self.assertIn("disabled=0", query)
+            self.assertIn("docstatus<2", query)
+
+    def test_monthly_contract_refuses_gregorian_and_partial_month_windows(self):
+        with self.assertRaisesRegex(_ValidationError, "full Solar Hijri month"):
+            self._monthly_calc("2026-10-01", "2026-10-31")
+        self.assertEqual(self.posted, [])
+
+    def test_monthly_contract_refuses_unapproved_partial_assignment_proration(self):
+        self.assignments[0].effective_start = "2026-10-25"
+        with self.assertRaisesRegex(_ValidationError, "partial-month terms"):
+            self._monthly_calc("2026-10-23", "2026-11-21")
+        self.assertEqual(self.posted, [])
+
+    def test_monthly_contract_must_cover_full_month_after_revision(self):
+        self.contract_doc.effective_end = "2026-11-10"
+        with self.assertRaisesRegex(_ValidationError, "partial-month terms"):
+            self._monthly_calc("2026-10-23", "2026-11-21")
+        self.assertEqual(self.posted, [])
+
+    def test_legacy_contract_still_pays_assignment_only_once(self):
+        self.contract_lists.append(self.contract_lists[0][:])
+        self.paid = {(ASSIGNMENT, "A-1"): ["2026-08-31"]}
+        result = self._calc()
+        self.assertEqual(result["already_compensated_prior_period"], {"A-1": ["2026-08-31"]})
+        self.assertFalse(any(row["ref_doctype"] == ASSIGNMENT for row in self.posted))
+
+    def test_unknown_earning_basis_is_refused(self):
+        self.contract_doc.earning_basis = "Every day"
+        self.contract_lists.append(self.contract_lists[0][:])
+        with self.assertRaisesRegex(_ValidationError, "Earning basis"):
+            self._calc()
+        self.assertEqual(self.posted, [])

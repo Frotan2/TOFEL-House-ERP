@@ -18,14 +18,17 @@ class FakeUser:
         self.roles = set(roles)
         self.save_calls = 0
 
-    def get_roles(self):
-        return sorted(self.roles)
+    def get(self, field):
+        assert field == "roles"
+        return [types.SimpleNamespace(role=role) for role in sorted(self.roles)]
 
-    def add_roles(self, role):
-        self.roles.add(role)
+    def append(self, field, values):
+        assert field == "roles"
+        self.roles.add(values["role"])
 
-    def remove_roles(self, role):
-        self.roles.discard(role)
+    def set(self, field, rows):
+        assert field == "roles"
+        self.roles = {row.role for row in rows}
 
     def save(self, **kwargs):
         self.save_calls += 1
@@ -65,7 +68,7 @@ class FakeFrappe(types.ModuleType):
         return lambda function: function
 
     def get_roles(self, user):
-        return {"Course Owner"} if user == self.session.user else set()
+        return {"Course Owner"} if user == self.session.user else set(self.users[user].roles)
 
     def get_doc(self, doctype_or_values, name=None, **kwargs):
         if isinstance(doctype_or_values, dict):

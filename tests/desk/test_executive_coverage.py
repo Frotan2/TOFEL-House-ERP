@@ -345,6 +345,7 @@ def run_owner_cockpit(*, deny_counts=False, deny_operational=False):
         "_staff_counts": lambda: [],
         "_recorded_action_items": lambda: [],
         "_executive_analytics_sections": lambda: [],
+        "owner_sections": lambda: [],
         "_site_mode": lambda: "REFUSED",
         "_age_label": lambda x: "",
         "viewer_roles": lambda: [],

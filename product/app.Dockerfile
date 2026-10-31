@@ -107,6 +107,8 @@ COPY product/backup.py /product/backup.py
 COPY product/native_gpg.py /product/native_gpg.py
 COPY product/native_db.py /product/native_db.py
 COPY product/wsgi.py /product/wsgi.py
+COPY product/web.cjs /product/web.cjs
+COPY product/realtime.cjs /product/realtime.cjs
 COPY product/entrypoint.sh /product/entrypoint.sh
 COPY tools/foundation/secure_weasyprint.py /product/secure_weasyprint.py
 COPY tools/foundation/secure_frappe_python.py /product/secure_frappe_python.py
@@ -118,6 +120,10 @@ COPY tools/foundation/banking-locks /product/banking-locks
 # see docs/engineering/evidence/sec-deps-01/realtime-socketio-2026-10-18/README.md.
 COPY tools/foundation/secure_realtime.py /product/secure_realtime.py
 COPY tools/foundation/secure_markdown.py /product/secure_markdown.py
+COPY tools/foundation/secure_deepmerge.py /product/secure_deepmerge.py
+COPY tools/foundation/deepmerge-hashes.json /product/deepmerge-hashes.json
+COPY tools/foundation/secure_uri_decoder.py /product/secure_uri_decoder.py
+COPY tools/foundation/decoder /product/decoder
 COPY tools/foundation/fix_setup_sidebar.py /product/fix_setup_sidebar.py
 COPY tools/foundation/realtime-locks /product/realtime-locks
 # The performance baseline (finding 9) runs inside the deployed image:
@@ -130,6 +136,7 @@ COPY product/perf_baseline.py /product/perf_baseline.py
 # updater starts this image with the product folder mounted read-only; the
 # engine decides whether an already-downloaded release may be applied.
 COPY product/update_engine.py /product/update_engine.py
+COPY product/update_host.py /product/update_host.py
 COPY product/update_entrypoint.sh /product/update_entrypoint.sh
 # Fail the build if a Windows checkout or manually altered build context
 # carries CRLFs, a Unicode BOM, or a non-LF kernel shebang into the image.
@@ -175,8 +182,8 @@ RUN set -eux; \
     bench get-app --skip-assets /build/owned/toefl_house; \
     python3 /product/secure_frappe_python.py /home/frappe/bench/apps/frappe; \
     /build/tools/bin/uv pip install --python /home/frappe/bench/env/bin/python --no-deps --upgrade \
-      "GitPython==3.2.1" "Pillow==13.0.0" "PyJWT==2.15.1" "pypdf==6.21.2" \
-      "filelock==3.20.3"; \
+      "GitPython==3.2.1" "Pillow==13.0.0" "PyJWT==2.15.1" "pypdf==6.21.4" "oauthlib==4.0.0" \
+      "filelock==4.2.4"; \
     /build/tools/bin/uv pip install --python /home/frappe/bench/env/bin/python --no-deps --reinstall --editable /home/frappe/bench/apps/frappe; \
     /home/frappe/bench/env/bin/python /product/secure_frappe_python.py /home/frappe/bench/apps/frappe --verify; \
     uv pip check --python /home/frappe/bench/env/bin/python; \
@@ -194,9 +201,14 @@ RUN python3 /product/secure_weasyprint.py /home/frappe/bench/apps/frappe \
 RUN python3 /product/secure_realtime.py /home/frappe/bench/apps/frappe
 RUN python3 /product/secure_markdown.py /home/frappe/bench/apps/frappe
 RUN python3 /product/fix_setup_sidebar.py /home/frappe/bench/apps/frappe
+RUN cd /home/frappe/bench/apps/education/frontend && yarn install --frozen-lockfile --non-interactive
+RUN python3 /product/secure_deepmerge.py /home/frappe/bench/apps --apps
+RUN python3 /product/secure_uri_decoder.py /home/frappe/bench/apps
 # Compile all browser bundles on the provider. Customer startup restores this
 # seed and verifies the manifest; it never invokes a frontend compiler.
 RUN cd /home/frappe/bench && bench build \
+    && python3 /product/secure_deepmerge.py /home/frappe/bench/apps --apps --verify --assets --report /build/deepmerge-distribution.json \
+    && python3 /product/secure_uri_decoder.py /home/frappe/bench/apps --verify --report /build/uri-decoder-distribution.json \
     && /home/frappe/bench/env/bin/python -c 'import sys; sys.path.insert(0, "/product"); from bootstrap import export_prebuilt_assets; export_prebuilt_assets()' \
     && yarn cache clean && rm -rf /home/frappe/.cache
 
@@ -210,6 +222,8 @@ COPY --from=builder --chown=frappe:frappe /home/frappe/bench /home/frappe/bench
 COPY --from=builder /product /product
 COPY --from=builder /build/sites-seed /build/sites-seed
 COPY --from=builder /build/assets-seed /build/assets-seed
+COPY --from=builder /build/deepmerge-distribution.json /build/deepmerge-distribution.json
+COPY --from=builder /build/uri-decoder-distribution.json /build/uri-decoder-distribution.json
 # Pillow/WeasyPrint must never reach Ghostscript (GHSA-r543-q48m-4c9j).
 # Check the shipped stage AFTER its installs and every cross-stage copy.
 RUN if command -v gs >/dev/null 2>&1; then echo "ghostscript present on PATH: GHSA-r543-q48m-4c9j precondition violated" >&2; exit 1; fi

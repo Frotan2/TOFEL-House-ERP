@@ -143,6 +143,11 @@ def synthetic_report():
         name = check["name"]
         if name == "role-page-api-authorization":
             check["observation"] = authorization_observation()
+        elif name == "reception-native-http-cash-receipt-correction-handover":
+            check["observation"] = dict(receipt="PAY-1", amended_receipt="PAY-1-1", transfer="PAY-2",
+                immediate_student_reduction=100, handover_student_change=0, counter_net=0,
+                main_cash_increase=100, idempotent=True, temporary_shares_removed=True,
+                unauthorized_read_denied=True, second_handover_denied=True)
         elif name == "role-page-css-delivery":
             check["observation"] = css_observation()
         elif name == "role-desk-configuration-http":
@@ -170,6 +175,17 @@ def synthetic_report():
 
 
 class FinalHostedAcceptanceTest(unittest.TestCase):
+    def test_cash_reconciliation_cannot_be_omitted_or_double_charge_student(self):
+        for field, value in (("handover_student_change", 100), ("temporary_shares_removed", False),
+                             ("counter_net", 100), ("main_cash_increase", 0)):
+            with self.subTest(field=field):
+                evidence = synthetic_report()
+                check = next(row for row in evidence["checks"] if row["name"] ==
+                             "reception-native-http-cash-receipt-correction-handover")
+                check["observation"][field] = value
+                with self.assertRaisesRegex(ValueError, "Reception"):
+                    verify_report(evidence, COMMIT)
+
     def test_complete_synthetic_report_never_approves_real_operation(self):
         summary = verify_report(synthetic_report(), COMMIT)
         self.assertEqual(summary["native_checks_passed"], MIN_NATIVE_CHECKS)

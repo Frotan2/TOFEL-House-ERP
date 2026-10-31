@@ -96,15 +96,13 @@ def validate_slots(value):
     return slots
 
 
-def expand_slots(slots, start_day, end_day, teaching_days, blocked=None):
-    """Expand weekly slots into candidate sessions between two dates.
+def expand_slots(slots, start_day, end_day, teaching_days, blocked=None, calendar_plan=None):
+    """Expand slots using the same calendar rule as individual scheduling.
 
-    ``blocked`` is the resolved calendar view from
-    :func:`toefl_house.teaching.calendars.calendar_plan`. Dates whose weekday
-    is not a configured teaching day or that the calendar blocks are skipped;
-    the caller reports them. Expansion is deterministic: the same inputs
-    always produce the same ordered candidate list, so a retried command
-    cannot invent a different timetable.
+    ``blocked`` remains supported for callers with a set of closed dates.
+    ``calendar_plan`` also carries dated Working Day exceptions, including an
+    explicitly reopened Friday. A recurring Friday slot alone cannot reopen a
+    Friday. Expansion is deterministic and never creates a second calendar.
     """
     first = date.fromisoformat(rules.parse_date(start_day, "Timetable start"))
     last = date.fromisoformat(rules.parse_date(end_day, "Timetable end"))
@@ -113,13 +111,16 @@ def expand_slots(slots, start_day, end_day, teaching_days, blocked=None):
     span = (last - first).days + 1
     if span > 366:
         raise ValueError("Timetable range exceeds 366 days")
-    allowed_days = {WEEKDAY_INDEX[code] for code in teaching_days or ()}
-    blocked = blocked or {}
+    from toefl_house.teaching.calendars import teaching_refusal
+
+    plan = dict(calendar_plan or {})
+    for closed_day in blocked or ():
+        plan[closed_day] = "Closed"
     candidates = []
     day = first
     while day <= last:
         iso = day.isoformat()
-        if day.weekday() in allowed_days and iso not in blocked:
+        if not teaching_refusal(iso, teaching_days, plan):
             for slot in slots:
                 if WEEKDAY_INDEX[slot["weekday"]] != day.weekday():
                     continue

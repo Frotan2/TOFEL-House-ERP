@@ -433,6 +433,7 @@ class ConfigurationAuditContractTests(unittest.TestCase):
                     and getattr(node.targets[0], "id", "") == "KIND_AUTHORITY"):
                 kinds = ast.literal_eval(node.value)
         self.assertEqual(kinds, {
+            "configure_reception_counter": "business_policy",
             "approve_guardian_consent": "business_policy",
             "set_portal_flags": "business_policy",
             "create_owner_operations_policy": "business_policy",
@@ -441,6 +442,8 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "validate_owner_operations_policy": "business_policy",
             "set_backup_enabled": "business_policy",
             "create_assessment_policy": "business_policy",
+            # Strict allowlist: new native grading-scale writes remain Owner-only.
+            "create_owner_grading_scale": "business_policy",
             "set_assessment_policy_version": "business_policy",
             "set_assessment_policy_status": "business_policy",
             "validate_assessment_policy": "business_policy",
@@ -453,6 +456,7 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "set_assessment_mapping": "business_policy",
             "create_program": "business_policy",
             "create_level": "business_policy",
+            "create_room": "business_policy",
             "set_level_duration": "business_policy",
             "set_next_level": "business_policy",
             "set_program_status": "business_policy",
@@ -536,7 +540,7 @@ class D1CommandContractTests(unittest.TestCase):
                                      "title", "description"],
         "set_assessment_policy_version": ["request_key", "policy",
                                           "effective_from", "reason",
-                                          "grading_scale"],
+                                          "grading_scale", "initial_facets", "passing_score", "retake_wait_days", "skill_weights"],
         "set_assessment_policy_status": ["request_key", "policy", "active"],
         "validate_assessment_policy": ["request_key", "policy"],
         "set_assessment_components": ["request_key", "policy",
@@ -666,7 +670,7 @@ class ConfigurationNavigationTests(unittest.TestCase):
             "toefl_house.academic.create_assessment_policy":
                 ["family", "code", "title", "description"],
             "toefl_house.academic.set_assessment_policy_version":
-                ["policy", "effective_from", "reason", "grading_scale"],
+                ["policy", "passing_score", "retake_wait_days", "effective_from", "reason", "grading_scale"],
             "toefl_house.academic.set_assessment_policy_status":
                 ["policy", "active"],
             "toefl_house.academic.validate_assessment_policy": ["policy"],
@@ -776,6 +780,36 @@ class D1FacetValidationTests(unittest.TestCase):
          "criteria": "Speaking"},
         {"code": "WRT", "title": "Writing", "maximum_score": 25},
     ]
+
+    def test_initial_snapshot_resolves_components_in_the_same_version(self):
+        import json
+        facets = {name: "" for name in academic_rules.ASSESSMENT_FACETS}
+        facets.update(components=self.COMPONENTS,
+                      weights=[{"component": "SPK", "weight": 1}],
+                      pass_rules={"overall": {"kind": "percent", "value": 60}})
+        before = json.dumps(facets)
+        clean = academic_rules.canonical_initial_facets(facets)
+        self.assertEqual(academic_rules.canonical_initial_facets(before), clean)
+        self.assertEqual(json.dumps(facets), before)
+        self.assertEqual(json.loads(clean["weights"])[0]["component"], "SPK")
+
+    def test_initial_snapshot_rejects_missing_unknown_and_incoherent_facets(self):
+        facets = {name: "" for name in academic_rules.ASSESSMENT_FACETS}
+        for raw in ({}, dict(facets, unknown=""), "not json", " " * 65537):
+            with self.subTest(raw_type=type(raw).__name__):
+                with self.assertRaises(ValueError):
+                    academic_rules.canonical_initial_facets(raw)
+        facets.update(components=self.COMPONENTS,
+                      weights=[{"component": "UNKNOWN", "weight": 1}])
+        with self.assertRaises(ValueError):
+            academic_rules.canonical_initial_facets(facets)
+
+    def test_new_snapshot_does_not_reintroduce_legacy_retake_governing(self):
+        facets = {name: "" for name in academic_rules.ASSESSMENT_FACETS}
+        facets["retakes"] = {"max_attempts": 2, "wait_days": 7,
+                             "scope": "full", "governing": "latest"}
+        with self.assertRaises(ValueError):
+            academic_rules.canonical_initial_facets(facets)
 
     def test_components_shape_and_canonical_form(self):
         import json
@@ -940,19 +974,21 @@ class D1FacetValidationTests(unittest.TestCase):
         import json
         stored = academic_rules.canonical_facet(
             "retakes", {"max_attempts": 2, "wait_days": 7,
-                        "scope": "full", "governing": "latest"})
+                        "scope": "full", "governing": "best"})
         self.assertEqual(json.loads(stored)["wait_days"], 7)
         unlimited = academic_rules.canonical_facet(
             "retakes", {"max_attempts": None, "wait_days": 0,
                         "scope": "partial", "governing": "best"})
         self.assertIsNone(json.loads(unlimited)["max_attempts"])
         base = {"max_attempts": 2, "wait_days": 7, "scope": "full",
-                "governing": "latest"}
+                "governing": "best"}
         for key in base:
             partial = {other: base[other] for other in base if other != key}
             with self.assertRaises(ValueError, msg=key):
                 academic_rules.canonical_facet("retakes", partial)
-        for bad in (dict(base, max_attempts=0),
+        for bad in (dict(base, governing="latest"),
+                    dict(base, governing="first"),
+                    dict(base, max_attempts=0),
                     dict(base, wait_days=-1),
                     dict(base, wait_days=1.5),
                     dict(base, scope="sometimes"),

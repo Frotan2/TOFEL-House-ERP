@@ -16,6 +16,7 @@
     "finance_scope": "Finance and payroll operations through native ERPNext/HRMS authorities.",
     "reception": "Reception",
     "reception_scope": "Student intake and reception operations.",
+    "reception_cash_posting_2026_10_27": "Owner decision: the student's balance falls immediately when Reception issues the numbered cash receipt. Finance later transfers the counter cash to main Cash through a separate native internal transfer, without a second student receipt. Separate receptionist counters, current Company/Branch scope, independent Finance acceptance and audited Owner corrections are required.",
     "staff_access": "Role-based access only.",
     "auditability": "Important activities require an auditable trail.",
     "offboarding": "Employee offboarding revokes access while preserving historical records.",
@@ -82,7 +83,7 @@
   },
   "unresolved_business_inputs_not_reinterpreted": [
     "Future internet-hosted provider, hostname, DNS, and public-edge selection.",
-    "Deferred academic grading/progression, advanced guardian, tax, refund-term, calendar/transfer policy details, and metrics-steward policy remain unconfigured unless a later resolved decision explicitly supersedes that deferral.",
+    "Academic GE/EAP grading and same-level transfer are superseded only to the extent of Owner's 2026-10-28 addendum; advanced withdrawal/refund execution, specialist assessment, tax, guardian delegation and derived metrics stay held until qualified integration.",
     "Resolved RPO/RTO authorize engineering measurement; off-site backup is deferred future scope and is not a current release gate."
   ],
   "source_documents": [
@@ -531,6 +532,326 @@
         "D17",
         "D8-BACKUP-RECOVERY"
       ]
+    }
+  },
+  "owner_policy_addenda_2026_10_28": {
+    "source": "Explicit Course Owner decisions in 2026-10-28 ChatGPT conversation",
+    "status": "OWNER_CONFIRMED_BUSINESS_INPUTS_NOT_PRODUCTION_ACTIVATION",
+    "scope": "Owner-confirmed scoped business inputs including 2026-10-28 refund and English legal name; no production site activation",
+    "supersession_note": "Supersedes D1 default deferral for the specific GE/EAP 60-percent, continuous/final assessment and one 7-day retake; grants restricted same-level class transfer as a new D5 Owner direction subject to implementing technical release and controlled approver. D3 refund routing is newly specified, but calculation and eligibility windows remain open. Does not supersede D7.",
+    "academic": {
+      "formal_programs": [
+        "General English",
+        "English for Academic Purposes"
+      ],
+      "pass_threshold_pct": 60,
+      "grading_scale_proposed_by_engineer_and_owner_delegated": {
+        "A": 90,
+        "B": 80,
+        "C": 70,
+        "D": 60,
+        "F": 0
+      },
+      "marks": {
+        "continuous": 40,
+        "final": 60,
+        "continuous_breakdown": {
+          "attendance": 5,
+          "participation": 10,
+          "assignments": 10,
+          "short_quizzes": 15
+        }
+      },
+      "retake": {
+        "for_initial_failure_only": true,
+        "max_total_attempts": 2,
+        "wait_days_min": 7,
+        "governing_selection": "best",
+        "original_and_retake_history_immutable": true,
+        "engine_requires_verified_best_attempt_selection": true,
+        "selection_precedence": "Best valid published Pass first; among passing attempts choose the highest overall percentage, then earliest publication and lowest attempt ordinal. If no Pass exists, select highest valid published percentage; original records remain unchanged.",
+        "historical_eligibility": "A previously approved valid Pass/Promote remains effective when a different student in the class retakes. Never republish a passed classmate merely because of another student's retake.",
+        "book_scope": "Ordinary first assessment is class-wide. Each authorized retake is a separate book restricted to the named failed student only. No other student's marks or native assessment result may be written.",
+        "governing_compatibility": "New policy facets must use best; historic latest/first facet values remain readable but do not override this Owner-approved Pass-preserving progression choice.",
+        "abandoned_book_policy": "Never silently free/reuse a consumed retake or delete evidence; require separately authorized audited cancellation/replacement before a new retake book."
+      },
+      "specialist_programs": [
+        "Special Speaking",
+        "TOEFL Preparation"
+      ],
+      "specialist_policy": "Progress and teacher feedback; no automatic pass/fail or level promotion, no official TOEFL-score representation",
+      "placement": {
+        "fee_afn": 100,
+        "fee_unit": "per placement attempt",
+        "reception_registration": true,
+        "paper_written_test": true,
+        "face_to_face_speaking_evaluation": true,
+        "academic_assessor_approves_level": true,
+        "native_receipt_required": true
+      }
+    },
+    "billing": {
+      "late_join_full_fee": true,
+      "automatic_proration": false,
+      "discount_only_if_approved": true,
+      "semester_payment_one_or_multiple": true,
+      "installment_amounts": "Negotiated payment percentages, including 50% or 60% up front; total exactly equals approved net course fee",
+      "due_date_options": [
+        "25th of enrollment/start Afghan month",
+        "first day of following Afghan month"
+      ],
+      "preferred": "first day of following Afghan month",
+      "grace_days": 5,
+      "grace_does_not_automatically_block_student": true,
+      "native_solar_hijri_billing_requires_verification": true
+    },
+    "student_operations": {
+      "capacity_range_per_class": {
+        "min": 15,
+        "max": 30
+      },
+      "default_capacity_engineering_proposal": 20,
+      "same_level_transfer_allowed": true,
+      "transfer_requires_capacity_and_auditable_academic_approval": true,
+      "other_advanced_transfers_remain_deferred": true,
+      "refund": {
+        "approving_role": "General Manager",
+        "paying_role": "Finance Manager",
+        "owner_approval_ordinary_case": false,
+        "amount_eligibility_and_refund_window": "CASE_BY_CASE_GENERAL_MANAGER_APPROVAL_NO_FIXED_AUTO_REFUND_WINDOW",
+        "decision_basis": "General Manager documents the reason, evidence and approved AFN amount for each withdrawal refund; no automatic percentage, fixed window or proration is authorized.",
+        "approval_and_payment_must_use_distinct_staff": true,
+        "approved_refund_cannot_exceed_unreturned_verified_paid_amount": true,
+        "cap_basis": "Total actual submitted tuition collections for this student, company and original fee/payment references minus completed refunds; cancelled and unsubmitted collections do not count.",
+        "finance_must_independently_check_native_submitted_source_payments": true,
+        "finance_issues_documented_native_refund_only": true,
+        "never_pay_automatically_on_manager_approval": true,
+        "no_disbursement_before_manager_approval": true,
+        "conserve_payment_and_audit_history": true,
+        "release_gate": "Native Fees credit/refund mechanics and dual-role financial reconciliation require integration and independent Windows acceptance"
+      }
+    },
+    "discounts": {
+      "available_percentages": [
+        5,
+        10,
+        15,
+        20,
+        50,
+        100
+      ],
+      "pct_5_to_20_approver": "General Manager",
+      "pct_50_approver": "Course Owner",
+      "pct_100_approver": "Course Owner",
+      "eligible_first_degree_staff_relatives": [
+        "spouse",
+        "children",
+        "parents"
+      ],
+      "excluded": [
+        "siblings"
+      ],
+      "student_specific_authorization_required": true,
+      "templates_remain_inactive_until_named_award": true
+    },
+    "online": {
+      "one_student_one_instructor": true,
+      "tuition_is_negotiated_student_fee_per_service_month": true,
+      "service_month": "Individual contract start date to same date the following month; exact month-end edge case pending",
+      "no_shamsi_first_day_requirement": true,
+      "teacher_salary_is_separately_approved_hrms_payroll": true
+    },
+    "tax_legal_identity": {
+      "legal_form": "Natural person: individually registered English language training center",
+      "english_name_supplied": "The TOEFL House",
+      "dari_name": "خانه موفقیت",
+      "name_spelling_must_be_checked_against_license_before_company_creation": true,
+      "tax_on_student_fee": "NOT_AUTOMATICALLY_ENABLED_OR_DECLARED_EXEMPT",
+      "official_authority_review_needed": true,
+      "english_name_on_license_owner_confirmed": true,
+      "require_license_document_match_before_live_company_creation": true
+    },
+    "release": {
+      "modifies_main": false,
+      "enables_live_rules": false,
+      "turns_on_backup": false,
+      "production_status": "HOLD_UNTIL_NATIVE_WINDOWS_FINANCE_RECOVERY_INDEPENDENT_ACCEPTANCE"
+    }
+  },
+  "owner_policy_addenda_2026_10_30_daily_setup": {
+    "source": "Latest direct Owner clarification in this chat on 2026-10-30 supersedes earlier GE/EAP combined pricing and two-month TOEFL statements.",
+    "status": "OWNER_CONFIRMED_NOT_PRODUCTION_AUTHORIZATION",
+    "first_installation": {
+      "owner_confirmation_2026_10_31": "The institute has no previous operational history; this is a brand-new ERP installation, not a data migration",
+      "profile": "FRESH_SITE_NO_PRIOR_COURSE_HISTORY",
+      "legacy_data_migration": false,
+      "demo_data_in_customer_package": false,
+      "initial_students": 0,
+      "initial_attendance": 0,
+      "initial_receipts": 0,
+      "initial_posted_fees": 0,
+      "initial_assessment_results": 0,
+      "do_not_delete_future_audit_logs": true
+    },
+    "onsite_ge_eap": {
+      "ge_monthly_fee_afn": 500,
+      "eap_monthly_fee_afn": 1000,
+      "pre_starter_months": 1,
+      "other_ge_level_months": 2,
+      "eap_level_months": 2,
+      "ge_two_month_total_afn": 1000,
+      "eap_two_month_total_afn": 2000,
+      "collection_basis": "Collect the full semester fee. Any authorized installment plan partitions that total; never bill monthly dues in addition to it."
+    },
+    "specialist_courses": {
+      "special_speaking_months": 2,
+      "toefl_preparation_months": 4,
+      "tuition_status": "OWNER_CONFIRMED_CONFIGURATION_ONLY_NOT_PRODUCTION_AUTHORIZATION",
+      "special_speaking_semester_count": 1,
+      "special_speaking_semester_fee_afn": 2000,
+      "special_speaking_semester_months_status": "OWNER_CONFIRMED",
+      "toefl_exact_fee_status": "OWNER_CONFIRMED_EXACT",
+      "toefl_semester_fee_afn": 7000
+    },
+    "staff_accounts": {
+      "initial_login_count_including_existing_owner": 6,
+      "additional_owner_logins": false,
+      "official_emails_not_available": true,
+      "invent_real_email_addresses": false,
+      "send_unrequested_invitations": false,
+      "ownership_and_operational_roles_are_distinct": true
+    },
+    "delivery": {
+      "customer_target": "Single verified signed offline Windows Setup EXE, no code, registry downloads or nested ZIP extraction required of customer",
+      "production_state": "REJECT_UNTIL_EXACT_HEAD_CI_REAL_WINDOWS_INDEPENDENT_REVIEW_BACKUP_RECOVERY_ACCEPTANCE"
+    },
+    "timetable": {
+      "status": "OWNER_CONFIRMED",
+      "confirmed_on": "2026-10-31",
+      "timezone": "Asia/Kabul",
+      "session_minutes": 70,
+      "normal_break_minutes": 10,
+      "break_after_first_morning_session_minutes": 20,
+      "friday_weekly_off": true,
+      "lunch": {
+        "start": "12:00",
+        "end": "13:00"
+      },
+      "sessions": [
+        {
+          "code": "S001",
+          "male": {
+            "start": "06:20",
+            "end": "07:30"
+          },
+          "female": {
+            "start": "06:30",
+            "end": "07:40"
+          }
+        },
+        {
+          "code": "S002",
+          "male": {
+            "start": "07:50",
+            "end": "09:00"
+          },
+          "female": {
+            "start": "08:00",
+            "end": "09:10"
+          }
+        },
+        {
+          "code": "S003",
+          "male": {
+            "start": "09:10",
+            "end": "10:20"
+          },
+          "female": {
+            "start": "09:20",
+            "end": "10:30"
+          }
+        },
+        {
+          "code": "S004",
+          "male": {
+            "start": "10:30",
+            "end": "11:40"
+          },
+          "female": {
+            "start": "10:40",
+            "end": "11:50"
+          }
+        },
+        {
+          "code": "S005",
+          "male": {
+            "start": "14:00",
+            "end": "15:10"
+          },
+          "female": {
+            "start": "13:50",
+            "end": "15:00"
+          }
+        },
+        {
+          "code": "S006",
+          "male": {
+            "start": "15:20",
+            "end": "16:30"
+          },
+          "female": {
+            "start": "15:10",
+            "end": "16:20"
+          }
+        },
+        {
+          "code": "S007",
+          "male": {
+            "start": "16:40",
+            "end": "17:50"
+          },
+          "female": {
+            "start": "16:30",
+            "end": "17:40"
+          }
+        }
+      ],
+      "morning_female_offset_minutes": 10,
+      "afternoon_female_offset_minutes": -10,
+      "unallocated_time_is_not_automatically_a_class": true,
+      "does_not_assign_classes_rooms_or_instructors": true
+    },
+    "assessment_retake_governing": {
+      "confirmed_on": "2026-10-31",
+      "value": "best",
+      "meaning": "Keep the higher score after an approved retake"
+    },
+    "rooms": {
+      "confirmed_on": "2026-10-31",
+      "numbers": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "owner_confirmed_capacity_range": [
+        15,
+        30
+      ],
+      "initial_conservative_operating_limit": 15,
+      "individual_measured_capacities_not_supplied": true
     }
   }
 }

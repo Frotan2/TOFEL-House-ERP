@@ -80,7 +80,9 @@ class WindowsBindMountPermissionContract(unittest.TestCase):
         # bench/gunicorn/node are never invoked as root
         self.assertIn("exec su -s /bin/sh frappe -c 'python3 /product/bootstrap.py'", self.entrypoint)
         self.assertNotIn("exec run_frappe '", self.entrypoint)
-        self.assertIn("exec /home/frappe/bench/env/bin/gunicorn", self.entrypoint)
+        self.assertIn("exec su -s /bin/sh frappe -c 'exec node /product/web.cjs'", self.entrypoint)
+        web = (PRODUCT / "web.cjs").read_text()
+        self.assertIn('spawn("/home/frappe/bench/env/bin/gunicorn"', web)
 
     def test_entrypoint_passes_service_name_argument(self):
         """Each service passes its name to the universal entrypoint."""

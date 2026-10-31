@@ -3,7 +3,7 @@
 The Windows scripts cannot run on this Linux CI runner, so these tests pin the
 safety properties of the update path: a separate graphical workflow, explicit
 Owner confirmation, a read-only engine call, prebuilt-image-only installs, no
-destructive Docker command, bilingual messages and updater files inside the
+destructive Docker command, English messages and updater files inside the
 verified customer package. The real PowerShell smoke test runs on the Windows
 runner in .github/workflows/windows-customer-package.yml.
 """
@@ -42,6 +42,17 @@ class UpdateWorkflowTests(unittest.TestCase):
         self.assertIn('$installUpdateButton.Text -ne "Install Update"', GUI)
         # Both buttons must be disabled while any operation is running.
         self.assertIn("$copyStatusButton, $updateButton, $installUpdateButton", GUI)
+
+    def test_gui_update_messages_match_the_english_only_catalogue(self):
+        self.assertIn('function Get-UpdaterText', GUI)
+        self.assertIn('$catalog.language -cne "en"', GUI)
+        self.assertIn('$catalog.fallback -cne "en"', GUI)
+        self.assertIn('return [pscustomobject]@{ en = $entry.en;', GUI)
+        self.assertIn('$body = $result.en', GUI)
+        for removed in ("$entry.fa", "$result.fa", "TH_STAGE-FA", "$stagesFa"):
+            self.assertNotIn(removed, GUI)
+        self.assertEqual(CATALOG["language"], "en")
+        self.assertEqual(CATALOG["fallback"], "en")
 
     def test_the_worker_routes_updates_without_touching_lifecycle_commands(self):
         self.assertIn('"Install", "Start", "Repair", "Stop", "Check", "UpdateCheck", "UpdateInstall"', WORKER)
@@ -91,6 +102,34 @@ class UpdateWorkflowTests(unittest.TestCase):
         self.assertIn("sitesRoot", apply_branch)
         self.assertNotIn("sitesRoot", engine_call[engine_call.index("} else {"):])
 
+    def test_legacy_and_hardened_engine_observer_selection_is_pinned(self):
+        """New installs need broker on Check; legacy installs must not get the socket."""
+        helper = UPDATE[UPDATE.index("function Test-ImageRequiresObserver"):
+                        UPDATE.index("function Stop-EngineFailure")]
+        self.assertIn('"--network", "none", "--read-only"', helper)
+        self.assertIn('"--cap-drop", "ALL"', helper)
+        self.assertIn('"--entrypoint", "/bin/sh", $ImageId', helper)
+        self.assertIn('"test -f /product/update_host.py"', helper)
+        self.assertIn('if ($probe.Code -eq 0) { return $true }', helper)
+        self.assertIn('if ($probe.Code -eq 1) { return $false }', helper)
+        self.assertIn('"updater.guard_blocked"', helper)
+        check = UPDATE[UPDATE.index("function Invoke-UpdateCheck"):
+                       UPDATE.index("function Invoke-UpdateStart")]
+        self.assertIn('$script:EngineImage = [string]$installed.image_id', check)
+        self.assertIn('$script:UseObserver = Test-ImageRequiresObserver $script:EngineImage', check)
+        self.assertIn('ObserverRequired = [bool]$script:UseObserver', check)
+        install = UPDATE[UPDATE.index("function Invoke-UpdateInstall"):
+                         UPDATE.index("function Invoke-SmokeTest")]
+        self.assertIn('$script:UseObserver = [bool]$Check.ObserverRequired', install)
+        self.assertIn('$script:UseObserver = $true', install)
+        self.assertLess(install.index('$script:UseObserver = [bool]$Check.ObserverRequired'),
+                        install.index('$script:UseObserver = $true'))
+
+    def test_update_entrypoint_never_mutates_customer_site_metadata_before_preflight(self):
+        self.assertNotIn("chown -R frappe:frappe /home/frappe/bench/sites", ENTRYPOINT)
+        self.assertNotIn("chown -R frappe:frappe /home/frappe/bench/logs", ENTRYPOINT)
+        self.assertIn("chown -R frappe:frappe /update-state", ENTRYPOINT)
+
     def test_only_a_prebuilt_verified_image_is_imported(self):
         self.assertTrue('Invoke-DockerVerbose @("load", "--input", $Check.Archive)' in UPDATE,
                         "the verified prebuilt archive is not the only imported image")
@@ -120,6 +159,14 @@ class UpdateWorkflowTests(unittest.TestCase):
         self.assertIn("org.toefl-house.source-revision", UPDATE)
         self.assertIn("ConvertTo-ReleaseSequence", UPDATE)
         self.assertIn("release_sequence = $sequence", UPDATE)
+
+    def test_verified_start_does_not_recreate_storage_or_rerun_bootstrap(self):
+        start = UPDATE[UPDATE.index("function Invoke-UpdateStart"):UPDATE.index("function Wait-ForApplication")]
+        self.assertIn("Test-ExistingInstallation -ProductRoot $productRoot", start)
+        self.assertIn("$image.Id -cne $ExpectedImageId", start)
+        self.assertIn('"--no-deps", "web", "worker", "scheduler", "socketio"', start)
+        self.assertNotIn('"bootstrap"', start)
+        self.assertLess(start.index("Test-ExistingInstallation"), start.index('Invoke-Compose'))
 
     def test_a_failed_migration_is_never_restarted_automatically(self):
         install = UPDATE[UPDATE.index("function Invoke-UpdateInstall"):]
@@ -162,15 +209,14 @@ class UpdateWorkflowTests(unittest.TestCase):
         for forbidden in ("docker ", "volume rm", "restore", "activate", "rm -rf", "prune"):
             self.assertNotIn(forbidden, ENTRYPOINT)
 
-    def test_every_customer_visible_message_is_english_and_dari(self):
+    def test_every_customer_visible_message_is_english_only(self):
         self.assertEqual(CATALOG["document_type"], "toefl-house-erp-updater-strings")
         for section in ("messages", "launcher", "ui"):
             self.assertIn(section, CATALOG)
             for key, entry in CATALOG[section].items():
-                self.assertEqual(set(entry), {"en", "fa"}, key)
+                self.assertEqual(set(entry), {"en"}, key)
                 self.assertTrue(entry["en"].strip(), key)
-                self.assertTrue(entry["fa"].strip(), key)
-                self.assertRegex(entry["fa"], r"[\u0600-\u06FF\u200c]", key)
+                self.assertNotRegex(entry["en"], r"[\u0600-\u06FF\u200c]", key)
         for key in ("updater.checking", "updater.available", "updater.up_to_date", "updater.completed",
                     "updater.failed", "updater.recovery_required", "updater.cancelled", "updater.not_installed",
                     "updater.installed_version_unknown", "updater.engine_failed", "updater.engine_missing",
@@ -222,11 +268,45 @@ class TwoPhaseProtocolTests(unittest.TestCase):
         check = self.block("function Invoke-UpdateCheck", "function Invoke-UpdateStart")
         self.assertIn('[string]$transaction.phase -cne "authorized"', check)
         install = self.block("function Invoke-UpdateInstall", "function Invoke-SmokeTest")
-        for field in ("transaction = $Check.Transaction", "archive = ($Check.RunFolder",
-                      "backup_receipt =", "backup_dir =", "installed = [pscustomobject]@{",
-                      "recovery_authorization =", "recovery_signature =",
-                      "journal_state =", "host = $Check.Facts"):
+        for field in ("transaction = $freshAuthorization.transaction", "archive = ($Check.RunFolder",
+                      "backup_receipt =", "backup_dir =",
+                      "recovery_authorization =", "recovery_signature ="):
             self.assertIn(field, install, f"the apply request does not carry {field}")
+        apply_request = install[install.index("$applyRequest ="):]
+        self.assertNotIn("host = $Check.Facts", apply_request)
+        self.assertNotIn("journal_state =", apply_request)
+        self.assertNotIn("installed =", apply_request)
+        self.assertLess(install.index('Invoke-EngineStep "recheck"'), install.index('Set-JournalState "prepared"'))
+
+    def test_old_engine_verifies_archive_then_new_engine_authorizes_live_host(self):
+        install = self.block("function Invoke-UpdateInstall", "function Invoke-SmokeTest")
+        self.assertLess(UPDATE.index('Invoke-EngineStep "authorize"'),
+                        UPDATE.index("function Invoke-UpdateInstall"))
+        old_preflight = install.index('Invoke-EngineStep "preflight"')
+        old_authorize = install.index('Invoke-EngineStep "authorize"')
+        load = install.index('Invoke-DockerVerbose @("load", "--input", $Check.Archive)')
+        candidate = install.index('$script:EngineImage = $candidateImageId')
+        new_preflight = install.index('Invoke-EngineStep "preflight"', candidate)
+        new_authorize = install.index('Invoke-EngineStep "authorize"', candidate)
+        recheck = install.index('Invoke-EngineStep "recheck"')
+        stop = install.index('Invoke-Compose @("stop"')
+        self.assertLess(old_preflight, old_authorize)
+        self.assertLess(old_authorize, load)
+        self.assertLess(load, candidate)
+        self.assertLess(candidate, new_preflight)
+        self.assertLess(new_preflight, new_authorize)
+        self.assertLess(new_authorize, recheck)
+        self.assertLess(recheck, stop)
+        self.assertIn('$freshRequest.Remove("transaction")', install)
+        self.assertIn('"tag", $previousImageId, $imageTag', install[:new_preflight])
+        self.assertIn('"tag", $candidateImageId, $imageTag', install[stop:])
+        engine = self.block("function Invoke-UpdateEngine", "function Stop-EngineFailure")
+        self.assertIn('if ($script:UseObserver)', engine)
+        self.assertIn('source=/var/run/docker.sock,target=/run/th-update-docker.sock,readonly', engine)
+        # Reauthorization preserves the observer requirement of the exact
+        # installed image; only a genuinely legacy image runs without it.
+        self.assertIn('$script:UseObserver = [bool]$Check.ObserverRequired', install[:load])
+        self.assertIn('$script:UseObserver = $true', install[load:new_preflight])
 
     def test_every_engine_request_is_answered_with_a_fresh_document(self):
         self.assertIn('Remove-Item -LiteralPath (Join-Path $script:WorkDir "response.json")', UPDATE)
@@ -238,7 +318,7 @@ class TwoPhaseProtocolTests(unittest.TestCase):
             self.assertNotIn(command, UPDATE)
         self.assertIn('Invoke-DockerVerbose @("load", "--input", $Check.Archive)', UPDATE)
 
-    def test_the_new_refusal_codes_are_translatable(self):
+    def test_the_new_refusal_codes_have_english_messages(self):
         for key in ("transaction.missing", "transaction.invalid", "transaction.expired",
                     "transaction.mismatch", "transaction.replayed", "transaction.unknown",
                     "transaction.tampered", "apply.archive_mismatch",
@@ -246,7 +326,8 @@ class TwoPhaseProtocolTests(unittest.TestCase):
                     "apply.host_unsafe", "apply.journal_unsafe"):
             self.assertIn(key, CATALOG["messages"])
             entry = CATALOG["messages"][key]
-            self.assertTrue(entry["en"].strip() and entry["fa"].strip(), key)
+            self.assertEqual(set(entry), {"en"}, key)
+            self.assertTrue(entry["en"].strip(), key)
 
 
 class PackageMembershipTests(unittest.TestCase):
@@ -260,9 +341,20 @@ class PackageMembershipTests(unittest.TestCase):
 
     def test_the_windows_workflow_reruns_when_the_update_path_changes(self):
         workflow = (ROOT / ".github" / "workflows" / "windows-customer-package.yml").read_text(encoding="utf-8")
-        for trigger in ("product/update_engine.py", "product/update_entrypoint.sh", "product/updates/**",
-                        "tests/foundation/test_windows_update_path.py"):
-            self.assertIn(trigger, workflow, f"{trigger} does not trigger the Windows update smoke")
+        push = workflow.partition("  workflow_dispatch:")[0]
+        self.assertIn("on:\n  push:\n", push)
+        if "    paths:\n" not in push:
+            # No file-path filtering: every update-engine or test change
+            # triggers Windows on both release branches. This is stronger
+            # than an explicit list of update paths.
+            self.assertIn("    branches:\n", push)
+            self.assertIn("      - main\n", push)
+            self.assertIn("      - work\n", push)
+            self.assertNotIn("    paths-ignore:", push)
+        else:
+            for trigger in ("product/update_engine.py", "product/update_entrypoint.sh",
+                            "product/updates/**", "tests/foundation/test_windows_update_path.py"):
+                self.assertIn(trigger, push, f"{trigger} does not trigger the Windows update smoke")
 
     def test_the_windows_workflow_parses_and_smoke_tests_the_updater(self):
         workflow = (ROOT / ".github" / "workflows" / "windows-customer-package.yml").read_text(encoding="utf-8")

@@ -18,6 +18,14 @@ OWNER_OPEN = {"BROWSER_SELF_DENIAL"}
 
 
 class AdvisoryTriageTests(unittest.TestCase):
+    def test_device_code_advisory_has_specific_grant_boundary_evidence(self):
+        triage = t.load_triage()
+        for identifier in ("GHSA-3jp2-3mrg-2vxc", "CVE-2026-49272"):
+            record = t.disposition_for_finding(
+                triage, package="py:oauthlib@3.3.1", advisories=[identifier])
+            self.assertEqual(record["runtime_disposition"], "NOT_REACHABLE")
+            self.assertIn("validate_grant_type", record["runtime_disposition_evidence"])
+
     def test_every_recorded_advisory_is_indexed(self):
         triage = t.load_triage()
         missing = []

@@ -41,11 +41,18 @@ class ApplyChargeDiscountTests(unittest.TestCase):
         self.assertEqual(rules.apply_charge_discount(25000, "10"), 22500.0)
 
     def test_rejects_bad_inputs(self):
-        for bad_pct in (0, 0.0, -5, 101, True, None, "ten", ""):
+        for bad_pct in (0, 0.0, -5, 101, True, None, "ten", "",
+                        "nan", "inf", "-inf", "1e999",
+                        float("nan"), float("inf"), float("-inf")):
             with self.assertRaises(ValueError, msg=repr(bad_pct)):
                 rules.apply_charge_discount(100, bad_pct)
         with self.assertRaises(ValueError):
             rules.apply_charge_discount(-1, 10)
+        for gross in (None, True, "nonnumeric", "nan", "inf", "1e999",
+                      float("nan"), float("inf"), float("-inf")):
+            with self.subTest(gross=repr(gross)):
+                with self.assertRaisesRegex(ValueError, "finite number"):
+                    rules.apply_charge_discount(gross, 10)
 
     def test_stacking_is_unrepresentable(self):
         """One percentage in, one application out: the helper accepts no
@@ -70,6 +77,18 @@ class ResolverRowShapeTests(unittest.TestCase):
             rules.resolve_charge_discount([dict(rule, status="Active")])["rule_code"],
             "X-1")
 
+
+    def test_active_malformed_rule_refuses_instead_of_corrupting_bill(self):
+        for percent in (None, 0, "nan", "inf", float("nan"), float("inf")):
+            active = {"code": "BAD", "status": "Active",
+                      "discount_percentage": percent, "precedence": 10}
+            with self.subTest(percent=repr(percent)):
+                with self.assertRaises(ValueError):
+                    rules.resolve_charge_discount([active])
+        # A malformed rule for another program must not block unrelated Fees.
+        unrelated = {"code": "BAD", "status": "Active",
+                     "discount_percentage": float("nan"), "program": "EAP"}
+        self.assertIsNone(rules.resolve_charge_discount([unrelated], program="GE"))
 
 class StudentEligibilityTests(unittest.TestCase):
     def test_bounded_ordinary_discount_and_documented_full_waiver(self):

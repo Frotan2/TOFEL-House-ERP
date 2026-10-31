@@ -53,10 +53,20 @@ class CalendarRuleTests(unittest.TestCase):
         self.assertEqual(refusal, "2026-09-24 is a Holiday day in the academic calendar")
         refusal = self.calendars.teaching_refusal("2026-09-25", ("Mon",),
                                                   {})
-        self.assertIn("is a Fri", refusal)
-        self.assertIn("does not teach", refusal)
+        self.assertIn("Friday", refusal)
+        self.assertIn("weekly holiday", refusal)
+        self.assertIn("Friday", self.calendars.teaching_refusal(
+            "2026-09-25", None, {}))
+        self.assertIn("Friday", self.calendars.teaching_refusal(
+            "2026-09-25", ("Fri",), {}))
+        # Exceptional Friday opening must be an explicit Course Owner
+        # calendar day, not a weekly policy that quietly changes holidays.
         self.assertEqual(self.calendars.teaching_refusal(
-            "2026-09-25", None, {}), "")
+            "2026-09-25", ("Mon",),
+            {"2026-09-25": "Working Day"}), "")
+        self.assertIn("Friday", self.calendars.teaching_refusal(
+            "2026-10-02", ("Mon",),
+            {"2026-09-25": "Working Day"}))
 
     def test_blocked_dates_are_only_the_blocking_kinds(self):
         plan = {"2026-09-21": "Holiday", "2026-09-22": "Working Day",
@@ -85,6 +95,31 @@ class CalendarPlanningTests(unittest.TestCase):
         branch_plan = self.calendars.calendar_plan(
             "2026-09-21", "2026-09-30", "2026-27", "BR-KABUL")
         self.assertEqual(branch_plan["2026-09-24"], "Working Day")
+
+    def test_calendar_limit_still_honors_the_last_eligible_closure(self):
+        # Exactly 100 is fully read and the last holiday must not disappear.
+        for index in range(99):
+            self.ops.seed_calendar(code=f"CAL-EMPTY-{index:03d}", days=[])
+        self.ops.seed_calendar(
+            code="CAL-CLOSURE", days=[{"date": "2026-09-24", "kind": "Closed"}])
+        self.assertEqual(self.calendars.calendar_plan(
+            "2026-09-21", "2026-09-30", "2026-27", "")["2026-09-24"],
+            "Closed")
+
+    def test_calendar_limit_overflow_fails_closed_instead_of_omitting_holidays(self):
+        # Old code silently read only 100 rows and could schedule classes
+        # despite an Owner-configured closure in the omitted calendar.
+        for index in range(100):
+            self.ops.seed_calendar(code=f"CAL-EMPTY-{index:03d}", days=[])
+        self.ops.seed_calendar(
+            code="CAL-CRITICAL", days=[{"date": "2026-09-24", "kind": "Holiday"}])
+        with self.assertRaisesRegex(ValidationError, "More than 100 active"):
+            self.calendars.calendar_plan(
+                "2026-09-21", "2026-09-30", "2026-27", "")
+        with self.assertRaisesRegex(ValidationError, "More than 100 active"):
+            self.calendars.assert_teaching_allowed(
+                "2026-09-24", ("Mon", "Tue", "Wed", "Thu"),
+                "2026-27", "")
 
     def test_a_retired_calendar_stops_applying_but_keeps_its_days(self):
         self.ops.seed_calendar(days=[{"date": "2026-09-24", "kind": "Holiday"}])

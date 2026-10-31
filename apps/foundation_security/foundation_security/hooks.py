@@ -5,6 +5,7 @@ app_description = "Deny-by-default session and native permission safeguards; no 
 app_email = "toeflhouse@toeflhouse.localhost"
 app_license = "MIT"
 required_apps = ["education"]
+setup_wizard_success = "foundation_security.setup.setup_wizard_success"
 on_session_creation = "foundation_security.guards.on_session_creation"
 auth_hooks = ["foundation_security.guards.validate_request"]
 has_permission = {"File": "foundation_security.files.parent_permission"}

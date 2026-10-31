@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "apps/toefl_house/toefl_house"
 DESK = APP / "desk"
 
-DESK_MODULES = ("__init__", "lifecycle", "reception", "academic", "finance",
+DESK_MODULES = ("__init__", "lifecycle", "collections", "tuition_refunds", "reception", "academic", "finance",
                 "operations", "owner", "setup", "teacher", "configuration")
 
 SENSITIVE_FIELDS = {
@@ -321,7 +321,7 @@ class DeskReadBoundaryTests(unittest.TestCase):
         forbidden_calls = ("frappe.get_all", "frappe.get_list", "frappe.db.get_list",
                            "frappe.db.get_all", "frappe.db.sql", "frappe.get_doc",
                            "frappe.db.insert", "frappe.db.delete", "frappe.db.count")
-        for name in ("reception", "academic", "finance", "operations", "owner",
+        for name in ("collections", "reception", "academic", "finance", "operations", "owner",
                      "setup", "teacher", "configuration"):
             for node in ast.walk(self.trees[name]):
                 if isinstance(node, ast.Call):
@@ -342,7 +342,7 @@ class DeskReadBoundaryTests(unittest.TestCase):
                                      f"{name} looks like it mutates a document: {line.strip()}")
 
     def test_every_projection_call_names_explicit_fields_and_a_limit(self):
-        for name in ("reception", "academic", "finance", "operations", "owner",
+        for name in ("collections", "reception", "academic", "finance", "operations", "owner",
                      "setup", "teacher", "configuration"):
             for node in ast.walk(self.trees[name]):
                 if not (isinstance(node, ast.Call) and ast.unparse(node.func) in (
@@ -530,7 +530,7 @@ class DeskSchemaFidelityTests(unittest.TestCase):
             assert_columns_real(f"PROJECTION_FIELDS[{desk},{doctype}]", doctype, fields)
 
     def test_every_desk_query_site_uses_real_columns(self):
-        for name in ("reception", "academic", "finance", "operations", "owner",
+        for name in ("collections", "reception", "academic", "finance", "operations", "owner",
                      "setup", "teacher", "configuration"):
             tree = self.trees[name]
             strings, lists = {}, {}
@@ -890,12 +890,16 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                                        ["request_key", "status"]),
         "toefl_house.finance.corrections.validate_correction_policy": ("finance/corrections.py",
                                                                        ["request_key"]),
+        "toefl_house.finance.cashier.reconcile_cashier_day": ("finance/cashier.py",
+                                                                   ["request_key", "company", "date", "counts"]),
         "toefl_house.teaching.create_student_group": ("teaching/__init__.py",
                                                        ["request_key", "group_name", "program",
                                                         "academic_year", "academic_term",
                                                         "max_strength", "class_start_date",
                                                         "class_end_date", "delivery_mode",
-                                                        "branch"]),
+                                                        "branch", "students"]),
+        "toefl_house.teaching.add_class_member": ("teaching/__init__.py",
+                                                  ["request_key", "student_group", "student", "override"]),
         "toefl_house.teaching.transition_class": ("teaching/__init__.py",
                                                    ["request_key", "student_group", "to_status"]),
         "toefl_house.teaching.schedule_session": ("teaching/__init__.py",
@@ -907,13 +911,13 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                                         "compensation_model", "assignment_basis",
                                                                         "payment_frequency", "effective_start",
                                                                         "effective_end", "conditions",
-                                                                        "skill_terms", "adjustments"]),
+                                                                        "skill_terms", "adjustments", "earning_basis"]),
         "toefl_house.teaching.compensation.revise_teaching_contract": ("teaching/compensation.py",
                                                                        ["request_key", "contract",
                                                                         "compensation_model", "assignment_basis",
                                                                         "payment_frequency", "effective_start",
                                                                         "effective_end", "conditions",
-                                                                        "skill_terms", "adjustments"]),
+                                                                        "skill_terms", "adjustments", "earning_basis"]),
         "toefl_house.teaching.compensation.calculate_teaching_compensation": ("teaching/compensation.py",
                                                                               ["request_key", "period_start",
                                                                                "period_end", "company",
@@ -925,7 +929,9 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
         "toefl_house.academic.set_assessment_policy_version": ("academic/__init__.py",
                                                               ["request_key", "policy",
                                                                "effective_from", "reason",
-                                                               "grading_scale"]),
+                                                               "grading_scale", "initial_facets",
+                                                                "passing_score", "retake_wait_days",
+                                                                "skill_weights"]),
         "toefl_house.academic.set_assessment_policy_status": ("academic/__init__.py",
                                                              ["request_key", "policy",
                                                               "active"]),
@@ -1028,7 +1034,8 @@ class SetupDeskWorldTests(unittest.TestCase):
     readiness for the current academic year.
     """
 
-    def _run(self, *, mismatch=False):
+    def _run(self, *, mismatch=False, no_year=False, no_fee_types=False,
+             enrollment_history=False):
         world = {
             "TH Academic Program": [{
                 "name": "PROG-GEN", "code": "GEN-ENG", "title": "General English",
@@ -1091,13 +1098,35 @@ class SetupDeskWorldTests(unittest.TestCase):
             }],
         }
 
+        if no_year:
+            world["Academic Year"] = []
+        if no_fee_types:
+            world["Fee Category"] = []
+        if enrollment_history:
+            # Test-only synthetic course activity, never bundled for a customer.
+            world["TH Level Duration"].append({
+                "name": "DUR-2", "parent": "LVL-A1",
+                "parenttype": "TH Program Level",
+                "duration_value": 1, "duration_unit": "Month",
+                "effective_from": "2026-05-01", "superseded_on": None,
+                "reason": "updated duration", "set_by": "owner@example.com",
+            })
+            world["Program Enrollment"] = [
+                {"name": "ENR-OLD", "program": "NATIVE-A1",
+                 "enrollment_date": "2026-03-01", "docstatus": 1},
+                {"name": "ENR-NEW", "program": "NATIVE-A1",
+                 "enrollment_date": "2026-06-01", "docstatus": 1},
+            ]
+
         def world_get_all(doctype, filters=None, fields=None, order_by=None,
                           limit_start=None, limit_page_length=None, **kwargs):
             assert_columns_real("setup world", doctype,
                                 list(fields or []) + list((filters or {}).keys()))
             rows = world.get(doctype, [])
             filters = filters or {}
-            return [dict(row) for row in rows
+            return [({key: row.get(key) for key in fields}
+                     if doctype == "Program Enrollment" and fields
+                     else dict(row)) for row in rows
                     if all(row.get(key) == value
                            for key, value in filters.items()
                            if key in row or value is not None)]
@@ -1115,6 +1144,19 @@ class SetupDeskWorldTests(unittest.TestCase):
     def _item(payload, sid, item_id):
         items = SetupDeskWorldTests._section(payload, sid)["items"]
         return next(item for item in items if item["id"] == item_id)
+
+    def test_duration_changes_preserve_enrollment_period_reporting(self):
+        payload = self._run(enrollment_history=True)
+        level = self._item(payload, "levels", "GEN-A1")
+        self.assertIn("History: 1 enrolled under 2 months (from 2026-01-01)",
+                      level["next"])
+        self.assertIn("1 enrolled under 1 month (from 2026-05-01)",
+                      level["next"])
+
+    def test_fresh_course_does_not_invent_enrollment_history(self):
+        # First-time customer sites must never contain fabricated activity.
+        level = self._item(self._run(), "levels", "GEN-A1")
+        self.assertNotIn("History:", level["next"])
 
     def test_progression_chain_reads_in_level_order(self):
         payload = self._run()
@@ -1144,6 +1186,18 @@ class SetupDeskWorldTests(unittest.TestCase):
         self.assertIn("Fee plan ready for 2026-2027.", ready["next"])
         unready = self._item(payload, "levels", "GEN-A2")
         self.assertIn("No complete fee plan for 2026-2027 yet.", unready["next"])
+
+    def test_first_fee_plan_has_a_guided_action_only_after_its_prerequisites(self):
+        payload = self._run()
+        unready = self._item(payload, "levels", "GEN-A2")
+        action = next(a for a in unready["actions"] if a["label"] == "Define fee plan")
+        self.assertEqual(action["endpoint"], "toefl_house.academic.set_level_fee_component")
+        self.assertEqual(action["args"], {"level": "GEN-A2", "academic_year": "2026-2027"})
+        ready = self._item(payload, "levels", "GEN-A1")
+        self.assertNotIn("Define fee plan", [a["label"] for a in ready.get("actions", [])])
+        for options in ({"no_year": True}, {"no_fee_types": True}):
+            level = self._item(self._run(**options), "levels", "GEN-A2")
+            self.assertNotIn("Define fee plan", [a["label"] for a in level.get("actions", [])])
 
     def test_the_orphan_native_program_is_audited(self):
         payload = self._run()
@@ -1377,9 +1431,11 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                              "the map desk configures nothing")
         self.assertIn("never decided here",
                       items["ASM-EFF"]["stage_definition"])
-        self.assertIn("No runtime grading, assessment or student-progression consumer",
+        self.assertIn("Guarded assessment and progression commands",
                       items["ASM-EFF"]["stage_definition"])
-        self.assertIn("D1 remains deferred",
+        self.assertIn("require complete approved policies",
+                      items["ASM-EFF"]["stage_definition"])
+        self.assertIn("does not publish student results",
                       items["ASM-EFF"]["stage_definition"])
         self.assertIn("this desk status is not runtime activation",
                       items["ASM-EFF"]["next"])
@@ -1628,9 +1684,9 @@ class AcademicClassActionsWorldTests(unittest.TestCase):
             ],
         }
 
-    def _payload(self, roles):
+    def _payload(self, roles, world=None):
         module = _import_desk("academic", roles=roles)
-        world_get_all = desk_world_get_all("class-actions world", self._world())
+        world_get_all = desk_world_get_all("class-actions world", self._world() if world is None else world)
         module.frappe.get_all = world_get_all
         module.frappe.db.get_all = world_get_all
         return module.work()
@@ -1671,10 +1727,47 @@ class AcademicClassActionsWorldTests(unittest.TestCase):
         self.assertNotIn("new-class:GEN-2:2026", items,
                          "a classed intake must not be offered creation")
 
+    def test_late_enrollment_is_visible_even_when_a_class_exists(self):
+        payload = self._payload({"Academic Manager", "Teaching Scheduler"})
+        item = self._classes(payload)["unrostered:ENR-3"]
+        self.assertEqual(item["action"]["endpoint"], "toefl_house.teaching.add_class_member")
+        self.assertEqual(item["action"]["args"], {"student": "STU-3", "student_group": "GROUP-B"})
+        facts = next(section for section in payload["sections"] if section["id"] == "funnel")["facts"]
+        self.assertEqual(next(f["value"] for f in facts if f["label"] == "Enrollments awaiting a class"), 3)
+
+    def test_matching_active_roster_removes_late_join_warning(self):
+        world = self._world()
+        world["Student Group Student"] = [
+            {"name": "R-3", "parent": "GROUP-B", "student": "STU-3", "active": 1}]
+        self.assertNotIn("unrostered:ENR-3", self._classes(
+            self._payload({"Academic Manager", "Teaching Scheduler"}, world)))
+        # An inactive membership or a different term must not hide the learner.
+        world["Student Group Student"][0]["active"] = 0
+        self.assertIn("unrostered:ENR-3", self._classes(
+            self._payload({"Academic Manager", "Teaching Scheduler"}, world)))
+        world["Student Group Student"][0]["active"] = 1
+        world["Student Group"][1]["academic_term"] = "OTHER-TERM"
+        self.assertNotIn("unrostered:ENR-3", self._classes(
+            self._payload({"Academic Manager", "Teaching Scheduler"}, world)))
+        self.assertIn("new-class:GEN-2:2026", self._classes(
+            self._payload({"Academic Manager", "Teaching Scheduler"}, world)))
+
+    def test_capped_roster_does_not_claim_a_complete_waiting_total(self):
+        world = self._world()
+        world["Student Group Student"] = [
+            {"name": f"R-{i}", "parent": "GROUP-B", "student": f"ST-{i}", "active": 1}
+            for i in range(400)]
+        payload = self._payload({"Academic Manager", "Teaching Scheduler"}, world)
+        facts = next(section for section in payload["sections"] if section["id"] == "funnel")["facts"]
+        self.assertEqual(next(f["value"] for f in facts if f["label"] == "Enrollments awaiting a class"), "—")
+        self.assertFalse(any(key.startswith(("new-class:", "unrostered:"))
+                             for key in self._classes(payload)))
+
     def test_actions_are_role_gated(self):
         items = self._classes(self._payload({"Academic Manager"}))
         self.assertIsNone(items["GROUP-A"]["action"])
         self.assertIsNone(items["GROUP-B"]["action"])
+        self.assertIsNone(items["unrostered:ENR-3"]["action"])
         self.assertNotIn("new-class:GEN-4:2026", items,
                          "the creation row is an affordance, not narration")
 
@@ -2095,10 +2188,27 @@ class OperationsHealthWorldTests(unittest.TestCase):
 
     def _payload(self, module_name, entry, roles, world=None, ping="pong"):
         module = _import_desk(module_name, roles=roles)
+        # This fixture explicitly exercises the permitted native virtual
+        # controller. Denied-role registry fallback has separate tests.
+        module.frappe.has_permission = lambda dt, *args, **kwargs: dt == "RQ Job"
         module.frappe.ping = lambda: ping
+        # This world exercises the *readable* virtual RQ Job projection. The
+        # denied/fallback path has independent tests in test_rq_fallback.
+        module.frappe.has_permission = lambda doctype, *args, **kwargs: doctype == "RQ Job"
         getter = desk_world_get_all(f"{module_name} health world", world or {})
         module.frappe.get_all = getter
         module.frappe.db.get_all = getter
+        # This fixture intentionally models an authorized reader of the
+        # virtual RQ Job doctype. A separate security regression covers
+        # the denied-reader registry fallback. Without this explicit grant,
+        # native RQ read permission is refused and the expected job rows
+        # never enter the desk projection.
+        original_has_permission = module.frappe.has_permission
+        def fixture_permission(doctype, permission=None, **kwargs):
+            if doctype == "RQ Job" and permission == "read":
+                return True
+            return original_has_permission(doctype, permission, **kwargs)
+        module.frappe.has_permission = fixture_permission
         return getattr(module, entry)()
 
     @staticmethod
@@ -2290,6 +2400,34 @@ class TeacherDeskWorldTests(unittest.TestCase):
         self.assertNotIn("SES-2", items)
         self.assertIn("1 marked, 0 absent", items["SES-1"]["next"])
 
+    def test_partial_attendance_keeps_only_unmarked_active_students_actionable(self):
+        world = self._world()
+        world["Student Group Student"].extend([
+            {"name": "R-3", "parent": "CLASS-A", "student": "STU-3",
+             "student_name": "Pending Student", "group_roll_number": 2, "active": 1},
+            {"name": "R-4", "parent": "CLASS-A", "student": "STU-4",
+             "student_name": "Exited Student", "group_roll_number": 3, "active": 0},
+        ])
+        payload = self._payload(world=world)
+        for section_id in ("today", "sessions"):
+            item = next(row for row in self._section(payload, section_id)["items"]
+                        if row["id"] == "SES-1")
+            self.assertEqual(item["next_role"], "Instructor")
+            self.assertIn("1 still need attendance", item["next"])
+            self.assertEqual(item["action"]["args"]["roster"], [
+                {"student": "STU-3", "name": "Pending Student"}])
+
+    def test_today_attendance_survives_a_full_recent_session_window(self):
+        world = self._world()
+        template = world["Course Schedule"][0]
+        world["Course Schedule"].extend(
+            dict(template, name=f"FUTURE-{i}", schedule_date="2026-10-01")
+            for i in range(30))
+        payload = self._payload(world=world)
+        item = self._section(payload, "today")["items"][0]
+        self.assertIn("1 marked, 0 absent", item["next"])
+        self.assertNotIn("action", item)
+
     def test_students_and_work_stay_within_my_classes(self):
         payload = self._payload()
         students = self._section(payload, "students")["items"]
@@ -2329,6 +2467,48 @@ class TeacherDeskWorldTests(unittest.TestCase):
         payload = self._payload(world=world)
         self.assertEqual(self._section(payload, "classes")["items"], [])
 
+    def test_ambiguous_employee_or_instructor_fails_closed(self):
+        for duplicate in ("Employee", "Instructor"):
+            world = self._world()
+            world[duplicate].append(dict(world[duplicate][0], name="AMBIGUOUS"))
+            with self.subTest(duplicate=duplicate):
+                self.assertEqual(self._section(self._payload(world=world), "classes")["items"], [])
+
+    def test_expired_and_future_assignments_reveal_no_roster_or_grades(self):
+        for updates in ({"effective_end": "2026-09-16"}, {"effective_start": "2026-09-18"}):
+            world = self._world()
+            world["TH Teaching Assignment"][0].update(updates)
+            with self.subTest(updates=updates):
+                payload = self._payload(world=world)
+                for section_id in ("classes", "today", "sessions", "students", "work"):
+                    self.assertEqual(self._section(payload, section_id)["items"], [])
+
+    def test_specific_session_assignment_does_not_authorize_other_sessions_or_grades(self):
+        world = self._world()
+        world["TH Teaching Assignment"][0]["course_schedule"] = "SES-1"
+        world["Course Schedule"].append(dict(world["Course Schedule"][0], name="SES-OTHER"))
+        payload = self._payload(world=world)
+        self.assertEqual([r["id"] for r in self._section(payload, "today")["items"]], ["SES-1"])
+        self.assertEqual(self._section(payload, "work")["items"], [])
+        self.assertEqual([r["id"] for r in self._section(payload, "students")["items"]], ["STU-1"])
+
+    def test_cancelled_postponed_and_future_sessions_cannot_offer_attendance(self):
+        world = self._world()
+        original = world["Course Schedule"][0]
+        world["Course Schedule"].extend([
+            dict(original, name="CANCELLED", th_session_status="Cancelled"),
+            dict(original, name="POSTPONED", th_session_status="Postponed"),
+            dict(original, name="FUTURE", schedule_date="2026-09-18", th_session_status="Scheduled"),
+        ])
+        payload = self._payload(world=world)
+        items = {r["id"]: r for r in self._section(payload, "sessions")["items"]}
+        for name in ("CANCELLED", "POSTPONED", "FUTURE"):
+            with self.subTest(name=name):
+                self.assertNotIn("action", items[name])
+                self.assertIsNone(items[name]["next_role"])
+        self.assertIn("cancelled", items["CANCELLED"]["next"])
+        self.assertIn("session date", items["FUTURE"]["next"])
+
     def test_wrong_role_is_refused_at_runtime(self):
         module = _import_desk("teacher", roles={"Reception"})
         with self.assertRaises(Exception) as ctx:
@@ -2356,6 +2536,95 @@ class TeacherDeskWorldTests(unittest.TestCase):
                  for item in self._section(payload, "classes")["items"]}
         self.assertIn("TA-1", items)
         self.assertNotIn("TA-2", items)
+
+
+class AdmissionMultiBranchProjectionTests(unittest.TestCase):
+    """Elevated projections must apply ALL linked branch facts."""
+
+    def test_first_enrollment_scope_uses_exact_admission_intake_not_email_or_program_alone(self):
+        world = {
+            "Student Group": [{"name": "GA", "th_branch": "A"}, {"name": "GB", "th_branch": "B"}],
+            "Student Group Student": [
+                {"name": "RB", "parent": "GB", "student": "ST-MOVED", "active": 1},
+                {"name": "RA-MIX", "parent": "GA", "student": "ST-MIXED", "active": 1},
+                {"name": "RB-MIX", "parent": "GB", "student": "ST-MIXED", "active": 1},
+            ],
+            "Student Applicant": [{"name": "AP-A", "th_branch": "A"}],
+            "TH Admission Decision": [
+                {"name": "DA", "student_applicant": "AP-A", "native_student": "ST-NEW",
+                 "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+                {"name": "DM", "student_applicant": "AP-A", "native_student": "ST-MOVED",
+                 "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+            ],
+            "Program Enrollment": [
+                {"name": "PE-A", "student": "ST-NEW", "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+                {"name": "PE-WRONG", "student": "ST-NEW", "program": "GE", "academic_year": "1405", "academic_term": "T2"},
+                {"name": "PE-MOVED", "student": "ST-MOVED", "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+                {"name": "PE-MIXED", "student": "ST-MIXED", "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+            ],
+        }
+        desk = _import_desk("__init__", roles={"Academic Manager"})
+        desk.frappe.get_all = desk_world_get_all("intake isolation", world)
+        self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["A"]), ["PE-A"])
+        self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["B"]), ["PE-MOVED"])
+
+    def test_truncated_first_enrollment_candidates_do_not_expand_scope(self):
+        world = {
+            "Student Group": [], "Student Group Student": [],
+            "Student Applicant": [{"name": "AP-A", "th_branch": "A"}],
+            "TH Admission Decision": [
+                {"name": "DA", "student_applicant": "AP-A", "native_student": "ST-NEW",
+                 "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+            ],
+            "Program Enrollment": [
+                {"name": "PE-1", "student": "ST-NEW", "program": "GE", "academic_year": "1405", "academic_term": "T1"},
+                {"name": "PE-2", "student": "ST-NEW", "program": "GE", "academic_year": "1405", "academic_term": "T2"},
+            ],
+        }
+        desk = _import_desk("__init__", roles={"Academic Manager"})
+        desk._CHAIN_LIMIT = 2
+        desk.frappe.get_all = desk_world_get_all("truncated intake", world)
+        with self.assertRaisesRegex(desk.frappe.ValidationError, "safe read limit"):
+            desk._branch_allowed_names("Program Enrollment", ["A"])
+
+    def test_mixed_intake_and_multiple_rosters_are_not_exposed(self):
+        world = {
+            "Student Group": [
+                {"name": "GA", "th_branch": "A"},
+                {"name": "GB", "th_branch": "B"},
+            ],
+            "Student Group Student": [
+                {"name": "RA", "parent": "GA", "student": "ST-A", "active": 1},
+                {"name": "RB", "parent": "GB", "student": "ST-B", "active": 1},
+                {"name": "RM-A", "parent": "GA", "student": "ST-MIX", "active": 1},
+                {"name": "RM-B", "parent": "GB", "student": "ST-MIX", "active": 1},
+            ],
+            "Student Applicant": [
+                {"name": "AP-A", "th_branch": "A"},
+                {"name": "AP-B", "th_branch": "B"},
+            ],
+            "TH Admission Decision": [
+                {"name": "D-A", "student_applicant": "AP-A",
+                 "existing_student": "ST-A", "native_student": None},
+                {"name": "D-first", "student_applicant": "AP-A",
+                 "existing_student": None, "native_student": None},
+                {"name": "D-B", "student_applicant": "AP-B",
+                 "existing_student": "ST-B", "native_student": None},
+                {"name": "D-cross-intake", "student_applicant": "AP-B",
+                 "existing_student": "ST-A", "native_student": None},
+                {"name": "D-cross-roster", "student_applicant": "AP-A",
+                 "existing_student": "ST-B", "native_student": None},
+                {"name": "D-mixed", "student_applicant": "AP-A",
+                 "existing_student": "ST-MIX", "native_student": None},
+            ],
+        }
+        desk = _import_desk("__init__", roles={"Admission Officer"})
+        desk.frappe.get_all = desk_world_get_all("admission isolation", world)
+        self.assertEqual(desk._branch_allowed_names("TH Admission Decision", ["A"]),
+                         ["D-A", "D-first"])
+        self.assertEqual(
+            desk._branch_allowed_names("TH Admission Decision", ["A", "B"]),
+            sorted(row["name"] for row in world["TH Admission Decision"]))
 
 
 class FinanceOutstandingWorldTests(unittest.TestCase):

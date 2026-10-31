@@ -15,6 +15,118 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 
+def check_device_grant_boundary() -> None:
+    """Exercise the real Frappe grant allowlist after successful authentication."""
+    from frappe.oauth import OAuthWebRequestValidator
+    from oauthlib.openid.connect.core.endpoints.pre_configured import Server
+
+    class Validator(OAuthWebRequestValidator):
+        def authenticate_client(self, request, *args, **kwargs):
+            request.client = SimpleNamespace(client_id="synthetic-public-client")
+            return True
+
+        def client_authentication_required(self, request, *args, **kwargs):
+            return True
+
+        def save_bearer_token(self, *args, **kwargs):
+            raise AssertionError("Device grant reached token persistence")
+
+    server = Server(Validator())
+    for suffix in ("", "&device_code=bogus"):
+        _headers, body, status = server.create_token_response(
+            "https://synthetic.invalid/token", http_method="POST",
+            body="grant_type=urn:ietf:params:oauth:grant-type:device_code"
+                 "&client_id=synthetic-public-client" + suffix)
+        response = json.loads(body)
+        assert status == 400 and response["error"] == "unauthorized_client"
+        assert "access_token" not in response and "refresh_token" not in response
+    print("OAuth device-code grant: missing/bogus codes denied before token creation PASS")
+
+
+def check_authenticated_client_binding() -> None:
+    """Real OAuthlib/Frappe validator: an authenticated client cannot switch IDs."""
+    from frappe.oauth import OAuthWebRequestValidator
+    from oauthlib.openid.connect.core.endpoints.pre_configured import Server
+
+    saved = []
+
+    class Validator(OAuthWebRequestValidator):
+        def authenticate_client(self, request, *args, **kwargs):
+            request.client = SimpleNamespace(client_id="synthetic-authenticated-client")
+            return True
+
+        def client_authentication_required(self, request, *args, **kwargs):
+            return True
+
+        def validate_user(self, username, password, client, request, *args, **kwargs):
+            request.user = SimpleNamespace(name="synthetic-oauth-user")
+            return True
+
+        def validate_scopes(self, client_id, scopes, client, request, *args, **kwargs):
+            return scopes == ["synthetic_scope"]
+
+        def save_bearer_token(self, token, request, *args, **kwargs):
+            saved.append(request.client.client_id)
+
+    server = Server(Validator())
+    common = "grant_type=password&username=synthetic&password=synthetic&scope=synthetic_scope"
+    _headers, body, status = server.create_token_response(
+        "https://synthetic.invalid/token", http_method="POST",
+        body=common + "&client_id=synthetic-foreign-client")
+    response = json.loads(body)
+    assert status in (400, 401) and "error" in response
+    assert "access_token" not in response and not saved
+    _headers, body, status = server.create_token_response(
+        "https://synthetic.invalid/token", http_method="POST",
+        body=common + "&client_id=synthetic-authenticated-client")
+    assert status == 200 and "access_token" in json.loads(body)
+    assert saved == ["synthetic-authenticated-client"]
+    print("OAuth authenticated client binding: mismatched ID denied; matching control passed")
+
+
+def check_realtime_pattern_dependency_boundary() -> None:
+    """The executed Node dependency graph must not acquire glob/minimatch."""
+    import re
+    import frappe
+
+    root = Path(frappe.__file__).resolve().parent.parent
+    ingress = Path(__file__).resolve().parents[2] / "product" / "web.cjs"
+    ingress_imports = re.findall(r'''require\(["']([^"']+)["']\)''', ingress.read_text())
+    assert ingress_imports and all(name.startswith("node:") for name in ingress_imports), (
+        "Product ingress acquired a non-builtin Node dependency; reassess build-only exclusions")
+    files = [root / "socketio.js", root / "node_utils.js"]
+    files.extend((root / "realtime").rglob("*.js"))
+    seeds = set()
+    builtins = {"fs", "path", "dns", "http", "https", "url", "util",
+                "events", "stream", "buffer", "crypto", "net", "tls"}
+    for file in files:
+        for name in re.findall(r'''require\(["']([^"']+)["']\)''', file.read_text()):
+            if not name.startswith((".", "node:")) and name not in builtins:
+                seeds.add(name)
+
+    def resolve(name, parent):
+        for folder in (parent, *parent.parents):
+            manifest = folder / "node_modules" / name / "package.json"
+            if manifest.is_file():
+                return manifest
+        raise AssertionError("Executed Node dependency cannot be resolved: " + name)
+
+    pending = [resolve(name, root) for name in seeds]
+    seen = set()
+    while pending:
+        manifest = pending.pop().resolve()
+        if manifest in seen:
+            continue
+        seen.add(manifest)
+        data = json.loads(manifest.read_text())
+        assert data["name"] not in {"glob", "minimatch"}, (
+            "Build-only pattern dependency entered the executed Node graph")
+        pending.extend(resolve(name, manifest.parent)
+                       for name in data.get("dependencies", {}))
+    assert seeds and seen
+    print(f"Node realtime dependency boundary: {len(seen)} runtime packages exclude glob/minimatch")
+
+
 def main() -> None:
     if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("CI") != "1":
         raise RuntimeError("Hosted synthetic runner only")
@@ -30,6 +142,9 @@ def main() -> None:
     from frappe.utils.weasyprint import PrintFormatGenerator, download_pdf, get_html
     from toefl_house import social_login
 
+    check_device_grant_boundary()
+    check_authenticated_client_binding()
+    check_realtime_pattern_dependency_boundary()
     frappe.init(site="placement-test.localhost", sites_path=str(Path.cwd()))
     frappe.connect()
     try:

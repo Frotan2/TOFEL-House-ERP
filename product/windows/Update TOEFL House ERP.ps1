@@ -15,7 +15,7 @@
 # owns every trust decision.  A SHA-256 sidecar alone is never accepted as
 # publisher identity; only a manifest signed by a key in the provisioned trust
 # store can authorize an update.  When any precondition cannot be verified the
-# script stops before changing anything and explains why in English and Dari.
+# script stops before changing anything and explains why in English.
 param(
     [ValidateSet("Check", "Install")]
     [string]$Action = "Check",
@@ -23,6 +23,25 @@ param(
     [switch]$SmokeTest
 )
 $ErrorActionPreference = "Stop"
+
+function Get-ProductFileSha256 {
+    param([string]$LiteralPath)
+    $fullPath = [IO.Path]::GetFullPath($LiteralPath)
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT -and -not $fullPath.StartsWith("\\?\")) {
+        if ($fullPath.StartsWith("\\")) { $fullPath = "\\?\UNC\" + $fullPath.Substring(2) }
+        else { $fullPath = "\\?\" + $fullPath }
+    }
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    $stream = $null
+    try {
+        $stream = [IO.File]::OpenRead($fullPath)
+        return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        if ($stream) { $stream.Dispose() }
+        $algorithm.Dispose()
+    }
+}
 
 $script:ExitAllowed = 0
 $script:ExitRefused = 3
@@ -44,6 +63,9 @@ $lockPath = Join-Path $updatesRoot "update.lock"
 $backupReceiptPath = Join-Path $dataRoot "activation\backup-receipt.json"
 $recoveryAuthorizationPath = Join-Path $updatesRoot "recovery-authorization.json"
 $recoverySignaturePath = Join-Path $updatesRoot "recovery-authorization.sig"
+# Second approver's signature over the identical document bytes.  The engine
+# refuses a migrating update unless both signatures are present and valid.
+$recoverySignature2Path = Join-Path $updatesRoot "recovery-authorization-2.sig"
 $composeFile = Join-Path $productRoot "docker-compose.yml"
 $catalogPath = Join-Path $PSScriptRoot "updater-strings.json"
 $siteName = "toeflhouse.localhost"
@@ -65,9 +87,11 @@ $minFreeBytes = [int64]32212254720
 $script:Catalog = $null
 $script:WorkDir = ""
 $script:BackupDirRelative = ""
+$script:ActiveTransactionId = ""
+$script:EngineImage = ""
 
 # ---------------------------------------------------------------------------
-# Bilingual catalogue, result document and stage output
+# English message catalogue, result document and stage output
 # ---------------------------------------------------------------------------
 
 function Get-Catalog {
@@ -79,7 +103,8 @@ function Get-Catalog {
     $text = [System.IO.File]::ReadAllText($catalogPath, $encoding)
     $catalog = $text | ConvertFrom-Json -ErrorAction Stop
     if ($catalog.schema_version -ne 1 -or
-        $catalog.document_type -cne "toefl-house-erp-updater-strings") {
+        $catalog.document_type -cne "toefl-house-erp-updater-strings" -or
+        $catalog.language -cne "en" -or $catalog.fallback -cne "en") {
         throw "The update message catalogue is not supported."
     }
     $script:Catalog = $catalog
@@ -92,8 +117,7 @@ function Get-Text([string]$Section, [string]$Key) {
     if ($null -eq $entries) { return $null }
     $entry = $entries.$Key
     if ($null -eq $entry) { return $null }
-    if (-not ($entry.en -is [string]) -or -not ($entry.fa -is [string])) { return $null }
-    if (-not $entry.en -or -not $entry.fa) { return $null }
+    if (-not ($entry.en -is [string]) -or [string]::IsNullOrWhiteSpace($entry.en)) { return $null }
     return $entry
 }
 
@@ -104,17 +128,15 @@ function Write-Stage([string]$Key) {
         return
     }
     Write-Host ("[TH_STAGE] " + $entry.en)
-    Write-Host ("[TH_STAGE-FA] " + $entry.fa)
 }
 
-function Write-Bilingual([string]$Section, [string]$Key) {
+function Write-Message([string]$Section, [string]$Key) {
     $entry = Get-Text $Section $Key
     if ($null -eq $entry) {
         Write-Host ("[" + $Section + "] " + $Key)
         return
     }
     Write-Host $entry.en
-    Write-Host $entry.fa
 }
 
 function Save-Result {
@@ -160,11 +182,11 @@ function Stop-Update {
     )
     Save-Result -Status $Status -Section $Section -Key $Key -Version $Version -Blockers $Blockers
     Write-Host ""
-    Write-Bilingual $Section $Key
+    Write-Message $Section $Key
     if ($Blockers.Count -gt 0) {
         Write-Host ""
         foreach ($code in $Blockers) {
-            Write-Bilingual "messages" $code
+            Write-Message "messages" $code
         }
     }
     exit $Code
@@ -258,6 +280,7 @@ function Set-JournalState([string]$Phase, [string]$Version) {
             document_type = "toefl-house-erp-update-journal"
             phase = $Phase
             version = $Version
+            transaction_id = $script:ActiveTransactionId
             updated_utc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
         }
         $text = $document | ConvertTo-Json -Depth 4
@@ -579,6 +602,9 @@ function Invoke-UpdateEngine([string]$Mode) {
         "--volume", ($engineStateRoot + ":" + $containerEngineState),
         "--entrypoint", "/product/update_entrypoint.sh"
     )
+    if ($script:UseObserver) {
+        $arguments += @("--mount", "type=bind,source=/var/run/docker.sock,target=/run/th-update-docker.sock,readonly")
+    }
     if ($Mode -ceq "apply") {
         $arguments += @("--network", ($composeProject + "_default"))
         $arguments += @("--volume", ($sitesRoot + ":/home/frappe/bench/sites"))
@@ -592,8 +618,37 @@ function Invoke-UpdateEngine([string]$Mode) {
             $arguments += @("--volume", ($script:BackupMount + ":" + $containerProductRoot + "/" + $script:BackupDirRelative + ":ro"))
         }
     }
-    $arguments += $imageTag
+    # Pin the engine container too: a mutable tag cannot select a different
+    # image between independent observation and container creation.
+    if ($script:EngineImage) { $arguments += $script:EngineImage } else { $arguments += $imageTag }
     return (Invoke-DockerVerbose $arguments)
+}
+
+# Detect the installed engine protocol without granting the old engine raw
+# Docker access. The probe executes only a shell file test in the pinned image:
+# no network, writable filesystem, application mounts or Docker socket.
+# Exit 1 means legacy image; every other unexpected error is a hard refusal.
+function Test-ImageRequiresObserver([string]$ImageId) {
+    if ($ImageId -cnotmatch '^sha256:[0-9a-f]{64}$') {
+        Stop-Update $script:ExitRefused "refused" "launcher" "updater.installed_version_unknown"
+    }
+    $probe = Invoke-Docker @(
+        "run", "--rm", "--network", "none", "--read-only",
+        "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+        "--entrypoint", "/bin/sh", $ImageId,
+        "-c", "test -f /product/update_host.py"
+    )
+    if ($probe.Code -eq 0) { return $true }
+    if ($probe.Code -eq 1) { return $false }
+    Stop-Update $script:ExitRefused "refused" "launcher" "updater.guard_blocked"
+}
+
+function Stop-EngineFailure([string]$Mode, [string]$Version) {
+    if ($Mode -ceq "apply") {
+        Set-JournalState "recovery-required" $Version
+        Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Version
+    }
+    Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $Version
 }
 
 function Invoke-EngineStep([string]$Mode, $Request, [string]$Version) {
@@ -607,15 +662,25 @@ function Invoke-EngineStep([string]$Mode, $Request, [string]$Version) {
     $engineExit = Invoke-UpdateEngine $Mode
     $response = Read-EngineResponse
     if ($null -eq $response) {
-        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $Version
+        Stop-EngineFailure $Mode $Version
     }
     if ($response.document_type -cne "toefl-house-erp-update-engine-response") {
-        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $Version
+        Stop-EngineFailure $Mode $Version
     }
-    if ($engineExit -ne $script:ExitAllowed -and $engineExit -ne $script:ExitRefused) {
+    $validEngineExit = (($engineExit -eq $script:ExitAllowed -and $response.decision -ceq "allow") -or
+                        ($engineExit -eq $script:ExitRefused -and $response.decision -ceq "refuse"))
+    if ($Mode -ceq "apply") {
+        # Exit 5 carries a structured migration/verification failure. Return it
+        # to the recovery handler; require a coherent exit/status/outcome pair.
+        $validEngineExit = (($engineExit -eq $script:ExitAllowed -and $response.status -ceq "succeeded" -and
+                             $response.transaction_outcome -ceq "completed") -or
+                            ($engineExit -eq $script:ExitFailed -and $response.status -ceq "failed" -and
+                             @("safe-abort", "recovery-required") -ccontains [string]$response.transaction_outcome))
+    }
+    if (-not $validEngineExit) {
         # Exit 4/5 means the engine itself could not decide.  A stray allow in
         # that state would be a fail-open, so treat it as a hard stop.
-        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $Version
+        Stop-EngineFailure $Mode $Version
     }
     return $response
 }
@@ -630,17 +695,17 @@ function Assert-EngineAllowed($Response, [string]$Version) {
     if ($onlyDowngrade) {
         Save-Result -Status "up-to-date" -Section "launcher" -Key "updater.up_to_date" -Version $Version
         Write-Host ""
-        Write-Bilingual "launcher" "updater.up_to_date"
+        Write-Message "launcher" "updater.up_to_date"
         exit $script:ExitAllowed
     }
     $primary = "updater.failed"
     if ($blockers.Count -gt 0 -and $null -ne (Get-Text "messages" $blockers[0])) { $primary = $blockers[0] }
     Save-Result -Status "refused" -Section "messages" -Key $primary -Version $Version -Blockers $blockers
     Write-Host ""
-    Write-Bilingual "messages" $primary
+    Write-Message "messages" $primary
     if ($blockers.Count -gt 1) {
         Write-Host ""
-        foreach ($code in $blockers) { Write-Bilingual "messages" $code }
+        foreach ($code in $blockers) { Write-Message "messages" $code }
     }
     exit $script:ExitRefused
 }
@@ -705,6 +770,10 @@ function Invoke-UpdateCheck {
     if (-not $installed.release_sequence) {
         Stop-Update $script:ExitRefused "refused" "launcher" "updater.installed_version_unknown"
     }
+    # Pin the original image, and expose the root-only observer just for an
+    # installed engine that actually contains the hardened observation broker.
+    $script:EngineImage = [string]$installed.image_id
+    $script:UseObserver = Test-ImageRequiresObserver $script:EngineImage
 
     # A verified independent backup must exist before any bytes are downloaded.
     # The engine re-verifies the same receipt and every artifact hash; this
@@ -822,6 +891,7 @@ function Invoke-UpdateCheck {
         backup_dir = $script:BackupDirRelative
         recovery_authorization = ""
         recovery_signature = ""
+        recovery_signature_2 = ""
         installed = [pscustomobject]@{
             version = [string]$installed.version
             release_sequence = $installed.release_sequence
@@ -837,6 +907,9 @@ function Invoke-UpdateCheck {
     }
     if (Test-Path -LiteralPath $recoverySignaturePath -PathType Leaf) {
         $request.recovery_signature = "data/updates/recovery-authorization.sig"
+    }
+    if (Test-Path -LiteralPath $recoverySignature2Path -PathType Leaf) {
+        $request.recovery_signature_2 = "data/updates/recovery-authorization-2.sig"
     }
     # Phase A: signed manifest, authorization, compatibility and local
     # readiness.  Nothing is downloaded into the image path until this allows.
@@ -863,7 +936,7 @@ function Invoke-UpdateCheck {
         Stop-Update $script:ExitRefused "refused" "messages" "release.archive.size_mismatch" $targetVersion
     }
     if ($null -ne $latest.archive_sha256) {
-        $actual = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $actual = (Get-ProductFileSha256 -LiteralPath $archivePath)
         if ($actual -cne ([string]$latest.archive_sha256).ToLowerInvariant()) {
             Stop-Update $script:ExitRefused "refused" "messages" "release.archive.hash_mismatch" $targetVersion
         }
@@ -899,6 +972,8 @@ function Invoke-UpdateCheck {
         Signature = $workRelative + "/signature.json"
         RunFolder = $workRelative
         Response = $response
+        Request = $request
+        ObserverRequired = [bool]$script:UseObserver
     }
 }
 
@@ -906,8 +981,17 @@ function Invoke-UpdateCheck {
 # Install pipeline (mutating, engine-gated)
 # ---------------------------------------------------------------------------
 
-function Invoke-UpdateStart {
-    $code = Invoke-Compose @("up", "-d", "--no-build")
+function Invoke-UpdateStart([string]$ExpectedImageId) {
+    # Never let Compose silently recreate missing storage after any update.
+    try {
+        . (Join-Path $PSScriptRoot "Test Existing Installation.ps1")
+        Test-ExistingInstallation -ProductRoot $productRoot
+    } catch { return $false }
+    $image = Get-InstalledImage
+    if ($null -eq $image -or [string]$image.Id -cne $ExpectedImageId) { return $false }
+    # The verified migration already ran. Do not rerun bootstrap or recreate
+    # DB/Redis dependencies after the preservation census.
+    $code = Invoke-Compose @("up", "-d", "--no-build", "--no-deps", "web", "worker", "scheduler", "socketio")
     return ($code -eq 0)
 }
 
@@ -928,31 +1012,94 @@ function Invoke-UpdateInstall($Check) {
     }
     Write-Stage "updater.applying"
 
-    $previousImageId = ""
-    $image = Get-InstalledImage
-    if ($null -ne $image -and $null -ne $image.Id) { $previousImageId = [string]$image.Id }
+    $previousImageId = [string]$Check.Installed.image_id
+    $candidateImageId = [string]$Check.Response.target.image.config_digest
+    if ($candidateImageId -cnotmatch '^sha256:[0-9a-f]{64}$') {
+        Stop-Update $script:ExitRefused "refused" "launcher" "updater.package_invalid" $Check.Version
+    }
 
+    # Check and Install may be separated in time. Re-verify the exact signed
+    # archive with the installed engine immediately before importing bytes.
+    $script:EngineImage = $previousImageId
+    # A hardened installed image still requires its broker on later upgrades.
+    # Never give the raw Docker socket to a legacy installed engine.
+    $script:UseObserver = [bool]$Check.ObserverRequired
+    $oldRequest = $Check.Request
+    $oldRequest.action = "preflight"
+    $oldRequest.archive = ""
+    $oldRequest.Remove("transaction")
+    $oldPreflight = Invoke-EngineStep "preflight" $oldRequest $Check.Version
+    [void](Assert-EngineAllowed $oldPreflight $Check.Version)
+    $oldRequest.action = "authorize"
+    $oldRequest.archive = ($Check.RunFolder + "/toefl-house-erp-app.tar")
+    $oldRequest.transaction = $oldPreflight.transaction
+    $oldAuthorization = Invoke-EngineStep "authorize" $oldRequest $Check.Version
+    [void](Assert-EngineAllowed $oldAuthorization $Check.Version)
+    if ([string]$oldAuthorization.transaction.phase -cne "authorized" -or
+        [string]$oldAuthorization.target.image.config_digest -cne $candidateImageId) {
+        Stop-Update $script:ExitRefused "refused" "launcher" "updater.package_invalid" $Check.Version
+    }
+
+    # The installed engine verified the signed archive, but an older image
+    # cannot issue a live-host authorization. Import the candidate while all
+    # services still run, verify its image ID, then restore the old Compose tag.
+    $loaded = Invoke-DockerVerbose @("load", "--input", $Check.Archive)
+    if ($loaded -ne 0) {
+        Invoke-DockerVerbose @("tag", $previousImageId, $imageTag) | Out-Null
+        Set-JournalState "recovery-required" $Check.Version
+        Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
+    }
+    $loadedImage = Get-InstalledImage
+    if ($null -eq $loadedImage -or [string]$loadedImage.Id -cne $candidateImageId) {
+        Invoke-DockerVerbose @("tag", $previousImageId, $imageTag) | Out-Null
+        Set-JournalState "recovery-required" $Check.Version
+        Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
+    }
+    if ((Invoke-DockerVerbose @("tag", $previousImageId, $imageTag)) -ne 0) {
+        Set-JournalState "recovery-required" $Check.Version
+        Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
+    }
+    $script:EngineImage = $candidateImageId
+    $script:UseObserver = $true
+
+    # Begin a fresh schema-2 authorization inside the verified candidate.
+    # It observes the actual running host through the authenticated broker.
+    $freshRequest = $Check.Request
+    $freshRequest.action = "preflight"
+    $freshRequest.archive = ""
+    $freshRequest.Remove("transaction")
+    $freshPreflight = Invoke-EngineStep "preflight" $freshRequest $Check.Version
+    [void](Assert-EngineAllowed $freshPreflight $Check.Version)
+    $freshRequest.action = "authorize"
+    $freshRequest.archive = ($Check.RunFolder + "/toefl-house-erp-app.tar")
+    $freshRequest.transaction = $freshPreflight.transaction
+    $freshAuthorization = Invoke-EngineStep "authorize" $freshRequest $Check.Version
+    [void](Assert-EngineAllowed $freshAuthorization $Check.Version)
+    if ($null -eq $freshAuthorization.transaction -or
+        [string]$freshAuthorization.transaction.phase -cne "authorized") {
+        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $Check.Version
+    }
+    $recheckRequest = $freshRequest
+    $recheckRequest.action = "recheck"
+    $recheckRequest.transaction = $freshAuthorization.transaction
+    $recheck = Invoke-EngineStep "recheck" $recheckRequest $Check.Version
+    [void](Assert-EngineAllowed $recheck $Check.Version)
+    $script:ActiveTransactionId = [string]$freshAuthorization.transaction.transaction_id
     Set-JournalState "prepared" $Check.Version
     Write-Stage "updater.verifying"
     $stopped = Invoke-Compose @("stop", "web", "worker", "scheduler", "socketio")
     if ($stopped -ne 0) {
-        Set-JournalState "rolled-back" ""
-        Stop-Update $script:ExitFailed "failed" "launcher" "updater.failed" $Check.Version
+        Set-JournalState "recovery-required" $Check.Version
+        Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
     }
 
-    $loaded = Invoke-DockerVerbose @("load", "--input", $Check.Archive)
-    if ($loaded -ne 0) {
-        # The tag may or may not have changed.  Restore the previous identity
-        # explicitly, then bring the untouched installation back.
-        if ($previousImageId) {
-            Invoke-DockerVerbose @("tag", $previousImageId, $imageTag) | Out-Null
-        }
-        $restarted = Invoke-UpdateStart
-        if ($restarted) { Set-JournalState "rolled-back" "" } else { Set-JournalState "recovery-required" "" }
-        Stop-Update $script:ExitFailed "failed" "launcher" "updater.rollback_done" $Check.Version
+    if ((Invoke-DockerVerbose @("tag", $candidateImageId, $imageTag)) -ne 0) {
+        Set-JournalState "recovery-required" $Check.Version
+        Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
     }
 
     Set-JournalState "applying" $Check.Version
+    $script:EngineImage = $candidateImageId
     $applyRequest = [ordered]@{
         action = "apply"
         site = $siteName
@@ -961,31 +1108,26 @@ function Invoke-UpdateInstall($Check) {
         signature = $Check.Signature
         trust_store = "data/updates/trust-store.json"
         archive = ($Check.RunFolder + "/toefl-house-erp-app.tar")
-        transaction = $Check.Transaction
-        installed = [pscustomobject]@{
-            version = [string]$Check.Installed.version
-            release_sequence = $Check.Installed.release_sequence
-            source_revision = [string]$Check.Installed.source_revision
-            image_labels = $Check.Installed.image_labels
-            image_id = [string]$Check.Installed.image_id
-        }
+        transaction = $freshAuthorization.transaction
         backup_receipt = "data/activation/backup-receipt.json"
         backup_dir = $script:BackupDirRelative
         recovery_authorization = ""
         recovery_signature = ""
+        recovery_signature_2 = ""
         sites_dir = "/home/frappe/bench/sites"
         bench = "/build/tools/bin/bench"
         host_updater_version = [string]$Check.Installed.version
         migrate_replays = 2
         command_timeout_seconds = 1800
-        journal_state = [string]$Check.JournalState
-        host = $Check.Facts
     }
     if (Test-Path -LiteralPath $recoveryAuthorizationPath -PathType Leaf) {
         $applyRequest.recovery_authorization = "data/updates/recovery-authorization.json"
     }
     if (Test-Path -LiteralPath $recoverySignaturePath -PathType Leaf) {
         $applyRequest.recovery_signature = "data/updates/recovery-authorization.sig"
+    }
+    if (Test-Path -LiteralPath $recoverySignature2Path -PathType Leaf) {
+        $applyRequest.recovery_signature_2 = "data/updates/recovery-authorization-2.sig"
     }
 
     $report = Invoke-EngineStep "apply" $applyRequest $Check.Version
@@ -998,18 +1140,12 @@ function Invoke-UpdateInstall($Check) {
     if ($status -ne "succeeded") {
         $blockers = Get-BlockerCodes $report
         if ($outcome -ceq "safe-abort") {
+            # The database was not migrated, but the refusal may mean its
+            # volume vanished or changed. Compose up could create an empty
+            # replacement, so safe-abort never means safe automatic restart.
             if ($previousImageId) {
                 Invoke-DockerVerbose @("tag", $previousImageId, $imageTag) | Out-Null
             }
-            $restarted = Invoke-UpdateStart
-            if ($restarted) { Set-JournalState "rolled-back" "" } else { Set-JournalState "recovery-required" "" }
-            $primary = "updater.rollback_done"
-            if ($blockers.Count -gt 0 -and $null -ne (Get-Text "messages" $blockers[0])) { $primary = $blockers[0] }
-            Save-Result -Status "failed" -Section "messages" -Key $primary -Version $Check.Version -Blockers $blockers
-            Write-Host ""
-            Write-Bilingual "launcher" "updater.rollback_done"
-            Write-Bilingual "messages" $primary
-            exit $script:ExitFailed
         }
         # A migration may already have changed the database.  Never start the
         # stack as if the update succeeded, and never restore over live data.
@@ -1019,33 +1155,33 @@ function Invoke-UpdateInstall($Check) {
         Save-Result -Status "recovery-required" -Section "launcher" -Key "updater.recovery_required" `
             -Version $Check.Version -Blockers $blockers
         Write-Host ""
-        Write-Bilingual "launcher" "updater.recovery_required"
-        Write-Bilingual "messages" $primary
+        Write-Message "launcher" "updater.recovery_required"
+        Write-Message "messages" $primary
         if ($blockers.Count -gt 1) {
-            foreach ($code in $blockers) { Write-Bilingual "messages" $code }
+            foreach ($code in $blockers) { Write-Message "messages" $code }
         }
         exit $script:ExitRecoveryRequired
     }
 
     Write-Stage "updater.applying"
-    if (-not (Invoke-UpdateStart)) {
+    if (-not (Invoke-UpdateStart $candidateImageId)) {
         Set-JournalState "recovery-required" $Check.Version
         Save-Result -Status "recovery-required" -Section "launcher" -Key "updater.recovery_required" -Version $Check.Version
         Write-Host ""
-        Write-Bilingual "launcher" "updater.recovery_required"
+        Write-Message "launcher" "updater.recovery_required"
         exit $script:ExitRecoveryRequired
     }
     if (-not (Wait-ForApplication 180)) {
         Set-JournalState "recovery-required" $Check.Version
         Save-Result -Status "recovery-required" -Section "launcher" -Key "updater.recovery_required" -Version $Check.Version
         Write-Host ""
-        Write-Bilingual "launcher" "updater.recovery_required"
+        Write-Message "launcher" "updater.recovery_required"
         exit $script:ExitRecoveryRequired
     }
     Set-JournalState "completed" $Check.Version
     Save-Result -Status "completed" -Section "launcher" -Key "updater.completed" -Version $Check.Version
     Write-Host ""
-    Write-Bilingual "launcher" "updater.completed"
+    Write-Message "launcher" "updater.completed"
     return $true
 }
 
@@ -1163,7 +1299,7 @@ try {
     } else {
         Save-Result -Status "update-available" -Section "launcher" -Key "updater.available" -Version $check.Version
         Write-Stage "updater.available"
-        Write-Bilingual "launcher" "updater.available"
+        Write-Message "launcher" "updater.available"
         Write-Host ("Target version: " + $check.Version)
         exit $script:ExitAllowed
     }

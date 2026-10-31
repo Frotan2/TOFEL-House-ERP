@@ -334,7 +334,7 @@ http {{
  large_client_header_buffers 4 4k;
  client_max_body_size 1m;
  client_body_buffer_size 16k;
- map $host $foundation_site {{ default ''; foundation.localhost foundation.localhost; restore.localhost restore.localhost; recovery.localhost recovery.localhost; }}
+ map $host $foundation_site {{ default ''; foundation.localhost foundation.localhost; restore.localhost restore.localhost; restore-recovery.localhost restore-recovery.localhost; }}
  server {{
   listen 127.0.0.1:8080;
   if ($foundation_site = '') {{ return 444; }}
@@ -498,6 +498,10 @@ def main() -> int:
             "encryption_key": encryption_key,
             "db_root_password": root_password,
             "admin_password": admin_password,
+            # This helper is used only for a newly created restore-named
+            # isolated CI target. Production remains fail-closed with
+            # two independent signatures and a pre-restore backup.
+            "target": "disposable",
         })
         return run(
             name, [bench_dir / "env/bin/python", ROOT / "product/restore.py"],
@@ -616,8 +620,8 @@ def main() -> int:
             ROOT / "tools/foundation/secure_frappe_python.py", bench_dir / "apps/frappe"])
         run("install-frappe-python-security-deps", [lab / "tools/bin/uv", "pip", "install",
             "--python", bench_dir / "env/bin/python", "--no-deps", "--upgrade",
-            "GitPython==3.2.1", "Pillow==13.0.0", "PyJWT==2.15.1", "pypdf==6.21.2",
-            "filelock==3.20.3"])
+            "GitPython==3.2.1", "Pillow==13.0.0", "PyJWT==2.15.1", "pypdf==6.21.4", "oauthlib==4.0.0",
+            "filelock==4.2.4"])
         run("refresh-frappe-security-metadata", [lab / "tools/bin/uv", "pip", "install",
             "--python", bench_dir / "env/bin/python", "--no-deps", "--reinstall",
             "--editable", bench_dir / "apps/frappe"])
@@ -653,7 +657,7 @@ def main() -> int:
         # DNS; this lab must add them to /etc/hosts instead of relying on the
         # hosted runner's resolver, which is not guaranteed to answer for
         # *.localhost.
-        lab_hosts = ("foundation.localhost", "restore.localhost", "recovery.localhost", "upstream-tests.localhost")
+        lab_hosts = ("foundation.localhost", "restore.localhost", "restore-recovery.localhost", "upstream-tests.localhost")
         try:
             current_hosts = Path("/etc/hosts").read_text()
         except OSError:
@@ -685,7 +689,17 @@ def main() -> int:
             raise RuntimeError("Native site encryption key was not initialized before the first backup")
         report["site_encryption_key_initialized"] = True
         report["site_encryption_key_sha256"] = initialize_result["checks"][0]["observation"]["sha256"]
+        run("secure-deepmerge-before-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_deepmerge.py", bench_dir / "apps", "--apps"])
+        run("secure-uri-decoder-before-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_uri_decoder.py", bench_dir / "apps"])
         bench("asset-build", "build", timeout=1800)
+        run("verify-deepmerge-after-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_deepmerge.py", bench_dir / "apps", "--apps", "--verify", "--assets",
+            "--report", evidence / "deepmerge-distribution.json"])
+        run("verify-uri-decoder-after-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_uri_decoder.py", bench_dir / "apps", "--verify",
+            "--report", evidence / "uri-decoder-distribution.json"])
         run("verify-hrms-editor-after-build", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/hrms", "--verify"])
         run("verify-banking-after-build", [bench_dir / "env/bin/python",
@@ -1032,7 +1046,7 @@ def main() -> int:
             if not artifact.is_file() or artifact.stat().st_size <= 0:
                 raise RuntimeError("Hardened native encrypted backup set is incomplete: " + artifact.name)
         report["hardened_backup"] = {label: {"bytes": p.stat().st_size, "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for label, p in (("database",secured_database),("private_files",secured_private),("public_files",secured_public))}
-        recovered_site = "recovery.localhost"
+        recovered_site = "restore-recovery.localhost"
         create_site("new-hardened-recovery-site", recovered_site, recovery_password)
         report["created_sites"].append(recovered_site)
         product_restore("hardened-restore-with-files", recovered_site,

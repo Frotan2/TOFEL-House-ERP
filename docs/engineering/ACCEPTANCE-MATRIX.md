@@ -1,4 +1,27 @@
+> **HISTORICAL BASELINE EVIDENCE.** This table is retained so prior acceptance
+> claims can be audited, but its dated issue/pr/check statuses do not describe
+> the current `work` head. Use [Documentation authority](../DOCUMENTATION.md)
+> and the [current release candidate contract](RELEASE-CANDIDATE.md) before
+> interpreting any release status. **Production remains REJECT / NO-GO.**
+>
 # Consolidated acceptance matrix
+
+Current continuation: [29 October reconciliation](READINESS-2026-10-29.md) and
+[preserved historical Windows acceptance](WINDOWS-ACCEPTANCE-PRESERVED-2026-10-29.md).
+The supplementary deepmerge overlay requires its own exact-head hosted gates;
+historical Owner-image checks do not certify a later candidate. Production
+remains REJECT and issue #115 Fees payout remains blocked.
+
+> **Historical baseline matrix — current qualification on work differs.**
+> This matrix's evidence SHA `c22b997...`, its feature deferrals and its
+> candidate-PR exclusions are a record of that older release scope; they are
+> **not** an assertion about `work` in October 2026. The Owner's
+> 2026-10-28 decisions narrowly supersede the same-level Class transfer
+> deferral; source now includes guarded assessment/retake mechanisms, but
+> unreviewed activation remains held. Tuition refund requests can be approved
+> while native Fees payouts remain blocked. Read
+> [WORK-READINESS-2026-10-29.md](WORK-READINESS-2026-10-29.md) and the actual
+> exact-head CI before using any row as release evidence. **Production HOLD.**
 
 Baseline evidence SHA: `c22b9979542c88a2cd179e179a91829d07a79a3a`
 

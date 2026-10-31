@@ -74,7 +74,8 @@ class AppAssemblyTests(unittest.TestCase):
 
     # --- DocType files -------------------------------------------------
     def test_every_doctype_directory_is_complete(self):
-        directories = [p for p in APP.glob("*/doctype/*/") if p.is_dir()]
+        directories = [p for p in APP.glob("*/doctype/*/")
+                       if p.is_dir() and p.name != "__pycache__"]
         self.assertTrue(directories, "no DocType directories found")
         for directory in directories:
             slug = directory.name

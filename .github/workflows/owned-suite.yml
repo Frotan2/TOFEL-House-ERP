@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: owned-suite-${{ github.ref }}
+  group: owned-suite-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -59,7 +59,11 @@ jobs:
 
       - name: Node suites
         run: |
+          node --test tests/foundation/test_product_ingress.cjs
           node tests/foundation/test_realtime_guard.cjs
           node tests/foundation/test_command_pages.cjs
           node tests/foundation/test_design_system.cjs
           node tests/foundation/test_role_desks.cjs
+
+      - name: Prove update observer privilege boundary (synthetic Docker HTTP)
+        run: sudo python3 tests/foundation/update_host_privilege_probe.py
