@@ -144,6 +144,18 @@ if (-not $secretPresent -and ($sitePresent -or $dbVolumePresent)) {
     Result "Database credential safety" "No credential file or existing site/database observed (informational, not permission to install)"
 }
 
+# Source-identity checks are deliberately read-only. Older preserved
+# installations require a controlled compatibility review, not automatic
+# re-pinning from user-supplied Docker labels.
+$installedIdentityPath = Join-Path $dataRoot "activation\installed-image-identity.json"
+if (Test-Path -LiteralPath $installedIdentityPath -PathType Leaf) {
+    Result "Installed application image record" "Present (cryptographic/image agreement is checked by daily Start, NOT by this report)"
+} elseif ($secretPresent -or $sitePresent) {
+    Result "Installed application image record" "NOT VERIFIED: preservation-safe legacy migration is required before starting the revised launcher. Do NOT reinstall or reset data."
+} else {
+    Result "Installed application image record" "Not created; expected only after a verified first installation"
+}
+
 try {
     $request = Invoke-WebRequest -Uri "http://127.0.0.1:8000/" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
     if ([int]$request.StatusCode -eq 200) {
