@@ -161,11 +161,15 @@ jobs:
           $env:TH_SYNTHETIC_LABELS = $labels | ConvertTo-Json -Compress
           $configDigest = (& python -c "from pathlib import Path; import json, os; from tests.foundation.test_customer_package_manifest import write_image_archive; print(write_image_archive(Path(os.environ['TH_SYNTHETIC_IMAGE_ARCHIVE']), json.loads(os.environ['TH_SYNTHETIC_LABELS'])))").Trim()
           if ($LASTEXITCODE -ne 0) { throw 'Synthetic Docker archive creation failed.' }
+          $rootfsJson = (& python -c "import os,tarfile,json; t=tarfile.open(os.environ['TH_SYNTHETIC_IMAGE_ARCHIVE']); m=json.load(t.extractfile('manifest.json')); c=json.load(t.extractfile(m[0]['Config'])); print(json.dumps(c['rootfs']['diff_ids']))").Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect synthetic factory layer digests.' }
+          $rootfsLayers = @($rootfsJson | ConvertFrom-Json)
           $env:TH_SYNTHETIC_INSPECT_JSON = [ordered]@{
             # Containerd-backed Docker can expose a manifest digest as .Id.
             Id = 'sha256:' + ('c' * 64)
             RepoTags = @('toefl-house-erp-app:local')
             Config = @{ Labels = $labels }
+            RootFS = @{ Layers = $rootfsLayers }
           } | ConvertTo-Json -Depth 6 -Compress
           $target = Join-Path $env:RUNNER_TEMP "Customer Kits"
           New-Item -ItemType Directory -Path $target -Force | Out-Null
