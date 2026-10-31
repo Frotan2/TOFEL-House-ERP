@@ -211,7 +211,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "The exported image failed post-packaging verification."
     }
-    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $packageRoot "product\windows\Verify Package Image.ps1") -VerifyLoadedImage
+    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $packageRoot "product\windows\Verify Package Image.ps1") -VerifyLoadedImage -VerifyProviderImage
     if ($LASTEXITCODE -ne 0) {
         throw "The application image tag changed during export. This incomplete folder is NOT deliverable."
     }
