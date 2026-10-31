@@ -27,6 +27,11 @@ jobs:
         run: |
           & powershell.exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File 'tests/foundation/test_customer_exe.ps1'
           if ($LASTEXITCODE -ne 0) { throw "Customer EXE extraction tests failed." }
+      - name: Compile and exercise smart online installer with synthetic ranged HTTP
+        shell: powershell
+        run: |
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'tests/foundation/test_online_installer.ps1'
+          if ($LASTEXITCODE -ne 0) { throw "Smart online installer regression failed." }
       - name: Exercise offline runtime integrity and identity refusals
         shell: powershell
         run: |
