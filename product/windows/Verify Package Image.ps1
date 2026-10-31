@@ -6,6 +6,9 @@ param(
     [string]$Manifest = (Join-Path $PSScriptRoot "..\release\release-manifest.json"),
     [string]$ManifestChecksum = "",
     [switch]$VerifyLoadedImage,
+    [switch]$RecordFactoryImage,
+    [switch]$RecordSignedUpdateImage,
+    [string]$ExpectedUpdatedImageId = "",
     [switch]$ReadArchiveIdentity
 )
 $ErrorActionPreference = "Stop"
@@ -157,25 +160,112 @@ try {
         $release.image.labels.'org.toefl-house.release-version' -cne $release.version) {
         throw "The release manifest does not bind the image to its source and version."
     }
+    if (($RecordFactoryImage -or $RecordSignedUpdateImage) -and -not $VerifyLoadedImage) {
+        throw "Image identity can only be recorded while verifying the loaded image."
+    }
+    if ($RecordFactoryImage -and $RecordSignedUpdateImage) {
+        throw "An installed image cannot have two release provenances."
+    }
     if ($VerifyLoadedImage) {
         $loadedJson = & docker image inspect "toefl-house-erp-app:local" --format '{{json .}}' 2>$null
         if ($LASTEXITCODE -ne 0 -or -not $loadedJson) {
             throw "The packaged application image is not loaded under its required local tag."
         }
         $loaded = $loadedJson | ConvertFrom-Json
-        # Docker's containerd store can expose a manifest digest as .Id, not the
-        # config digest. Bind config bytes via the archive, and loaded identity
-        # via its saved tag and source/version labels instead.
         if (-not (@($loaded.RepoTags) -ccontains $release.image.tag) -or
+            [string]$loaded.Id -cnotmatch '^sha256:[0-9a-f]{64}$' -or
             $loaded.Config.Labels.'org.toefl-house.source-eol' -cne "lf-v1" -or
-            $loaded.Config.Labels.'org.toefl-house.source-revision' -cne $release.source_revision -or
-            $loaded.Config.Labels.'org.toefl-house.release-version' -cne $release.version) {
-            throw "The loaded image identity does not match the verified release manifest. No start is permitted."
+            [string]$loaded.Config.Labels.'org.toefl-house.source-revision' -cnotmatch '^[0-9a-fA-F]{40}$' -or
+            [string]$loaded.Config.Labels.'org.toefl-house.release-version' -notmatch '^[A-Za-z0-9][A-Za-z0-9._+\\-]{0,95}$') {
+            throw "The loaded application image has invalid identity, platform labels or local tag."
         }
-        Write-Host "Customer loaded image identity: verified."
-        if ($loaded.Id -match '^sha256:[0-9a-f]{64}$') {
-            Write-Host ("Loaded application image ID: " + $loaded.Id)
+        $identityPath = Join-Path $PSScriptRoot '..\data\activation\installed-image-identity.json'
+        $identityDirectory = Split-Path -Parent $identityPath
+        $sourceRevision = [string]$loaded.Config.Labels.'org.toefl-house.source-revision'
+        $releaseVersion = [string]$loaded.Config.Labels.'org.toefl-house.release-version'
+        if ($RecordFactoryImage -or $RecordSignedUpdateImage) {
+            if ($RecordFactoryImage -and
+                ($sourceRevision -cne $release.source_revision -or
+                 $releaseVersion -cne $release.version)) {
+                throw "Factory image labels do not match the verified original release."
+            }
+            if ($RecordFactoryImage -and (Test-Path -LiteralPath $identityPath)) {
+                throw "The installed image identity already exists; an initial installer must not overwrite it."
+            }
+            if ($RecordSignedUpdateImage -and
+                ($ExpectedUpdatedImageId -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+                 [string]$loaded.Id -cne $ExpectedUpdatedImageId -or
+                 -not (Test-Path -LiteralPath $identityPath -PathType Leaf))) {
+                throw "Signed updater image identity is missing, incorrect or has no original installation record."
+            }
+            if (-not (Test-Path -LiteralPath $identityDirectory -PathType Container)) {
+                throw "Protected activation storage is missing; installed identity was not recorded."
+            }
+            $record = [ordered]@{
+                schema_version = 1
+                document_type = 'toefl-house-erp-installed-image'
+                provenance = $(if ($RecordFactoryImage) { 'factory' } else { 'signed-update' })
+                image_id = [string]$loaded.Id
+                source_revision = $sourceRevision
+                release_version = $releaseVersion
+                original_release_revision = [string]$release.source_revision
+            }
+            $temporaryIdentity = $identityPath + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
+            try {
+                [IO.File]::WriteAllText($temporaryIdentity, ($record | ConvertTo-Json -Depth 5),
+                    (New-Object System.Text.UTF8Encoding($false)))
+                if ($RecordFactoryImage) {
+                    [IO.File]::Move($temporaryIdentity, $identityPath)
+                } else {
+                    [IO.File]::Replace($temporaryIdentity, $identityPath, $null)
+                }
+            } finally {
+                if (Test-Path -LiteralPath $temporaryIdentity) {
+                    Remove-Item -LiteralPath $temporaryIdentity -Force
+                }
+            }
+            Write-Host "Verified installed image ID recorded in protected activation storage."
+            exit 0
         }
+        # Reading a durable installed-image record is mandatory for daily Start.
+        # Labels alone are user-controlled metadata and cannot prove image identity.
+        if (-not (Test-Path -LiteralPath $identityPath -PathType Leaf)) {
+            throw "The verified installed-image record is missing. Do not start; contact trusted support for preservation-safe qualification."
+        }
+        $identityInfo = Get-Item -LiteralPath $identityPath -Force
+        if (($identityInfo.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+            $identityInfo.Length -gt 4096) {
+            throw "The installed-image record is unsafe or malformed."
+        }
+        $identity = [IO.File]::ReadAllText($identityPath) | ConvertFrom-Json
+        if ($identity.schema_version -ne 1 -or
+            $identity.document_type -cne 'toefl-house-erp-installed-image' -or
+            $identity.image_id -cne [string]$loaded.Id -or
+            $identity.source_revision -cne $sourceRevision -or
+            $identity.release_version -cne $releaseVersion -or
+            $identity.original_release_revision -cne $release.source_revision) {
+            throw "Loaded Docker image does not match the recorded, verified installed image ID."
+        }
+        if ($identity.provenance -ceq 'factory') {
+            if ($sourceRevision -cne $release.source_revision -or $releaseVersion -cne $release.version) {
+                throw "Factory installation labels no longer match the original release."
+            }
+        } elseif ($identity.provenance -ceq 'signed-update') {
+            $journalPath = Join-Path $PSScriptRoot '..\data\updates\journal.json'
+            if (-not (Test-Path -LiteralPath $journalPath -PathType Leaf)) {
+                throw "The signed update journal is missing; refusing to start."
+            }
+            $journal = [IO.File]::ReadAllText($journalPath) | ConvertFrom-Json
+            if ($journal.schema_version -ne 1 -or
+                $journal.document_type -cne 'toefl-house-erp-update-journal' -or
+                $journal.phase -cne 'completed' -or
+                $journal.version -cne $releaseVersion) {
+                throw "The signed update was not completed or does not match the installed image."
+            }
+        } else {
+            throw "Unknown installed-image provenance; refusing to start."
+        }
+        Write-Host "Customer installed image identity: approved ID and release record verified."
         exit 0
     }
     if (-not (Test-Path -LiteralPath $Archive -PathType Leaf)) {
