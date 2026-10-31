@@ -38,9 +38,7 @@ rem This check is read-only: it does not import, retag or download images.
 echo [TH_STAGE] Verifying the installed application image identity...
 powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1" -VerifyLoadedImage
 if errorlevel 1 goto :imageidentityhold
-if not exist data\activation mkdir data\activation
-icacls data\activation /inheritance:r /grant:r "%USERDOMAIN%\%USERNAME%:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /T >nul 2>nul
-if errorlevel 1 goto :failed
+rem The first installer secured activation storage. Daily Start must not rewrite its ACLs.
 echo [TH_STAGE] Starting the installed TOEFL House ERP...
 docker compose up -d --no-build
 if errorlevel 1 goto :failed
