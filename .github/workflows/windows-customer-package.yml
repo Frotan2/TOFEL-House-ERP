@@ -541,6 +541,13 @@ jobs:
           # Confirm that a new image starts only with a matching durable record.
           $originalIdentityRecord = [IO.File]::ReadAllBytes($installedIdentityPath)
           $journal = Join-Path $kit 'product/data/updates/journal.json'
+          [IO.Directory]::CreateDirectory((Split-Path -Parent $journal)) | Out-Null
+          [IO.File]::WriteAllText($journal, '{"schema_version":1,"document_type":"toefl-house-erp-update-journal","phase":"applying","version":"2026.11.01"}')
+          try {
+            Assert-PackageVerification $false -Loaded
+          } finally {
+            Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
+          }
           $updateId = 'sha256:' + ('d' * 64)
           $simulatedImage = $originalInspect | ConvertFrom-Json
           $simulatedImage.Id = $updateId
