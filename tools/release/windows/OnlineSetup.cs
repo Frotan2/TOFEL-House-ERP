@@ -241,7 +241,7 @@ public sealed class OnlineSetup : Form {
     readonly Button cancel = new Button();
     readonly BackgroundWorker worker = new BackgroundWorker();
 
-    public OnlineSetup(OnlinePlan plan, string root) {
+    internal OnlineSetup(OnlinePlan plan, string root) {
         this.plan = plan; this.root = root;
         Text = "The TOEFL House | Online Setup";
         Width = 500; Height = 230;
