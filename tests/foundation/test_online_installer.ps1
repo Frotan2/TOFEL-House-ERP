@@ -42,6 +42,16 @@ try {
         }
     }
     $exe = Build 'valid' $hash
+    # Also compile the ACTUAL production symbol set, not only TEST_BUILD.
+    # No untrusted offline EXE is launched; signing belongs to the provider.
+    $productionSource = Join-Path $work 'valid.txt'
+    $productionExe = Join-Path $work 'production-unsigned-compile-probe.exe'
+    $prodOutput = @(& $csc /nologo /target:winexe /platform:x64 ("/out:" + $productionExe) /reference:System.Windows.Forms.dll /reference:System.Drawing.dll ('/resource:' + $productionSource + ',TOEFLHouse.OnlinePlan') $source 2>&1)
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $productionExe)) {
+        throw ('Production C# bootstrap did not compile: ' + ($prodOutput -join ' '))
+    }
+    if ((Get-Item $productionExe).Length -gt 20MB) { throw 'Online bootstrap exceeds 20 MB.' }
+    Write-Host ('Unsigned compile-only production bootstrap bytes=' + (Get-Item $productionExe).Length)
     $destRoot = Join-Path $work 'good'
     Probe $exe $destRoot $true
     $dest = Join-Path $destRoot ('Downloads/TOEFL-House-ERP-Setup-' + $hash.Substring(0,16) + '.exe')
