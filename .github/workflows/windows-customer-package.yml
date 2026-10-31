@@ -578,8 +578,19 @@ jobs:
             [IO.File]::WriteAllText($journal, '{"schema_version":1,"document_type":"toefl-house-erp-update-journal","phase":"completed","version":"2026.11.01"}')
             Assert-PackageVerification $true -Loaded
             $startAfterUpdate = Join-Path $kit 'product/windows/Start TOEFL House ERP.cmd'
-            & $startAfterUpdate | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw 'Daily Start refused the completed simulated signed update.' }
+            # The first synthetic HTTP listener was intentionally stopped after
+            # the initial lifecycle test. Recreate it for this second Start.
+            $updateHttpProcess = Start-Process -FilePath $fakeHttpPath -PassThru -WindowStyle Hidden
+            try {
+              Start-Sleep -Milliseconds 250
+              if ($updateHttpProcess.HasExited) { throw 'Signed-update loopback listener could not start.' }
+              & $startAfterUpdate | Out-Null
+              if ($LASTEXITCODE -ne 0) { throw 'Daily Start refused the completed simulated signed update.' }
+            } finally {
+              if (-not $updateHttpProcess.HasExited) {
+                Stop-Process -Id $updateHttpProcess.Id -ErrorAction Stop
+              }
+            }
             $repairAfterUpdate = Join-Path $kit 'product/windows/Repair TOEFL House ERP.cmd'
             $previousPreference = $ErrorActionPreference
             try {
