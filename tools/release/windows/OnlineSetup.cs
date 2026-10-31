@@ -316,6 +316,12 @@ public sealed class OnlineSetup : Form {
             Application.Run(new OnlineSetup(plan, root));
             return 0;
         } catch (Exception error) {
+#if TEST_BUILD
+            if (args.Length == 2 && args[0] == "--probe-download") {
+                Console.Error.WriteLine("Synthetic download refused: " + error.Message);
+                return 1;
+            }
+#endif
             MessageBox.Show(error.Message, "TOEFL House Online Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
