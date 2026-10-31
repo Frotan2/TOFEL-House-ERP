@@ -124,7 +124,7 @@ if errorlevel 1 goto :packagechanged
 echo [TH_STAGE] Loading the ready-to-run application. This can take several minutes.
 docker load -i "release\toefl-house-erp-app.tar"
 if errorlevel 1 goto :failed
-powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1" -VerifyLoadedImage
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1" -VerifyLoadedImage -RecordFactoryImage
 if errorlevel 1 goto :failed
 echo [TH_STAGE] Starting TOEFL House ERP...
 docker compose up -d --no-build
