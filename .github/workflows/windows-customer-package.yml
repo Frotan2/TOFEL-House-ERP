@@ -169,7 +169,10 @@ jobs:
           # The synthetic image has exactly one layer. Read its digest as a
           # scalar, avoiding PowerShell 5.1 JSON array unrolling/nesting bugs.
           $rootfsLayer = (& python -c "import os,tarfile,json; t=tarfile.open(os.environ['TH_SYNTHETIC_IMAGE_ARCHIVE']); m=json.load(t.extractfile('manifest.json')); c=json.load(t.extractfile(m[0]['Config'])); assert len(c['rootfs']['diff_ids']) == 1; print(c['rootfs']['diff_ids'][0])").Trim()
-          if ($LASTEXITCODE -ne 0 -or $rootfsLayer -cnotmatch '^sha256:[0-9a-f]{64}
+          if ($LASTEXITCODE -ne 0 -or $rootfsLayer.Length -ne 71 -or $rootfsLayer -notmatch '^sha256:[0-9a-f]{64}') {
+            throw 'Cannot read synthetic factory layer digest.'
+          }
+          $rootfsLayers = @($rootfsLayer)
           $env:TH_SYNTHETIC_INSPECT_JSON = [ordered]@{
             # Containerd-backed Docker can expose a manifest digest as .Id.
             Id = 'sha256:' + ('c' * 64)
