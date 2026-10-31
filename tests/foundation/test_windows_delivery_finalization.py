@@ -239,6 +239,22 @@ class LifecyclePreservationTests(unittest.TestCase):
         # A bare tag-existence check cannot prove exact-version identity.
         self.assertNotIn("docker image inspect toefl-house-erp-app:local >nul", REPAIR)
 
+    def test_start_refuses_unverified_loaded_image_before_compose(self):
+        # Daily start must not auto-pull or run a substituted application tag.
+        # The manifest identity check is read-only and follows volume/site
+        # preservation checks, but precedes all Compose service mutations.
+        self.assertLess(
+            START.index("Test Existing Installation.ps1"),
+            START.index('Verify Package Image.ps1" -VerifyLoadedImage'),
+        )
+        self.assertLess(
+            START.index('Verify Package Image.ps1" -VerifyLoadedImage'),
+            START.index("docker compose up -d --no-build"),
+        )
+        self.assertIn("if errorlevel 1 goto :imageidentityhold", START)
+        self.assertIn("Start refused an absent or mismatched verified application image", START)
+        self.assertIn("Your existing database and student records were not changed", START)
+
     def test_unknown_storage_is_never_classified_as_disposable(self):
         self.assertIn("Could not check existing database storage", FRESH_PREFLIGHT)
         self.assertIn("no password was generated", FRESH_PREFLIGHT.lower())
