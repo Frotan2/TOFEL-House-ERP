@@ -35,12 +35,16 @@ Windows/Docker licence prompts for the customer. Restarts and UAC may be needed.
   the user's local application data. Subsequent launches use HTTP Range only
   when the server proves the correct offset and total length; otherwise the
   response is restarted from byte zero. A finished verified cache is reused.
+  A corrupt completed cache or oversized partial is discarded with an explicit
+  retry message, never executed, and never mistaken for customer site data.
   Reparse points and overwrites of existing published paths are refused.
   Partial downloads are never executed. HTTPS is required in production.
 - An existing `%LOCALAPPDATA%\TOEFL House ERP\Customer` directory causes
-  refusal **before network/download**; the user is directed to the installed
-  launcher. The offline setup retains its own site/volume/secret fail-closed
-  checks. No Docker, data, credential, finance or Owner records are touched
+  refusal **before network/download**; recognized portable ERP data folders on
+  the current user's Desktop are also refused. This discovery is not a
+  machine-wide inventory: other legacy paths or Docker volumes may remain
+  undetected, so the offline setup's independent site/volume/secret refusal is
+  mandatory. No Docker, data, credential, finance or Owner records are touched
   by the online downloader.
 - Deliberate version pinning means an online bootstrap is **not an updater**:
   a future release gets a newly approved, signed bootstrap. The held
