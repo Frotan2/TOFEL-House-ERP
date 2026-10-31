@@ -153,11 +153,17 @@ class LifecyclePreservationTests(unittest.TestCase):
                     condition = re.search(rf"(?m)^if .* GTR 0 goto :{label}$", script)
                     self.assertIsNotNone(decrement)
                     self.assertIsNotNone(condition)
-                    harness = (
-                        f"@echo off\\nsetlocal\\nset {counter}=2\\n:{label}\\n"
-                        f"{decrement.group(0)}\\n{condition.group(0)}\\n"
-                        f'if not "%{counter}%"=="0" exit /b 4\\nexit /b 0\\n'
-                    ).replace("\\n", "\n")
+                    harness = "\n".join((
+                        "@echo off",
+                        "setlocal",
+                        f"set {counter}=2",
+                        f":{label}",
+                        decrement.group(0),
+                        condition.group(0),
+                        f'if not "%{counter}%"=="0" exit /b 4',
+                        "exit /b 0",
+                        "",
+                    ))
                     with tempfile.TemporaryDirectory(prefix="th-cmd-retry-") as tmp:
                         runner = Path(tmp) / "bounded-retry.cmd"
                         runner.write_text(harness, encoding="ascii")
