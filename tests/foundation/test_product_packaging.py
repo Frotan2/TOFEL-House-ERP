@@ -678,7 +678,7 @@ class ImageRecreationContract(unittest.TestCase):
         check = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Test Fresh Installation.ps1"'
         self.assertIn(check + "\nif errorlevel 1 goto :storagecheckfailed", text)
         self.assertLess(text.index(check), text.index('[guid]::NewGuid()'))
-        self.assertLess(text.index('if exist data\\secrets\\db.env goto :secretok'), text.index(check))
+        self.assertLess(text.index('if exist "data\\.installation-claim" goto :alreadyinstalled'), text.index(check))
         refusal = text.split("\n:storagecheckfailed\n")[1].split("\n:secretaclfailed\n")[0]
         self.assertIn("exit /b 1", refusal)
         helper = (PRODUCT / "windows" / "Test Fresh Installation.ps1").read_text()
@@ -1418,8 +1418,8 @@ class CmdSyntaxContract(unittest.TestCase):
         self.assertIn("del data\\secrets\\.dbpw.tmp >nul 2>nul", text)
         self.assertIn("if not defined DBPW goto :failed", text)
         self.assertIn(">data\\secrets\\db.env echo MARIADB_ROOT_PASSWORD=%DBPW%", text)
-        # Idempotence: an existing db.env is never regenerated.
-        self.assertIn("if exist data\\secrets\\db.env goto :secretok", text)
+        # Fail-closed idempotence: never reuse or regenerate db.env in Install.
+        self.assertIn("if exist data\\secrets\\db.env goto :alreadyinstalled", text)
         # No reintroduction of the FOR-based capture in the whole file.
         for raw in install_lines:
             self.assertIsNone(self.FOR_RE.match(raw))

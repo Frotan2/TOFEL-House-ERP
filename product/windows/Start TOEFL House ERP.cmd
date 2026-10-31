@@ -24,7 +24,7 @@ set DAEMON_TRIES=60
 powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5" >nul 2>nul
 docker info >nul 2>nul && goto :up
 set /a DAEMON_TRIES-=1
-if DAEMON_TRIES GTR 0 goto :waitdaemon
+if %DAEMON_TRIES% GTR 0 goto :waitdaemon
 echo  Docker Desktop did not finish starting within 5 minutes.
 goto :failed
 :up
@@ -32,6 +32,12 @@ if not exist data\secrets\db.env goto :nosecret
 echo [TH_STAGE] Verifying preserved site and database before starting...
 powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Test Existing Installation.ps1"
 if errorlevel 1 goto :datapreservationhold
+rem Starting the daily system must not pull or start an unverified local tag.
+rem The same manifest/loaded-image identity check protects Repair and Install.
+rem This check is read-only: it does not import, retag or download images.
+echo [TH_STAGE] Verifying the installed application image identity...
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1" -VerifyLoadedImage
+if errorlevel 1 goto :imageidentityhold
 if not exist data\activation mkdir data\activation
 icacls data\activation /inheritance:r /grant:r "%USERDOMAIN%\%USERNAME%:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /T >nul 2>nul
 if errorlevel 1 goto :failed
@@ -47,7 +53,7 @@ if errorlevel 1 goto :waitservices
 goto :ready
 :waitservices
 set /a READY_TRIES-=1
-if READY_TRIES GTR 0 goto :waitready
+if %READY_TRIES% GTR 0 goto :waitready
 echo  TOEFL House ERP services did not all become ready within 10 minutes.
 goto :failed
 :ready
@@ -71,6 +77,13 @@ exit /b 1
 echo  Missing database credentials with existing or unverified site/storage.
 echo  Do NOT reinstall, delete data or create a replacement database password.
 echo  Recover the original credentials or contact TOEFL House support.
+if not defined TH_GUI_MODE pause
+exit /b 1
+:imageidentityhold
+echo  Start refused an absent or mismatched verified application image.
+echo  Your existing database and student records were not changed.
+echo  Do not pull another image, reinstall, rebuild or delete Docker volumes.
+echo  Use Check This PC and contact trusted TOEFL House support.
 if not defined TH_GUI_MODE pause
 exit /b 1
 :datapreservationhold

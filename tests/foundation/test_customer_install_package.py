@@ -120,6 +120,22 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn('docker compose up -d --no-build', INSTALL)
         self.assertNotIn('docker compose build', INSTALL)
 
+    def test_gui_refuses_partial_or_alt_site_before_windows_changes(self):
+        # GUI worker must not elevate, install prerequisites or import Docker
+        # images if any old site or interrupted installer claim is present.
+        self.assertIn(r"data\.installation-claim", WORKER)
+        self.assertIn("Get-ChildItem -LiteralPath $sitesRoot -Force -ErrorAction Stop", WORKER)
+        self.assertIn("Existing ERP site storage cannot be inventoried", WORKER)
+        self.assertIn("Previous or partial ERP site files exist.", WORKER)
+        self.assertLess(
+            WORKER.index("Get-ChildItem -LiteralPath $sitesRoot"),
+            WORKER.index("Verify Package Image.ps1"),
+        )
+        self.assertLess(
+            WORKER.index("Get-ChildItem -LiteralPath $sitesRoot"),
+            WORKER.index("Prepare This PC.ps1"),
+        )
+
     def test_customer_can_open_error_diagnostics_without_terminal(self):
         self.assertIn("View Details", GUI)
         self.assertIn("$script:stdoutPath", GUI)

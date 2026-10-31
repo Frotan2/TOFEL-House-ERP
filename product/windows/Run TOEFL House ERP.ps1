@@ -55,9 +55,24 @@ foreach ($bin in @("$env:ProgramFiles\Docker\Docker\resources\bin",
 }
 if ($Action -eq 'Install') {
     $productRoot = Join-Path $PSScriptRoot '..'
-    foreach ($relative in @('data\secrets\db.env', 'data\sites\toeflhouse.localhost\site_config.json')) {
+    foreach ($relative in @('data\secrets\db.env', 'data\sites\toeflhouse.localhost\site_config.json', 'data\.installation-claim')) {
         if (Test-Path -LiteralPath (Join-Path $productRoot $relative)) {
             [Console]::Error.WriteLine('Existing or partial ERP installation preserved. Use Open / Start or contact support.')
+            exit 1
+        }
+    }
+    # Alternate Frappe site names and partial common_site_config are equally
+    # protected. Inspect names only, without reading private files or data.
+    $sitesRoot = Join-Path $productRoot 'data\sites'
+    if (Test-Path -LiteralPath $sitesRoot) {
+        try {
+            if (@(Get-ChildItem -LiteralPath $sitesRoot -Force -ErrorAction Stop |
+                    Select-Object -First 1).Count -gt 0) {
+                [Console]::Error.WriteLine('Previous or partial ERP site files exist. No installation or Windows prerequisites were changed.')
+                exit 1
+            }
+        } catch {
+            [Console]::Error.WriteLine('Existing ERP site storage cannot be inventoried. Installation refused.')
             exit 1
         }
     }

@@ -9,7 +9,10 @@ They do not substitute for real Windows + Docker Desktop qualification.
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 import unittest
 
@@ -117,6 +120,59 @@ class LifecyclePreservationTests(unittest.TestCase):
                     f"{name} must not use a FOR command",
                 )
 
+    def test_customer_retry_loops_use_numeric_values_and_stop_at_zero(self):
+        # CMD does not expand bare names in IF comparisons. Comparing a
+        # literal such as DAEMON_TRIES to 0 can loop forever on failed Docker
+        # startup, leaving the GUI indefinitely at a preparing state.
+        # These linear batch scripts must expand %%NAME%% on every iteration.
+        for name, script, loops in (
+            ("Install", INSTALL, (("DAEMON_TRIES", "waitdaemon"), ("READY_TRIES", "waitready"))),
+            ("Start", START, (("DAEMON_TRIES", "waitdaemon"), ("READY_TRIES", "waitready"))),
+            ("Repair", REPAIR, (("READY_TRIES", "waitready"),)),
+        ):
+            for counter, label in loops:
+                with self.subTest(script=name, counter=counter):
+                    self.assertRegex(script, rf"(?m)^set {counter}=[1-9][0-9]*$")
+                    self.assertRegex(script, rf"(?m)^set /a {counter}-=1$")
+                    self.assertRegex(script, rf"(?m)^if %{counter}% GTR 0 goto :{label}$")
+                    self.assertNotRegex(script, rf"(?m)^if {counter} GTR 0 goto")
+
+    @unittest.skipUnless(os.name == "nt", "Requires Windows cmd.exe")
+    def test_windows_cmd_actually_exits_each_retry_loop(self):
+        # Execute the actual counter decrement and IF line in a two-iteration
+        # disposable CMD harness. If the IF accidentally compares a bare
+        # variable name, CMD will loop until subprocess timeout and fail CI.
+        for name, script, loops in (
+            ("Install", INSTALL, (("DAEMON_TRIES", "waitdaemon"), ("READY_TRIES", "waitready"))),
+            ("Start", START, (("DAEMON_TRIES", "waitdaemon"), ("READY_TRIES", "waitready"))),
+            ("Repair", REPAIR, (("READY_TRIES", "waitready"),)),
+        ):
+            for counter, label in loops:
+                with self.subTest(script=name, counter=counter):
+                    decrement = re.search(rf"(?m)^set /a {counter}-=1$", script)
+                    condition = re.search(rf"(?m)^if .* GTR 0 goto :{label}$", script)
+                    self.assertIsNotNone(decrement)
+                    self.assertIsNotNone(condition)
+                    harness = "\n".join((
+                        "@echo off",
+                        "setlocal",
+                        f"set {counter}=2",
+                        f":{label}",
+                        decrement.group(0),
+                        condition.group(0),
+                        f'if not "%{counter}%"=="0" exit /b 4',
+                        "exit /b 0",
+                        "",
+                    ))
+                    with tempfile.TemporaryDirectory(prefix="th-cmd-retry-") as tmp:
+                        runner = Path(tmp) / "bounded-retry.cmd"
+                        runner.write_text(harness, encoding="ascii")
+                        result = subprocess.run(
+                            ["cmd.exe", "/d", "/c", str(runner)],
+                            capture_output=True, text=True, timeout=5, check=False,
+                        )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_install_orders_verification_before_credentials_and_data(self):
         self.assertLess(
             INSTALL.index("Checking package integrity before local installation"),
@@ -130,6 +186,37 @@ class LifecyclePreservationTests(unittest.TestCase):
             INSTALL.index('docker load -i "release\\toefl-house-erp-app.tar"'),
             INSTALL.index("docker compose up -d --no-build"),
         )
+
+    def test_first_install_checks_storage_and_claims_before_docker_import(self):
+        # Importing a runtime image mutates shared Docker tags. Even this
+        # must be refused when a prior site or database volume exists.
+        preflight = INSTALL.index("Checking that no prior database or site exists")
+        first_check = INSTALL.index("Test Fresh Installation.ps1")
+        verify = INSTALL.index("Checking package integrity before local installation")
+        claim = INSTALL.index(r'mkdir "data\.installation-claim"')
+        runtime = INSTALL.index("Import Offline Runtime.ps1")
+        app = INSTALL.index(r'docker load -i "release\toefl-house-erp-app.tar"')
+        self.assertLess(preflight, first_check)
+        self.assertLess(first_check, verify)
+        self.assertLess(verify, claim)
+        self.assertLess(claim, runtime)
+        self.assertLess(runtime, app)
+        self.assertIn(r'if exist "data\.installation-claim" goto :alreadyinstalled', INSTALL)
+        self.assertIn('if errorlevel 1 goto :alreadyinstalled', INSTALL)
+        self.assertIn(r'if exist data\secrets\db.env goto :alreadyinstalled', INSTALL)
+        self.assertNotIn('goto :secretok', INSTALL)
+
+    @unittest.skipUnless(os.name == "nt", "Requires Windows cmd.exe")
+    def test_install_claim_is_exclusive_on_windows(self):
+        # Actual CMD/NTFS behavior: a second installer cannot create the
+        # same claim directory in the disposable test location.
+        with tempfile.TemporaryDirectory(prefix="th-install-claim-") as tmp:
+            claim = Path(tmp) / ".installation-claim"
+            command = ["cmd.exe", "/d", "/c", "mkdir", str(claim)]
+            first = subprocess.run(command, capture_output=True, text=True, timeout=5)
+            second = subprocess.run(command, capture_output=True, text=True, timeout=5)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertNotEqual(second.returncode, 0, "Duplicate install claim was accepted")
 
     def test_install_reports_a_changed_package_with_partial_state_guidance(self):
         self.assertIn("if errorlevel 1 goto :packagechanged", INSTALL)
@@ -151,6 +238,22 @@ class LifecyclePreservationTests(unittest.TestCase):
         )
         # A bare tag-existence check cannot prove exact-version identity.
         self.assertNotIn("docker image inspect toefl-house-erp-app:local >nul", REPAIR)
+
+    def test_start_refuses_unverified_loaded_image_before_compose(self):
+        # Daily start must not auto-pull or run a substituted application tag.
+        # The manifest identity check is read-only and follows volume/site
+        # preservation checks, but precedes all Compose service mutations.
+        self.assertLess(
+            START.index("Test Existing Installation.ps1"),
+            START.index('Verify Package Image.ps1" -VerifyLoadedImage'),
+        )
+        self.assertLess(
+            START.index('Verify Package Image.ps1" -VerifyLoadedImage'),
+            START.index("docker compose up -d --no-build"),
+        )
+        self.assertIn("if errorlevel 1 goto :imageidentityhold", START)
+        self.assertIn("Start refused an absent or mismatched verified application image", START)
+        self.assertIn("Your existing database and student records were not changed", START)
 
     def test_unknown_storage_is_never_classified_as_disposable(self):
         self.assertIn("Could not check existing database storage", FRESH_PREFLIGHT)

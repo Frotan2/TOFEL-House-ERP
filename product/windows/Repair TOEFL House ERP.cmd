@@ -57,7 +57,7 @@ if errorlevel 1 goto :waitservices
 goto :ready
 :waitservices
 set /a READY_TRIES-=1
-if READY_TRIES GTR 0 goto :waitready
+if %READY_TRIES% GTR 0 goto :waitready
 echo  TOEFL House ERP services did not all become ready within 50 minutes.
 goto :failed
 :ready

@@ -322,6 +322,34 @@ jobs:
             throw "Headless synthetic install did not generate its local credential file."
           }
           Write-Host "Headless installer, start, stop and repair routes passed with fake Docker."
+          # Security regression: after a completed install, a mismatched loaded
+          # application image must refuse daily Start before Compose can run.
+          # All hashes are synthetic fixtures, and only the test kit is touched.
+          $goodImageIdentity = $env:TH_SYNTHETIC_INSPECT_JSON
+          $identity = $goodImageIdentity | ConvertFrom-Json
+          $identity.Config.Labels.'org.toefl-house.source-revision' = ('0' * 40)
+          $env:TH_SYNTHETIC_INSPECT_JSON = $identity | ConvertTo-Json -Depth 10 -Compress
+          $syntheticSecret = Join-Path $kit 'product/data/secrets/db.env'
+          $secretBefore = (Get-FileHash -LiteralPath $syntheticSecret).Hash
+          $syntheticStart = Join-Path $kit 'product/windows/Start TOEFL House ERP.cmd'
+          try {
+            $previousPreference = $ErrorActionPreference
+            try {
+              $ErrorActionPreference = 'Continue'
+              $mismatchedOutput = @(& $syntheticStart 2>&1)
+              $mismatchedExit = $LASTEXITCODE
+            } finally { $ErrorActionPreference = $previousPreference }
+            if ($mismatchedExit -eq 0 -or
+                ($mismatchedOutput -join "`n") -notmatch 'Start refused an absent or mismatched verified application image') {
+              throw 'Daily Start accepted a mismatched image or omitted its safe refusal.'
+            }
+            if ((Get-FileHash -LiteralPath $syntheticSecret).Hash -ne $secretBefore) {
+              throw 'Daily Start changed local credentials while refusing the image.'
+            }
+            Write-Host 'Daily Start refused a mismatched loaded application image; credentials preserved.'
+          } finally {
+            $env:TH_SYNTHETIC_INSPECT_JSON = $goodImageIdentity
+          }
           # Accidental Install on an already completed site must refuse before
           # regenerating credentials, importing an image or invoking Compose.
           $repeatInstall = Join-Path $kit 'product/windows/Install TOEFL House ERP.cmd'
