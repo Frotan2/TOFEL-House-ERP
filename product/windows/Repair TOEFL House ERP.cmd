@@ -15,6 +15,9 @@ echo  Docker Desktop is not running. Please start it, wait a minute, then run th
 if not defined TH_GUI_MODE pause
 exit /b 1
 :repair
+rem Never revert an independently signed update to the original factory image.
+rem Even completed update journals require a version-aware supported recovery.
+if exist data\updates\journal.json goto :updaterepairhold
 if not exist data\secrets\db.env goto :nosecret
 echo [TH_STAGE] Verifying preserved site and database before repair...
 powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Test Existing Installation.ps1"
@@ -81,6 +84,12 @@ exit /b 1
 echo  Missing database credentials with existing or unverified site/storage.
 echo  Do NOT reinstall, delete data or create a replacement database password.
 echo  Recover the original credentials or contact TOEFL House support.
+if not defined TH_GUI_MODE pause
+exit /b 1
+:updaterepairhold
+echo  Repair refused: a signed update journal exists.
+echo  The original factory image must not replace a later approved release.
+echo  Stop and request preservation-safe, version-aware recovery from trusted support.
 if not defined TH_GUI_MODE pause
 exit /b 1
 :datapreservationhold
