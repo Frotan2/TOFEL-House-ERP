@@ -166,9 +166,443 @@ jobs:
           $env:TH_SYNTHETIC_LABELS = $labels | ConvertTo-Json -Compress
           $configDigest = (& python -c "from pathlib import Path; import json, os; from tests.foundation.test_customer_package_manifest import write_image_archive; print(write_image_archive(Path(os.environ['TH_SYNTHETIC_IMAGE_ARCHIVE']), json.loads(os.environ['TH_SYNTHETIC_LABELS'])))").Trim()
           if ($LASTEXITCODE -ne 0) { throw 'Synthetic Docker archive creation failed.' }
-          $rootfsJson = (& python -c "import os,tarfile,json; t=tarfile.open(os.environ['TH_SYNTHETIC_IMAGE_ARCHIVE']); m=json.load(t.extractfile('manifest.json')); c=json.load(t.extractfile(m[0]['Config'])); print(json.dumps(c['rootfs']['diff_ids']))").Trim()
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect synthetic factory layer digests.' }
-          $rootfsLayers = @($rootfsJson | ConvertFrom-Json)
+          # The synthetic image has exactly one layer. Read its digest as a
+          # scalar, avoiding PowerShell 5.1 JSON array unrolling/nesting bugs.
+          $rootfsLayer = (& python -c "import os,tarfile,json; t=tarfile.open(os.environ['TH_SYNTHETIC_IMAGE_ARCHIVE']); m=json.load(t.extractfile('manifest.json')); c=json.load(t.extractfile(m[0]['Config'])); assert len(c['rootfs']['diff_ids']) == 1; print(c['rootfs']['diff_ids'][0])").Trim()
+          if ($LASTEXITCODE -ne 0 -or $rootfsLayer -cnotmatch '^sha256:[0-9a-f]{64}
+          $env:TH_SYNTHETIC_INSPECT_JSON = [ordered]@{
+            # Containerd-backed Docker can expose a manifest digest as .Id.
+            Id = 'sha256:' + ('c' * 64)
+            RepoTags = @('toefl-house-erp-app:local')
+            Config = @{ Labels = $labels }
+            RootFS = @{ Layers = $rootfsLayers }
+          } | ConvertTo-Json -Depth 6 -Compress
+          $target = Join-Path $env:RUNNER_TEMP "Customer Kits"
+          New-Item -ItemType Directory -Path $target -Force | Out-Null
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "product/windows/Prepare Customer Package.ps1" -Destination $target -Version $env:TH_SYNTHETIC_VERSION -SourceRevision $env:TH_SYNTHETIC_REVISION
+          if ($LASTEXITCODE -ne 0) { throw "Synthetic package creation failed." }
+          $kits = @(Get-ChildItem -LiteralPath $target -Directory)
+          if ($kits.Count -ne 1) { throw "Expected exactly one customer package." }
+          $kit = $kits[0].FullName
+          foreach ($relative in @(
+            'TOEFL House ERP.vbs',
+            'product/docker-compose.yml',
+            'product/windows/TOEFL House ERP.ps1',
+            'product/windows/Check This PC.ps1',
+            'product/windows/Test Existing Installation.ps1',
+            'product/windows/OWNER ACCEPTANCE GUIDE.txt',
+            'product/windows/OWNER HANDBOOK.txt',
+            'product/windows/DAILY USE GUIDE.txt',
+            'product/release/toefl-house-erp-app.tar',
+            'product/release/toefl-house-erp-app.tar.sha256',
+            'product/release/release-manifest.json',
+            'product/release/release-manifest.json.sha256',
+            'READ ME FIRST.txt'
+          )) {
+            if (-not (Test-Path -LiteralPath (Join-Path $kit $relative) -PathType Leaf)) {
+              throw "Package missing $relative"
+            }
+          }
+          if (Test-Path -LiteralPath (Join-Path $kit 'product/data')) {
+            throw "Customer package included private application data."
+          }
+          $dailyGuide = [System.IO.File]::ReadAllText((Join-Path $kit 'product/windows/DAILY USE GUIDE.txt'))
+          if ($dailyGuide -notmatch 'HOW TO USE' -or $dailyGuide -notmatch 'NO-GO') {
+            throw "Customer kit omitted its nontechnical daily-use guide or release warning."
+          }
+          $ownerGuide = [System.IO.File]::ReadAllText((Join-Path $kit 'product/windows/OWNER ACCEPTANCE GUIDE.txt'))
+          if ($ownerGuide -notmatch 'RELEASE DECISION: NO-GO' -or $ownerGuide -notmatch 'PRESERVATION') {
+            throw "Customer kit omitted its Owner hold and safe first-check guidance."
+          }
+          $handbook = [System.IO.File]::ReadAllText((Join-Path $kit 'product/windows/OWNER HANDBOOK.txt'))
+          if ($handbook -notmatch 'NO-GO' -or $handbook -notmatch 'Check for Updates' -or $handbook -notmatch 'Install Update') {
+            throw "Customer kit omitted its Owner handbook or its gated-update guidance."
+          }
+          # A corrupt first-run kit must be rejected before creating local data.
+          # Use a separate synthetic copy so the valid package stays unchanged.
+          $damagedKit = Join-Path $env:RUNNER_TEMP "Damaged Customer Kit"
+          Copy-Item -LiteralPath $kit -Destination $damagedKit -Recurse -ErrorAction Stop
+          $damagedArchive = Join-Path $damagedKit 'product/release/toefl-house-erp-app.tar'
+          [System.IO.File]::AppendAllText($damagedArchive, "SYNTHETIC_CORRUPTION")
+          $env:TH_GUI_MODE = '1'
+          $damagedInstall = Join-Path $damagedKit 'product/windows/Install TOEFL House ERP.cmd'
+          # A correctly rejected package emits stderr. Windows PowerShell
+          # 5.1 wraps native stderr in a NativeCommandError when the CI
+          # preference is Stop. Capture the EXPECTED refusal, then restore Stop.
+          $previousPreference = $ErrorActionPreference
+          try {
+            $ErrorActionPreference = 'Continue'
+            $rejectedOutput = @(& $damagedInstall 2>&1)
+            $rejectedExit = $LASTEXITCODE
+          } finally {
+            $ErrorActionPreference = $previousPreference
+          }
+          if ($rejectedExit -eq 0) { throw "Damaged kit was accepted by installer." }
+          if (Test-Path -LiteralPath (Join-Path $damagedKit 'product/data')) {
+            throw "Damaged kit modified local ERP data before integrity verification."
+          }
+          if (($rejectedOutput -join [Environment]::NewLine) -notmatch 'Package integrity verification failed') {
+            throw "Damaged kit refusal did not explain its cause."
+          }
+          # Check This PC must be runnable with an empty package and must
+          # not create site files, secrets, Docker volumes or backups.
+          if (Test-Path -LiteralPath (Join-Path $kit 'product/data')) {
+            throw "Unexpected customer data before read-only PC check."
+          }
+          $checkScript = Join-Path $kit 'product/windows/Check This PC.ps1'
+          $checkOutput = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $checkScript 2>&1)
+          if ($LASTEXITCODE -ne 0) { throw "Read-only PC check failed." }
+          if (($checkOutput -join "`n") -notmatch 'Production authorization: NOT VERIFIED') {
+            throw "Read-only PC check omitted release hold notice."
+          }
+          if (Test-Path -LiteralPath (Join-Path $kit 'product/data')) {
+            throw "Read-only PC check unexpectedly changed customer data."
+          }
+          # Exercise the customer-facing CMD paths without real Docker or databases.
+          $fakeCurl = 'public class FakeCurl { public static int Main(string[] args) { return 0; } }'
+          Add-Type -TypeDefinition $fakeCurl -OutputAssembly (Join-Path $fakeDir 'curl.exe') -OutputType ConsoleApplication
+          # The structured PowerShell readiness probe performs a real loopback
+          # HTTP request. Supply an explicit disposable HTTP fixture rather
+          # than bypassing that part of the production probe.
+          $fakeHttp = @'
+          using System;
+          using System.Net;
+          using System.Net.Sockets;
+          using System.Text;
+          public class ReadyHttp {
+              public static void Main() {
+                  var listener = new TcpListener(IPAddress.Loopback, 8000);
+                  listener.Start();
+                  while (true) {
+                      using (var client = listener.AcceptTcpClient()) {
+                          var stream = client.GetStream();
+                          stream.ReadTimeout = 5000;
+                          var buffer = new byte[8192];
+                          try {
+                              stream.Read(buffer, 0, buffer.Length);
+                              var response = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK");
+                              stream.Write(response, 0, response.Length);
+                          } catch (System.IO.IOException) { }
+                      }
+                  }
+              }
+          }
+          '@
+          $fakeHttpPath = Join-Path $fakeDir 'ready-http.exe'
+          Add-Type -TypeDefinition $fakeHttp -OutputAssembly $fakeHttpPath -OutputType ConsoleApplication
+          $fakeHttpProcess = Start-Process -FilePath $fakeHttpPath -PassThru -WindowStyle Hidden
+          Start-Sleep -Milliseconds 250
+          if ($fakeHttpProcess.HasExited) { throw 'Synthetic loopback HTTP listener could not start.' }
+          $env:TH_GUI_MODE = '1'
+          try {
+          foreach ($task in @('Install', 'Start', 'Stop', 'Repair')) {
+            if ($task -eq 'Start') {
+              # Fake Docker cannot create Frappe data. Model the successful
+              # completed synthetic Install's site and named volume explicitly.
+              $syntheticSite = Join-Path $kit 'product/data/sites/toeflhouse.localhost'
+              New-Item -ItemType Directory -Path $syntheticSite -Force | Out-Null
+              [System.IO.File]::WriteAllText((Join-Path $syntheticSite 'site_config.json'), '{}')
+              $env:TH_SYNTHETIC_VOLUME_EXISTS = '1'
+            }
+            $script = Join-Path $kit ("product/windows/" + $task + " TOEFL House ERP.cmd")
+            $output = @(& $script 2>&1)
+            $taskExit = $LASTEXITCODE
+            $stageSummary = @($output | Where-Object { $_ -match '^\[TH_STAGE\]' })
+            Write-Host ("Synthetic " + $task + " exit=" + $taskExit + " stageCount=" + $stageSummary.Count)
+            if ($stageSummary.Count -eq 0) {
+              $safeMessages = @($output | Where-Object { $_ -match 'Docker Desktop|Windows could not|missing|failed|could not|site|install|script|data|database' } | Select-Object -First 8)
+              foreach ($line in $safeMessages) { Write-Host ("Synthetic diagnostic: " + (($line -replace 'MARIADB_ROOT_PASSWORD=.*', 'MARIADB_ROOT_PASSWORD=[REDACTED]') -replace 'Password:.*', 'Password:[REDACTED]')) }
+            }
+            if ($taskExit -ne 0) {
+              throw ("Headless " + $task + " failed: " + ($output | Out-String))
+            }
+            if (($output | Out-String) -match 'Username: Administrator|Password: ') {
+              throw "Headless execution leaked the initial Administrator credentials."
+            }
+          }
+          } finally {
+            if (-not $fakeHttpProcess.HasExited) { Stop-Process -Id $fakeHttpProcess.Id -ErrorAction Stop }
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $kit 'product/data/secrets/db.env') -PathType Leaf)) {
+            $productData = Join-Path $kit 'product/data'
+            Write-Host ("Diagnostic: kit product data directory exists=" + (Test-Path -LiteralPath $productData))
+            if (Test-Path -LiteralPath $productData) {
+              Get-ChildItem -LiteralPath $productData -Recurse -Force | ForEach-Object { Write-Host ("Diagnostic path: " + $_.FullName) }
+            }
+            throw "Headless synthetic install did not generate its local credential file."
+          }
+          Write-Host "Headless installer, start, stop and repair routes passed with fake Docker."
+          $installedIdentityPath = Join-Path $kit 'product/data/activation/installed-image-identity.json'
+          if (-not (Test-Path -LiteralPath $installedIdentityPath -PathType Leaf)) {
+            throw 'Initial Install did not record the verified Docker image ID.'
+          }
+          $installedIdentity = [IO.File]::ReadAllText($installedIdentityPath) | ConvertFrom-Json
+          if ($installedIdentity.provenance -cne 'factory' -or
+              $installedIdentity.image_id -cne ('sha256:' + ('c' * 64))) {
+            throw 'Initial installed-image identity is not pinned to actual loaded bytes.'
+          }
+          # Security regression: after a completed install, a mismatched loaded
+          # application image must refuse daily Start before Compose can run.
+          # All hashes are synthetic fixtures, and only the test kit is touched.
+          $goodImageIdentity = $env:TH_SYNTHETIC_INSPECT_JSON
+          $identity = $goodImageIdentity | ConvertFrom-Json
+          $identity.Config.Labels.'org.toefl-house.source-revision' = ('0' * 40)
+          $env:TH_SYNTHETIC_INSPECT_JSON = $identity | ConvertTo-Json -Depth 10 -Compress
+          $syntheticSecret = Join-Path $kit 'product/data/secrets/db.env'
+          $secretBefore = (Get-FileHash -LiteralPath $syntheticSecret).Hash
+          $syntheticStart = Join-Path $kit 'product/windows/Start TOEFL House ERP.cmd'
+          try {
+            $previousPreference = $ErrorActionPreference
+            try {
+              $ErrorActionPreference = 'Continue'
+              $mismatchedOutput = @(& $syntheticStart 2>&1)
+              $mismatchedExit = $LASTEXITCODE
+            } finally { $ErrorActionPreference = $previousPreference }
+            if ($mismatchedExit -eq 0 -or
+                ($mismatchedOutput -join "`n") -notmatch 'Start refused an absent or mismatched verified application image') {
+              throw 'Daily Start accepted a mismatched image or omitted its safe refusal.'
+            }
+            if ((Get-FileHash -LiteralPath $syntheticSecret).Hash -ne $secretBefore) {
+              throw 'Daily Start changed local credentials while refusing the image.'
+            }
+            Write-Host 'Daily Start refused a mismatched loaded application image; credentials preserved.'
+          } finally {
+            $env:TH_SYNTHETIC_INSPECT_JSON = $goodImageIdentity
+          }
+          # Accidental Install on an already completed site must refuse before
+          # regenerating credentials, importing an image or invoking Compose.
+          $repeatInstall = Join-Path $kit 'product/windows/Install TOEFL House ERP.cmd'
+          $previousPreference = $ErrorActionPreference
+          try {
+            $ErrorActionPreference = 'Continue'
+            $alreadyInstalledOutput = @(& $repeatInstall 2>&1)
+            $alreadyInstalledExit = $LASTEXITCODE
+          } finally {
+            $ErrorActionPreference = $previousPreference
+          }
+          if ($alreadyInstalledExit -eq 0 -or
+              ($alreadyInstalledOutput -join "`n") -notmatch 'no installation attempted') {
+            throw "Repeated Install did not refuse the existing Frappe site."
+          }
+          Write-Host "Repeated Install was refused safely."
+          # The graphical update path must run on a real Windows host and stop
+          # before any download or mutation while the provider has not enabled
+          # a production channel. Exit 3 is the documented refusal code.
+          $updateScript = Join-Path $kit 'product/windows/Update TOEFL House ERP.ps1'
+          $previousPreference = $ErrorActionPreference
+          try {
+            $ErrorActionPreference = 'Continue'
+            $updateOutput = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $updateScript -Action Check 2>&1)
+            $updateExit = $LASTEXITCODE
+          } finally { $ErrorActionPreference = $previousPreference }
+          $updateText = ($updateOutput -join "`n")
+          Write-Host "Update Check output:"
+          Write-Host $updateText
+          if ($updateExit -ne 3) {
+            # Annotations are the only failure detail reachable from the API;
+            # the job log itself lives behind a host this project cannot poll.
+            Write-Host ("::error::Update Check exit=" + $updateExit + " lines=" + (($updateText -split "`n").Count))
+            foreach ($line in @($updateText -split "`n" | Select-Object -Last 6)) {
+              Write-Host ("::error::" + $line)
+            }
+            throw ("Update Check should refuse a disabled channel, exit=" + $updateExit)
+          }
+          if ($updateText -notmatch 'paused updates') {
+            Write-Host "::error::Update refusal did not explain the disabled channel."
+            throw "Update refusal did not explain the disabled channel."
+          }
+          if ($updateText -notmatch 'Your data was not changed\.' -or $updateText -match '\p{IsArabic}') {
+            throw "Update refusal must explain data preservation in the approved English interface."
+          }
+          $updateResult = Join-Path $kit 'product/data/updates/last-result.json'
+          if (-not (Test-Path -LiteralPath $updateResult -PathType Leaf)) {
+            Write-Host "::error::Update refusal did not record a safe result."
+            if (Test-Path -LiteralPath (Join-Path $kit 'product/data/updates')) {
+              Get-ChildItem -LiteralPath (Join-Path $kit 'product/data/updates') -Recurse -Force |
+                ForEach-Object { Write-Host ("::error::updates path " + $_.FullName) }
+            }
+            throw "Update refusal did not record a safe result."
+          }
+          $resultText = [System.IO.File]::ReadAllText($updateResult)
+          $result = $resultText | ConvertFrom-Json -ErrorAction Stop
+          if ($result.document_type -ne 'toefl-house-erp-updater-result') { throw "Update refusal did not record the documented result type." }
+          if ($result.message_key -ne 'channel.disabled') { throw "Update refusal recorded an unexpected reason." }
+          if ($result.status -ne 'refused') { throw "Update refusal recorded an unexpected status." }
+          if ($resultText -match 'password|secret|MARIADB|C:\\\\') { throw "Update refusal recorded private detail." }
+          Write-Host "Update Check refused a disabled provider channel without downloading anything."
+          # Partial-install protection: credentials alone must prevent Install
+          # even when the synthetic Frappe site config is temporarily absent.
+          $siteConfig = Join-Path $kit 'product/data/sites/toeflhouse.localhost/site_config.json'
+          $heldSiteConfig = "$siteConfig.synthetic-hold"
+          Move-Item -LiteralPath $siteConfig -Destination $heldSiteConfig
+          try {
+            $missingSiteOutput = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $checkScript 2>&1)
+            if ($LASTEXITCODE -ne 0 -or
+                ($missingSiteOutput -join "`n") -notmatch 'BLOCKED: credentials exist but site configuration is missing') {
+              throw "Owner read-only PC check missed a missing Frappe site configuration."
+            }
+            $previousPreference = $ErrorActionPreference
+            try {
+              $ErrorActionPreference = 'Continue'
+              $partialInstallOutput = @(& $repeatInstall 2>&1)
+              $partialInstallExit = $LASTEXITCODE
+            } finally {
+              $ErrorActionPreference = $previousPreference
+            }
+            if ($partialInstallExit -eq 0 -or
+                ($partialInstallOutput -join "`n") -notmatch 'no installation attempted') {
+              throw "Partial install with preserved credentials was treated as a fresh install."
+            }
+          } finally {
+            Move-Item -LiteralPath $heldSiteConfig -Destination $siteConfig
+          }
+          Write-Host "Partial install with preserved credentials was refused safely."
+          # A missing database volume with credentials + site config present
+          # must NOT allow Compose to create an empty replacement database.
+          $env:TH_SYNTHETIC_VOLUME_EXISTS = '0'
+          $missingVolumeCheck = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $checkScript 2>&1)
+          if ($LASTEXITCODE -ne 0 -or
+              ($missingVolumeCheck -join "`n") -notmatch 'NOT VERIFIED: credentials exist but the database volume could not be confirmed') {
+            throw "Owner read-only PC check missed a missing named database volume."
+          }
+          $blockedStart = Join-Path $kit 'product/windows/Start TOEFL House ERP.cmd'
+          $previousPreference = $ErrorActionPreference
+          try {
+            $ErrorActionPreference = 'Continue'
+            $lostVolumeOutput = @(& $blockedStart 2>&1)
+            $lostVolumeExit = $LASTEXITCODE
+          } finally {
+            $ErrorActionPreference = $previousPreference
+            $env:TH_SYNTHETIC_VOLUME_EXISTS = '1'
+          }
+          if ($lostVolumeExit -eq 0 -or ($lostVolumeOutput -join "`n") -notmatch 'BLOCKED TO PRESERVE DATA') {
+            throw "Start accepted a missing database volume; data preservation guard failed."
+          }
+          if (($lostVolumeOutput -join "`n") -match 'Starting the installed TOEFL House ERP') {
+            throw "Start reached Docker Compose despite a missing database volume."
+          }
+          Write-Host "Missing native database volume was refused without a start attempt."
+          # Simulate a lost credential file after synthetic installation. The
+          # read-only check must catch it without viewing password contents.
+          $credential = Join-Path $kit 'product/data/secrets/db.env'
+          $heldCredential = "$credential.synthetic-hold"
+          if (Test-Path -LiteralPath $heldCredential) {
+            throw "Unexpected synthetic credential hold file."
+          }
+          Move-Item -LiteralPath $credential -Destination $heldCredential
+          try {
+            $blockedCheck = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $checkScript 2>&1)
+            if ($LASTEXITCODE -ne 0) { throw "Read-only missing-credential check failed." }
+            if (($blockedCheck -join "`n") -notmatch 'BLOCKED: existing site/database but credential file missing') {
+              throw "Read-only check failed to warn about preserved data and missing credentials."
+            }
+          } finally {
+            Move-Item -LiteralPath $heldCredential -Destination $credential
+          }
+          Write-Host "Missing-credential preservation check passed."
+          $tar = Join-Path $kit 'product/release/toefl-house-erp-app.tar'
+          $sha = "$tar.sha256"
+          $manifest = Join-Path $kit 'product/release/release-manifest.json'
+          function Assert-PackageVerification {
+            param([bool]$ShouldPass, [switch]$Loaded, [switch]$Provider)
+            $verifyArgs = @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+              '-File', 'product/windows/Verify Package Image.ps1', '-Archive', $tar,
+              '-Checksum', $sha, '-Manifest', $manifest)
+            if ($Loaded) { $verifyArgs += '-VerifyLoadedImage' }
+            if ($Provider) { $verifyArgs += '-VerifyProviderImage' }
+            $previousPreference = $ErrorActionPreference
+            try {
+              $ErrorActionPreference = 'Continue'
+              $verifyOutput = @(& powershell.exe @verifyArgs 2>&1)
+              $verifyExit = $LASTEXITCODE
+            } finally { $ErrorActionPreference = $previousPreference }
+            if (($verifyExit -eq 0) -ne $ShouldPass) {
+              throw ('Unexpected package verification result: ' + ($verifyOutput | Out-String))
+            }
+          }
+          Assert-PackageVerification $true
+          Assert-PackageVerification $true -Loaded
+          Assert-PackageVerification $true -Loaded -Provider
+          $originalManifest = [System.IO.File]::ReadAllBytes($manifest)
+          try {
+            [System.IO.File]::AppendAllText($manifest, ' ')
+            Assert-PackageVerification $false
+            Assert-PackageVerification $false -Loaded
+          } finally { [System.IO.File]::WriteAllBytes($manifest, $originalManifest) }
+          $manifestChecksum = "$manifest.sha256"
+          $originalManifestChecksum = [System.IO.File]::ReadAllBytes($manifestChecksum)
+          try {
+            Remove-Item -LiteralPath $manifestChecksum
+            Assert-PackageVerification $false
+            [System.IO.File]::WriteAllText($manifestChecksum, 'not-a-digest')
+            Assert-PackageVerification $false
+          } finally { [System.IO.File]::WriteAllBytes($manifestChecksum, $originalManifestChecksum) }
+          $originalInspect = $env:TH_SYNTHETIC_INSPECT_JSON
+          try {
+            $wrongImage = $originalInspect | ConvertFrom-Json
+            $wrongImage.Id = 'sha256:' + ('0' * 64)
+            $env:TH_SYNTHETIC_INSPECT_JSON = $wrongImage | ConvertTo-Json -Depth 6 -Compress
+            Assert-PackageVerification $false -Loaded
+            Assert-PackageVerification $false -Loaded -Provider
+            $wrongImage = $originalInspect | ConvertFrom-Json
+            $wrongImage.Config.Labels.'org.toefl-house.source-revision' = 'b' * 40
+            $env:TH_SYNTHETIC_INSPECT_JSON = $wrongImage | ConvertTo-Json -Depth 6 -Compress
+            Assert-PackageVerification $false -Loaded
+          } finally { $env:TH_SYNTHETIC_INSPECT_JSON = $originalInspect }
+          # Signed-update handoff REHEARSAL ONLY: the trusted engine is not
+          # invoked, just its already-verified candidate ID and completed journal.
+          # Confirm that a new image starts only with a matching durable record.
+          $originalIdentityRecord = [IO.File]::ReadAllBytes($installedIdentityPath)
+          $journal = Join-Path $kit 'product/data/updates/journal.json'
+          [IO.Directory]::CreateDirectory((Split-Path -Parent $journal)) | Out-Null
+          [IO.File]::WriteAllText($journal, '{"schema_version":1,"document_type":"toefl-house-erp-update-journal","phase":"applying","version":"2026.11.01"}')
+          try {
+            Assert-PackageVerification $false -Loaded
+          } finally {
+            Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
+          }
+          $updateId = 'sha256:' + ('d' * 64)
+          $simulatedImage = $originalInspect | ConvertFrom-Json
+          $simulatedImage.Id = $updateId
+          $simulatedImage.Config.Labels.'org.toefl-house.release-version' = '2026.11.01'
+          $env:TH_SYNTHETIC_INSPECT_JSON = $simulatedImage | ConvertTo-Json -Depth 6 -Compress
+          $env:TH_SYNTHETIC_VOLUME_EXISTS = '1'
+          try {
+            & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'product/windows/Verify Package Image.ps1' -VerifyLoadedImage -RecordSignedUpdateImage -ExpectedUpdatedImageId $updateId -ExpectedUpdatedVersion '2026.11.01' -ExpectedUpdatedRevision $env:TH_SYNTHETIC_REVISION
+            if ($LASTEXITCODE -ne 0) { throw 'Verified synthetic signed-update identity could not be recorded.' }
+            Assert-PackageVerification $false -Loaded
+            [IO.Directory]::CreateDirectory((Split-Path -Parent $journal)) | Out-Null
+            [IO.File]::WriteAllText($journal, '{"schema_version":1,"document_type":"toefl-house-erp-update-journal","phase":"completed","version":"2026.11.01"}')
+            Assert-PackageVerification $true -Loaded
+            $startAfterUpdate = Join-Path $kit 'product/windows/Start TOEFL House ERP.cmd'
+            & $startAfterUpdate | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Daily Start refused the completed simulated signed update.' }
+            $repairAfterUpdate = Join-Path $kit 'product/windows/Repair TOEFL House ERP.cmd'
+            $previousPreference = $ErrorActionPreference
+            try {
+              $ErrorActionPreference = 'Continue'
+              $repairMessage = @(& $repairAfterUpdate 2>&1)
+              $repairExit = $LASTEXITCODE
+            } finally { $ErrorActionPreference = $previousPreference }
+            if ($repairExit -eq 0 -or ($repairMessage -join "`n") -notmatch 'signed update journal exists') {
+              throw 'Legacy factory Repair would overwrite a signed update.'
+            }
+            [IO.File]::WriteAllText($journal, '{"schema_version":1,"document_type":"toefl-house-erp-update-journal","phase":"applying","version":"2026.11.01"}')
+            Assert-PackageVerification $false -Loaded
+          } finally {
+            $env:TH_SYNTHETIC_INSPECT_JSON = $originalInspect
+            [IO.File]::WriteAllBytes($installedIdentityPath, $originalIdentityRecord)
+            Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
+          }
+          Assert-PackageVerification $true -Loaded
+          Add-Content -LiteralPath $tar -Value 'TAMPERED'
+          Assert-PackageVerification $false
+          Write-Host "Package allowlist, manifest/image integrity and loaded identity checks passed."
+          exit 0
+) {
+            throw 'Cannot read synthetic factory layer digest.'
+          }
+          $rootfsLayers = @($rootfsLayer)
           $env:TH_SYNTHETIC_INSPECT_JSON = [ordered]@{
             # Containerd-backed Docker can expose a manifest digest as .Id.
             Id = 'sha256:' + ('c' * 64)
