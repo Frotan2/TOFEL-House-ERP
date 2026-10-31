@@ -257,14 +257,15 @@ public sealed class OnlineSetup : Form {
         Controls.Add(status); Controls.Add(progress); Controls.Add(start); Controls.Add(cancel);
         worker.WorkerReportsProgress = true; worker.WorkerSupportsCancellation = true;
         worker.DoWork += (sender, args) => {
-            args.Result = OnlineDownloader.Download(plan, root, worker);
+            try { args.Result = OnlineDownloader.Download(plan, root, worker); }
+            catch (OperationCanceledException) { args.Cancel = true; }
         };
         worker.ProgressChanged += (sender, args) => {
             progress.Value = Math.Max(0, Math.Min(100, args.ProgressPercentage));
             status.Text = "Downloading verified offline installation package: " + progress.Value + "%\r\nDo not turn off this computer.";
         };
         worker.RunWorkerCompleted += (sender, args) => {
-            start.Enabled = true; cancel.Text = "Close";
+            start.Enabled = true; cancel.Enabled = true; cancel.Text = "Close";
             if (args.Error != null) {
                 status.Text = "Download failed. No ERP database was changed.";
                 MessageBox.Show(args.Error.Message, "TOEFL House Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
