@@ -7,6 +7,7 @@ param(
     [string]$ManifestChecksum = "",
     [switch]$VerifyLoadedImage,
     [switch]$RecordFactoryImage,
+    [switch]$VerifyProviderImage,
     [switch]$RecordSignedUpdateImage,
     [string]$ExpectedUpdatedImageId = "",
     [string]$ExpectedUpdatedVersion = "",
@@ -163,11 +164,12 @@ try {
         $release.image.labels.'org.toefl-house.release-version' -cne $release.version) {
         throw "The release manifest does not bind the image to its source and version."
     }
-    if (($RecordFactoryImage -or $RecordSignedUpdateImage) -and -not $VerifyLoadedImage) {
+    if (($RecordFactoryImage -or $RecordSignedUpdateImage -or $VerifyProviderImage) -and -not $VerifyLoadedImage) {
         throw "Image identity can only be recorded while verifying the loaded image."
     }
-    if ($RecordFactoryImage -and $RecordSignedUpdateImage) {
-        throw "An installed image cannot have two release provenances."
+    if (($RecordFactoryImage -and $RecordSignedUpdateImage) -or
+        ($VerifyProviderImage -and ($RecordFactoryImage -or $RecordSignedUpdateImage))) {
+        throw "Provider image verification and installed identity recording are separate operations."
     }
     if ($VerifyLoadedImage) {
         $loadedJson = & docker image inspect "toefl-house-erp-app:local" --format '{{json .}}' 2>$null
@@ -186,30 +188,36 @@ try {
         $identityDirectory = Split-Path -Parent $identityPath
         $sourceRevision = [string]$loaded.Config.Labels.'org.toefl-house.source-revision'
         $releaseVersion = [string]$loaded.Config.Labels.'org.toefl-house.release-version'
-        if ($RecordFactoryImage -or $RecordSignedUpdateImage) {
-            if ($RecordFactoryImage) {
-                if ($sourceRevision -cne $release.source_revision -or $releaseVersion -cne $release.version) {
-                    throw "Factory image labels do not match the verified original release."
-                }
-                # Labels and a tag are forgeable: verify the loaded filesystem
-                # layer digests against the separately SHA-256 verified TAR.
-                # Docker 29's image Id may represent a manifest, not the config,
-                # but RootFS.Layers still reports uncompressed diff IDs.
-                $expectedArchive = Get-ArchiveIdentity $Archive
-                if ($expectedArchive.config_digest -cne $release.image.config_digest) {
-                    throw "The factory image archive config differs from its verified manifest."
-                }
-                $expectedLayers = @($expectedArchive.rootfs_layers)
-                $actualLayers = @($loaded.RootFS.Layers)
-                if ($expectedLayers.Count -ne $actualLayers.Count) {
+        # Package creation verifies loaded factory bytes without recording
+        # anything inside the customer's distributable package.
+        if ($RecordFactoryImage -or $VerifyProviderImage) {
+            if ($sourceRevision -cne $release.source_revision -or $releaseVersion -cne $release.version) {
+                throw "Factory image labels do not match the verified original release."
+            }
+            if (-not (Test-Path -LiteralPath $Archive -PathType Leaf) -or
+                (Get-ProductFileSha256 -LiteralPath $Archive) -cne $release.image.sha256) {
+                throw "The factory image archive does not match the verified release checksum."
+            }
+            $expectedArchive = Get-ArchiveIdentity $Archive
+            if ($expectedArchive.config_digest -cne $release.image.config_digest) {
+                throw "The factory image archive config differs from its verified manifest."
+            }
+            $expectedLayers = @($expectedArchive.rootfs_layers)
+            $actualLayers = @($loaded.RootFS.Layers)
+            if ($expectedLayers.Count -ne $actualLayers.Count) {
+                throw "The loaded factory filesystem differs from the verified release archive."
+            }
+            for ($layerIndex = 0; $layerIndex -lt $expectedLayers.Count; $layerIndex++) {
+                if ([string]$expectedLayers[$layerIndex] -cne [string]$actualLayers[$layerIndex]) {
                     throw "The loaded factory filesystem differs from the verified release archive."
                 }
-                for ($layerIndex = 0; $layerIndex -lt $expectedLayers.Count; $layerIndex++) {
-                    if ([string]$expectedLayers[$layerIndex] -cne [string]$actualLayers[$layerIndex]) {
-                        throw "The loaded factory filesystem differs from the verified release archive."
-                    }
-                }
             }
+            if ($VerifyProviderImage) {
+                Write-Host "Provider loaded image filesystem and release identity: verified."
+                exit 0
+            }
+        }
+        if ($RecordFactoryImage -or $RecordSignedUpdateImage) {
             if ($RecordFactoryImage -and (Test-Path -LiteralPath $identityPath)) {
                 throw "The installed image identity already exists; an initial installer must not overwrite it."
             }
