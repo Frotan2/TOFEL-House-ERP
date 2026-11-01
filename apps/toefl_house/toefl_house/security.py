@@ -35,6 +35,7 @@ KIND_ROLES = {
     "release_decision": "Placement Releaser",
     "create_walkin_inquiry": "Reception",
     "update_walkin_inquiry": "Reception",
+    "correct_walkin_inquiry": "Reception",
     "record_applicant": "Admission Officer",
     "create_admission": "Admission Officer",
     "review_admission": "Admission Reviewer",

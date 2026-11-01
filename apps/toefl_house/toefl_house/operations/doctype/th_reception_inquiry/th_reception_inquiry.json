@@ -4,7 +4,7 @@
   "module": "Operations",
   "autoname": "hash",
   "engine": "InnoDB",
-  "track_changes": 0,
+  "track_changes": 1,
   "allow_rename": 0,
   "field_order": [
     "person_name",
@@ -16,7 +16,9 @@
     "recorded_by",
     "version",
     "synthetic",
-    "open_identity_key"
+    "open_identity_key",
+    "last_correction_reason",
+    "last_corrected_by"
   ],
   "fields": [
     {
@@ -88,6 +90,21 @@
       "read_only": 1,
       "hidden": 1,
       "description": "System-only index preventing simultaneous identical open intake. NULL when closed or no contact; not a person identity."
+    },
+    {
+      "fieldname": "last_correction_reason",
+      "label": "Last identity correction reason",
+      "fieldtype": "Small Text",
+      "read_only": 1,
+      "hidden": 1
+    },
+    {
+      "fieldname": "last_corrected_by",
+      "label": "Last corrected by",
+      "fieldtype": "Link",
+      "options": "User",
+      "read_only": 1,
+      "hidden": 1
     }
   ],
   "permissions": [],

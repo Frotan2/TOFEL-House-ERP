@@ -79,7 +79,7 @@ def protect_inquiry(doc, method=None):
     if method in ("on_trash", "before_cancel", "before_update_after_submit"):
         raise frappe.PermissionError("Reception inquiries cannot be cancelled, deleted or edited after submit")
     kind, actor = require_command(DOCTYPE)
-    if kind not in {"create_walkin_inquiry", "update_walkin_inquiry"}:
+    if kind not in {"create_walkin_inquiry", "update_walkin_inquiry", "correct_walkin_inquiry"}:
         raise frappe.PermissionError("Unauthorized reception inquiry command")
     if doc.status not in STATUSES or int(doc.version or 0) < 1:
         raise frappe.ValidationError("Invalid inquiry status or version")
@@ -100,16 +100,36 @@ def protect_inquiry(doc, method=None):
                 or int(doc.synthetic) != record_synthetic_flag()):
             raise frappe.PermissionError("Only the authorized first-contact command may create an inquiry")
         return
-    if kind != "update_walkin_inquiry":
+    if kind not in {"update_walkin_inquiry", "correct_walkin_inquiry"}:
         raise frappe.PermissionError("An existing inquiry cannot be created twice")
     original = frappe.db.get_value(DOCTYPE, doc.name,
         ["person_name", "phone", "program_interest", "th_branch",
-         "recorded_by", "synthetic", "status", "version"], as_dict=True)
+         "recorded_by", "synthetic", "status", "version", "notes",
+         "last_correction_reason", "last_corrected_by"], as_dict=True)
     if not original or original.status == "Closed" or int(doc.version) != int(original.version) + 1:
         raise frappe.ValidationError("Inquiry was changed or closed; refresh before updating")
-    for key in ("person_name", "phone", "program_interest", "th_branch", "recorded_by", "synthetic"):
+    if kind == "correct_walkin_inquiry":
+        if frappe.db.exists("TH Placement Case", {"reception_inquiry": doc.name}):
+            raise frappe.PermissionError(
+                "Placement already consumed this Inquiry; identity corrections need Academic Manager review")
+        for key in ("program_interest", "th_branch", "recorded_by", "synthetic",
+                    "status", "notes"):
+            if (doc.get(key) or "") != (original.get(key) or ""):
+                raise frappe.PermissionError(
+                    "Identity correction cannot alter Branch, status, notes or original owner")
+        if ((doc.person_name == original.person_name and
+             (doc.phone or "") == (original.phone or "")) or
+                not _text(doc.get("last_correction_reason") or "",
+                          "Correction reason", required=True, length=500) or
+                doc.get("last_corrected_by") != actor):
+            raise frappe.ValidationError(
+                "Provide changed visitor details and a recorded correction reason")
+        return
+    for key in ("person_name", "phone", "program_interest", "th_branch", "recorded_by",
+                "synthetic", "last_correction_reason", "last_corrected_by"):
         if (doc.get(key) or "") != (original.get(key) or ""):
-            raise frappe.PermissionError("An inquiry's original identity and branch cannot be silently rewritten")
+            raise frappe.PermissionError(
+                "An inquiry's original identity and correction history cannot be silently rewritten")
     if original.status == "Awaiting Placement" and doc.status == "Contacted":
         # Once Placement has consumed a referral, Reception must not move
         # its status backwards and incorrectly offer another test.
@@ -201,3 +221,53 @@ def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes=
         "inquiry": inquiry, "expected_version": expected_version,
         "status": status, "notes": notes,
     }, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def correct_walkin_inquiry(request_key, inquiry, expected_version, person_name, phone="", reason=""):
+    """Audit a genuine Reception typo BEFORE the inquiry is used by Placement.
+
+    The locked Inquiry serializes against competing corrections and the
+    Placement Publisher's origin lock. After a case is attached the origin is
+    immutable and only an independently approved identity review may repair it.
+    """
+    def work(actor):
+        if type(expected_version) is int:
+            version = expected_version
+        elif isinstance(expected_version, str) and re.fullmatch(
+                r"[1-9][0-9]{0,8}", expected_version):
+            version = int(expected_version)
+        else:
+            raise frappe.ValidationError("An integer inquiry version is required")
+        if not 1 <= version <= 999999999:
+            raise frappe.ValidationError("An integer inquiry version is required")
+        name = _text(inquiry, "Inquiry", required=True)
+        person = _text(person_name, "Visitor name", required=True)
+        contact = _phone(phone)
+        justification = _text(reason, "Correction reason", required=True, length=500)
+        doc = frappe.get_doc(DOCTYPE, name, for_update=True)
+        if doc.status == "Closed" or int(doc.version) != version:
+            raise frappe.ValidationError("Inquiry changed or is closed; refresh before correcting")
+        if frappe.db.exists("TH Placement Case", {"reception_inquiry": name}):
+            raise frappe.PermissionError(
+                "Placement already consumed this Inquiry; identity corrections need Academic Manager review")
+        if doc.person_name == person and (doc.phone or "") == contact:
+            raise frappe.ValidationError("Nothing to correct")
+        doc.person_name = person
+        doc.phone = contact
+        doc.open_identity_key = _open_identity_key(doc.th_branch, person, contact)
+        doc.last_correction_reason = justification
+        doc.last_corrected_by = actor
+        doc.version += 1
+        try:
+            doc.save(ignore_permissions=True)
+        except frappe.DuplicateEntryError as exc:
+            raise frappe.ValidationError(
+                "Another open inquiry already uses these visitor details; search first") from exc
+        return _result(doc), dict(
+            target=doc.name,
+            after_hash=digest([doc.name, doc.version, person, contact, justification]))
+
+    return _execute("correct_walkin_inquiry", request_key, {
+        "inquiry": inquiry, "expected_version": expected_version,
+        "person_name": person_name, "phone": phone, "reason": reason}, work)
