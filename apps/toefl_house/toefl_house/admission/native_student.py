@@ -7,6 +7,7 @@ and the separately governed th_candidate_ref, NOT User.email.
 """
 import frappe
 from education.education.doctype.student.student import Student
+from toefl_house.security import active_command_kind, is_production
 
 
 def _protect_candidate_provenance(doc, doctype, fields):
@@ -30,12 +31,26 @@ def _protect_candidate_provenance(doc, doctype, fields):
 
 
 def protect_applicant_identity(doc, method=None):
+    if is_production() and doc.is_new():
+        if active_command_kind() != "record_applicant":
+            raise frappe.PermissionError(
+                "Native Student Applicant creation requires approved placement intake")
+        if not doc.get("th_candidate_ref") or not doc.get("th_reception_inquiry"):
+            raise frappe.ValidationError(
+                "Student Applicant needs a verified candidate and Reception referral")
     _protect_candidate_provenance(
         doc, "Student Applicant", ("th_candidate_ref", "th_reception_inquiry"))
 
 
 class THEmailOptionalStudent(Student):
     def validate(self):
+        if is_production() and self.is_new():
+            if active_command_kind() != "convert_applicant":
+                raise frappe.PermissionError(
+                    "Native Student creation requires an approved admission conversion")
+            if not self.get("student_applicant") or not self.get("th_candidate_ref"):
+                raise frappe.ValidationError(
+                    "Student needs a verified Applicant and candidate reference")
         _protect_candidate_provenance(
             self, "Student", ("student_applicant", "th_candidate_ref"))
         return super().validate()
