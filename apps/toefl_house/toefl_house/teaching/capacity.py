@@ -908,7 +908,7 @@ def waiting_list_board(student_group=""):
             elif seats["available"] >= 1 and entry["name"] == first_waiting:
                 next_step = "A seat is free; offer it to the first waiting entry."
                 action = "offer_waiting_list_seat"
-            elif entry["status"] == "Waiting":
+            elif entry["status"] == "Waiting" and entry["name"] != first_waiting:
                 next_step = ("Wait for earlier waiting entries to receive or "
                              "decline their offers before selecting this student.")
                 action = ""
