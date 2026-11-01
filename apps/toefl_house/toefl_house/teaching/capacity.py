@@ -186,9 +186,19 @@ def reserved_offers(group_name, on_date=None, exclude_entry=None):
     holding is exactly the seat being granted, so it must not be counted as a
     competing reservation for its own admission.
     """
-    return len([row for row in _open_entries(group_name, ("Offered",))
-                if unexpired(row.get("offer_expires_on"), on_date)
-                and row.get("name") != exclude_entry])
+    # The roster and reservations are financial/operational seat facts,
+    # not a page of sample rows. A MAX_ENTRIES slice could count 200 of 201
+    # live offers and incorrectly promise an extra seat. Use the native
+    # indexed aggregate for an exact count, without paging or materializing
+    # names of waiting learners.
+    filters = {
+        "student_group": group_name,
+        "status": "Offered",
+        "offer_expires_on": (">=", str(on_date or _today())),
+    }
+    if exclude_entry:
+        filters["name"] = ("!=", exclude_entry)
+    return int(frappe.db.count(WAITING, filters))
 
 
 def seat_facts(group_name, for_update=False, on_date=None, exclude_entry=None):
