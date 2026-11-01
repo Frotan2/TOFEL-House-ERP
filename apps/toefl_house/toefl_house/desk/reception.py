@@ -685,10 +685,10 @@ def lookup(query):
     # while intake stores a single canonical contact. Only apply this
     # normalization to a phone-shaped query, never to a person's name.
     phone_query = text
-    if re.fullmatch(r"\\+?[0-9 ()-]{5,32}", text) and 5 <= sum(
+    if re.fullmatch(r"\+?[0-9 ()-]{5,32}", text) and 5 <= sum(
             char.isdigit() for char in text) <= 15:
         phone_query = re.sub(r"[ ()-]", "", text)
-    phone_escaped = phone_query.replace("\\\\", "\\\\\\\\").replace("%", r"\\%").replace("_", r"\\_")
+    phone_escaped = phone_query.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
     phone_like = f"%{phone_escaped}%"
 
     matches = project_rows("reception", APPLICANT, APPLICANT_FIELDS,
