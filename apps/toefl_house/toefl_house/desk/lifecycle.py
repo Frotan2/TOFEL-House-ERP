@@ -76,7 +76,18 @@ def admission_stage(admission_status, accepted, has_native_student):
             "role": "Admission Approver",
             "command": "decide_admission",
         }
-    if admission_status in ("Approved", "Conditional"):
+    if admission_status == "Conditional":
+        # Conditions are a mandatory independent decision gate. Recording the
+        # applicant's offer acceptance does not satisfy the conditions, and
+        # the conversion command refuses Conditional even when accepted.
+        return {
+            "label": "Conditions awaiting verification",
+            "definition": "An independent approver must check and record evidence before Student conversion.",
+            "next": "Verify the conditions and record the supporting evidence.",
+            "role": "Admission Approver",
+            "command": "satisfy_conditions",
+        }
+    if admission_status == "Approved":
         if has_native_student:
             return {
                 "label": "Student created",
