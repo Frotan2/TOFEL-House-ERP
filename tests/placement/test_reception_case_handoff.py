@@ -108,7 +108,7 @@ class ReceptionToPlacementHandoffTests(unittest.TestCase):
         }
         exec(source_function(), self.env)
 
-    def create(self, inquiry="INQ-A", branch="Branch A", subject="candidate@example.test"):
+    def create(self, inquiry="INQ-A", branch="Branch A", subject=""):
         purpose = "Initial placement" if self.production else "synthetic-placement"
         return self.env["create_case"](
             "request-case-test-01", subject, purpose, branch, inquiry)
@@ -119,6 +119,8 @@ class ReceptionToPlacementHandoffTests(unittest.TestCase):
         self.assertEqual(self.cases[0].reception_inquiry, "INQ-A")
         self.assertEqual(self.cases[0].th_branch, "Branch A")
         self.assertEqual(self.cases[0].synthetic, 0)
+        self.assertTrue(result["subject"].startswith("THV-"))
+        self.assertNotIn("@", result["subject"])
 
     def test_branch_mismatch_is_denied_before_case_created(self):
         self.inquiry_branch = "Branch B"
@@ -149,17 +151,17 @@ class ReceptionToPlacementHandoffTests(unittest.TestCase):
             self.create()
         self.assertFalse(self.cases)
 
-    def test_duplicate_referral_or_native_candidate_is_refused(self):
+    def test_duplicate_referral_and_fabricated_email_are_refused(self):
         self.create()
         with self.assertRaises(Invalid):
             self.create()
         with self.assertRaises(Invalid):
-            self.create(subject="different@example.test")
+            self.create(subject="fake@example.test")
         self.assertEqual(len(self.cases), 1)
 
     def test_synthetic_legacy_case_can_omit_reception_handoff(self):
         self.production = False
-        result = self.create(inquiry="", branch="")
+        result = self.create(inquiry="", branch="", subject="synthetic@example.test")
         self.assertEqual(result["status"], "Open")
         self.assertEqual(result["reception_inquiry"], "")
         self.assertEqual(self.cases[0].synthetic, 1)

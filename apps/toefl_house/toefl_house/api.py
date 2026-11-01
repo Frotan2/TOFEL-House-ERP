@@ -414,9 +414,13 @@ def _pinned_published(doctype, validator, name, expected_version, label):
 
 
 @frappe.whitelist(methods=["POST"])
-def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE, branch="", inquiry=""):
-    if not isinstance(subject, str) or not 3 <= len(subject) <= 140:
-        raise frappe.ValidationError("Subject user reference required")
+def create_case(request_key, subject="", purpose=SYNTHETIC_PURPOSE, branch="", inquiry=""):
+    if is_production():
+        if subject not in ("", None):
+            raise frappe.ValidationError(
+                "Real visitors use a server-issued candidate reference, not a User or email")
+    elif not isinstance(subject, str) or not 3 <= len(subject) <= 140:
+        raise frappe.ValidationError("Synthetic test User reference required")
     # D16 mirror: the synthetic increment accepts only its purpose marker;
     # production requires a staff-entered bounded purpose and refuses the
     # test marker (no purpose vocabulary is invented — staff enter it).
@@ -441,11 +445,13 @@ def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE, branch="", inqu
             raise frappe.ValidationError("Choose a verified placement branch before creating a case")
         if chosen_branch and not frappe.db.exists("Branch", chosen_branch):
             raise frappe.ValidationError("Unknown placement branch")
-        if subject in ("Administrator", "Guest") or not frappe.db.get_value("User", subject, "enabled"):
-            raise frappe.ValidationError("Subject must be an enabled non-privileged native user")
-        # The receptionist's real intake is the auditable handoff into
-        # placement. It is not an email address or a fabricated candidate
-        # login. A publisher must verify the real native User separately.
+        if not is_production() and (
+                subject in ("Administrator", "Guest") or
+                not frappe.db.get_value("User", subject, "enabled")):
+            raise frappe.ValidationError("Synthetic subject must be an enabled non-privileged native User")
+        # In production a real visitor does NOT need a User, email or phone.
+        # The referral ID is not authentication: it is an internal record key.
+        # The authorized invigilator checks physical identity before the test.
         if is_production() and not inquiry:
             raise frappe.ValidationError(
                 "Register the visitor at Reception and provide the inquiry reference before placement")
@@ -469,17 +475,19 @@ def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE, branch="", inqu
             if frappe.db.exists(CASE, {"reception_inquiry": inquiry}):
                 raise frappe.ValidationError(
                     "This reception inquiry is already attached to a placement case")
-        if frappe.db.exists(CASE, {"subject": subject}):
-            raise frappe.ValidationError("Subject already has a case in this increment")
-        case = frappe.get_doc(dict(doctype=CASE, subject=subject, purpose=purpose,
+        candidate_ref = ("THV-" + digest(["TOEFL House visitor", inquiry])[:32]
+                         if is_production() else subject)
+        if frappe.db.exists(CASE, {"subject": candidate_ref}):
+            raise frappe.ValidationError("Candidate already has a placement case")
+        case = frappe.get_doc(dict(doctype=CASE, subject=candidate_ref, purpose=purpose,
                                    th_branch=chosen_branch or None,
                                    reception_inquiry=inquiry or None,
                                    status="Open", synthetic=record_synthetic_flag()))
         case.insert(ignore_permissions=True)
-        return {"name": case.name, "subject": subject, "purpose": purpose,
+        return {"name": case.name, "subject": candidate_ref, "purpose": purpose,
                 "branch": chosen_branch, "reception_inquiry": inquiry,
                 "status": case.status}, \
-               dict(target=case.name, after_hash=digest([subject, purpose, chosen_branch, inquiry]))
+               dict(target=case.name, after_hash=digest([candidate_ref, purpose, chosen_branch, inquiry]))
 
     return _execute("create_case", request_key,
                     {"subject": subject, "purpose": purpose, "branch": branch,
