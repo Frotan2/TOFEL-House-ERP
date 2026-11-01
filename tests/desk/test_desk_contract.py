@@ -1789,6 +1789,41 @@ class DeskBranchScopeTests(unittest.TestCase):
     (scope applies where the schema supports it) executes on every affected
     projection call."""
 
+    def test_reception_suspension_read_is_branch_scoped_without_private_reason(self):
+        module = _import_desk("reception", roles={"Reception"})
+        world = {
+            "Student Group": [
+                {"name": "CLASS-A", "th_branch": "BR-A"},
+                {"name": "CLASS-B", "th_branch": "BR-B"},
+            ],
+            "TH Class Suspension": [
+                {"name": "SUSP-A", "scope": "Class", "student_group": "CLASS-A",
+                 "student": None, "status": "Active",
+                 "from_date": "2026-11-10", "until_date": "2026-11-12",
+                 "reason": "PRIVATE REASON A"},
+                {"name": "SUSP-B", "scope": "Student", "student_group": "CLASS-B",
+                 "student": "FOREIGN-STUDENT", "status": "Active",
+                 "from_date": "2026-11-10", "until_date": "2026-11-12",
+                 "reason": "PRIVATE REASON B"},
+            ],
+        }
+        fake = desk_world_get_all("reception suspension branch", world)
+        def read(doctype, filters=None, fields=None, pluck=None, **kwargs):
+            if doctype == "User Permission" and pluck == "for_value":
+                return ["BR-A"] if (filters or {}).get("allow") == "Branch" else []
+            return fake(doctype, filters=filters, fields=fields, **kwargs)
+        module.frappe.get_all = read
+        fields = ["name", "scope", "student_group", "status",
+                  "from_date", "until_date"]
+        rows = module.project_rows("reception", "TH Class Suspension", fields,
+                                   filters={"status": "Active"}, limit=30)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], "SUSP-A")
+        self.assertNotIn("reason", rows[0])
+        with self.assertRaises(module.frappe.ValidationError):
+            module.project_rows("reception", "TH Class Suspension",
+                                fields + ["reason"], filters={"status": "Active"})
+
     def test_scope_filters_apply_only_where_the_schema_supports_them(self):
         seen = []
 
