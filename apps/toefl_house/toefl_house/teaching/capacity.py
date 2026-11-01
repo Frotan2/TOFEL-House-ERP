@@ -845,8 +845,14 @@ def waiting_list_board(student_group=""):
                 next_step = "This class is no longer open for new seating. Refer to Academic Manager."
                 action = ""
             elif offered and not live:
-                next_step = "The seat offer expired; offer a seat again or withdraw the entry."
-                action = "offer_waiting_list_seat"
+                # The offer command only accepts Waiting rows; trying it on
+                # an expired Offered row would always fail. Keep the old
+                # offer's audit trail, withdraw it with a reason, then let
+                # the scheduler review current seats and any new queue entry.
+                next_step = ("This offer expired. Withdraw the old entry with "
+                             "a reason, then check current seats before a new "
+                             "admission or waiting-list request.")
+                action = "leave_waiting_list"
             elif offered and live:
                 next_step = "The student holds a seat offer; admit or let it expire."
                 action = "admit_from_waiting_list"
