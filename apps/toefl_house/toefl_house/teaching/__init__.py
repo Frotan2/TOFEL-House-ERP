@@ -865,6 +865,16 @@ def add_class_member(request_key, student_group, student, override=None):
         _require_mutable_class(group_name, facts)
         cutoff = _require_open_cutoff()
         _require_matching_enrollment(student_name, facts, group_name)
+        # An unreserved free seat is not permission to jump ahead of
+        # existing Waiting learners. This direct roster entry point must
+        # route an existing queue through the auditable admit-from-waiting
+        # command; otherwise the first-offer priority rule is bypassed.
+        waiting = class_capacity._open_entries(group_name, ("Waiting",))
+        if waiting:
+            raise frappe.ValidationError(
+                f"Class {group_name} has pending waiting-list entries. "
+                "Use the authorized offer/admit-from-waiting workflow or "
+                "withdraw declined requests with recorded reasons")
         existing = _locked_roster_row(group_name, student_name)
         if existing is not None and int(existing.active or 0):
             raise frappe.ValidationError(
