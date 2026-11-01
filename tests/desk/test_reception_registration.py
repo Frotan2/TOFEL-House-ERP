@@ -446,7 +446,7 @@ class RegistrationDeskTests(unittest.TestCase):
         progress = desk._walkin_progress([{"name": "INQ-1", "th_branch": "Branch Alpha"}], [ref])
         self.assertEqual(progress["INQ-1"][0], "Enrollment on file")
         self.assertEqual(progress["INQ-1"][2], "Academic Manager")
-        self.assertIn("assigned class", progress["INQ-1"][1])
+        self.assertIn("class and upcoming dated sessions", progress["INQ-1"][1])
         self.assertIn("Student ID STU-1", progress["INQ-1"][1])
 
     def test_reception_progress_does_not_join_wrong_branch_or_reused_phone(self):
