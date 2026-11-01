@@ -84,6 +84,43 @@ def _subject_index(decisions):
     return index
 
 
+def _referral_display_names(subjects):
+    """Resolve names only through two branch-scoped reads of verified referrals.
+
+    A candidate reference is an internal identity key, not what Reception
+    should call the person. Never use an unbranched/mismatched inquiry as a
+    name source or infer identity from a shared telephone number.
+    """
+    keys = sorted({value for value in subjects if isinstance(value, str)
+                   and value.startswith("THV-")})
+    if not keys or len(keys) >= BOUNCE_WINDOW:
+        return {}
+    cases = project_rows(
+        "reception", CASE,
+        ["name", "subject", "th_branch", "reception_inquiry"],
+        filters={"subject": ("in", keys)},
+        order_by="creation desc", limit=BOUNCE_WINDOW)
+    if len(cases) >= BOUNCE_WINDOW:
+        return {}
+    inquiries = sorted({row.get("reception_inquiry") for row in cases
+                       if row.get("reception_inquiry") and row.get("th_branch")})
+    if not inquiries or len(inquiries) >= BOUNCE_WINDOW:
+        return {}
+    intake = project_rows(
+        "reception", INQUIRY, ["name", "person_name", "th_branch"],
+        filters={"name": ("in", inquiries)},
+        order_by="name", limit=BOUNCE_WINDOW)
+    if len(intake) >= BOUNCE_WINDOW:
+        return {}
+    by_id = {row["name"]: row for row in intake}
+    result = {}
+    for case in cases:
+        visit = by_id.get(case.get("reception_inquiry"))
+        if visit and visit.get("th_branch") == case.get("th_branch") and visit.get("person_name"):
+            result[case["subject"]] = visit["person_name"]
+    return result
+
+
 def _walkin_item(row):
     """Visitor is NOT yet an Applicant, Student or enrolled fee payer."""
     closed = row.get("status") == "Closed"
@@ -285,6 +322,7 @@ def work():
                               filters={"status": ("in", list(lifecycle.ADMISSION_OPEN_STATUSES))},
                               order_by="modified desc", limit=BOUNCE_WINDOW)
     subjects = _subject_index(decisions)
+    referral_names = _referral_display_names(subjects.values())
     claimed = {row["placement_decision"] for row in admissions if row.get("placement_decision")}
     # A different released attempt must not offer a second admission while
     # this applicant still has an unconverted active admission.
@@ -371,9 +409,10 @@ def work():
             next_step = "Record the applicant, then open the admission."
             next_role = "Admission Officer"
         handover.append({
-            "id": row["name"], "person": subject,
+            "id": row["name"], "person": referral_names.get(subject, subject),
             "detail": " · ".join(value for value in
-                                 (row.get("course_code") or "", row.get("internal_level") or "") if value),
+                                 ("Candidate: " + subject,
+                                  row.get("course_code") or "", row.get("internal_level") or "") if value),
             "status": row["status"], "stage": "Ready for intake",
             "stage_definition": "Valid released placement with no unconsumed admission.",
             "next": next_step, "next_role": next_role,

@@ -105,7 +105,7 @@ PROJECTION_FIELDS = {
         "name", "case_name", "status",
     ],
     ("reception", "TH Placement Case"): [
-        "name", "subject", "status", "th_branch",
+        "name", "subject", "status", "th_branch", "reception_inquiry",
     ],
     ("reception", "Student"): [
         "name", "student_name", "student_email_id", "th_candidate_ref", "student_applicant", "creation",
