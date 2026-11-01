@@ -15,6 +15,7 @@ KINDS = {
     "TH Placement Course Map Revision": "course_map",
     "TH Placement Decision": "decision",
     "TH Admission Decision": "admission_decision",
+    "TH Reception Inquiry": "reception_inquiry",
     "TH Enrollment Exit": "enrollment_exit",
     "TH Instructor Contract": "contract",
     "TH Teaching Assignment": "assignment",
@@ -269,7 +270,10 @@ def _doc_branches(doc, kind):
 
 
 def _doc_branches_guarded(doc, kind):
-    """Branch resolution for the five GUARDED kinds (via their link fields)."""
+    """Resolve each guarded record to its existing native Branch fact."""
+    if kind == "reception_inquiry":
+        branch = doc.get("th_branch")
+        return {branch} if branch else set()
     if kind == "admission_decision":
         branches = set()
         if doc.get("student_applicant"):
