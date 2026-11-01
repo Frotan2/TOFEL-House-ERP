@@ -178,7 +178,8 @@ def _roster_status(group_name, student):
 def _open_entries(group_name, statuses=OPEN_WAITING_STATUSES):
     rows = frappe.get_all(
         WAITING, filters={"student_group": group_name, "status": ("in", list(statuses))},
-        fields=["name", "student", "status", "offer_expires_on", "priority"],
+        fields=["name", "student", "status", "offer_expires_on", "priority",
+                "requested_on"],
         limit_page_length=MAX_ENTRIES + 1)
     if len(rows) > MAX_ENTRIES:
         raise frappe.ValidationError(
@@ -380,11 +381,15 @@ def _waiting_row(entry, for_update=True):
     return row
 
 
+def _queue_order(row):
+    return (-int(row.get("priority") or 0),
+            str(row.get("requested_on") or ""),
+            str(row.get("name") or ""))
+
+
 def _queue_position(entry, row):
     ahead = _open_entries(row["student_group"])
-    ordered = sorted(ahead, key=lambda item: (
-        -int(item.get("priority") or 0), str(item.get("requested_on") or ""),
-        str(item.get("name") or "")))
+    ordered = sorted(ahead, key=_queue_order)
     for index, item in enumerate(ordered, 1):
         if item.get("name") == entry:
             return index
@@ -496,6 +501,13 @@ def offer_waiting_list_seat(request_key, entry, expires_on=""):
         facts = _group_facts(group_name, for_update=True)
         _require_open_class(group_name, facts)
         require_matching_enrollment(row["student"], facts, group_name)
+        waiting = sorted(_open_entries(group_name, ("Waiting",)),
+                         key=_queue_order)
+        if not waiting or waiting[0]["name"] != row["name"]:
+            raise frappe.ValidationError(
+                "Earlier waiting-list entries have priority. Offer the "
+                "first eligible waiting entry or withdraw a declined "
+                "entry with a recorded reason before proceeding")
         seats = seat_facts(group_name)
         if seats["available"] < 1:
             raise frappe.ValidationError(
@@ -854,9 +866,9 @@ def waiting_list_board(student_group=""):
             seats = seat_facts(group_name)
         except frappe.ValidationError:
             seats = {"capacity": 0, "rostered": 0, "reserved": 0, "available": 0}
-        ordered = sorted(entries, key=lambda item: (
-            -int(item.get("priority") or 0), str(item.get("requested_on") or ""),
-            str(item.get("name") or "")))
+        ordered = sorted(entries, key=_queue_order)
+        first_waiting = next(
+            (entry["name"] for entry in ordered if entry["status"] == "Waiting"), None)
         for index, entry in enumerate(ordered, 1):
             offered = entry["status"] == "Offered"
             live = offered and unexpired(entry.get("offer_expires_on"))
@@ -878,9 +890,13 @@ def waiting_list_board(student_group=""):
             elif offered and live:
                 next_step = "The student holds a seat offer; admit or let it expire."
                 action = "admit_from_waiting_list"
-            elif seats["available"] >= 1:
-                next_step = "A seat is free; offer it to this entry."
+            elif seats["available"] >= 1 and entry["name"] == first_waiting:
+                next_step = "A seat is free; offer it to the first waiting entry."
                 action = "offer_waiting_list_seat"
+            elif entry["status"] == "Waiting":
+                next_step = ("Wait for earlier waiting entries to receive or "
+                             "decline their offers before selecting this student.")
+                action = ""
             else:
                 next_step = "No seat yet; the entry holds its place in the queue."
                 action = ""
