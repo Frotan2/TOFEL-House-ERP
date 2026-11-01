@@ -85,6 +85,15 @@ class RecommendCourseTests(unittest.TestCase):
         self.assertNotIn("toefl", result)
         self.assertNotIn("composite", result)
 
+    def test_uncalibrated_mapping_cannot_issue_real_student_level(self):
+        production_map = {
+            "algorithm": "course-map-v1",
+            "entries": [{"internal_level": "GE-Starter", "course_code": "GE",
+                         "match": "any_correct"}],
+        }
+        with self.assertRaisesRegex(ValueError, "not qualified for real students"):
+            recommend_course(score(), production_map, production=True)
+
     def test_all_missing_fails_closed(self):
         with self.assertRaises(ValueError):
             recommend_course(score(presented=9, correct=0, incorrect=0, missing=9), course_map())
