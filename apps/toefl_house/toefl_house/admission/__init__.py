@@ -162,7 +162,18 @@ def deny_enroll_student(source_name=None):
 
 
 @frappe.whitelist(methods=["POST"])
-def record_applicant(request_key, placement_decision, first_name, program, academic_year, branch="", last_name=""):
+def record_applicant(request_key, placement_decision, first_name, program, academic_year,
+                     branch="", last_name="", email=""):
+    if email is None:
+        email = ""
+    if not isinstance(email, str) or len(email) > 254 or any(ord(char) < 33 for char in email):
+        if email != "":
+            raise frappe.ValidationError("Email is optional but must be a valid address when supplied")
+    if email:
+        from frappe.utils import validate_email_address
+        if not validate_email_address(email, throw=False):
+            raise frappe.ValidationError("Enter a valid email or leave the field blank")
+        email = email.lower()
     def work(actor):
         row = _placement_row(placement_decision)
         _unexpired(row)
@@ -281,7 +292,7 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             doctype=APPLICANT,
             first_name=first,
             last_name=surname,
-            student_email_id=None if is_production() else subject,
+            student_email_id=(email or None) if is_production() else subject,
             th_candidate_ref=subject if is_production() else None,
             th_reception_inquiry=origin_inquiry,
             program=program_name,
@@ -300,7 +311,7 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             raise frappe.ValidationError("Admission must not mark the native applicant paid")
         result = {
             "name": applicant.name,
-            "student_email_id": "" if is_production() else subject,
+            "student_email_id": email if is_production() else subject,
             "candidate_reference": subject if is_production() else "",
             "program": program_name,
             "academic_year": year_name,
@@ -318,6 +329,8 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
     # a surname. New nonempty surnames become part of idempotency identity.
     if last_name:
         payload["last_name"] = last_name
+    if email:
+        payload["email"] = email
     return _execute("record_applicant", request_key, payload, work)
 
 
