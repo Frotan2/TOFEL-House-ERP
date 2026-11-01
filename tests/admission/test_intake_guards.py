@@ -207,6 +207,23 @@ class IntakeGuardTests(unittest.TestCase):
         result = self._record()
         self.assertFalse(result["reused"])
 
+    def test_fresh_intake_preserves_optional_real_surname(self):
+        self.admission.record_applicant(
+            "test-key-record-surname-00001", "PD-1", "SYNTHETIC Probe",
+            "TH-PROG", "2026-27", last_name="Nazari")
+        self.assertEqual(self.created[0]._payload["last_name"], "Nazari")
+
+    def test_fresh_intake_never_invents_applicant_surname(self):
+        self._record()
+        self.assertEqual(self.created[0]._payload["last_name"], "")
+
+    def test_intake_rejects_invisible_and_overlong_surnames(self):
+        for surname in ("X\\nY", "X" * 141, "\\x00"):
+            with self.subTest(surname=surname), self.assertRaises(_ValidationError):
+                self.admission.record_applicant(
+                    "test-key-record-surname-00002", "PD-1", "SYNTHETIC Probe",
+                    "TH-PROG", "2026-27", last_name=surname)
+
     def test_paid_prior_applicant_is_refused(self):
         self.applicant_probe = [{"name": "APP-OLD"}]
         self.returning_mode = "placement_per_term"
