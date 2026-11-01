@@ -244,6 +244,20 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             if not origin_inquiry:
                 raise frappe.PermissionError(
                     "No verified Reception origin for this placement candidate")
+            verified_intake = frappe.db.get_value(
+                "TH Reception Inquiry", origin_inquiry,
+                ["person_name", "th_branch"], as_dict=True)
+            if (not verified_intake or verified_intake.th_branch != placement_branch or
+                    not isinstance(verified_intake.person_name, str) or
+                    not verified_intake.person_name.strip()):
+                raise frappe.PermissionError(
+                    "Reception identity or Branch no longer matches the released Placement")
+            applicant_name = " ".join(" ".join((first, surname)).split()).casefold()
+            original_name = " ".join(verified_intake.person_name.split()).casefold()
+            if applicant_name != original_name:
+                raise frappe.ValidationError(
+                    "Applicant name must match the original Reception registration; "
+                    "ask Academic Manager to review an incorrect name before conversion")
             prior = frappe.db.sql(
                 "select name from `tabStudent Applicant` "
                 "where th_candidate_ref=%s for update", (subject,), as_dict=True)

@@ -542,7 +542,7 @@ def work():
         else:
             action = guided_action("Admission Officer", "toefl_house.admission.record_applicant",
                                    "Record applicant", {"placement_decision": row["name"],
-                                                        "first_name": "", "program": "",
+                                                        "first_name": referral_names.get(subject, ""), "program": "",
                                                         "academic_year": "", **context})
             next_step = "Record the applicant, then open the admission."
             next_role = "Admission Officer"

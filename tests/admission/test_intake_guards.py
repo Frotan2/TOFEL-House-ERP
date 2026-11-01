@@ -60,6 +60,7 @@ class IntakeGuardTests(unittest.TestCase):
         self.production_mode = False
         self.subject_value = "subject@example.test"
         self.origin_inquiry = "INQ-001"
+        self.origin_name = "Visitor"
         self.branch_ups = []          # the actor's native User Permissions on Branch
         self.created = []             # applicant docs created through the command
         previous = dict(sys.modules)
@@ -92,6 +93,9 @@ class IntakeGuardTests(unittest.TestCase):
                 return fake.placement_branch
             if doctype == "TH Placement Case" and fieldname == "reception_inquiry":
                 return fake.origin_inquiry
+            if doctype == "TH Reception Inquiry" and as_dict:
+                return SimpleNamespace(person_name=fake.origin_name,
+                                       th_branch=fake.placement_branch)
             raise AssertionError(f"unexpected get_value {doctype} {fieldname}")
 
         stub = types.ModuleType("frappe")
@@ -186,6 +190,29 @@ class IntakeGuardTests(unittest.TestCase):
         self.assertIsNone(self.created[0]._payload["student_email_id"])
         self.assertIn("th_candidate_ref=%s", self.calls[1][0])
         self.assertEqual(self.calls[1][1], (self.subject_value,))
+
+    def test_production_refuses_applicant_name_changed_after_reception(self):
+        self.production_mode = True
+        self.subject_value = "THV-" + "a" * 32
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Alpha"]
+        self.origin_name = "Another Visitor"
+        with self.assertRaisesRegex(_ValidationError, "must match"):
+            self.admission.record_applicant(
+                "mismatch-reception-name-0001", "PD-1", "Visitor",
+                "TH-PROG", "2026-27")
+        self.assertFalse(self.created)
+
+    def test_registered_full_name_can_be_kept_in_first_name_field(self):
+        self.production_mode = True
+        self.subject_value = "THV-" + "a" * 32
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Alpha"]
+        self.origin_name = "Arefa Mohammadi"
+        result = self.admission.record_applicant(
+            "verified-full-name-00001", "PD-1", "Arefa Mohammadi",
+            "TH-PROG", "2026-27")
+        self.assertEqual(result["candidate_reference"], self.subject_value)
 
     def test_real_email_is_optional_and_normalized_when_provided(self):
         self.production_mode = True

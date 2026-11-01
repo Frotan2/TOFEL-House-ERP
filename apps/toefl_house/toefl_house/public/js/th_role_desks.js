@@ -970,7 +970,8 @@ frappe.provide("toefl_house.role_desks");
 		],
 		"toefl_house.admission.record_applicant": [
 			{ fieldname: "placement_decision", label: "Released placement decision", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "first_name", label: "First name", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "first_name", label: "Registered name (required)", fieldtype: "Data", reqd: 1,
+				description: "Must match the name recorded at Reception. Keep the full registered name here if no separate family name was recorded." },
 			{ fieldname: "last_name", label: "Family name (optional)", fieldtype: "Data" },
 			{ fieldname: "email", label: "Email (optional)", fieldtype: "Data", description: "Only enter a genuine address; leave blank if none." },
 			{ fieldname: "program", label: "Program", fieldtype: "Link", options: "Program", reqd: 1 },
