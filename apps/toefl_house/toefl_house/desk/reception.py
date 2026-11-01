@@ -81,6 +81,13 @@ def _subject_index(decisions):
 
 def _walkin_item(row):
     """Visitor is NOT yet an Applicant, Student or enrolled fee payer."""
+    closed = row.get("status") == "Closed"
+    action = None if closed else guided_action(
+        "Reception", "toefl_house.reception_intake.update_walkin_inquiry",
+        "Update follow-up", {"inquiry": row["name"],
+                             "expected_version": row["version"],
+                             "status": "Contacted",
+                             "notes": row.get("notes") or ""})
     return {
         "id": row["name"],
         "person": row.get("person_name") or "",
@@ -88,14 +95,11 @@ def _walkin_item(row):
         "status": row.get("status") or "New",
         "stage": "Pre-registration",
         "stage_definition": "Reception inquiry only; no candidate account, placement, enrollment or bill was created.",
-        "next": "Contact the visitor and arrange the separately authorized placement or admission step.",
-        "next_role": "Reception",
+        "next": ("This inquiry is closed; register a new visit if needed." if closed
+                 else "Contact the visitor and arrange the separately authorized placement or admission step."),
+        "next_role": None if closed else "Reception",
         "waiting_since": row.get("creation"),
-        "action": guided_action("Reception", "toefl_house.reception_intake.update_walkin_inquiry",
-                                "Update follow-up", {"inquiry": row["name"],
-                                                     "expected_version": row["version"],
-                                                     "status": "Contacted",
-                                                     "notes": row.get("notes") or ""}),
+        "action": action,
     }
 
 
