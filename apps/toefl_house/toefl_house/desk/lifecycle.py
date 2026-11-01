@@ -179,7 +179,7 @@ def funnel_order():
         "Admission drafted",
         "Admission review",
         "Admission decided",
-        "Conditional admission",
+        "Conditions awaiting verification",
         "Offer accepted",
         "Student created",
         "Awaiting enrollment",
