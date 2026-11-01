@@ -108,7 +108,7 @@ PROJECTION_FIELDS = {
         "name", "subject", "status", "th_branch",
     ],
     ("reception", "Student"): [
-        "name", "student_name", "student_email_id", "student_applicant", "creation",
+        "name", "student_name", "student_email_id", "th_candidate_ref", "student_applicant", "creation",
     ],
     # Cohort truth for the walk-in lookup: the class lifecycle lives on the
     # governed th_class_status custom field (planned/active classes open a
@@ -124,7 +124,7 @@ PROJECTION_FIELDS = {
     ("reception", "Student Applicant"): [
         # `title` is the pinned native full-name column (education
         # 93bc70757533); Student Applicant has no `applicant_name` column.
-        "name", "title", "student_email_id", "program",
+        "name", "title", "student_email_id", "th_candidate_ref", "program",
         "academic_year", "application_status", "creation",
     ],
     ("reception", "TH Admission Decision"): [
