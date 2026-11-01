@@ -346,6 +346,31 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(self.site.get("TH Class Waiting List", entry)["status"],
                          "Admitted")
 
+    def test_direct_admission_from_waiting_cannot_skip_priority(self):
+        self.ops.seed_class(name="GRP-DIRECT", capacity=3, members=["STU-1"])
+        for student in ("STU-2", "STU-3"):
+            self.ops.seed_student(student)
+            self.ops.seed_enrollment(student)
+        self.ops.seed_policy()
+        first = self.ops.seed_waiting(
+            "GRP-DIRECT", "STU-2", priority=9,
+            requested_on="2026-09-21 09:00:00")
+        later = self.ops.seed_waiting(
+            "GRP-DIRECT", "STU-3", priority=0,
+            requested_on="2026-09-20 09:00:00")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.admit_from_waiting_list("skip-direct-0001", later)
+        self.assertIn("Earlier waiting-list entries have priority", str(ctx.exception))
+        self.assertEqual(self.ops.roster("GRP-DIRECT"), [("STU-1", 1)])
+        self.assertEqual(self.site.get("TH Class Waiting List", later)["status"],
+                         "Waiting")
+        result = self.ops.capacity.admit_from_waiting_list("first-direct-0001", first)
+        self.assertEqual(result["status"], "Admitted")
+        self.assertEqual(self.ops.roster("GRP-DIRECT"),
+                         [("STU-1", 1), ("STU-2", 1)])
+        result = self.ops.capacity.admit_from_waiting_list("next-direct-0001", later)
+        self.assertEqual(result["status"], "Admitted")
+
     def test_admission_refuses_an_expired_offer(self):
         group = self._full_class()
         self.ops.seed_policy()
