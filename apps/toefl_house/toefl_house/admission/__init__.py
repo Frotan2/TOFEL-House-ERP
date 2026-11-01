@@ -162,12 +162,19 @@ def deny_enroll_student(source_name=None):
 
 
 @frappe.whitelist(methods=["POST"])
-def record_applicant(request_key, placement_decision, first_name, program, academic_year, branch=""):
+def record_applicant(request_key, placement_decision, first_name, program, academic_year, branch="", last_name=""):
     def work(actor):
         row = _placement_row(placement_decision)
         _unexpired(row)
         subject = _placement_subject(row)
-        first = _name(first_name, "First name")
+        first = _name(first_name, "First name").strip()
+        if not first or any(char in first for char in ("\\r", "\\n", "\\x00")):
+            raise frappe.ValidationError("A valid first name is required")
+        if not isinstance(last_name, str) or len(last_name) > 140:
+            raise frappe.ValidationError("Last name must be bounded text")
+        surname = last_name.strip()
+        if any(char in surname for char in ("\\r", "\\n", "\\x00")):
+            raise frappe.ValidationError("Last name contains unsupported characters")
         # D16 mirror: synthetic sites accept only marked fixture names;
         # production accepts real bounded names and refuses test markers.
         if is_production():
@@ -242,7 +249,7 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
         applicant = frappe.get_doc(dict(
             doctype=APPLICANT,
             first_name=first,
-            last_name="Applicant",
+            last_name=surname,
             student_email_id=subject,
             program=program_name,
             academic_year=year_name,
@@ -271,10 +278,13 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
         }
         return result, dict(target=applicant.name, after_hash=digest([applicant.name, subject, program_name]))
 
-    return _execute("record_applicant", request_key,
-                    {"placement_decision": placement_decision, "first_name": first_name,
-                     "program": program, "academic_year": academic_year,
-                     "branch": branch}, work)
+    payload = {"placement_decision": placement_decision, "first_name": first_name,
+               "program": program, "academic_year": academic_year, "branch": branch}
+    # Preserve historical request-key digests when old callers did not supply
+    # a surname. New nonempty surnames become part of idempotency identity.
+    if last_name:
+        payload["last_name"] = last_name
+    return _execute("record_applicant", request_key, payload, work)
 
 
 @frappe.whitelist(methods=["POST"])
