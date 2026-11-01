@@ -86,7 +86,8 @@ def _walkin_item(row):
         "Reception", "toefl_house.reception_intake.update_walkin_inquiry",
         "Update follow-up", {"inquiry": row["name"],
                              "expected_version": row["version"],
-                             "status": "Contacted",
+                             "status": ("Contacted" if row.get("status") == "New"
+                                        else row.get("status")),
                              "notes": row.get("notes") or ""})
     return {
         "id": row["name"],
