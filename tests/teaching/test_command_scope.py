@@ -47,6 +47,23 @@ class CommandScopeTests(unittest.TestCase):
         self.scope = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.scope)
 
+    def test_placement_case_cannot_move_between_scoped_branches(self):
+        self.documents[("TH Placement Case", "CASE-A")] = {"th_branch": "A"}
+        self.scope.authorize_command_scope("allocate_attempt", {"case": "CASE-A"}, "actor")
+        self.scope.authorize_command_scope(
+            "create_case", {"branch": "A"}, "actor", result={"name": "CASE-A"})
+        self.branches = ["B"]
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope("allocate_attempt", {"case": "CASE-A"}, "actor")
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "create_case", {"branch": "B"}, "actor", result={"name": "CASE-A"})
+
+    def test_branchless_placement_case_fails_closed_for_scoped_staff(self):
+        self.documents[("TH Placement Case", "CASE-NONE")] = {"th_branch": None}
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope("allocate_attempt", {"case": "CASE-NONE"}, "actor")
+
     def test_reception_inquiry_followup_and_cached_receipt_recheck_branch(self):
         self.documents[("TH Reception Inquiry", "INQ-ALPHA")] = {
             "branches": {"A"}}

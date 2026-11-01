@@ -211,6 +211,10 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             raise frappe.ValidationError("Placement decision is missing its attempt case")
         frappe.db.sql("select name from `tabTH Placement Case` where name=%s for update",
                       (case_name,))
+        placement_branch = frappe.db.get_value("TH Placement Case", case_name, "th_branch")
+        if placement_branch and placement_branch != branch_name:
+            raise frappe.PermissionError(
+                "Applicant branch must match the verified placement case branch")
         prior = frappe.db.sql("select name from `tabStudent Applicant` "
                                "where student_email_id=%s for update", (subject,),
                                as_dict=True)
@@ -324,6 +328,11 @@ def create_admission(request_key, student_applicant, placement_decision, existin
         subject = _placement_subject(row)
         if (applicant.student_email_id or "") != subject:
             raise frappe.ValidationError("Placement subject does not match the native applicant")
+        source_case = frappe.db.get_value(ATTEMPT, row.attempt, "case_name")
+        source_branch = frappe.db.get_value("TH Placement Case", source_case, "th_branch") if source_case else None
+        if source_branch and applicant.get("th_branch") != source_branch:
+            raise frappe.PermissionError(
+                "Applicant's branch differs from the verified placement case")
         returning = None
         if existing_student:
             returning = _name(existing_student, "Existing Student")

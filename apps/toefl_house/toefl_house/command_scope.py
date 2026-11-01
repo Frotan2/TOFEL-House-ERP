@@ -8,6 +8,7 @@ REFERENCES = {
     "session": "Course Schedule",
     "student": "Student", "student_applicant": "Student Applicant",
     "inquiry": "TH Reception Inquiry",
+    "case": "TH Placement Case",
     "admission_decision": "TH Admission Decision",
     "program_enrollment": "Program Enrollment", "attendance": "Student Attendance",
     "transfer": "TH Class Transfer", "exit": "TH Enrollment Exit",
@@ -21,6 +22,7 @@ ADMISSION_NAMES = frozenset({
 RESULT_NAMES = {
     "create_student_group": "Student Group", "record_applicant": "Student Applicant",
     "create_walkin_inquiry": "TH Reception Inquiry",
+    "create_case": "TH Placement Case",
     "create_admission": "TH Admission Decision", "schedule_session": "Course Schedule",
     "assign_teaching_skill": "TH Teaching Assignment",
 }
@@ -142,7 +144,10 @@ def _require_document(doctype, name, allowed):
         raise frappe.PermissionError("The command target must resolve to a permitted branch")
     doc = frappe.get_doc(doctype, name)
     from toefl_house import permissions
-    if doctype in ("Student", "Program Enrollment"):
+    if doctype == "TH Placement Case":
+        branch = doc.get("th_branch")
+        branches = {branch} if branch else set()
+    elif doctype in ("Student", "Program Enrollment"):
         student = name if doctype == "Student" else doc.get("student")
         branches = _effective_student_branches(student)
     elif doctype in ("Course Schedule", "Student Attendance"):
