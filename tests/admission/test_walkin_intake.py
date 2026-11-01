@@ -30,7 +30,7 @@ class Inquiry:
         self.fixture = fixture
         self.data = dict(facts)
         self.new = new
-        self.name = self.data.get("name") or "INQ-001"
+        self.name = self.data.get("name") or f"INQ-{len(fixture.saved) + 1:03d}"
         self.data["name"] = self.name
 
     def __getattr__(self, key):
