@@ -102,10 +102,12 @@ The multi-branch operating rule, enforced with the native User Permission on
   the class roster (`Student Group Student`, active rows), which ties a
   Student to a class. Records whose branch cannot be resolved are invisible
   to a scoped user (fail closed).
-- **Unscoped users.** A user with no Branch User Permission (HQ roles,
-  Administrator) is unrestricted — the native semantics: a User Permission
-  restricts only the users who hold it. The GM desk's branch-wide funnel is
-  this case, not a separate mechanism.
+- **Unscoped HQ roles.** An authorized academic or management user with
+  no Branch User Permission may use HQ-wide projections where that endpoint
+  supports the HQ model. **Reception is an explicit exception:** a Reception
+  login needs at least one assigned Branch before using front-counter, seat
+  availability or waiting-list endpoints. The GM desk's branch-wide funnel
+  is governed separately, not by inheriting a Reception bypass.
 - **Surfaces.** Desks scope their projections (direct `th_branch` field
   where the doctype carries one; the class/roster/applicant chain
   otherwise, resolved on the server before the projection query). Native
@@ -148,8 +150,16 @@ Sections:
   action and the role that owns it. If the viewer also holds the acting role,
   the item carries a prefill for that guarded command.
 - **Find a person** — `toefl_house.desk.reception.lookup(query)` matches
-  applicant/student name or email (bounded, no wildcards) and returns the same
-  stage projection. This is the "student walks in" answer in one place.
+  intake and native Student names/references and optional genuine contacts,
+  under the caller's Branch. It resolves the specific submitted enrollment,
+  actual active class-roster membership, upcoming dated sessions and verified
+  session teachers. A pending transfer is labeled **REQUESTED**, never
+  represented as an executed class change.
+- **Available seats and waiting list** — the native `class_availability`
+  and `waiting_list_board` endpoints independently enforce the login's
+  Branch User Permissions before class-level counts or waiting-student IDs
+  can be returned. Passing a different `branch` or `student_group`
+  does not widen authority; the endpoints do not create enrollments.
 
 ### Academic Manager desk
 
