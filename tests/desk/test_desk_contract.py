@@ -876,7 +876,7 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                     "program", "academic_year", "academic_term"]),
         "toefl_house.admission.record_applicant": ("admission/__init__.py",
                                                    ["request_key", "placement_decision", "first_name", "program", "academic_year",
-                                                    "branch", "last_name"]),
+                                                    "branch", "last_name", "email"]),
         "toefl_house.reception_intake.create_walkin_inquiry": ("reception_intake.py",
             ["request_key", "person_name", "phone", "program_interest", "branch", "notes"]),
         "toefl_house.reception_intake.update_walkin_inquiry": ("reception_intake.py",
