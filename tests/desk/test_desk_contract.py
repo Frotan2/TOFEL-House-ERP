@@ -1789,6 +1789,48 @@ class DeskBranchScopeTests(unittest.TestCase):
     (scope applies where the schema supports it) executes on every affected
     projection call."""
 
+    def test_reception_transfer_requires_both_classes_in_permitted_branch(self):
+        module = _import_desk("reception", roles={"Reception"})
+        world = {
+            "Student Group": [
+                {"name": "GROUP-A", "th_branch": "BR-A"},
+                {"name": "GROUP-B", "th_branch": "BR-A"},
+                {"name": "GROUP-X", "th_branch": "BR-B"},
+            ],
+            "TH Class Transfer": [
+                {"name": "TR-VALID", "student": "STU-1",
+                 "from_group": "GROUP-A", "to_group": "GROUP-B",
+                 "status": "Requested", "transfer_kind": "Class",
+                 "effective_date": "2026-11-11",
+                 "reason": "PRIVATE family note"},
+                {"name": "TR-OUT", "student": "STU-1",
+                 "from_group": "GROUP-A", "to_group": "GROUP-X",
+                 "status": "Requested", "transfer_kind": "Branch",
+                 "effective_date": "2026-11-11"},
+                {"name": "TR-IN", "student": "STU-1",
+                 "from_group": "GROUP-X", "to_group": "GROUP-A",
+                 "status": "Requested", "transfer_kind": "Branch",
+                 "effective_date": "2026-11-11"},
+            ],
+        }
+        fake = desk_world_get_all("reception transfer branch", world)
+        def read(doctype, filters=None, fields=None, pluck=None, **kwargs):
+            if doctype == "User Permission" and pluck == "for_value":
+                return ["BR-A"] if (filters or {}).get("allow") == "Branch" else []
+            rows = fake(doctype, filters=filters, fields=fields, **kwargs)
+            return [{field: row.get(field) for field in fields} for row in rows] if fields else rows
+        module.frappe.get_all = read
+        module.frappe.db.get_all = read
+        fields = ["name", "student", "from_group", "to_group",
+                  "transfer_kind", "status", "effective_date"]
+        rows = module.project_rows("reception", "TH Class Transfer", fields,
+                                   filters={"student": "STU-1", "status": "Requested"},
+                                   limit=30)
+        self.assertEqual([row["name"] for row in rows], ["TR-VALID"])
+        self.assertNotIn("reason", rows[0])
+        with self.assertRaises(module.frappe.ValidationError):
+            module.project_rows("reception", "TH Class Transfer", fields + ["reason"])
+
     def test_reception_suspension_read_is_branch_scoped_without_private_reason(self):
         module = _import_desk("reception", roles={"Reception"})
         world = {
