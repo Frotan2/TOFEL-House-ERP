@@ -104,6 +104,23 @@ class CapacityTests(unittest.TestCase):
         self.assertIn("Completed", str(ctx.exception))
 
     # --- the seat gate ---------------------------------------------------
+    def test_stale_active_class_end_date_cannot_offer_new_seats(self):
+        group = self._full_class(capacity=3, roster=1)
+        self.site.get("Student Group", group)["th_class_end_date"] = "2026-09-21"
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.assert_seat_available(group, "STU-2")
+        self.assertIn("no current class end date", str(ctx.exception))
+        self.ops.login(RECEPTION)
+        self._log_in_branch_reception()
+        self.assertEqual(self.ops.capacity.class_availability(
+            student_group=group)["classes"], [])
+
+    def test_missing_class_end_date_never_becomes_an_open_seat(self):
+        group = self._full_class(capacity=3, roster=1)
+        self.site.get("Student Group", group)["th_class_end_date"] = None
+        with self.assertRaises(ValidationError):
+            self.ops.capacity.assert_seat_available(group, "STU-2")
+
     def test_free_seat_returns_no_override(self):
         group = self._full_class(capacity=3, roster=2)
         seat = self.ops.capacity.assert_seat_available(group, "STU-3")
