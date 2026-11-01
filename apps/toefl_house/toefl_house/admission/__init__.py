@@ -680,8 +680,18 @@ def convert_applicant(request_key, name, expected_version):
             student_name = linked.name
             customer = linked.customer or frappe.db.get_value(STUDENT, student_name, "customer")
         else:
-            # First-time lane only: no Student may already point at this
-            # applicant, otherwise this would double-convert one person.
+            # First-time lane only. Refuse deployment misconfiguration before
+            # attempting a write: standard Education marks Student email as
+            # mandatory, and an upgrade must import our verified property
+            # setter before a real email-free admission is permitted.
+            if is_production() and not applicant.student_email_id:
+                email_field = frappe.get_meta(STUDENT).get_field("student_email_id")
+                if not email_field or email_field.reqd:
+                    raise frappe.ValidationError(
+                        "Email-free Student conversion is not installed; "
+                        "an administrator must migrate the approved Education schema")
+            # No Student may already point at this applicant; otherwise
+            # the first-time lane would double-convert one person.
             if frappe.db.exists(STUDENT, {"student_applicant": applicant.name}):
                 raise frappe.ValidationError("A native Student already exists for this applicant")
             student = frappe.get_doc(dict(
