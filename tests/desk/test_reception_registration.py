@@ -91,6 +91,12 @@ class RegistrationDeskTests(unittest.TestCase):
         desk.lookup("۷۰۰")
         self.assertIn((desk.INQUIRY, {"phone": ("like", "%700%")}), calls)
 
+    def test_lookup_treats_percent_and_underscore_as_literal_characters(self):
+        desk, calls = self.desk(placement=False, applicant=False)
+        desk.lookup("A_%")
+        self.assertIn((desk.INQUIRY, {"person_name": ("like", r"%A\_\%%")}), calls)
+        self.assertIn((desk.STUDENT, {"student_name": ("like", r"%A\_\%%"), "enabled": 1}), calls)
+
     def test_visitors_are_not_misclassified_as_native_applicants(self):
         desk, _ = self.desk(placement=False, applicant=False)
         results = desk.lookup("700")

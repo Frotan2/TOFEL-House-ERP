@@ -195,7 +195,7 @@ def _funnel(handover_count):
          "value": project_count("reception", ATTEMPT, {
              "status": ("in", [s for s in lifecycle.PLACEMENT_ATTEMPT_ORDER if s != "Finalized"])}),
          "owner": "Placement Invigilator", "source": "placement attempts (non-finalized)", "scope": "Branch-wide", "drill_path": "placement attempt list"},
-        {"label": "Results awaiting intake",
+        {"label": "Results awaiting intake (visible)",
          "definition": "Released placement decisions with no active admission decision attached.",
          "value": handover_count, "owner": "Admission Officer", "source": "released placement outcomes", "scope": "Branch-wide", "drill_path": "placement decision list"},
         {"label": "Admissions drafted",
@@ -353,7 +353,9 @@ def lookup(query):
     text = "".join(
         str(unicodedata.decimal(char)) if char.isdecimal() else char
         for char in text)
-    like = f"%{text}%"
+    # Treat percent and underscore from staff input as literal search text.
+    escaped = text.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+    like = f"%{escaped}%"
 
     matches = project_rows("reception", APPLICANT, APPLICANT_FIELDS,
                            filters={"title": ("like", like)},

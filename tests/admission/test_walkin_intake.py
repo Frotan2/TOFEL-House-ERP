@@ -196,6 +196,13 @@ class ReceptionWalkinTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             self.module.update_walkin_inquiry("reopen", "INQ-001", 3, "Contacted")
 
+    def test_unchanged_followup_does_not_create_an_audit_revision(self):
+        self.module.create_walkin_inquiry("new", "Visitor")
+        self.module.update_walkin_inquiry("call", "INQ-001", 1, "Contacted", notes="Call made")
+        with self.assertRaises(ValidationError):
+            self.module.update_walkin_inquiry("no-op", "INQ-001", 2, "Contacted", notes="Call made")
+        self.assertEqual(self.saved["INQ-001"]["version"], 2)
+
     def test_http_int_version_is_canonical_and_concurrent_safe(self):
         self.module.create_walkin_inquiry("new", "Visitor")
         result = self.module.update_walkin_inquiry(

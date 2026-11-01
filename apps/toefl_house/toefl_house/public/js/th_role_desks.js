@@ -1996,7 +1996,7 @@ frappe.provide("toefl_house.role_desks");
 			results.append(queueMarkup(applicants, [text("Record"), text("Status"), text("Next action"), text("Waiting"), text("Act")]));
 		}
 		if (students.length) {
-			$("<h3 class='th-search-heading'></h3>").text(text("Enrolled students")).appendTo(results);
+			$("<h3 class='th-search-heading'></h3>").text(text("Student records (check enrollment stage)")).appendTo(results);
 			results.append(queueMarkup(students, [text("Record"), text("Status"), text("Next action"), text("Waiting"), text("Act")]));
 		}
 		(payload.collection_sections || []).forEach((part) => {

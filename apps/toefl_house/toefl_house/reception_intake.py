@@ -136,8 +136,11 @@ def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes=
         doc = frappe.get_doc(DOCTYPE, name, for_update=True)
         if doc.status == "Closed" or int(doc.version) != version:
             raise frappe.ValidationError("Inquiry changed or is closed; refresh first")
+        new_notes = _text(notes, "Notes", length=1000)
+        if doc.status == status and (doc.notes or "") == new_notes:
+            raise frappe.ValidationError("Nothing changed; update the status or follow-up note")
         doc.status = status
-        doc.notes = _text(notes, "Notes", length=1000)
+        doc.notes = new_notes
         doc.version += 1
         doc.save(ignore_permissions=True)
         return _result(doc), dict(target=doc.name, after_hash=digest([doc.name, doc.status, doc.version]))
