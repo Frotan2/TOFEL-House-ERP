@@ -145,11 +145,11 @@ class RegistrationDeskTests(unittest.TestCase):
         desk, calls = self.desk(placement=False, applicant=False)
         desk.lookup("STU-001")
         self.assertIn((desk.STUDENT, {
-            "name": ("like", "%STU-001%"), "enabled": ("in", [0, 1])
+            "name": "STU-001", "enabled": ("in", [0, 1])
         }), calls)
         desk.lookup("INQ-001")
         self.assertIn((desk.INQUIRY, {
-            "name": ("like", "%INQ-001%")
+            "name": "INQ-001"
         }), calls)
 
     def test_disabled_student_is_visible_as_inactive_not_enrollable(self):

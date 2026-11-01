@@ -2575,6 +2575,63 @@ class AdmissionMultiBranchProjectionTests(unittest.TestCase):
         self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["A"]), ["PE-A"])
         self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["B"]), ["PE-MOVED"])
 
+    def test_student_without_roster_is_visible_at_its_verified_admission_branch(self):
+        world = {
+            "Student Group": [
+                {"name": "GA", "th_branch": "A"},
+                {"name": "GB", "th_branch": "B"},
+            ],
+            "Student Group Student": [
+                {"name": "R-A", "parent": "GA", "student": "ST-A", "active": 1},
+                {"name": "R-B", "parent": "GB", "student": "ST-B", "active": 1},
+                {"name": "R-MIX-A", "parent": "GA", "student": "ST-MIX", "active": 1},
+                {"name": "R-MIX-B", "parent": "GB", "student": "ST-MIX", "active": 1},
+            ],
+            "Student Applicant": [
+                {"name": "AP-A", "th_branch": "A"},
+                {"name": "AP-B", "th_branch": "B"},
+            ],
+            "TH Admission Decision": [
+                {"name": "D-NEW", "student_applicant": "AP-A",
+                 "native_student": "ST-NEW", "existing_student": None},
+                {"name": "D-FOREIGN", "student_applicant": "AP-A",
+                 "native_student": "ST-B", "existing_student": None},
+                {"name": "D-MISMATCH", "student_applicant": "AP-A",
+                 "native_student": "ST-BADLINK", "existing_student": None},
+            ],
+            "Student": [
+                {"name": "ST-NEW", "student_applicant": "AP-A"},
+                {"name": "ST-A", "student_applicant": "AP-A"},
+                {"name": "ST-B", "student_applicant": "AP-B"},
+                {"name": "ST-MIX", "student_applicant": "AP-A"},
+                {"name": "ST-BADLINK", "student_applicant": "AP-B"},
+            ],
+        }
+        desk = _import_desk("__init__", roles={"Reception"})
+        desk.frappe.get_all = desk_world_get_all("student intake branch", world)
+        self.assertEqual(desk._branch_allowed_names("Student", ["A"]),
+                         ["ST-A", "ST-NEW"])
+        self.assertEqual(desk._branch_allowed_names("Student", ["B"]), ["ST-B"])
+
+    def test_student_scope_refuses_truncated_memberships(self):
+        world = {
+            "Student Group": [{"name": "GA", "th_branch": "A"}],
+            "Student Group Student": [
+                {"name": "R1", "parent": "GA", "student": "ST-1", "active": 1},
+                {"name": "R2", "parent": "GA", "student": "ST-2", "active": 1},
+            ],
+            "Student Applicant": [], "TH Admission Decision": [],
+            "Student": [
+                {"name": "ST-1", "student_applicant": None},
+                {"name": "ST-2", "student_applicant": None},
+            ],
+        }
+        desk = _import_desk("__init__", roles={"Reception"})
+        desk._CHAIN_LIMIT = 2
+        desk.frappe.get_all = desk_world_get_all("truncated student memberships", world)
+        with self.assertRaisesRegex(desk.frappe.ValidationError, "safe read limit"):
+            desk._branch_allowed_names("Student", ["A"])
+
     def test_truncated_first_enrollment_candidates_do_not_expand_scope(self):
         world = {
             "Student Group": [], "Student Group Student": [],
