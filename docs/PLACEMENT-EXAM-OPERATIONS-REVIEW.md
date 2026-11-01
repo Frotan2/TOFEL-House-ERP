@@ -10,9 +10,10 @@ security and branch isolation, scoring, review, release and admissions handoff.
 1. A receptionist searches by real name or contact and registers a walk-in inquiry
    without creating an invented email address or duplicate Student.
 2. Reception marks the inquiry Awaiting Placement. An authorized placement
-   publisher links that exact inquiry to the case, verifying its Branch and
-   the independently verified native candidate User. A branchless case must
-   never be offered to Reception; linking an inquiry is not identity proof.
+   publisher links that exact inquiry to a Branch-scoped placement case.
+   The server issues an internal candidate reference without requiring a
+   Website User, an email address or phone. The invigilator later checks the
+   actual person's identity; an internal reference is not an access token.
 3. A publisher selects an approved, published question blueprint and operational
    policy; allocation creates the sealed form and prevents family reuse.
 4. A separate invigilator checks the candidate's physical identity, test station,
@@ -40,7 +41,7 @@ security and branch isolation, scoring, review, release and admissions handoff.
 
 | Area | Observed in source | Remediation / required acceptance |
 | --- | --- | --- |
-| Registration | A case can now reference its Reception inquiry, with enforced Branch, readiness status and uniqueness; `create_case` still requires an enabled native User subject. | **PARTIAL / BLOCKER**: link is auditable, but an inquiry without a real User cannot start placement. Implement a secure candidate identity bridge without invented email addresses or staff privileges. |
+| Registration | A real candidate's case is keyed to an opaque internal reference derived from the verified Reception inquiry; no native User or email is required. Native Applicant/Student carry a unique candidate reference and Student email-required override is explicitly versioned. | **PARTIAL / BLOCKER**: complete native MariaDB/Windows validation, plus a separately governed identity re-use and anti-duplicate process for returning people with multiple visits. No staff account may be shared with students. |
 | Branch provenance | Earlier case/attempt workflow did not carry an authoritative Branch. | Draft adds immutable Case branch, requires it in production, scopes reception and all eight live exam commands. Requires MariaDB cross-branch tests. |
 | Invigilator UI | Legacy command page requires manual Attempt/version/occurrence fields. | Draft adds a supervised staff workspace with question-by-question navigation, saved revisions, secure resume, and confirmation before seal. Requires browser and keyboard evaluation on Windows. |
 | Candidate self-service | No candidate-only authenticated exam route; invigilator role cannot safely be lent to students. | **BLOCKER**: a separately authenticated candidate token/session limited to exactly one allocated attempt, no Desk route, expiry, revocation and anti-replay. |
@@ -75,6 +76,6 @@ security and branch isolation, scoring, review, release and admissions handoff.
 
 The current work is an *engineering and safety improvement* only.
 Passing source-unit tests is not equivalent to validating an actual exam.
-Until the candidate identity model, candidate-only portal, academic course
-mapping, content coverage and native Windows acceptance are independently
+Until returning-candidate identity reconciliation, a candidate-only portal,
+academic course mapping, content coverage and native Windows acceptance are independently
 qualified, the product must remain **TEST PACKAGE — NO REAL DATA**.
