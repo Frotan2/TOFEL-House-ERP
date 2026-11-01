@@ -46,7 +46,11 @@ def _phone(value):
     if not PHONE_PATTERN.fullmatch(normalized) or not 5 <= digits <= 15:
         raise frappe.ValidationError(
             "Phone must have 5–15 digits and contain only spaces, +, - or parentheses")
-    return normalized
+    # Spaces, dashes and parentheses are input presentation, not identity.
+    # Strip them before storing so a second employee typing 079-435-7509
+    # sees the same exact-contact duplicate warning as 0794357509.
+    # The contact is never used as proof that two people are the same.
+    return re.sub(r"[ ()-]", "", normalized)
 
 
 def _result(doc):

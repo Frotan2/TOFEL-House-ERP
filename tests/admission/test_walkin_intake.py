@@ -174,6 +174,16 @@ class ReceptionWalkinTests(unittest.TestCase):
                                               phone="0794357509")
         self.assertEqual(len(self.saved), 1)
 
+    def test_phone_separators_are_normalized_before_duplicate_warning(self):
+        result = self.module.create_walkin_inquiry(
+            "new", "Visitor", phone="۰۷۹-۴۳۵ ۷۵۰۹")
+        self.assertEqual(result["status"], "New")
+        self.assertEqual(self.saved["INQ-001"]["phone"], "0794357509")
+        with self.assertRaisesRegex(ValidationError, "open inquiry already exists"):
+            self.module.create_walkin_inquiry(
+                "repeated", "Visitor", phone="0794357509")
+        self.assertEqual(len(self.saved), 1)
+
     def test_shared_household_phone_does_not_merge_different_people(self):
         self.module.create_walkin_inquiry("one", "Visitor A", phone="0794357509")
         self.module.create_walkin_inquiry("two", "Visitor B", phone="0794357509")
