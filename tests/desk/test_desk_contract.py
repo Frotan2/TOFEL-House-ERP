@@ -1811,7 +1811,10 @@ class DeskBranchScopeTests(unittest.TestCase):
         def read(doctype, filters=None, fields=None, pluck=None, **kwargs):
             if doctype == "User Permission" and pluck == "for_value":
                 return ["BR-A"] if (filters or {}).get("allow") == "Branch" else []
-            return fake(doctype, filters=filters, fields=fields, **kwargs)
+            rows = fake(doctype, filters=filters, fields=fields, **kwargs)
+            # The reusable fixture matcher returns the full source dict; real
+            # Frappe get_all sends ONLY requested columns across the network.
+            return [{field: row.get(field) for field in fields} for row in rows] if fields else rows
         module.frappe.get_all = read
         fields = ["name", "scope", "student_group", "status",
                   "from_date", "until_date"]
