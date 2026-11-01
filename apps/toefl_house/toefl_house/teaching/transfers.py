@@ -493,9 +493,21 @@ def approve_class_transfer(request_key, transfer, override=""):
             raise frappe.PermissionError(
                 "A transfer cannot be approved by the person who requested it")
         source, target, student = row["from_group"], row["to_group"], row["student"]
+        effective_day = str(row["effective_date"])
+        # Approve-and-execute changes the live native roster immediately.
+        # Never approve a future-dated request early (or backdate a missed
+        # effective day): Reception would then advertise the wrong class.
+        execution_day = str(frappe.utils.today())
+        if effective_day > execution_day:
+            raise frappe.ValidationError(
+                "The transfer is scheduled for " + effective_day
+                + "; approve and execute it on the effective date")
+        if effective_day < execution_day:
+            raise frappe.ValidationError(
+                "The transfer effective date has passed; cancel and re-request "
+                "under the current approval and roster policies")
         _lock(GROUP, source)
         _lock(GROUP, target)
-        effective_day = str(row["effective_date"])
         evidence, _seats = _eligibility(student, source, target,
                                         effective_day, terms)
         # Re-check the narrow scope at execution time, on the live facts
