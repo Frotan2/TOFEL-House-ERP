@@ -208,6 +208,78 @@ class RegistrationDeskTests(unittest.TestCase):
         desk.project_rows = project_rows
         self.assertEqual(desk._referral_display_names([ref]), {})
 
+    def test_reception_progress_tracks_exact_referral_through_native_student(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        ref = "THV-" + "a" * 32
+        intake = {"name": "INQ-1", "person_name": "Visitor", "th_branch": "Branch Alpha",
+                  "status": "Awaiting Placement", "version": 2}
+        facts = {
+            desk.CASE: [{"name": "CASE-1", "subject": ref,
+                         "th_branch": "Branch Alpha", "reception_inquiry": "INQ-1"}],
+            desk.APPLICANT: [{"name": "APP-1", "th_candidate_ref": ref,
+                              "th_branch": "Branch Alpha",
+                              "th_reception_inquiry": "INQ-1",
+                              "application_status": "Admitted"}],
+            desk.STUDENT: [{"name": "STU-1", "student_applicant": "APP-1",
+                            "th_candidate_ref": ref, "enabled": 1}],
+        }
+        desk.project_rows = lambda _surface, dt, _fields, **kwargs: list(facts.get(dt, []))
+        stage = desk._walkin_progress([intake], [ref])["INQ-1"]
+        self.assertEqual(stage[0], "Student profile created")
+        item = desk._walkin_item(intake, stage)
+        self.assertEqual(item["stage"], "Student profile created")
+        self.assertEqual(item["next_role"], "Enrollment Officer")
+        self.assertIn("Verify Program Enrollment separately", item["next"])
+        # An active Student does not imply any Program Enrollment or Fees.
+        self.assertNotIn("Enrolled", item["stage"])
+
+    def test_reception_progress_does_not_join_wrong_branch_or_reused_phone(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        visit = {"name": "INQ-1", "person_name": "Visitor", "th_branch": "Branch Alpha"}
+        ref = "THV-" + "a" * 32
+        facts = {
+            desk.CASE: [{"name": "CASE-1", "subject": ref,
+                         "th_branch": "Branch Beta", "reception_inquiry": "INQ-1"}],
+            desk.APPLICANT: [{"name": "APP-1", "th_candidate_ref": ref,
+                              "th_branch": "Branch Alpha", "th_reception_inquiry": "INQ-1"}],
+            desk.STUDENT: [{"name": "STU-1", "student_applicant": "APP-1",
+                            "th_candidate_ref": ref, "enabled": 1}],
+        }
+        desk.project_rows = lambda _surface, dt, _fields, **kwargs: list(facts.get(dt, []))
+        self.assertEqual(desk._walkin_progress([visit], [ref]), {})
+        facts[desk.CASE][0]["th_branch"] = "Branch Alpha"
+        facts[desk.APPLICANT][0]["th_candidate_ref"] = "THV-" + "b" * 32
+        self.assertEqual(desk._walkin_progress([visit], [ref])["INQ-1"][0],
+                         "Placement result released")
+        facts[desk.APPLICANT][0]["th_candidate_ref"] = ref
+        facts[desk.STUDENT][0]["th_candidate_ref"] = "THV-" + "b" * 32
+        self.assertEqual(desk._walkin_progress([visit], [ref])["INQ-1"][0],
+                         "Admission in progress")
+
+    def test_reception_progress_requires_academic_review_on_duplicate_links(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        visit = {"name": "INQ-1", "th_branch": "Branch Alpha"}
+        ref = "THV-" + "a" * 32
+        facts = {
+            desk.CASE: [{"name": "CASE-1", "subject": ref,
+                         "th_branch": "Branch Alpha", "reception_inquiry": "INQ-1"}],
+            desk.APPLICANT: [
+                {"name": "APP-1", "th_candidate_ref": ref,
+                 "th_branch": "Branch Alpha", "th_reception_inquiry": "INQ-1"},
+                {"name": "APP-2", "th_candidate_ref": ref,
+                 "th_branch": "Branch Alpha", "th_reception_inquiry": "INQ-1"}],
+        }
+        desk.project_rows = lambda _surface, dt, _fields, **kwargs: list(facts.get(dt, []))
+        stage = desk._walkin_progress([visit], [ref])["INQ-1"]
+        self.assertEqual(stage[0], "Identity review needed")
+        self.assertEqual(stage[2], "Academic Manager")
+
+    def test_no_placement_cannot_claim_progressed_student(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        desk.project_rows = lambda *_args, **_kwargs: []
+        visit = {"name": "INQ-1", "th_branch": "Branch Alpha"}
+        self.assertEqual(desk._walkin_progress([visit], []), {})
+
     def test_walkin_registration_is_visible_even_without_placement(self):
         desk, _ = self.desk(placement=False, applicant=False)
         view = desk.work()
