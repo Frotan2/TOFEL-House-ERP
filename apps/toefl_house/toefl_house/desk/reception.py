@@ -535,7 +535,8 @@ def lookup(query):
                 "reception", STUDENT,
                 ["name", "student_name", "student_email_id",
                  "th_candidate_ref", "enabled", "creation"],
-                filters={search_field: ("like", like), "enabled": ("in", [0, 1])},
+                filters={search_field: (text if search_field == "name" else ("like", like)),
+                         "enabled": ("in", [0, 1])},
                 order_by="creation desc", limit=LIMIT_LOOKUP):
             if row["name"] not in seen_students:
                 student_rows.append(row)
@@ -598,7 +599,7 @@ def lookup(query):
     # A printed inquiry reference must also be searchable without phone or email.
     for row in project_rows(
             "reception", INQUIRY, INQUIRY_FIELDS,
-            filters={"name": ("like", like)},
+            filters={"name": text},
             order_by="creation desc", limit=LIMIT_LOOKUP):
         if row["name"] not in seen_inquiries:
             inquiries.append(row)
