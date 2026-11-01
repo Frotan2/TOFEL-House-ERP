@@ -651,6 +651,52 @@ def _seal(attempt, reason):
 
 
 @frappe.whitelist(methods=["GET"])
+def supervised_attempt_choices():
+    """Bounded choice list for a Branch-assigned Placement Invigilator.
+
+    Only this actor's permitted Branches and supervised digital attempts
+    appear. The candidate reference is branch-local staff metadata, not a
+    public or candidate-login endpoint. Truncation refuses rather than
+    silently showing an incomplete queue.
+    """
+    actor = authorize("Placement Invigilator")
+    from toefl_house.command_scope import actor_branches
+    branches = actor_branches(actor)
+    if not branches:
+        raise frappe.PermissionError("An assigned Branch is required")
+    max_cases = 4000
+    cases = frappe.get_all(
+        CASE, filters={"th_branch": ("in", sorted(branches))},
+        fields=["name", "subject"], limit_page_length=max_cases)
+    if len(cases) >= max_cases:
+        raise frappe.ValidationError("Branch placement queue is too large; contact Academic Manager")
+    if not cases:
+        return []
+    by_case = {row["name"]: row.get("subject") or "" for row in cases}
+    limit = 101
+    attempts = frappe.get_all(
+        ATTEMPT, filters={
+            "case_name": ("in", list(by_case)),
+            "mode": "Digital",
+            "status": ("in", ["Allocated", "Verified", "In Progress"]),
+        },
+        fields=["name", "case_name", "allocated_by", "mode", "status", "version"],
+        order_by="creation desc", limit_page_length=limit)
+    if len(attempts) >= limit:
+        raise frappe.ValidationError("Too many active placement attempts; contact Academic Manager")
+    choices = []
+    for row in attempts:
+        if row.get("allocated_by") == actor:
+            continue  # A creator must not invigilate their own allocation.
+        choices.append({
+            "attempt": row["name"],
+            "status": row["status"],
+            "candidate_reference": by_case[row["case_name"]],
+        })
+    return choices
+
+
+@frappe.whitelist(methods=["GET"])
 def supervised_attempt_status(attempt):
     """Branch-authorized, key-free status for a real invigilator's workflow.
 

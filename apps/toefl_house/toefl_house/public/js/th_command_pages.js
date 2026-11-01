@@ -605,6 +605,31 @@ frappe.provide("toefl_house.command_pages");
 			.attr("aria-label", text("Attempt reference")).appendTo(idLabel);
 		const load = $("<button type='button' class='btn btn-primary'></button>")
 			.text(text("Check exam status")).appendTo(toolbar);
+		const suggestions = $("<datalist id='th-placement-attempt-choices'></datalist>").appendTo(block);
+		attemptField.attr("list", "th-placement-attempt-choices");
+		let choicesPending = false;
+		attemptField.on("focus", () => {
+			if (choicesPending) return;
+			choicesPending = true;
+			frappe.call({
+				method: "toefl_house.api.supervised_attempt_choices", type: "GET",
+				callback(reply) {
+					choicesPending = false;
+					suggestions.empty();
+					const rows = Array.isArray(reply.message) ? reply.message : [];
+					rows.forEach((item) => {
+						if (!item || !item.attempt) return;
+						$("<option></option>").attr("value", item.attempt)
+							.attr("label", String(item.status || "") + " · " +
+								String(item.candidate_reference || "")).appendTo(suggestions);
+					});
+				},
+				error() {
+					choicesPending = false;
+					inform("The Branch attempt list is unavailable. You may enter an exact Attempt reference.");
+				},
+			});
+		});
 		const notice = $("<p class='th-placement-notice' role='status' aria-live='polite'></p>").appendTo(block);
 		const content = $("<div class='th-placement-content'></div>").appendTo(block);
 		let active = null;

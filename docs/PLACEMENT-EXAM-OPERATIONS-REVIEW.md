@@ -21,10 +21,11 @@ security and branch isolation, scoring, review, release and admissions handoff.
    explicit final submission. **The current system does not have this safe
    candidate login/kiosk.**
 6. The staff console in `th-placement-invigilation` is for a trusted invigilator.
-   It provides server-checked attempt status, physical identity confirmation,
-   verification, timed-session start, answer navigation and recovery of confirmed
-   server responses; it must not be handed to a candidate because the same Desk
-   account also has other administrative actions.
+   It provides a bounded, branch-filtered Attempt picker, server-checked attempt
+   status, physical identity confirmation, verification, timed-session start,
+   answer navigation and recovery of confirmed server responses; it must not be
+   handed to a candidate because the same Desk account also has administrative
+   actions.
 7. The scorer uses server-side keys, not browser-visible answers. Independent
    assessment, review, finalization and release stay separate, audited roles.
 8. An approved level and native Program mapping must be calibrated, published
