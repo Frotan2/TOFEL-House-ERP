@@ -21,6 +21,9 @@ class SameLevelBase(unittest.TestCase):
         self.ops = OperationsSite()
         self.addCleanup(self.ops.close)
         self.site = self.ops.site
+        # The reviewed same-level positive journeys execute on their
+        # requested effective date, not three days early.
+        self.site.today = "2026-09-25"
         self.ops.seed_policy()
         self.ops.seed_class(name="GRP-A", capacity=3,
                             members=["STU-1", "STU-2"])
