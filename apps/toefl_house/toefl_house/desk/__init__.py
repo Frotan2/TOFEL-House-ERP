@@ -133,6 +133,12 @@ PROJECTION_FIELDS = {
         "name", "student_group", "instructor", "course_schedule",
         "effective_start", "effective_end",
     ],
+    # Read suspension *state/window only*, never sensitive free-text reason or
+    # other students' names. All queries stay scoped to the caller's branch.
+    ("reception", "TH Class Suspension"): [
+        "name", "scope", "student_group", "student", "status",
+        "from_date", "until_date",
+    ],
     ("reception", "Instructor"): [
         "name", "instructor_name", "status",
     ],
@@ -640,7 +646,8 @@ def scope_filters(desk):
 BRANCH_CHAIN_FILTERS = ("TH Reception Inquiry", "Student", "Student Group Student", "Student Attendance",
                         "Course Schedule", "Program Enrollment", "Fees",
                         "TH Enrollment Exit", "TH Teaching Assignment",
-                        "TH Correction Request", "TH Admission Decision")
+                        "TH Class Suspension", "TH Correction Request",
+                        "TH Admission Decision")
 _CHAIN_LIMIT = 10000  # bounded scope resolution; truncation is fail-closed
 
 
@@ -674,7 +681,8 @@ def _branch_allowed_names(doctype, branches, *, require_complete=False):
         return [row["name"] for row in frappe.get_all(
             doctype, filters={"parent": ("in", groups), "active": 1},
             fields=["name"], limit_page_length=_CHAIN_LIMIT)]
-    if doctype in ("Student Attendance", "Course Schedule", "TH Teaching Assignment"):
+    if doctype in ("Student Attendance", "Course Schedule", "TH Teaching Assignment",
+                   "TH Class Suspension"):
         if not groups:
             return []
         return [row["name"] for row in frappe.get_all(
