@@ -4,6 +4,7 @@ Read-only. Sections and data sources are specified in docs/ROLE-DESKS.md.
 All reads go through toefl_house.desk.project_rows / project_count, which
 enforce the per-desk field allow-list and bounds.
 """
+from datetime import date
 import re
 import unicodedata
 
@@ -45,6 +46,7 @@ GROUP = "Student Group"
 ROSTER = "Student Group Student"
 SCHEDULE = "Course Schedule"
 INSTRUCTOR = "Instructor"
+ASSIGNMENT = "TH Teaching Assignment"
 GROUP_COHORT_FIELDS = [
     "name", "student_group_name", "program", "academic_year",
     "academic_term", "th_branch", "disabled", "th_class_status",
@@ -734,18 +736,53 @@ def _student_class_information(students, enrollments):
         limit=BOUNCE_WINDOW) if active_groups else []
     truncated_sessions = len(sessions) >= BOUNCE_WINDOW
     instructors = {}
+    verified_session_teachers = set()
     if not truncated_sessions and sessions:
-        keys = sorted({row.get("instructor") for row in sessions
-                       if row.get("instructor")})
-        names_rows = project_rows(
-            "reception", INSTRUCTOR, ["name", "instructor_name"],
-            filters={"name": ("in", keys)},
-            order_by="name asc", limit=BOUNCE_WINDOW) if keys else []
-        if len(names_rows) >= BOUNCE_WINDOW:
+        # A Course Schedule can retain a teacher link after a staffing
+        # change. Only call that person a session instructor when an effective
+        # native TH Teaching Assignment also covers that exact class, date,
+        # and (for session-specific substitutions) the exact session.
+        assignments = project_rows(
+            "reception", ASSIGNMENT,
+            ["name", "student_group", "instructor", "course_schedule",
+             "effective_start", "effective_end"],
+            filters={"student_group": ("in", active_groups)},
+            order_by="effective_start asc", limit=BOUNCE_WINDOW)
+        if len(assignments) >= BOUNCE_WINDOW:
             truncated_sessions = True
         else:
-            instructors = {row["name"]: row.get("instructor_name")
-                           for row in names_rows}
+            for session in sessions:
+                try:
+                    day = date.fromisoformat(str(session.get("schedule_date") or ""))
+                except (ValueError, TypeError):
+                    continue
+                for assignment in assignments:
+                    if (assignment.get("student_group") != session.get("student_group")
+                            or assignment.get("instructor") != session.get("instructor")
+                            or (assignment.get("course_schedule")
+                                and assignment.get("course_schedule") != session.get("name"))):
+                        continue
+                    try:
+                        start = date.fromisoformat(str(assignment.get("effective_start") or ""))
+                        end = (date.fromisoformat(str(assignment["effective_end"]))
+                               if assignment.get("effective_end") else None)
+                    except (ValueError, TypeError):
+                        continue
+                    if start <= day and (end is None or day <= end):
+                        verified_session_teachers.add(session["name"])
+                        break
+            keys = sorted({row.get("instructor") for row in sessions
+                           if row.get("name") in verified_session_teachers
+                           and row.get("instructor")})
+            names_rows = project_rows(
+                "reception", INSTRUCTOR, ["name", "instructor_name", "status"],
+                filters={"name": ("in", keys)},
+                order_by="name asc", limit=BOUNCE_WINDOW) if keys else []
+            if len(names_rows) >= BOUNCE_WINDOW:
+                truncated_sessions = True
+            else:
+                instructors = {row["name"]: row.get("instructor_name")
+                               for row in names_rows if row.get("status") != "Left"}
     sessions_by_group = {}
     if not truncated_sessions:
         for row in sessions:
@@ -795,13 +832,14 @@ def _student_class_information(students, enrollments):
             previews = []
             for session in upcoming[:3]:
                 teacher_id = session.get("instructor")
-                teacher = instructors.get(teacher_id)
+                teacher = (instructors.get(teacher_id)
+                           if session.get("name") in verified_session_teachers else None)
                 parts = [
                     str(session.get("schedule_date") or ""),
                     str(session.get("from_time") or "") + "–" + str(session.get("to_time") or ""),
                     session.get("course") or "",
                     "Room: " + str(session["room"]) if session.get("room") else "Room unassigned",
-                    "Session instructor: " + teacher if teacher else "Instructor name unverified",
+                    "Session instructor: " + teacher if teacher else "Instructor assignment unverified",
                 ]
                 previews.append(" / ".join(part for part in parts if part))
             result[name] = {
