@@ -39,7 +39,8 @@ def protect_applicant_identity(doc, method=None):
             raise frappe.ValidationError(
                 "Student Applicant needs a verified candidate and Reception referral")
     _protect_candidate_provenance(
-        doc, "Student Applicant", ("th_candidate_ref", "th_reception_inquiry"))
+        doc, "Student Applicant",
+        ("th_candidate_ref", "th_reception_inquiry", "first_name", "last_name"))
 
 
 class THEmailOptionalStudent(Student):
@@ -52,7 +53,8 @@ class THEmailOptionalStudent(Student):
                 raise frappe.ValidationError(
                     "Student needs a verified Applicant and candidate reference")
         _protect_candidate_provenance(
-            self, "Student", ("student_applicant", "th_candidate_ref"))
+            self, "Student",
+            ("student_applicant", "th_candidate_ref", "first_name", "last_name"))
         return super().validate()
 
     def validate_user(self):
