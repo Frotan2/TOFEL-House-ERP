@@ -130,6 +130,61 @@ class RegistrationDeskTests(unittest.TestCase):
         handover = next(x for x in view["sections"] if x["id"] == "handover")["items"]
         self.assertEqual(handover, [])
 
+    def test_reception_can_search_student_by_internal_candidate_reference(self):
+        desk, calls = self.desk(placement=False, applicant=False)
+        ref = "THV-" + "a" * 32
+        desk.lookup(ref)
+        self.assertIn((desk.STUDENT, {
+            "th_candidate_ref": ("like", "%" + ref + "%"), "enabled": 1
+        }), calls)
+        self.assertIn((desk.APPLICANT, {
+            "th_candidate_ref": ("like", "%" + ref + "%")
+        }), calls)
+
+    def test_reception_can_search_native_student_and_inquiry_ids(self):
+        desk, calls = self.desk(placement=False, applicant=False)
+        desk.lookup("STU-001")
+        self.assertIn((desk.STUDENT, {
+            "name": ("like", "%STU-001%"), "enabled": 1
+        }), calls)
+        desk.lookup("INQ-001")
+        self.assertIn((desk.INQUIRY, {
+            "name": ("like", "%INQ-001%")
+        }), calls)
+
+    def test_verified_inquiry_name_is_used_in_admission_handover(self):
+        desk, calls = self.desk(applicant=False)
+        ref = "THV-" + "a" * 32
+        desk._subject_index = lambda decisions: {row["name"]: ref for row in decisions}
+        real_rows = desk.project_rows
+        def project_rows(surface, doctype, fields, filters=None, **kwargs):
+            if doctype == desk.CASE:
+                return [{"name": "CASE-1", "subject": ref, "th_branch": "Branch Alpha",
+                         "reception_inquiry": "INQ-1"}]
+            if doctype == desk.INQUIRY and filters and "name" in filters:
+                return [{"name": "INQ-1", "person_name": "Visitor Name",
+                         "th_branch": "Branch Alpha"}]
+            return real_rows(surface, doctype, fields, filters=filters, **kwargs)
+        desk.project_rows = project_rows
+        row = next(section for section in desk.work()["sections"]
+                   if section["id"] == "handover")["items"][0]
+        self.assertEqual(row["person"], "Visitor Name")
+        self.assertIn(ref, row["detail"])
+
+    def test_wrong_branch_does_not_display_reception_identity(self):
+        desk, _ = self.desk(applicant=False)
+        ref = "THV-" + "a" * 32
+        def project_rows(surface, doctype, fields, filters=None, **kwargs):
+            if doctype == desk.CASE:
+                return [{"name": "CASE-1", "subject": ref, "th_branch": "Branch Alpha",
+                         "reception_inquiry": "INQ-1"}]
+            if doctype == desk.INQUIRY:
+                return [{"name": "INQ-1", "person_name": "Wrong Branch Name",
+                         "th_branch": "Branch Beta"}]
+            return []
+        desk.project_rows = project_rows
+        self.assertEqual(desk._referral_display_names([ref]), {})
+
     def test_walkin_registration_is_visible_even_without_placement(self):
         desk, _ = self.desk(placement=False, applicant=False)
         view = desk.work()
