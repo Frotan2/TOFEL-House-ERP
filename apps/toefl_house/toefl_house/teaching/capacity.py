@@ -690,7 +690,10 @@ def class_availability(student_group="", program="", academic_year="",
     branches = _availability_branch_scope()
     if branch and branches is not None and branch not in branches:
         raise frappe.PermissionError("The selected branch is not assigned to this login")
-    filters = {"disabled": 0}
+    # A completed or cancelled class is not accepting learners, even if
+    # its raw native roster count is below max_strength. Do not advertise
+    # unusable seats at Reception.
+    filters = {"disabled": 0, "th_class_status": ("in", ["Planned", "Active"])}
     if student_group:
         filters["name"] = student_group
     else:
@@ -789,7 +792,11 @@ def waiting_list_board(student_group=""):
         # Restrict the waiting queue BEFORE reading any student identifiers.
         # For a direct class query, both name and branch must match; for the
         # board, collect only classes the viewer is authorized to see.
-        group_filters = {"th_branch": ("in", branches)}
+        group_filters = {
+            "th_branch": ("in", branches),
+            "disabled": 0,
+            "th_class_status": ("in", ["Planned", "Active"]),
+        }
         if student_group:
             group_filters["name"] = student_group
         group_rows = frappe.get_all(
@@ -829,7 +836,10 @@ def waiting_list_board(student_group=""):
         for index, entry in enumerate(ordered, 1):
             offered = entry["status"] == "Offered"
             live = offered and unexpired(entry.get("offer_expires_on"))
-            if offered and not live:
+            if seats.get("class_status") not in ("Planned", "Active"):
+                next_step = "This class is no longer open for new seating. Refer to Academic Manager."
+                action = ""
+            elif offered and not live:
                 next_step = "The seat offer expired; offer a seat again or withdraw the entry."
                 action = "offer_waiting_list_seat"
             elif offered and live:
