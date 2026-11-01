@@ -269,7 +269,9 @@ class IntakeGuardTests(unittest.TestCase):
         self.production_mode = True
         self.branch_ups = ["Branch Alpha"]
         with self.assertRaises(_PermissionError):
-            self._record()
+            self.admission.record_applicant(
+                "test-prod-branch-missing-00001", "PD-1",
+                "Real Learner", "TH-PROG", "2026-27")
 
     def test_branch_provenance_rejects_cross_branch_admission(self):
         self.placement_branch = "Branch Alpha"
