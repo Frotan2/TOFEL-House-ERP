@@ -586,6 +586,13 @@ def _require_session_operator(actor, attempt):
         raise frappe.PermissionError("Allocator cannot operate the session")
     if attempt.mode != "Digital":
         raise frappe.ValidationError("Only digital delivery is implemented in this increment")
+    # Verification binds an attempt to ONE invigilator. A shared role and
+    # Branch do not permit silent station takeover; that needs an audited
+    # transfer command before being allowed in live operations.
+    if attempt.status in ("Verified", "In Progress") and \
+            getattr(attempt, "verified_by", None) != actor:
+        raise frappe.PermissionError(
+            "Only the verifying invigilator may operate this session")
 
 
 def _advance(attempt, status, **fields):
@@ -680,7 +687,8 @@ def supervised_attempt_choices():
             "mode": "Digital",
             "status": ("in", ["Allocated", "Verified", "In Progress"]),
         },
-        fields=["name", "case_name", "allocated_by", "mode", "status", "version"],
+        fields=["name", "case_name", "allocated_by", "verified_by",
+                "mode", "status", "version"],
         order_by="creation desc", limit_page_length=limit)
     if len(attempts) >= limit:
         raise frappe.ValidationError("Too many active placement attempts; contact Academic Manager")
@@ -688,6 +696,8 @@ def supervised_attempt_choices():
     for row in attempts:
         if row.get("allocated_by") == actor:
             continue  # A creator must not invigilate their own allocation.
+        if row.get("status") in ("Verified", "In Progress") and row.get("verified_by") != actor:
+            continue  # A different invigilator already owns the session.
         choices.append({
             "attempt": row["name"],
             "status": row["status"],
@@ -708,7 +718,7 @@ def supervised_attempt_status(attempt):
         raise frappe.ValidationError("A valid attempt reference is required")
     row = frappe.db.get_value(
         ATTEMPT, attempt,
-        ["name", "case_name", "allocated_by", "mode", "status", "version",
+        ["name", "case_name", "allocated_by", "verified_by", "mode", "status", "version",
          "started_at", "deadline_at"], as_dict=True)
     if not row:
         raise frappe.ValidationError("Placement attempt does not exist")
@@ -741,7 +751,7 @@ def supervised_attempt_view(attempt):
         raise frappe.ValidationError("A valid attempt reference is required")
     row = frappe.db.get_value(
         ATTEMPT, attempt,
-        ["name", "case_name", "allocated_by", "mode", "status",
+        ["name", "case_name", "allocated_by", "verified_by", "mode", "status",
          "version", "started_at", "deadline_at"], as_dict=True)
     if not row:
         raise frappe.ValidationError("Placement attempt does not exist")

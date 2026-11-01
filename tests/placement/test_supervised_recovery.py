@@ -86,7 +86,7 @@ class SupervisedRecoveryRuntimeTests(unittest.TestCase):
                     return None
                 return types.SimpleNamespace(
                     name="ATT-1", case_name="CASE-1",
-                    allocated_by="different@example.test", mode="Digital",
+                    allocated_by="different@example.test", verified_by=obj.actor, mode="Digital",
                     status=obj.status, version=3,
                     started_at="2026-09-17 09:00:00", deadline_at=obj.deadline)
             if doctype == "TH Placement Case" and fields == "th_branch":

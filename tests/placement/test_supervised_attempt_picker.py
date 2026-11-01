@@ -22,6 +22,7 @@ class SupervisedAttemptPickerTests(unittest.TestCase):
             "if len(cases) >= max_cases:",
             "if len(attempts) >= limit:",
             'if row.get("allocated_by") == actor:',
+            'row.get("verified_by") != actor',
         ):
             with self.subTest(required=required):
                 self.assertIn(required, body)

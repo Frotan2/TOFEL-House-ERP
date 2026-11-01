@@ -25,7 +25,8 @@ security and branch isolation, scoring, review, release and admissions handoff.
    status, physical identity confirmation, verification, timed-session start,
    answer navigation and recovery of confirmed server responses; it must not be
    handed to a candidate because the same Desk account also has administrative
-   actions.
+   actions. The verified exam is bound to its original invigilator; any staff
+   handover requires a separately authorized and audited workflow, not yet built.
 7. The scorer uses server-side keys, not browser-visible answers. Independent
    assessment, review, finalization and release stay separate, audited roles.
 8. An approved level and native Program mapping must be calibrated, published
