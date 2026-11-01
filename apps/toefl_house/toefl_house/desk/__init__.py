@@ -139,6 +139,13 @@ PROJECTION_FIELDS = {
         "name", "scope", "student_group", "student", "status",
         "from_date", "until_date",
     ],
+    # A pending class move is not the same as a changed roster. Only show
+    # operational facts, never the student's confidential transfer reason,
+    # requester, audit evidence or names of unrelated learners.
+    ("reception", "TH Class Transfer"): [
+        "name", "student", "from_group", "to_group", "transfer_kind",
+        "status", "effective_date",
+    ],
     ("reception", "Instructor"): [
         "name", "instructor_name", "status",
     ],
@@ -646,8 +653,8 @@ def scope_filters(desk):
 BRANCH_CHAIN_FILTERS = ("TH Reception Inquiry", "Student", "Student Group Student", "Student Attendance",
                         "Course Schedule", "Program Enrollment", "Fees",
                         "TH Enrollment Exit", "TH Teaching Assignment",
-                        "TH Class Suspension", "TH Correction Request",
-                        "TH Admission Decision")
+                        "TH Class Suspension", "TH Class Transfer",
+                        "TH Correction Request", "TH Admission Decision")
 _CHAIN_LIMIT = 10000  # bounded scope resolution; truncation is fail-closed
 
 
@@ -681,6 +688,19 @@ def _branch_allowed_names(doctype, branches, *, require_complete=False):
         return [row["name"] for row in frappe.get_all(
             doctype, filters={"parent": ("in", groups), "active": 1},
             fields=["name"], limit_page_length=_CHAIN_LIMIT)]
+    if doctype == "TH Class Transfer":
+        if not groups:
+            return []
+        # BOTH groups must be in the same authorized Branch set, not merely
+        # the source. A future/old cross-branch transfer is never exposed.
+        rows = frappe.get_all(
+            doctype, filters={"from_group": ("in", groups),
+                              "to_group": ("in", groups)},
+            fields=["name"], limit_page_length=_CHAIN_LIMIT)
+        if len(rows) >= _CHAIN_LIMIT:
+            raise frappe.ValidationError(
+                "Branch transfer scope exceeds the safe read limit; ask an administrator")
+        return [row["name"] for row in rows]
     if doctype in ("Student Attendance", "Course Schedule", "TH Teaching Assignment",
                    "TH Class Suspension"):
         if not groups:
