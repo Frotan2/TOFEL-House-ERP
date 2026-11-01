@@ -100,6 +100,16 @@ class ReceptionWalkinTests(unittest.TestCase):
             exists=lambda doctype, value: doctype == "Branch" and value == "Branch Alpha",
             get_value=get_value)
         frappe.get_doc = get_doc
+        def get_all(doctype, filters=None, fields=None, limit_page_length=None):
+            assert doctype == "TH Reception Inquiry"
+            assert set(filters) == {"th_branch", "phone", "person_name", "status"}
+            statuses = set(filters["status"][1])
+            return [{"name": name} for name, value in f.saved.items()
+                    if value.get("th_branch") == filters["th_branch"]
+                    and value.get("phone") == filters["phone"]
+                    and value.get("person_name") == filters["person_name"]
+                    and value.get("status") in statuses][:limit_page_length]
+        frappe.get_all = get_all
         sys.modules["frappe"] = frappe
 
         package = ModuleType("toefl_house")
@@ -155,6 +165,25 @@ class ReceptionWalkinTests(unittest.TestCase):
         self.assertEqual(self.saved["INQ-001"]["person_name"], "Arefa Visitor")
         self.assertNotIn("student_email_id", self.saved["INQ-001"])
         self.assertEqual([kind for kind, _ in self.audit], ["create_walkin_inquiry"])
+
+    def test_same_open_visitor_and_phone_is_not_accidentally_registered_twice(self):
+        self.module.create_walkin_inquiry("one", "Visitor",
+                                          phone="۰۷۹۴۳۵۷۵۰۹")
+        with self.assertRaisesRegex(ValidationError, "open inquiry already exists"):
+            self.module.create_walkin_inquiry("two", "Visitor",
+                                              phone="0794357509")
+        self.assertEqual(len(self.saved), 1)
+
+    def test_shared_household_phone_does_not_merge_different_people(self):
+        self.module.create_walkin_inquiry("one", "Visitor A", phone="0794357509")
+        self.module.create_walkin_inquiry("two", "Visitor B", phone="0794357509")
+        self.assertEqual(len(self.saved), 2)
+
+    def test_closed_visit_permits_a_new_visit(self):
+        self.module.create_walkin_inquiry("one", "Visitor", phone="0794357509")
+        self.module.update_walkin_inquiry("done", "INQ-001", 1, "Closed", notes="Finished")
+        self.module.create_walkin_inquiry("two", "Visitor", phone="0794357509")
+        self.assertEqual(len(self.saved), 2)
 
     def test_phone_optional_but_untrusted_contact_is_rejected(self):
         self.module.create_walkin_inquiry("k", "Visitor", phone="")

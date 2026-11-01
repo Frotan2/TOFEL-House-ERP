@@ -102,6 +102,20 @@ def create_walkin_inquiry(request_key, person_name, phone="", program_interest="
             raise frappe.ValidationError("Choose a reception branch before saving the visitor")
         if not frappe.db.exists("Branch", chosen):
             raise frappe.ValidationError("Unknown reception branch")
+        # A repeated visit from the same person/contact belongs in the open
+        # follow-up record, not in a second incomplete admission funnel.
+        # The comparison is exact and branch-local. Different family members
+        # sharing one telephone remain separate people, and closed visits
+        # may be followed by a new record.
+        if contact and frappe.get_all(
+                DOCTYPE,
+                filters={"th_branch": chosen, "phone": contact,
+                         "person_name": person,
+                         "status": ("in", ["New", "Contacted", "Awaiting Placement"])},
+                fields=["name"], limit_page_length=1):
+            raise frappe.ValidationError(
+                "An open inquiry already exists for this visitor and phone in this Branch; "
+                "search the visitor and update the existing follow-up")
         doc = frappe.get_doc(dict(
             doctype=DOCTYPE, person_name=person, phone=contact,
             program_interest=interest, th_branch=chosen or None,
