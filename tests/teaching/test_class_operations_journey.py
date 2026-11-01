@@ -116,6 +116,41 @@ class ReceptionBranchAvailabilityTests(unittest.TestCase):
         self.assertEqual(self.ops.capacity.class_availability(
             student_group="GRP-B")["classes"], [])
 
+    def test_truncated_availability_and_waiting_board_cannot_claim_exact_counts(self):
+        self.site.add("User Permission", name="BR-LIMIT-A",
+                      user=RECEPTION, allow="Branch", for_value="BR-A")
+        for i in range(self.ops.capacity.MAX_CLASSES):
+            self.site.add("Student Group", name=f"MORE-A-{i}",
+                          th_branch="BR-A", disabled=0,
+                          student_group_name=f"Many {i}")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.class_availability()
+        self.assertIn("Too many classes", str(ctx.exception))
+
+        # The class-specific read must remain available even when the
+        # overall branch scope has too many classes to show completely.
+        single = self.ops.capacity.class_availability(student_group="GRP-A")
+        self.assertEqual([c["student_group"] for c in single["classes"]], ["GRP-A"])
+        for i in range(self.ops.capacity.MAX_ENTRIES):
+            self.site.add("TH Class Waiting List", name=f"WAIT-A-{i}",
+                          student=f"STU-{i}", student_group="GRP-A",
+                          status="Waiting", priority=0,
+                          requested_on="2026-09-22")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.waiting_list_board(student_group="GRP-A")
+        self.assertIn("choose one class", str(ctx.exception))
+
+        # Even when class is selected, a seat summary cannot silently
+        # undercount a large waiting queue.
+        for i in range(self.ops.capacity.MAX_CLASSES * 4):
+            self.site.add("TH Class Waiting List", name=f"WAIT-EXTRA-{i}",
+                          student=f"OTHER-{i}", student_group="GRP-A",
+                          status="Waiting", priority=0,
+                          requested_on="2026-09-22")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.class_availability(student_group="GRP-A")
+        self.assertIn("Waiting-list totals exceed", str(ctx.exception))
+
     def test_branch_rule_restricts_academic_manager_but_hq_without_one_can_read(self):
         self.ops.login(APPROVER)
         self.site.set_roles(APPROVER, ["Academic Manager"])
