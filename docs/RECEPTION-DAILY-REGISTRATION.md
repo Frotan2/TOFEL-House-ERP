@@ -1,0 +1,41 @@
+# TOEFL House — Reception daily registration (staff procedure)
+
+**Scope:** front-counter intake only. This page is for an authorized Reception login. No developer tools, JSON editing, or manual database changes are part of daily registration. Changes in PR #124 remain **TEST PACKAGE — NO REAL DATA** until release acceptance.
+
+## Walk-in: no email or placement result
+1. Sign in with your own Reception account and open **TOEFL House Reception Desk**.
+2. Under **New visitors and follow-ups**, choose **Register a new visitor**.
+3. Enter the person's **real full name**. Add contact phone (optional, Afghan numerals work), interested program and brief contact note. Choose your authorized branch if the account has more than one branch.
+4. Save once. The system provides a unique internal inquiry reference and keeps an auditable operation receipt. The visitor appears in the follow-up queue.
+5. Search by name or phone before registering another contact; same-family phone numbers alone are not proof of the same identity.
+6. Use **Update follow-up** to mark **Contacted**, **Awaiting Placement**, or **Closed**, adding the real next-step note. A closed record remains in the audit trail and is no longer editable from this queue.
+
+**This is not student registration.** No actual Student, User, placement case, academic enrollment, receipt, invoice or tuition charge is created merely because a visitor walks in. Do not enter invented or third-party email addresses.
+
+## After verified placement
+1. A designated Placement Publisher must have a separately verified candidate account and create/allocate the placement case. The invigilator, assessor, reviewer and releaser execute their respective independently authorized steps.
+2. A *released and still-valid* result appears in **Ready for admission intake**. Expired results are refused even if present in history.
+3. If the candidate already has a native Applicant record, **Open admission** uses that record. Otherwise an Admission Officer must use **Record applicant**; enter the verified real first name, optionally surname, an existing native Program, academic year and authorized branch.
+4. The admission then follows **Draft → Review → Approved / Conditional / Deferred / Rejected**. A reviewer and approver must have the required distinct authority.
+5. **Conditional** requires an independent Admission Approver to record evidence through **Verify conditions**; do not attempt student conversion while still Conditional. The original deciding approver may not approve their own conditions.
+6. Once **Approved**, an Admission Officer records offer acceptance; an Admission Approver converts into the native Student. **Enrollment Officer** then submits the real Program Enrollment.
+7. Academic staff place the student in a class with available capacity. Authorized finance staff issue tuition separately under the Owner-approved billing policy, without duplicate billing.
+
+## Staff safety and exceptions
+- An inquiry is not linked automatically to an email-based candidate account. Only a verified identity and an authorized placement/admission journey may make that association. Never assume two matching names or shared phone numbers are the same person.
+- If the result is expired, the case does not exist, the selected Program differs from approved academic placement, or required approver roles are missing: **stop and refer to Academic Manager**. Do not bypass the guards or choose arbitrary levels.
+- Branch User Permissions restrict front-counter record visibility. A reception account without Branch User Permissions is considered headquarters-wide by the existing application scope model: **the Owner must assign branch restrictions deliberately**.
+- Save your contact records only in Reception Desk. Do not write sensitive medical or family information in free-text notes; use a short operational follow-up description.
+- An interrupted or repeated request should be retried from the **same dialog** so its idempotency key is preserved; opening a separate form starts a new request.
+- No final production readiness is implied by successful static tests. Test full Windows on a restored, synthetic-only site first, including role boundaries, same-key replay, branching, candidate verification, admission and ledger reconciliation.
+
+## Acceptance checklist for an independent reviewer
+- [ ] New, phone-free walk-in records without any email or candidate account.
+- [ ] Afghan and Latin phone numerals normalize and search consistently.
+- [ ] Same-key replay yields exactly one inquiry; different-key multi-submit is explicitly monitored.
+- [ ] Other-branch Reception is unable to read, query or update the inquiry, including cached receipts.
+- [ ] Invalid or expired placement cannot create admission from the queue.
+- [ ] Existing applicant does not receive a duplicate-registration action.
+- [ ] Conditional admission cannot convert until another approver verifies conditions with evidence.
+- [ ] The real Account/Student/Program Enrollment/Fees ledger is unchanged by a preliminary inquiry.
+- [ ] The release is signed, CI exact-head passes, and Owner Windows acceptance authorizes use of real data.
