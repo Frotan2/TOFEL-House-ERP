@@ -7,6 +7,7 @@ REFERENCES = {
     "to_group": "Student Group", "course_schedule": "Course Schedule",
     "session": "Course Schedule",
     "student": "Student", "student_applicant": "Student Applicant",
+    "inquiry": "TH Reception Inquiry",
     "admission_decision": "TH Admission Decision",
     "program_enrollment": "Program Enrollment", "attendance": "Student Attendance",
     "transfer": "TH Class Transfer", "exit": "TH Enrollment Exit",
@@ -19,6 +20,7 @@ ADMISSION_NAMES = frozenset({
 })
 RESULT_NAMES = {
     "create_student_group": "Student Group", "record_applicant": "Student Applicant",
+    "create_walkin_inquiry": "TH Reception Inquiry",
     "create_admission": "TH Admission Decision", "schedule_session": "Course Schedule",
     "assign_teaching_skill": "TH Teaching Assignment",
 }
