@@ -11,6 +11,7 @@ class CommandScopeTests(unittest.TestCase):
     def setUp(self):
         self.branches = ["A"]
         self.companies = []
+        self.production = False
         self.documents = {}
         self.student_branches = {}
         self.values = {}
@@ -37,8 +38,11 @@ class CommandScopeTests(unittest.TestCase):
         permissions._student_branches = lambda name: self.student_branches.get(name, set())
         package = types.ModuleType("toefl_house")
         package.permissions = permissions
+        security = types.ModuleType("toefl_house.security")
+        security.is_production = lambda: self.production
         modules = {"frappe": self.frappe, "toefl_house": package,
-                   "toefl_house.permissions": permissions}
+                   "toefl_house.permissions": permissions,
+                   "toefl_house.security": security}
         context = patch.dict(sys.modules, modules)
         context.start()
         self.addCleanup(context.stop)
@@ -46,6 +50,37 @@ class CommandScopeTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("scope_under_test", path)
         self.scope = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.scope)
+
+    def test_production_exam_commands_reject_foreign_case(self):
+        self.production = True
+        self.documents[("TH Placement Case", "CASE-A")] = {"th_branch": "A"}
+        self.values[("TH Placement Attempt", "ATT-A", "case_name")] = "CASE-A"
+        for kind in self.scope.PLACEMENT_ATTEMPT_COMMANDS:
+            self.scope.authorize_command_scope(kind, {"attempt": "ATT-A"}, "actor")
+        self.branches = ["B"]
+        for kind in self.scope.PLACEMENT_ATTEMPT_COMMANDS:
+            with self.subTest(kind=kind), self.assertRaises(PermissionError):
+                self.scope.authorize_command_scope(kind, {"attempt": "ATT-A"}, "actor")
+
+    def test_production_exam_commands_require_branch_assignment(self):
+        self.production = True
+        self.branches = []
+        for kind in (*self.scope.PLACEMENT_ATTEMPT_COMMANDS, "create_case", "allocate_attempt"):
+            with self.subTest(kind=kind), self.assertRaises(PermissionError):
+                self.scope.authorize_command_scope(
+                    kind, {"attempt": "ATT-A", "branch": "A", "case": "CASE-A"}, "actor")
+
+    def test_exam_receipt_rechecks_branch_after_reassignment(self):
+        self.production = True
+        self.documents[("TH Placement Case", "CASE-A")] = {"th_branch": "A"}
+        self.values[("TH Placement Attempt", "ATT-A", "case_name")] = "CASE-A"
+        payload = {"attempt": "ATT-A", "expected_version": 3}
+        self.scope.authorize_command_scope(
+            "deliver_attempt", payload, "actor", result={"projection": {"items": []}})
+        self.branches = ["B"]
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "deliver_attempt", payload, "actor", result={"projection": {"items": []}})
 
     def test_placement_case_cannot_move_between_scoped_branches(self):
         self.documents[("TH Placement Case", "CASE-A")] = {"th_branch": "A"}

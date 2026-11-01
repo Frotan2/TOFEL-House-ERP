@@ -47,6 +47,11 @@ REFUND_COMMANDS = frozenset({
     "approve_tuition_refund", "deny_tuition_refund", "pay_tuition_refund", "void_tuition_refund",
 })
 
+PLACEMENT_ATTEMPT_COMMANDS = frozenset({
+    "verify_attempt", "deliver_attempt", "save_response", "seal_attempt",
+    "score_attempt", "review_attempt", "finalize_attempt", "release_decision",
+})
+
 
 def _reference_company(doctype, name):
     """Resolve Company through the native teaching contract and its employee."""
@@ -216,6 +221,20 @@ def authorize_command_scope(kind, payload, actor, *, result=None):
         from toefl_house.teaching import _require_own_instructor_session
         _require_own_instructor_session(actor, row, schedule)
     allowed = actor_branches(actor)
+    # Placement attempts have no direct branch column. The frozen Case is
+    # their sole authoritative origin. Every production operator must carry
+    # an explicitly assigned Branch, including when replaying an old receipt;
+    # role possession alone is not enough to cross campus boundaries.
+    if kind in PLACEMENT_ATTEMPT_COMMANDS or kind in {"create_case", "allocate_attempt"}:
+        from toefl_house.security import is_production
+        if is_production():
+            if not allowed:
+                raise frappe.PermissionError(
+                    "A verified Branch assignment is required for placement commands")
+            if kind in PLACEMENT_ATTEMPT_COMMANDS:
+                case_name = frappe.db.get_value(
+                    "TH Placement Attempt", payload.get("attempt"), "case_name")
+                _require_document("TH Placement Case", case_name, allowed)
     if allowed is None:
         return
     if "branch" in payload:
