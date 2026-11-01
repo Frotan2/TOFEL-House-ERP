@@ -129,8 +129,12 @@ PROJECTION_FIELDS = {
         "name", "student_group", "instructor", "course", "room",
         "from_time", "to_time", "schedule_date", "th_session_status",
     ],
+    ("reception", "TH Teaching Assignment"): [
+        "name", "student_group", "instructor", "course_schedule",
+        "effective_start", "effective_end",
+    ],
     ("reception", "Instructor"): [
-        "name", "instructor_name",
+        "name", "instructor_name", "status",
     ],
     ("reception", "Program Enrollment"): [
         "name", "student", "student_name", "program", "academic_year",
