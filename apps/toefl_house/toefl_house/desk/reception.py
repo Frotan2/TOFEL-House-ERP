@@ -948,6 +948,10 @@ def lookup(query):
                           "next": class_info["next"],
                           "role": class_info["next_role"]}
                          if enrollment and class_info else
+                         {"label": "Enrolled, class unverified",
+                          "definition": "A submitted enrollment is visible but no complete class check is available.",
+                          "next": "Ask Academic Manager to verify the learner's exact roster before quoting a class.",
+                          "role": "Academic Manager"} if enrollment else
                          lifecycle.enrollment_stage(False, False))
             student_items.append({
                 "id": row["name"],
