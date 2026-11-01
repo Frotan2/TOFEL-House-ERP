@@ -187,6 +187,9 @@ class ReceptionBranchAvailabilityTests(unittest.TestCase):
         self.site.add("TH Class Waiting List", name="WAIT-CLOSED",
                       student="STU-PRIVATE", student_group="GRP-COMPLETED",
                       status="Waiting", priority=0, requested_on="2026-09-22")
+        self.site.add("TH Class Waiting List", name="WAIT-ARCHIVED",
+                      student="STU-HISTORICAL", student_group="GRP-ARCHIVED",
+                      status="Waiting", priority=0, requested_on="2026-09-22")
         report = self.ops.capacity.class_availability()
         self.assertEqual([row["student_group"] for row in report["classes"]],
                          ["GRP-A"])
@@ -201,6 +204,11 @@ class ReceptionBranchAvailabilityTests(unittest.TestCase):
         self.assertEqual(len(board["entries"]), 1)
         self.assertEqual(board["entries"][0]["next_command"], "")
         self.assertEqual(board["entries"][0]["next_role"], "Academic Manager")
+        historical = self.ops.capacity.waiting_list_board(
+            student_group="GRP-ARCHIVED")
+        self.assertEqual(len(historical["entries"]), 1)
+        self.assertEqual(historical["entries"][0]["next_command"], "")
+        self.assertEqual(historical["entries"][0]["next_role"], "Academic Manager")
 
     def test_branch_rule_restricts_academic_manager_but_hq_without_one_can_read(self):
         self.ops.login(APPROVER)
