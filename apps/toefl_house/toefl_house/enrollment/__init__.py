@@ -10,7 +10,7 @@ from toefl_house.admission import (
 )
 from toefl_house.api import _execute
 from toefl_house.policy import digest, enrollment_is_eligible
-from toefl_house.security import enrollment_command_active, finance_command_active, require_operational
+from toefl_house.security import enrollment_command_active, finance_command_active, require_operational, is_production
 
 PE = "Program Enrollment"
 CE = "Course Enrollment"
@@ -116,17 +116,43 @@ def enroll_in_program(request_key, admission_decision):
         _unexpired(placement)
         student = row.native_student
         frappe.db.sql("select name from `tabStudent` where name=%s for update", (student,))
-        linked = frappe.db.get_value(STUDENT, student, ["name", "student_applicant", "customer"], as_dict=True)
+        linked = frappe.db.get_value(
+            STUDENT, student,
+            ["name", "student_applicant", "th_candidate_ref", "enabled", "customer"],
+            as_dict=True,
+        )
         if not linked:
             raise frappe.ValidationError("Native Student not found")
-        if row.existing_student:
-            # Returning lane: the Student keeps its ORIGINAL applicant
-            # link (native history is never rewritten); identity was
-            # proven at convert by email match, so here the linkage
-            # itself is verified instead.
-            if linked.name != row.existing_student:
-                raise frappe.ValidationError("Student does not match the returning admission")
-        elif (linked.student_applicant or "") != row.student_applicant:
+        if not int(linked.enabled or 0):
+            raise frappe.ValidationError("Disabled Student cannot be enrolled")
+        if row.existing_student and linked.name != row.existing_student:
+            raise frappe.ValidationError("Student does not match the returning admission")
+        if is_production():
+            # Revalidate the entire Reception -> Placement -> Applicant ->
+            # Student lineage at the LAST point before creating an enrollment.
+            # A matching name, phone, email, or declared existing_student by
+            # itself is not proof of identity.
+            case_name = frappe.db.get_value(
+                "TH Placement Attempt", placement.attempt, "case_name")
+            case_origin = frappe.db.get_value(
+                "TH Placement Case", case_name,
+                ["subject", "th_branch", "reception_inquiry"], as_dict=True) if case_name else None
+            applicant = frappe.db.get_value(
+                "Student Applicant", row.student_applicant,
+                ["name", "th_candidate_ref", "th_branch", "th_reception_inquiry"],
+                as_dict=True)
+            if (not case_origin or not applicant or
+                    not case_origin.subject or not case_origin.subject.startswith("THV-") or
+                    not case_origin.th_branch or not case_origin.reception_inquiry or
+                    applicant.th_candidate_ref != case_origin.subject or
+                    applicant.th_reception_inquiry != case_origin.reception_inquiry or
+                    applicant.th_branch != case_origin.th_branch or
+                    linked.th_candidate_ref != case_origin.subject or
+                    linked.student_applicant != applicant.name):
+                raise frappe.PermissionError(
+                    "Student identity or Branch no longer matches the verified "
+                    "Reception and Placement record; enrollment refused")
+        elif not row.existing_student and (linked.student_applicant or "") != row.student_applicant:
             raise frappe.ValidationError("Student does not match the admission applicant")
         if not frappe.db.exists(PROGRAM, row.program):
             raise frappe.ValidationError("Unknown program")
