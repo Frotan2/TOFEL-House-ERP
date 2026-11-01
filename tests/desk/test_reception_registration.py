@@ -44,6 +44,29 @@ class RegistrationDeskTests(unittest.TestCase):
         desk.project_rows = project_rows
         return desk, calls
 
+    def test_branchless_placement_case_does_not_expose_subject(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        rows = [{
+            "name": "PL-1", "attempt": "ATT-1", "status": "Released",
+        }]
+        def get_rows(_surface, doctype, _fields, **_kwargs):
+            if doctype == desk.ATTEMPT:
+                return [{"name": "ATT-1", "case_name": "CASE-1", "status": "Finalized"}]
+            if doctype == desk.CASE:
+                return [{"name": "CASE-1", "subject": "private@example.test",
+                         "status": "Open", "th_branch": ""}]
+            return []
+        desk.project_rows = get_rows
+        self.assertEqual(desk._subject_index(rows), {} if False else {"PL-1": ""})
+
+    def test_reception_without_branch_assignment_is_denied(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        original = desk.frappe.db.get_value
+        desk.frappe.db.get_value = lambda doctype, *args, **kwargs: (
+            None if doctype == "User Permission" else original(doctype, *args, **kwargs))
+        with self.assertRaises(desk.frappe.PermissionError):
+            desk.work()
+
     def test_existing_applicant_gets_create_admission_not_duplicate_record(self):
         desk, _ = self.desk()
         view = desk.work()

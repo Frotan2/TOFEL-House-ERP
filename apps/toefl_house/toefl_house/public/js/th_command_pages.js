@@ -135,7 +135,8 @@ frappe.provide("toefl_house.command_pages");
 					label: "Create placement case",
 					method: "toefl_house.api.create_case",
 					dispatches: ["create_case"],
-					fields: [data("subject", "Synthetic subject", { reqd: 1 }), data("purpose", "Purpose")],
+					fields: [data("subject", "Verified candidate User", { reqd: 1 }), data("purpose", "Purpose"),
+                        data("branch", "Placement branch", { reqd: 1, description: "Select the authorized branch for this candidate. The branch is immutable after case creation." })],
 				},
 				{
 					label: "Allocate placement attempt",

@@ -9,6 +9,7 @@
   "field_order": [
     "subject",
     "purpose",
+    "th_branch",
     "status",
     "synthetic"
   ],
@@ -38,6 +39,13 @@
       "fieldtype": "Check",
       "default": "1",
       "read_only": 1
+    },
+    {
+      "fieldname": "th_branch",
+      "label": "Placement branch",
+      "fieldtype": "Link",
+      "options": "Branch",
+      "in_list_view": 1
     }
   ],
   "permissions": [

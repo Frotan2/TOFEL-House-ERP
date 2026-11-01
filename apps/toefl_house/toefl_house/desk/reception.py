@@ -69,10 +69,13 @@ def _subject_index(decisions):
     case_names = sorted({row["case_name"] for row in attempts.values() if row.get("case_name")})
     cases = {}
     if case_names:
-        for row in project_rows("reception", CASE, ["name", "subject", "status"],
+        for row in project_rows("reception", CASE, ["name", "subject", "status", "th_branch"],
                                 filters={"name": ("in", case_names)},
                                 order_by="name", limit=BOUNCE_WINDOW):
-            cases[row["name"]] = row
+            # The projection itself enforces Branch User Permissions. Even
+            # HQ viewers never get branchless placement subjects in intake.
+            if row.get("th_branch"):
+                cases[row["name"]] = row
     index = {}
     for decision in decisions:
         attempt = attempts.get(decision.get("attempt"))

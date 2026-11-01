@@ -386,7 +386,7 @@ def _pinned_published(doctype, validator, name, expected_version, label):
 
 
 @frappe.whitelist(methods=["POST"])
-def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE):
+def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE, branch=""):
     if not isinstance(subject, str) or not 3 <= len(subject) <= 140:
         raise frappe.ValidationError("Subject user reference required")
     # D16 mirror: the synthetic increment accepts only its purpose marker;
@@ -401,17 +401,26 @@ def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE):
         raise frappe.ValidationError("Unsupported purpose in this synthetic increment")
 
     def work(actor):
+        from toefl_house.command_scope import resolve_creation_branch
+        chosen_branch = resolve_creation_branch(branch, actor)
+        if is_production() and not chosen_branch:
+            raise frappe.ValidationError("Choose a verified placement branch before creating a case")
+        if chosen_branch and not frappe.db.exists("Branch", chosen_branch):
+            raise frappe.ValidationError("Unknown placement branch")
         if subject in ("Administrator", "Guest") or not frappe.db.get_value("User", subject, "enabled"):
             raise frappe.ValidationError("Subject must be an enabled non-privileged native user")
         if frappe.db.exists(CASE, {"subject": subject}):
             raise frappe.ValidationError("Subject already has a case in this increment")
         case = frappe.get_doc(dict(doctype=CASE, subject=subject, purpose=purpose,
+                                   th_branch=chosen_branch or None,
                                    status="Open", synthetic=record_synthetic_flag()))
         case.insert(ignore_permissions=True)
-        return {"name": case.name, "subject": subject, "purpose": purpose, "status": case.status}, \
-               dict(target=case.name, after_hash=digest([subject, purpose]))
+        return {"name": case.name, "subject": subject, "purpose": purpose,
+                "branch": chosen_branch, "status": case.status}, \
+               dict(target=case.name, after_hash=digest([subject, purpose, chosen_branch]))
 
-    return _execute("create_case", request_key, {"subject": subject, "purpose": purpose}, work)
+    return _execute("create_case", request_key,
+                    {"subject": subject, "purpose": purpose, "branch": branch}, work)
 
 
 @frappe.whitelist(methods=["POST"])

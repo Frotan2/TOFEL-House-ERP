@@ -576,6 +576,11 @@ def require_desk_audience(slug):
         )
     if not frappe.db.get_value("User", user, "enabled"):
         frappe.throw("This account has been disabled.", frappe.PermissionError)
+    if slug == "th-reception-desk" and not frappe.db.get_value(
+            "User Permission", {"user": user, "allow": "Branch"}, "for_value"):
+        frappe.throw(
+            "Reception needs an assigned Branch before customer records can be viewed. "
+            "Ask the Course Owner to assign your branch.", frappe.PermissionError)
     return user
 
 
