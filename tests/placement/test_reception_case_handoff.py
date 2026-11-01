@@ -38,6 +38,7 @@ class ReceptionToPlacementHandoffTests(unittest.TestCase):
         self.inquiry_branch = "Branch A"
         self.mode_stamp = 0
         self.cases = []
+        self.locked_origin = False
         self.enabled = True
         self.has_inquiry = True
         self.actor_branch = "Branch A"
@@ -69,7 +70,14 @@ class ReceptionToPlacementHandoffTests(unittest.TestCase):
                     return any(doc.reception_inquiry == key["reception_inquiry"] for doc in fixture.cases)
             raise AssertionError(f"Unexpected existence check {doctype} {key}")
 
-        frappe.db = types.SimpleNamespace(get_value=get_value, exists=exists)
+        def sql(query, values=()):
+            self.assertIn("tabTH Reception Inquiry", query)
+            self.assertIn("for update", query.lower())
+            self.assertEqual(values, ("INQ-A",))
+            fixture.locked_origin = True
+            return [{"name": "INQ-A"}] if fixture.has_inquiry else []
+
+        frappe.db = types.SimpleNamespace(get_value=get_value, exists=exists, sql=sql)
         def get_doc(fields):
             record = types.SimpleNamespace(name=f"CASE-{len(fixture.cases) + 1}", **fields)
             def insert(ignore_permissions=False):
@@ -119,6 +127,7 @@ class ReceptionToPlacementHandoffTests(unittest.TestCase):
         self.assertEqual(self.cases[0].reception_inquiry, "INQ-A")
         self.assertEqual(self.cases[0].th_branch, "Branch A")
         self.assertEqual(self.cases[0].synthetic, 0)
+        self.assertTrue(self.locked_origin)
         self.assertTrue(result["subject"].startswith("THV-"))
         self.assertNotIn("@", result["subject"])
 
