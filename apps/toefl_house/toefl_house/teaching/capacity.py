@@ -880,12 +880,16 @@ def waiting_list_board(student_group=""):
         ordered = sorted(entries, key=_queue_order)
         first_waiting = next(
             (entry["name"] for entry in ordered if entry["status"] == "Waiting"), None)
+        class_facts = seats.get("facts") or {}
+        closed = (not class_facts
+                  or bool(int(class_facts.get("disabled") or 0))
+                  or seats.get("class_status") not in ("Planned", "Active")
+                  or not seats.get("class_end_date")
+                  or seats["class_end_date"] < _today())
         for index, entry in enumerate(ordered, 1):
             offered = entry["status"] == "Offered"
             live = offered and unexpired(entry.get("offer_expires_on"))
-            if (seats.get("class_status") not in ("Planned", "Active")
-                    or not seats.get("class_end_date")
-                    or seats["class_end_date"] < _today()):
+            if closed:
                 next_step = ("This class is not open for new seating in the "
                              "current period. Refer to Academic Manager.")
                 action = ""
@@ -919,11 +923,7 @@ def waiting_list_board(student_group=""):
                 "offer_expires_on": str(entry.get("offer_expires_on") or ""),
                 "seats_available": seats["available"],
                 "next": next_step,
-                "next_role": ("Academic Manager"
-                              if (seats.get("class_status") not in ("Planned", "Active")
-                                  or not seats.get("class_end_date")
-                                  or seats["class_end_date"] < _today())
-                              else "Teaching Scheduler"),
+                "next_role": "Academic Manager" if closed else "Teaching Scheduler",
                 "next_command": action,
             })
     return {"as_of": _today(), "entries": board,
