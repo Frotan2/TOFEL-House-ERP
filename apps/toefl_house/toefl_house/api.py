@@ -414,7 +414,7 @@ def _pinned_published(doctype, validator, name, expected_version, label):
 
 
 @frappe.whitelist(methods=["POST"])
-def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE, branch=""):
+def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE, branch="", inquiry=""):
     if not isinstance(subject, str) or not 3 <= len(subject) <= 140:
         raise frappe.ValidationError("Subject user reference required")
     # D16 mirror: the synthetic increment accepts only its purpose marker;
@@ -443,18 +443,45 @@ def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE, branch=""):
             raise frappe.ValidationError("Unknown placement branch")
         if subject in ("Administrator", "Guest") or not frappe.db.get_value("User", subject, "enabled"):
             raise frappe.ValidationError("Subject must be an enabled non-privileged native user")
+        # The receptionist's real intake is the auditable handoff into
+        # placement. It is not an email address or a fabricated candidate
+        # login. A publisher must verify the real native User separately.
+        if is_production() and not inquiry:
+            raise frappe.ValidationError(
+                "Register the visitor at Reception and provide the inquiry reference before placement")
+        if inquiry:
+            if not isinstance(inquiry, str) or not 1 <= len(inquiry) <= 140:
+                raise frappe.ValidationError("A valid reception inquiry reference is required")
+            intake = frappe.db.get_value(
+                "TH Reception Inquiry", inquiry,
+                ["name", "person_name", "th_branch", "status", "synthetic"],
+                as_dict=True)
+            if not intake or intake.th_branch != chosen_branch:
+                raise frappe.PermissionError(
+                    "Reception inquiry is missing or belongs to another Branch")
+            if intake.status != "Awaiting Placement":
+                raise frappe.ValidationError(
+                    "Reception must mark the visitor Awaiting Placement before allocating the test")
+            if int(intake.synthetic or 0) != record_synthetic_flag():
+                raise frappe.PermissionError("Reception inquiry site mode does not match this case")
+            if frappe.db.exists(CASE, {"reception_inquiry": inquiry}):
+                raise frappe.ValidationError(
+                    "This reception inquiry is already attached to a placement case")
         if frappe.db.exists(CASE, {"subject": subject}):
             raise frappe.ValidationError("Subject already has a case in this increment")
         case = frappe.get_doc(dict(doctype=CASE, subject=subject, purpose=purpose,
                                    th_branch=chosen_branch or None,
+                                   reception_inquiry=inquiry or None,
                                    status="Open", synthetic=record_synthetic_flag()))
         case.insert(ignore_permissions=True)
         return {"name": case.name, "subject": subject, "purpose": purpose,
-                "branch": chosen_branch, "status": case.status}, \
-               dict(target=case.name, after_hash=digest([subject, purpose, chosen_branch]))
+                "branch": chosen_branch, "reception_inquiry": inquiry,
+                "status": case.status}, \
+               dict(target=case.name, after_hash=digest([subject, purpose, chosen_branch, inquiry]))
 
     return _execute("create_case", request_key,
-                    {"subject": subject, "purpose": purpose, "branch": branch}, work)
+                    {"subject": subject, "purpose": purpose, "branch": branch,
+                     "inquiry": inquiry}, work)
 
 
 @frappe.whitelist(methods=["POST"])

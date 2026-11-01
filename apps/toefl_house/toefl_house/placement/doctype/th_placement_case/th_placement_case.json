@@ -10,6 +10,7 @@
     "subject",
     "purpose",
     "th_branch",
+    "reception_inquiry",
     "status",
     "synthetic"
   ],
@@ -45,6 +46,13 @@
       "label": "Placement branch",
       "fieldtype": "Link",
       "options": "Branch",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "reception_inquiry",
+      "label": "Reception inquiry",
+      "fieldtype": "Link",
+      "options": "TH Reception Inquiry",
       "in_list_view": 1
     }
   ],

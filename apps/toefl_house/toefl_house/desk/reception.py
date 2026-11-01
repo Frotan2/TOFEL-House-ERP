@@ -103,7 +103,8 @@ def _walkin_item(row):
         "id": row["name"],
         "person": row.get("person_name") or "",
         "detail": " · ".join(part for part in
-                             (row.get("phone") or "", row.get("program_interest") or "", preview) if part),
+                             ("Inquiry reference: " + row["name"], row.get("phone") or "",
+                              row.get("program_interest") or "", preview) if part),
         "status": row.get("status") or "New",
         "stage": "Pre-registration",
         "stage_definition": "Reception inquiry only; no candidate account, placement, enrollment or bill was created.",
