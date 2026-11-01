@@ -89,7 +89,7 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertEqual(item["action"]["args"]["placement_course_code"], "GE-P1")
         self.assertEqual(item["next_role"], "Admission Officer")
         self.assertIn((desk.STUDENT, {
-            "student_applicant": ("in", ["APP-1"]), "enabled": ("in", [0, 1])}), calls)
+            "student_applicant": ("in", ["APP-1"]), "enabled": 1}), calls)
 
     def test_admitted_applicant_with_no_visible_native_student_has_no_dead_button(self):
         desk, _ = self.desk(applicant_status="Admitted")
