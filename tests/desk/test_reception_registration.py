@@ -342,6 +342,90 @@ class RegistrationDeskTests(unittest.TestCase):
         self.suspensions = [{**class_row, "scope": "Class", "from_date": "broken"}]
         self.assertEqual(stage()["stage"], "Class assigned, timetable needs review")
 
+    def test_pending_class_transfer_is_not_an_executed_roster_change(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        requests = []
+        def read(_surface, doctype, fields, filters=None, **_kwargs):
+            if doctype == desk.ROSTER:
+                return [{"name": "MEM-1", "parent": "CLASS-A",
+                         "student": "STU-1", "active": 1}]
+            if doctype == desk.GROUP:
+                return [{"name": "CLASS-A", "student_group_name": "Morning GE",
+                         "program": "GE", "academic_year": "2026",
+                         "academic_term": "Term 1", "th_branch": "Branch Alpha",
+                         "th_class_status": "Planned", "disabled": 0}]
+            if doctype == desk.TRANSFER:
+                self.assertNotIn("reason", fields)
+                self.assertNotIn("eligibility_json", fields)
+                self.assertEqual(filters, {"student": ("in", ["STU-1"]),
+                                           "status": "Requested"})
+                return list(requests)
+            return []
+        desk.project_rows = read
+        def view():
+            return desk._student_class_information(
+                [{"name": "STU-1", "enabled": 1}],
+                [{"name": "PE-1", "student": "STU-1", "program": "GE",
+                  "academic_year": "2026", "academic_term": "Term 1",
+                  "docstatus": 1}])["STU-1"]
+        self.assertEqual(view()["stage"], "Class planned")
+        requests.append({"name": "TRANSFER-1", "student": "STU-1",
+                         "from_group": "CLASS-A", "to_group": "CLASS-B",
+                         "status": "Requested", "transfer_kind": "Class",
+                         "effective_date": "2026-11-12"})
+        pending = view()
+        self.assertEqual(pending["stage"], "Class planned")
+        self.assertIn("Morning GE", pending["detail"])
+        self.assertIn("Transfer REQUESTED to class CLASS-B", pending["next"])
+        self.assertIn("Current class stays", pending["next"])
+        self.assertEqual(pending["next_role"], "Academic Manager")
+        # A foreign or old source class is not the learner's verified roster.
+        requests[0]["from_group"] = "CLASS-FOREIGN"
+        self.assertNotIn("Transfer REQUESTED", view()["next"])
+        requests[0]["from_group"] = "CLASS-A"
+        requests[0]["status"] = "Executed"
+        # A completed transfer isn't a pending request: native roster is
+        # authoritative, not a transfer request/decision row.
+        requests.clear()
+        self.assertNotIn("Transfer REQUESTED", view()["next"])
+
+    def test_multiple_or_overdue_pending_moves_require_academic_review(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        requests = [
+            {"name": "TR-1", "student": "S", "from_group": "CLASS-A",
+             "to_group": "CLASS-B", "status": "Requested",
+             "transfer_kind": "Class", "effective_date": "2026-01-01"},
+        ]
+        def read(_surface, doctype, fields, filters=None, **_kwargs):
+            if doctype == desk.ROSTER:
+                return [{"name": "MEM", "parent": "CLASS-A", "student": "S", "active": 1}]
+            if doctype == desk.GROUP:
+                return [{"name": "CLASS-A", "student_group_name": "Morning",
+                         "program": "GE", "academic_year": "2026",
+                         "academic_term": "Term 1", "th_branch": "Branch Alpha",
+                         "th_class_status": "Planned", "disabled": 0}]
+            if doctype == desk.TRANSFER:
+                return requests
+            return []
+        desk.project_rows = read
+        def info():
+            return desk._student_class_information(
+                [{"name": "S", "enabled": 1}],
+                [{"student": "S", "program": "GE",
+                  "academic_year": "2026", "academic_term": "Term 1",
+                  "docstatus": 1}])["S"]
+        self.assertIn("requested date has passed", info()["next"])
+        requests.append({**requests[0], "name": "TR-2", "to_group": "CLASS-C"})
+        self.assertEqual(info()["stage"], "Class transfer requests need review")
+        self.assertEqual(info()["next_role"], "Academic Manager")
+        requests.clear()
+        requests.extend({**{"name": f"TR-{i}", "student": "S",
+                            "from_group": "CLASS-A", "to_group": "CLASS-B",
+                            "status": "Requested", "transfer_kind": "Class",
+                            "effective_date": "2026-11-12"}}
+                        for i in range(desk.BOUNCE_WINDOW))
+        self.assertEqual(info()["stage"], "Class transfer status needs review")
+
     def test_planned_class_does_not_claim_scheduled_meeting_or_teacher(self):
         desk, _ = self.desk(placement=False, applicant=False)
         group = {"name": "CLASS-PLAN", "student_group_name": "GE Planned",
