@@ -115,6 +115,7 @@ class SupervisedRecoveryRuntimeTests(unittest.TestCase):
 
         functions["supervised_attempt_view"].__globals__.update({
             "frappe": frappe,
+            "json": json,
             "authorize": authorize,
             "_now": lambda: datetime(2026, 9, 17, 10, 0),
             "get_datetime": lambda raw: datetime.fromisoformat(str(raw)),
