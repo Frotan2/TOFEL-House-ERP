@@ -171,7 +171,11 @@ def _open_entries(group_name, statuses=OPEN_WAITING_STATUSES):
     rows = frappe.get_all(
         WAITING, filters={"student_group": group_name, "status": ("in", list(statuses))},
         fields=["name", "student", "status", "offer_expires_on", "priority"],
-        limit_page_length=MAX_ENTRIES)
+        limit_page_length=MAX_ENTRIES + 1)
+    if len(rows) > MAX_ENTRIES:
+        raise frappe.ValidationError(
+            "Open waiting entries exceed the complete seat reservation read; "
+            "narrow the class or resolve the queue before changing seats")
     return rows
 
 
@@ -359,10 +363,7 @@ def _waiting_row(entry, for_update=True):
 
 
 def _queue_position(entry, row):
-    ahead = frappe.get_all(
-        WAITING, filters={"student_group": row["student_group"],
-                          "status": ("in", list(OPEN_WAITING_STATUSES))},
-        fields=["name", "priority", "requested_on"], limit_page_length=MAX_ENTRIES)
+    ahead = _open_entries(row["student_group"])
     ordered = sorted(ahead, key=lambda item: (
         -int(item.get("priority") or 0), str(item.get("requested_on") or ""),
         str(item.get("name") or "")))
@@ -391,11 +392,16 @@ def join_waiting_list(request_key, student_group, student, note=""):
         if _roster_status(group_name, student_name) == 1:
             raise frappe.ValidationError(
                 f"Student {student_name} is already an active member of {group_name}")
-        for row in _open_entries(group_name):
+        existing_open = _open_entries(group_name)
+        for row in existing_open:
             if row.get("student") == student_name:
                 raise frappe.ValidationError(
                     f"Student {student_name} already has an open waiting-list entry "
                     f"({row.get('name')})")
+        if len(existing_open) >= MAX_ENTRIES:
+            raise frappe.ValidationError(
+                "This class waiting list reached the complete read limit; "
+                "contact Teaching Scheduler before adding more entries")
         seats = seat_facts(group_name)
         if seats["available"] >= 1:
             raise frappe.ValidationError(
