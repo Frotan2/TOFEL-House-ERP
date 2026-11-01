@@ -1,0 +1,85 @@
+{
+  "doctype": "DocType",
+  "name": "TH Reception Inquiry",
+  "module": "Operations",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "track_changes": 0,
+  "allow_rename": 0,
+  "field_order": [
+    "person_name",
+    "phone",
+    "program_interest",
+    "th_branch",
+    "status",
+    "notes",
+    "recorded_by",
+    "version",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "person_name",
+      "label": "Visitor name",
+      "fieldtype": "Data",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "phone",
+      "label": "Contact phone (optional)",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "program_interest",
+      "label": "Interested program",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "th_branch",
+      "label": "Reception branch",
+      "fieldtype": "Link",
+      "options": "Branch"
+    },
+    {
+      "fieldname": "status",
+      "label": "Follow-up status",
+      "fieldtype": "Select",
+      "options": "New\nContacted\nAwaiting Placement\nClosed",
+      "default": "New",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "notes",
+      "label": "Reception notes",
+      "fieldtype": "Small Text"
+    },
+    {
+      "fieldname": "recorded_by",
+      "label": "Recorded by",
+      "fieldtype": "Link",
+      "options": "User",
+      "reqd": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "version",
+      "label": "Version",
+      "fieldtype": "Int",
+      "default": "1",
+      "reqd": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}
