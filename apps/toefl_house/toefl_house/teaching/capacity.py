@@ -859,7 +859,9 @@ def waiting_list_board(student_group=""):
                 "offer_expires_on": str(entry.get("offer_expires_on") or ""),
                 "seats_available": seats["available"],
                 "next": next_step,
-                "next_role": "Teaching Scheduler",
+                "next_role": ("Academic Manager"
+                              if seats.get("class_status") not in ("Planned", "Active")
+                              else "Teaching Scheduler"),
                 "next_command": action,
             })
     return {"as_of": _today(), "entries": board,
