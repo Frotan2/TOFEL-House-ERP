@@ -27,6 +27,10 @@ from toefl_house.desk.collections import reception_sections
 
 SLUG = "th-reception-desk"
 
+INQUIRY = "TH Reception Inquiry"
+INQUIRY_FIELDS = ["name", "person_name", "phone", "program_interest", "th_branch",
+                  "status", "notes", "recorded_by", "version", "creation"]
+
 APPLICANT = "Student Applicant"
 ADMISSION = "TH Admission Decision"
 DECISION = "TH Placement Decision"
@@ -73,6 +77,26 @@ def _subject_index(decisions):
         case = cases.get(attempt.get("case_name")) if attempt else None
         index[decision["name"]] = (case or {}).get("subject") or ""
     return index
+
+
+def _walkin_item(row):
+    """Visitor is NOT yet an Applicant, Student or enrolled fee payer."""
+    return {
+        "id": row["name"],
+        "person": row.get("person_name") or "",
+        "detail": row.get("program_interest") or "",
+        "status": row.get("status") or "New",
+        "stage": "Pre-registration",
+        "stage_definition": "Reception inquiry only; no candidate account, placement, enrollment or bill was created.",
+        "next": "Contact the visitor and arrange the separately authorized placement or admission step.",
+        "next_role": "Reception",
+        "waiting_since": row.get("creation"),
+        "action": guided_action("Reception", "toefl_house.reception_intake.update_walkin_inquiry",
+                                "Update follow-up", {"inquiry": row["name"],
+                                                     "expected_version": row["version"],
+                                                     "status": "Contacted",
+                                                     "notes": row.get("notes") or ""}),
+    }
 
 
 def _current_release(row, now):
@@ -262,10 +286,23 @@ def work():
 
     people = [_person_item(row, decisions_by_applicant, subject_to_decision) for row in applicants]
 
+    inquiries = project_rows("reception", INQUIRY, INQUIRY_FIELDS,
+                             filters={"status": ("in", ["New", "Contacted", "Awaiting Placement"])},
+                             order_by="creation desc", limit=LIMIT_QUEUES)
+    register = guided_action("Reception", "toefl_house.reception_intake.create_walkin_inquiry",
+                             "Register a new visitor",
+                             {"person_name": "", "phone": "", "program_interest": "",
+                              "branch": "", "notes": ""})
+
     return {
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
         "sections": [
+            section("walkins", "New visitors and follow-ups", "queue",
+                    items=[_walkin_item(row) for row in inquiries],
+                    empty_title="No open reception inquiries",
+                    empty_body="Register a visitor before placement or any student account exists.",
+                    actions=[register] if register else []),
             *reception_sections(),
             section("funnel", "Applicant funnel", "facts", facts=_funnel(len(handover)),
                     empty_title="The funnel is empty",
@@ -366,5 +403,17 @@ def lookup(query):
                 "waiting_since": (enrollment or row).get("enrollment_date") or row.get("creation"),
             })
 
+    inquiries = project_rows("reception", INQUIRY, INQUIRY_FIELDS,
+                             filters={"person_name": ("like", like)},
+                             order_by="creation desc", limit=LIMIT_LOOKUP)
+    seen_inquiries = {row["name"] for row in inquiries}
+    for row in project_rows("reception", INQUIRY, INQUIRY_FIELDS,
+                            filters={"phone": ("like", like)},
+                            order_by="creation desc", limit=LIMIT_LOOKUP):
+        if row["name"] not in seen_inquiries:
+            inquiries.append(row)
+            seen_inquiries.add(row["name"])
+    # Keep preliminary visitor cards distinct from existing native Students.
+    items.extend(_walkin_item(row) for row in inquiries[:LIMIT_LOOKUP])
     return {"desk": SLUG, "query": text, "items": items, "students": student_items,
             "collection_sections": reception_sections(students=[row["name"] for row in student_rows])}
