@@ -94,7 +94,8 @@ def _walkin_item(row):
     return {
         "id": row["name"],
         "person": row.get("person_name") or "",
-        "detail": row.get("program_interest") or "",
+        "detail": " · ".join(part for part in
+                             (row.get("phone") or "", row.get("program_interest") or "") if part),
         "status": row.get("status") or "New",
         "stage": "Pre-registration",
         "stage_definition": "Reception inquiry only; no candidate account, placement, enrollment or bill was created.",
@@ -431,7 +432,9 @@ def lookup(query):
         if row["name"] not in seen_inquiries:
             inquiries.append(row)
             seen_inquiries.add(row["name"])
-    # Keep preliminary visitor cards distinct from existing native Students.
-    items.extend(_walkin_item(row) for row in inquiries[:LIMIT_LOOKUP])
-    return {"desk": SLUG, "query": text, "items": items, "students": student_items,
+    # Preliminary visitors are NOT yet applicants. Keep them in their own
+    # results category so Reception never mistakes a contact for enrollment.
+    visitor_items = [_walkin_item(row) for row in inquiries[:LIMIT_LOOKUP]]
+    return {"desk": SLUG, "query": text, "items": items,
+            "inquiries": visitor_items, "students": student_items,
             "collection_sections": reception_sections(students=[row["name"] for row in student_rows])}

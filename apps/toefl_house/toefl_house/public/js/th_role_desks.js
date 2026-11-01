@@ -1962,10 +1962,15 @@ frappe.provide("toefl_house.role_desks");
 
 	function renderSearchResults(results, payload) {
 		const applicants = payload.items || [];
+		const inquiries = payload.inquiries || [];
 		const students = payload.students || [];
-		if (!applicants.length && !students.length) {
+		if (!applicants.length && !students.length && !inquiries.length) {
 			results.append(`<div class='th-empty'><p class='th-empty-title'>${escapeText(text("No match found"))}</p><p class='th-empty-body'>${escapeText(text("No matching visitor, applicant or active student. Check the spelling or register a new visitor above; placement can happen later."))}</p></div>`);
 			return;
+		}
+		if (inquiries.length) {
+			$("<h3 class='th-search-heading'></h3>").text(text("Walk-in visitors (not yet enrolled)")).appendTo(results);
+			results.append(queueMarkup(inquiries, [text("Visitor"), text("Follow-up"), text("Next action"), text("Recorded"), text("Act")]));
 		}
 		if (applicants.length) {
 			$("<h3 class='th-search-heading'></h3>").text(text("In the admission funnel")).appendTo(results);

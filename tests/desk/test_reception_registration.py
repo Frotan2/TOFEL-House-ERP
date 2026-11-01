@@ -90,6 +90,14 @@ class RegistrationDeskTests(unittest.TestCase):
         desk.lookup("۷۰۰")
         self.assertIn((desk.INQUIRY, {"phone": ("like", "%700%")}), calls)
 
+    def test_visitors_are_not_misclassified_as_native_applicants(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        results = desk.lookup("700")
+        self.assertEqual(len(results["inquiries"]), 1)
+        self.assertEqual(results["items"], [])
+        self.assertIn("+93700000001", results["inquiries"][0]["detail"])
+        self.assertIn("English", results["inquiries"][0]["detail"])
+
     def test_closed_inquiry_has_no_action_that_would_be_denied(self):
         desk, _ = self.desk()
         item = desk._walkin_item({

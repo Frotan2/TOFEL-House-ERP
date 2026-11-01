@@ -487,7 +487,7 @@ function payloadWith(queueItems, factValue) {
 	};
 }
 
-function runScenario({ workPayload, failFirstWork = false, failLookup = false, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null, readableSources = [] }) {
+function runScenario({ workPayload, failFirstWork = false, failLookup = false, lookupReply = null, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null, readableSources = [] }) {
 	const calls = [];
 	const dialogs = [];
 	const routed = [];
@@ -543,7 +543,7 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, c
 			}
 			if (opts.method === "toefl_house.desk.reception.lookup") {
 				if (failLookup) { opts.error(); return; }
-				opts.callback({ message: { items: [hostileItem], students: [] } });
+				opts.callback({ message: lookupReply || { items: [hostileItem], students: [] } });
 				return;
 			}
 			if (opts.method === "toefl_house.admission.review_admission") {
@@ -655,6 +655,36 @@ const hostileItem = {
 		"the secondary dialog mirrors its reviewed signature");
 	assert.strictEqual(secondary.values.level, "ADM-0001",
 		"the secondary prefill reaches the dialog");
+}
+
+{
+	// A contact is not an Applicant/Student. Keep their phone visible
+	// only in the authorized reception search, under a separate heading.
+	const scenario = runScenario({
+		workPayload: payloadWith([], "0"),
+		lookupReply: {
+			items: [], students: [],
+			inquiries: [{
+				id: "INQ-001", person: "Walk-in", detail: "+93700000001 · General English",
+				status: "New", stage: "Pre-registration", next: "Contact the visitor",
+			}],
+		},
+	});
+	const input = findAll(scenario.body, "th-search-input")[0];
+	input.attrs.value = "0794";
+	const search = [];
+	(function walk(node) {
+		for (const child of node.children) {
+			if (child.tag === "button" && serialize(child).includes("Search")) search.push(child);
+			walk(child);
+		}
+	})(scenario.body);
+	search[0].click();
+	const words = serialize(findAll(scenario.body, "th-search-results")[0]);
+	assert(words.includes("Walk-in visitors (not yet enrolled)"));
+	assert(words.includes("+93700000001"));
+	assert(!words.includes("In the admission funnel"),
+		"reception inquiries must never be represented as academic applicants");
 }
 
 {
