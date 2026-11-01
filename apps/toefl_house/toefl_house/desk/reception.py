@@ -47,6 +47,7 @@ ROSTER = "Student Group Student"
 SCHEDULE = "Course Schedule"
 INSTRUCTOR = "Instructor"
 ASSIGNMENT = "TH Teaching Assignment"
+SUSPENSION = "TH Class Suspension"
 GROUP_COHORT_FIELDS = [
     "name", "student_group_name", "program", "academic_year",
     "academic_term", "th_branch", "disabled", "th_class_status",
@@ -738,6 +739,18 @@ def _student_class_information(students, enrollments):
         order_by="schedule_date asc, from_time asc, name asc",
         limit=BOUNCE_WINDOW) if active_groups else []
     truncated_sessions = len(sessions) >= BOUNCE_WINDOW
+    # An already Scheduled meeting can subsequently become subject to a
+    # class-wide or student-specific suspension. Do not promise attendance
+    # from the schedule alone, and never disclose a private suspension reason.
+    suspensions = project_rows(
+        "reception", SUSPENSION,
+        ["name", "scope", "student_group", "student", "status",
+         "from_date", "until_date"],
+        filters={"student_group": ("in", active_groups),
+                 "status": "Active", "until_date": (">=", frappe.utils.today())},
+        order_by="from_date asc, name asc",
+        limit=BOUNCE_WINDOW) if active_groups and not truncated_sessions else []
+    truncated_sessions = truncated_sessions or len(suspensions) >= BOUNCE_WINDOW
     instructors = {}
     verified_session_teachers = set()
     if not truncated_sessions and sessions:
@@ -825,6 +838,55 @@ def _student_class_information(students, enrollments):
             }
         else:
             upcoming = sessions_by_group.get(group["name"], [])
+            if upcoming:
+                affected_class = False
+                affected_student = False
+                invalid_window = False
+                for session in upcoming:
+                    try:
+                        session_day = date.fromisoformat(str(session.get("schedule_date") or ""))
+                    except (ValueError, TypeError):
+                        invalid_window = True
+                        break
+                    for restriction in suspensions:
+                        if (restriction.get("student_group") != group["name"]
+                                or restriction.get("status") != "Active"):
+                            continue
+                        try:
+                            start_day = date.fromisoformat(str(restriction.get("from_date") or ""))
+                            end_day = date.fromisoformat(str(restriction.get("until_date") or ""))
+                        except (ValueError, TypeError):
+                            invalid_window = True
+                            break
+                        if start_day <= session_day <= end_day:
+                            if restriction.get("scope") == "Class":
+                                affected_class = True
+                            elif restriction.get("scope") == "Student" and restriction.get("student") == name:
+                                affected_student = True
+                            elif restriction.get("scope") not in ("Class", "Student"):
+                                invalid_window = True
+                    if invalid_window:
+                        break
+                if invalid_window:
+                    result[name] = {
+                        "stage": "Class assigned, timetable needs review",
+                        "next": "A session or suspension window is invalid. Ask Academic Manager to verify before quoting meeting dates.",
+                        "next_role": "Academic Manager", "detail": detail,
+                    }
+                    continue
+                if affected_class or affected_student:
+                    result[name] = {
+                        "stage": ("Class sessions under review" if affected_class
+                                  else "Attendance eligibility needs review"),
+                        "next": ("A class suspension overlaps a scheduled session. "
+                                 "Ask Teaching Scheduler to confirm the meeting before informing the learner."
+                                 if affected_class else
+                                 "A student-specific attendance restriction overlaps a scheduled session. "
+                                 "Ask Academic Manager to verify attendance eligibility privately."),
+                        "next_role": "Teaching Scheduler" if affected_class else "Academic Manager",
+                        "detail": detail,
+                    }
+                    continue
             if not upcoming:
                 result[name] = {
                     "stage": "Class assigned, schedule pending",
