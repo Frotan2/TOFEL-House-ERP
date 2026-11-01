@@ -114,12 +114,27 @@ PROJECTION_FIELDS = {
     # governed th_class_status custom field (planned/active classes open a
     # cohort; completed/cancelled ones do not). No `active` column exists on
     # the pinned native Student Group (education 93bc70757533).
+    # Front-counter class lookup: class and timetable facts may only derive
+    # from an in-scope Student, submitted Program Enrollment, and this
+    # Student's own active native roster membership. A class merely existing
+    # for the same program is NOT proof the learner belongs to that class.
     ("reception", "Student Group"): [
-        "name", "program", "academic_year", "disabled", "th_class_status",
+        "name", "student_group_name", "program", "academic_year",
+        "academic_term", "th_branch", "disabled", "th_class_status",
+    ],
+    ("reception", "Student Group Student"): [
+        "name", "parent", "student", "active",
+    ],
+    ("reception", "Course Schedule"): [
+        "name", "student_group", "instructor", "course", "room",
+        "from_time", "to_time", "schedule_date", "th_session_status",
+    ],
+    ("reception", "Instructor"): [
+        "name", "instructor_name",
     ],
     ("reception", "Program Enrollment"): [
         "name", "student", "student_name", "program", "academic_year",
-        "enrollment_date", "docstatus",
+        "academic_term", "enrollment_date", "docstatus",
     ],
     ("reception", "Student Applicant"): [
         # `title` is the pinned native full-name column (education
