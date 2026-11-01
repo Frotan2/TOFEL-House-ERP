@@ -162,6 +162,17 @@ class ReceptionWalkinTests(unittest.TestCase):
             with self.subTest(phone=phone), self.assertRaises(ValidationError):
                 self.module.create_walkin_inquiry("k", "Visitor", phone=phone)
 
+    def test_afghan_dari_decimal_phone_digits_are_normalized(self):
+        self.module.create_walkin_inquiry(
+            "key-dari-phone-0000000001", "Visitor",
+            phone="۰۷۹۴۳۵۷۵۰۹")
+        self.assertEqual(self.saved["INQ-001"]["phone"], "0794357509")
+
+    def test_contact_cannot_be_only_punctuation(self):
+        for phone in ("(((()", "+-----", "0" * 16):
+            with self.subTest(phone=phone), self.assertRaises(ValidationError):
+                self.module.create_walkin_inquiry("key-invalid-number-01", "Visitor", phone=phone)
+
     def test_branch_refused_before_any_document_is_written(self):
         with self.assertRaises(PermissionError):
             self.module.create_walkin_inquiry("k", "Visitor", branch="Other Branch")
@@ -178,6 +189,16 @@ class ReceptionWalkinTests(unittest.TestCase):
         self.module.update_walkin_inquiry("close", "INQ-001", 2, "Closed")
         with self.assertRaises(ValidationError):
             self.module.update_walkin_inquiry("reopen", "INQ-001", 3, "Contacted")
+
+    def test_http_int_version_is_canonical_and_concurrent_safe(self):
+        self.module.create_walkin_inquiry("new", "Visitor")
+        result = self.module.update_walkin_inquiry(
+            "follow-up", "INQ-001", "1", "Contacted")
+        self.assertEqual(result["version"], 2)
+        for version in (True, "01", "1.0", "-1", 1.5, "9999999999"):
+            with self.subTest(version=version), self.assertRaises(ValidationError):
+                self.module.update_walkin_inquiry(
+                    "bad-version", "INQ-001", version, "Closed")
 
     def test_identity_cannot_be_mutated_by_follow_up(self):
         self.module.create_walkin_inquiry("new", "Visitor")
