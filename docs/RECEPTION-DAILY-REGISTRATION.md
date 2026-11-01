@@ -21,6 +21,16 @@
 6. Once **Approved**, an Admission Officer records offer acceptance; an Admission Approver converts into the native Student. **Enrollment Officer** then submits the real Program Enrollment.
 7. Academic staff place the student in a class with available capacity. Authorized finance staff issue tuition separately under the Owner-approved billing policy, without duplicate billing.
 
+## Student class, timetable and teacher — front-counter answers
+1. In Reception Desk, search the enrolled Student by their exact Student ID, Candidate reference or verified name. Do **not** equate an initial Inquiry or an approved Applicant with a Student.
+2. The latest submitted **Program Enrollment** establishes the academic **program, year and term** shown in the result. It does **not** establish a class assignment. Confirm the period the learner is asking about before promising their current class.
+3. **Enrolled, class not confirmed** means no verified active roster membership in a planned or active native Student Group matches that particular submitted enrollment. A class existing for other students is not a match. Ask Teaching Scheduler to assign/confirm the learner; Reception must not change roster membership.
+4. **Class planned** means this learner has an active native Student Group Student roster row in a planned class. No meeting time or permanent teacher is promised yet.
+5. **Class assigned, schedule pending** means the confirmed active class has no upcoming Scheduled Course Schedule record. Ask Teaching Scheduler for the dated timetable. Do not tell the learner that the usual weekly period is already published.
+6. **Class assigned, sessions scheduled** shows the class ID/name and up to three actual dated Course Schedule records: date, start/end time, course, room, and *session instructor* when their native Instructor name can be verified. A dated session is not a weekly recurrence or a permanent teacher assignment. Only Scheduled sessions are shown, never cancelled/postponed ones.
+7. If the student is **Inactive**, the enrollment read is incomplete, more than one matching class roster appears, or a timetable read is truncated, stop and refer to Academic Manager or Teaching Scheduler. Do not guess a class, room, teacher or attendance status. Do not reveal or act on records from another Branch.
+8. Reception can explain and search these facts but cannot create or transfer class memberships, change teacher assignments, schedule sessions, mark attendance or alter enrollments. Those actions remain with their authorized academic roles.
+
 ## Staff safety and exceptions
 - The reception intake workspace is explicitly English LTR, and a test checks authored English-only source strings. Keep authentic visitor names in their original spelling; never manufacture an English name.
 - An inquiry is not linked automatically to an email-based candidate account. Only a verified identity and an authorized placement/admission journey may make that association. Never assume two matching names or shared phone numbers are the same person.
