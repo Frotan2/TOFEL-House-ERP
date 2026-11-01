@@ -462,8 +462,10 @@ def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE, branch="", inqu
             if intake.status != "Awaiting Placement":
                 raise frappe.ValidationError(
                     "Reception must mark the visitor Awaiting Placement before allocating the test")
-            if int(intake.synthetic or 0) != record_synthetic_flag():
+            if intake.synthetic is None or int(intake.synthetic) != record_synthetic_flag():
                 raise frappe.PermissionError("Reception inquiry site mode does not match this case")
+            if not isinstance(intake.person_name, str) or not intake.person_name.strip():
+                raise frappe.ValidationError("Reception inquiry has no verified visitor name")
             if frappe.db.exists(CASE, {"reception_inquiry": inquiry}):
                 raise frappe.ValidationError(
                     "This reception inquiry is already attached to a placement case")
