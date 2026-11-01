@@ -75,6 +75,16 @@ def _subject_index(decisions):
     return index
 
 
+def _current_release(row, now):
+    """Fail closed for missing, malformed or expired release timestamps."""
+    if row.get("status") != "Released" or not row.get("expires_at"):
+        return False
+    try:
+        return frappe.utils.get_datetime(row["expires_at"]) > now
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
 def _admission_item(row, decision):
     stage = lifecycle.admission_stage(
         decision["status"], bool(decision.get("accepted")), bool(decision.get("native_student")))
@@ -96,6 +106,9 @@ def _admission_item(row, decision):
                              "Record outcome", {"name": decision["name"], "expected_version": decision["version"]}),
         "accept_offer": ("Admission Officer", "toefl_house.admission.accept_offer",
                          "Accept offer", {"name": decision["name"], "expected_version": decision["version"]}),
+        "satisfy_conditions": ("Admission Approver", "toefl_house.admission.satisfy_conditions",
+                                "Verify conditions", {"name": decision["name"], "expected_version": decision["version"],
+                                                      "evidence": ""}),
         "convert_applicant": ("Admission Approver", "toefl_house.admission.convert_applicant",
                               "Convert to Student", {"name": decision["name"], "expected_version": decision["version"]}),
         "enroll_in_program": ("Enrollment Officer", "toefl_house.enrollment.enroll_in_program",
@@ -182,39 +195,70 @@ def work():
                               "course_code", "internal_level"],
                              filters={"status": "Released"},
                              order_by="released_at desc", limit=BOUNCE_WINDOW)
+    # The desk is a queue, not a history viewer. Expired placement results
+    # remain in the audit trail but are NEVER offered as actionable intake.
+    now = frappe.utils.now_datetime()
+    decisions = [row for row in decisions if _current_release(row, now)]
     admissions = project_rows("reception", ADMISSION, ADMISSION_FIELDS,
                               filters={"status": ("in", list(lifecycle.ADMISSION_OPEN_STATUSES))},
                               order_by="modified desc", limit=BOUNCE_WINDOW)
     subjects = _subject_index(decisions)
-
     claimed = {row["placement_decision"] for row in admissions if row.get("placement_decision")}
+    # A different released attempt must not offer a second admission while
+    # this applicant still has an unconverted active admission.
+    unconverted_subjects = {subjects.get(row.get("placement_decision") or "")
+                            for row in admissions if not row.get("native_student")}
+    ready = [row for row in decisions
+             if row["name"] not in claimed
+             and subjects.get(row["name"]) not in unconverted_subjects
+             and subjects.get(row["name"])]
+
+    # Use the released placement SUBJECT, not an already-created admission,
+    # to locate the next decision for a person with no admission yet.
     subject_to_decision = {}
-    for row in admissions:
-        subject = subjects.get(row.get("placement_decision") or "")
-        if subject and subject not in subject_to_decision:
-            subject_to_decision[subject] = row
+    for row in ready:
+        subject_to_decision.setdefault(subjects[row["name"]], row)
 
     applicants = project_rows("reception", APPLICANT, APPLICANT_FIELDS,
                               filters={"application_status": "Applied"},
                               order_by="creation desc", limit=LIMIT_QUEUES)
-    decisions_by_applicant = {row["student_applicant"]: row for row in admissions
-                              if row.get("student_applicant")}
+    # Include returning learners whose native Applicant is already Admitted.
+    existing = project_rows("reception", APPLICANT, APPLICANT_FIELDS,
+                            filters={"student_email_id": ("in", list(subject_to_decision))},
+                            order_by="creation desc", limit=BOUNCE_WINDOW) if subject_to_decision else []
+    existing_by_email = {row["student_email_id"]: row for row in existing
+                         if row.get("student_email_id")}
+    decisions_by_applicant = {}
+    for row in admissions:
+        # Rows are newest-first. Never overwrite the latest with older state.
+        if row.get("student_applicant"):
+            decisions_by_applicant.setdefault(row["student_applicant"], row)
 
-    handover = [{
-        "id": row["name"],
-        "person": subjects.get(row["name"]) or row["name"],
-        "detail": row.get("course_code") or "",
-        "status": row["status"],
-        "stage": "Ready for intake",
-        "stage_definition": "Placement result released and still valid; no active admission decision uses it yet.",
-        "next": "Record the applicant and open the admission file.",
-        "next_role": "Admission Officer",
-        "waiting_since": row.get("released_at"),
-        "action": guided_action("Admission Officer", "toefl_house.admission.record_applicant",
-                                "Record applicant",
-                                {"placement_decision": row["name"], "first_name": "",
-                                 "program": "", "academic_year": ""}),
-    } for row in decisions if row["name"] not in claimed]
+    handover = []
+    for row in ready:
+        subject = subjects[row["name"]]
+        applicant = existing_by_email.get(subject)
+        if applicant and applicant["name"] in {r.get("student_applicant") for r in admissions
+                                               if not r.get("native_student")}:
+            continue
+        if applicant:
+            action = guided_action("Admission Officer", "toefl_house.admission.create_admission",
+                                   "Open admission", {"student_applicant": applicant["name"],
+                                                      "placement_decision": row["name"]})
+            next_step = "Open the admission for the existing applicant."
+        else:
+            action = guided_action("Admission Officer", "toefl_house.admission.record_applicant",
+                                   "Record applicant", {"placement_decision": row["name"],
+                                                        "first_name": "", "program": "",
+                                                        "academic_year": ""})
+            next_step = "Record the applicant, then open the admission."
+        handover.append({
+            "id": row["name"], "person": subject, "detail": row.get("course_code") or "",
+            "status": row["status"], "stage": "Ready for intake",
+            "stage_definition": "Valid released placement with no unconsumed admission.",
+            "next": next_step, "next_role": "Admission Officer",
+            "waiting_since": row.get("released_at"), "action": action,
+        })
 
     people = [_person_item(row, decisions_by_applicant, subject_to_decision) for row in applicants]
 
@@ -278,6 +322,17 @@ def lookup(query):
                                 ["name", "student_name", "student_email_id", "creation"],
                                 filters={"student_name": ("like", like), "enabled": 1},
                                 order_by="creation desc", limit=LIMIT_LOOKUP)
+    seen_students = {row["name"] for row in student_rows}
+    # Native Student lookup advertised name OR email. Search both with the
+    # same restricted projection and bound; keep one row per student.
+    for row in project_rows("reception", STUDENT,
+                            ["name", "student_name", "student_email_id", "creation"],
+                            filters={"student_email_id": ("like", like), "enabled": 1},
+                            order_by="creation desc", limit=LIMIT_LOOKUP):
+        if row["name"] not in seen_students:
+            student_rows.append(row)
+            seen_students.add(row["name"])
+    student_rows = student_rows[:LIMIT_LOOKUP]
     if student_rows:
         enrollments = project_rows("reception", ENROLLMENT,
                                    ["name", "student", "student_name", "program",
