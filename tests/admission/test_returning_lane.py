@@ -55,6 +55,7 @@ class ReturningConvertTests(unittest.TestCase):
     def setUp(self):
         self.existing_student = "EDU-STU-2025-00001"
         self.student_email = SUBJECT
+        self.student_applicant = "APP-NEW"
         self.student_enabled = 1
         self.student_missing = False
         self.student_customer = "CUST-OLD"
@@ -83,6 +84,7 @@ class ReturningConvertTests(unittest.TestCase):
             if doctype == "Student" and as_dict and not fake.student_missing:
                 return SimpleNamespace(name=fake.existing_student,
                                        student_email_id=fake.student_email,
+                                       student_applicant=fake.student_applicant,
                                        enabled=fake.student_enabled,
                                        customer=fake.student_customer)
             if doctype == "Student" and as_dict and fake.student_missing:
@@ -166,6 +168,12 @@ class ReturningConvertTests(unittest.TestCase):
         with self.assertRaises(_ValidationError) as ctx:
             self._convert()
         self.assertIn("does not belong to this applicant", str(ctx.exception))
+
+    def test_native_applicant_link_changed_before_conversion_is_refused(self):
+        self.student_applicant = "APP-OTHER"
+        with self.assertRaises(_PermissionError) as ctx:
+            self._convert()
+        self.assertIn("native Applicant link changed", str(ctx.exception))
 
     def test_disabled_student_is_refused(self):
         self.student_enabled = 0

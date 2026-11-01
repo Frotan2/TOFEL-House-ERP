@@ -621,7 +621,7 @@ def convert_applicant(request_key, name, expected_version):
             # structurally — no new Customer row is created.
             linked = frappe.db.get_value(
                 STUDENT, returning,
-                ["name", "student_email_id", "enabled", "customer"],
+                ["name", "student_email_id", "student_applicant", "enabled", "customer"],
                 as_dict=True,
             )
             if not linked:
@@ -631,6 +631,9 @@ def convert_applicant(request_key, name, expected_version):
             if (linked.student_email_id or "") != (applicant.student_email_id or ""):
                 raise frappe.ValidationError(
                     "Existing Student does not belong to this applicant")
+            if linked.student_applicant != applicant.name:
+                raise frappe.PermissionError(
+                    "Existing Student's native Applicant link changed; conversion is refused")
             if frappe.db.sql(
                     "select name from `tabProgram Enrollment` where student=%s "
                     "and program=%s and academic_year=%s "
