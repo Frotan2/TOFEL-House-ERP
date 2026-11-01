@@ -212,6 +212,8 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
         frappe.db.sql("select name from `tabTH Placement Case` where name=%s for update",
                       (case_name,))
         placement_branch = frappe.db.get_value("TH Placement Case", case_name, "th_branch")
+        if is_production() and not placement_branch:
+            raise frappe.PermissionError("Placement origin has no verified Branch")
         if placement_branch and placement_branch != branch_name:
             raise frappe.PermissionError(
                 "Applicant branch must match the verified placement case branch")
@@ -333,6 +335,8 @@ def create_admission(request_key, student_applicant, placement_decision, existin
             raise frappe.ValidationError("Placement subject does not match the native applicant")
         source_case = frappe.db.get_value(ATTEMPT, row.attempt, "case_name")
         source_branch = frappe.db.get_value("TH Placement Case", source_case, "th_branch") if source_case else None
+        if is_production() and not source_branch:
+            raise frappe.PermissionError("Placement origin has no verified Branch")
         if source_branch and applicant.get("th_branch") != source_branch:
             raise frappe.PermissionError(
                 "Applicant's branch differs from the verified placement case")
@@ -345,6 +349,10 @@ def create_admission(request_key, student_applicant, placement_decision, existin
             if (linked_email or "") != (applicant.student_email_id or ""):
                 raise frappe.ValidationError(
                     "Existing Student does not belong to this applicant")
+            linked_applicant = frappe.db.get_value(STUDENT, returning, "student_applicant")
+            if linked_applicant != applicant_name:
+                raise frappe.PermissionError(
+                    "Existing Student must be natively linked to this exact applicant")
         if _open_decision_for_applicant(applicant_name):
             raise frappe.ValidationError("Applicant already has an open admission decision")
         linked = frappe.db.sql(

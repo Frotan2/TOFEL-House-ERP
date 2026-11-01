@@ -57,6 +57,7 @@ class IntakeGuardTests(unittest.TestCase):
         self.prior_status = "Admitted"
         self.prior_paid = 0
         self.placement_branch = None
+        self.production_mode = False
         self.branch_ups = []          # the actor's native User Permissions on Branch
         self.created = []             # applicant docs created through the command
         previous = dict(sys.modules)
@@ -139,7 +140,7 @@ class IntakeGuardTests(unittest.TestCase):
         sys.modules["toefl_house"] = package
         _load_real("toefl_house.policy", APP / "policy.py")
         security = types.ModuleType("toefl_house.security")
-        security.is_production = lambda: False
+        security.is_production = lambda: fake.production_mode
         security.record_synthetic_flag = lambda: 1
         sys.modules["toefl_house.security"] = security
         api = types.ModuleType("toefl_house.api")
@@ -263,6 +264,12 @@ class IntakeGuardTests(unittest.TestCase):
             "test-key-record-00000099", "PD-1", "SYNTHETIC Probe",
             "TH-PROG", "2026-27", branch="Branch Beta")
         self.assertEqual(result["branch"], "Branch Beta")
+
+    def test_production_refuses_branchless_placement_origin(self):
+        self.production_mode = True
+        self.branch_ups = ["Branch Alpha"]
+        with self.assertRaises(_PermissionError):
+            self._record()
 
     def test_branch_provenance_rejects_cross_branch_admission(self):
         self.placement_branch = "Branch Alpha"

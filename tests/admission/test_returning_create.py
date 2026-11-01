@@ -58,6 +58,8 @@ class ReturningCreateTests(unittest.TestCase):
         self.applicant_email = SUBJECT
         self.student_email = SUBJECT
         self.student_missing = False
+        self.linked_applicant = "APP-OLD"
+        self.production_mode = False
         self.placement_branch = None
         self.applicant_branch = None
         self.open_decisions = []
@@ -81,6 +83,8 @@ class ReturningCreateTests(unittest.TestCase):
                 return fake.placement_branch
             if doctype == "Student" and fieldname == "student_email_id":
                 return None if fake.student_missing else fake.student_email
+            if doctype == "Student" and fieldname == "student_applicant":
+                return fake.linked_applicant
             raise AssertionError(f"unexpected get_value {doctype} {fieldname}")
 
         def sql(query, values=(), **kwargs):
@@ -129,7 +133,7 @@ class ReturningCreateTests(unittest.TestCase):
         sys.modules["toefl_house"] = package
         _load_real("toefl_house.policy", APP / "policy.py")
         security = types.ModuleType("toefl_house.security")
-        security.is_production = lambda: False
+        security.is_production = lambda: fake.production_mode
         security.record_synthetic_flag = lambda: 1
         sys.modules["toefl_house.security"] = security
         api = types.ModuleType("toefl_house.api")
@@ -199,6 +203,16 @@ class ReturningCreateTests(unittest.TestCase):
         with self.assertRaises(_ValidationError) as ctx:
             self._create()
         self.assertIn("open admission decision", str(ctx.exception))
+
+    def test_same_email_with_wrong_native_applicant_is_not_identity_proof(self):
+        self.linked_applicant = "APP-OTHER"
+        with self.assertRaises(_PermissionError):
+            self._create()
+
+    def test_production_requires_branched_placement_origin(self):
+        self.production_mode = True
+        with self.assertRaises(_PermissionError):
+            self._create()
 
     def test_returning_admission_denies_foreign_placement_branch(self):
         self.placement_branch = "Branch Alpha"
