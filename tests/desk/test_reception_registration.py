@@ -326,6 +326,17 @@ class RegistrationDeskTests(unittest.TestCase):
         visit = {"name": "INQ-1", "th_branch": "Branch Alpha"}
         self.assertEqual(desk._walkin_progress([visit], []), {})
 
+    def test_reception_typo_correction_is_a_secondary_action_before_placement(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        row = {"name": "INQ-1", "person_name": "Visitor", "phone": "0794357509",
+               "status": "New", "version": 1}
+        item = desk._walkin_item(row)
+        self.assertEqual(item["actions"][0]["endpoint"],
+                         "toefl_house.reception_intake.correct_walkin_inquiry")
+        self.assertEqual(item["actions"][0]["args"]["person_name"], "Visitor")
+        self.assertEqual(item["actions"][0]["args"]["reason"], "")
+        self.assertEqual(desk._walkin_item(row, ("Placement case opened", "", "Placement Publisher"))["actions"], [])
+
     def test_awaiting_placement_inquiry_points_to_publisher_not_reception(self):
         desk, _ = self.desk(placement=False, applicant=False)
         row = {"name": "INQ-1", "person_name": "Visitor",

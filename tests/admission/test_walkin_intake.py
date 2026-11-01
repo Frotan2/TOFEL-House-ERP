@@ -71,6 +71,11 @@ class Inquiry:
     def save(self, ignore_permissions=False):
         assert ignore_permissions
         self.fixture.module.protect_inquiry(self)
+        active_key = self.data.get("open_identity_key")
+        if active_key and any(
+                other_name != self.name and row.get("open_identity_key") == active_key
+                for other_name, row in self.fixture.saved.items()):
+            raise DuplicateEntryError("Duplicate open inquiry key")
         self.fixture.saved[self.name] = dict(self.data)
         return self
 
@@ -158,7 +163,7 @@ class ReceptionWalkinTests(unittest.TestCase):
         security = ModuleType("toefl_house.security")
         def require(doctype):
             if doctype != "TH Reception Inquiry" or f.kind not in {
-                "create_walkin_inquiry", "update_walkin_inquiry"}:
+                "create_walkin_inquiry", "update_walkin_inquiry", "correct_walkin_inquiry"}:
                 raise PermissionError("Guarded command required")
             return f.kind, ACTOR
         security.require_command = require
@@ -249,6 +254,49 @@ class ReceptionWalkinTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.module.create_walkin_inquiry("k", "Visitor", branch="Other Branch")
         self.assertEqual(self.saved, {})
+
+    def test_reception_corrects_typo_before_case_with_reason_and_version(self):
+        self.module.create_walkin_inquiry("new", "Visiter", phone="۰۷۹-۴۳۵-۷۵۰۹")
+        result = self.module.correct_walkin_inquiry(
+            "fix", "INQ-001", 1, "Visitor", "0794357509",
+            "Corrected spelling after checking written registration")
+        self.assertEqual(result["version"], 2)
+        row = self.saved["INQ-001"]
+        self.assertEqual(row["person_name"], "Visitor")
+        self.assertEqual(row["phone"], "0794357509")
+        self.assertIn("Corrected spelling", row["last_correction_reason"])
+        self.assertEqual(row["last_corrected_by"], ACTOR)
+        self.assertEqual(len(self.saved), 1)
+        with self.assertRaises(ValidationError):
+            self.module.correct_walkin_inquiry(
+                "stale", "INQ-001", 1, "Another", "", "Bad stale edit")
+
+    def test_identity_correction_refuses_consumed_placement_case(self):
+        self.module.create_walkin_inquiry("new", "Visitor", phone="0794357509")
+        self.placement_attached = True
+        with self.assertRaisesRegex(PermissionError, "Placement already consumed"):
+            self.module.correct_walkin_inquiry(
+                "fix", "INQ-001", 1, "Different", "0794357509",
+                "Need to change identity")
+        self.assertEqual(self.saved["INQ-001"]["person_name"], "Visitor")
+
+    def test_reception_typo_correction_cannot_merge_two_open_contacts(self):
+        self.module.create_walkin_inquiry("first", "Visitor A", phone="0794357509")
+        self.module.create_walkin_inquiry("second", "Visitor B", phone="0794357509")
+        with self.assertRaisesRegex(ValidationError, "Another open inquiry"):
+            self.module.correct_walkin_inquiry(
+                "merge", "INQ-002", 1, "Visitor A", "0794357509",
+                "Do not merge identities by phone")
+        self.assertEqual(self.saved["INQ-002"]["person_name"], "Visitor B")
+
+    def test_reception_correction_rejects_no_change_and_missing_reason(self):
+        self.module.create_walkin_inquiry("new", "Visitor")
+        with self.assertRaises(ValidationError):
+            self.module.correct_walkin_inquiry(
+                "same", "INQ-001", 1, "Visitor", "", "No edit")
+        with self.assertRaises(ValidationError):
+            self.module.correct_walkin_inquiry(
+                "no-reason", "INQ-001", 1, "Different", "", " ")
 
     def test_normal_follow_up_checks_locked_revision(self):
         self.module.create_walkin_inquiry("new", "Visitor")

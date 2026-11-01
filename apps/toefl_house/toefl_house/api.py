@@ -458,6 +458,13 @@ def create_case(request_key, subject="", purpose=SYNTHETIC_PURPOSE, branch="", i
         if inquiry:
             if not isinstance(inquiry, str) or not 1 <= len(inquiry) <= 140:
                 raise frappe.ValidationError("A valid reception inquiry reference is required")
+            if is_production():
+                # Synchronize case handoff with a Reception typo correction.
+                # Both commands lock the SAME inquiry row. Do not read an
+                # origin while another counter is changing its identity.
+                frappe.db.sql(
+                    "select name from `tabTH Reception Inquiry` where name=%s for update",
+                    (inquiry,))
             intake = frappe.db.get_value(
                 "TH Reception Inquiry", inquiry,
                 ["name", "person_name", "th_branch", "status", "synthetic"],
