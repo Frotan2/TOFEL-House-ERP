@@ -108,6 +108,22 @@ class CommandGuardTests(unittest.TestCase):
         with self.assertRaises(Denied):
             obj.validate()
 
+    def test_native_applicant_cannot_be_renamed_to_another_person(self):
+        self.kind = "record_applicant"
+        obj = Doc({
+            "th_candidate_ref": "THV-ABC", "th_reception_inquiry": "INQ-1",
+            "first_name": "Different Person"}, new=False)
+        with self.assertRaises(Denied):
+            self.applicant_guard(obj)
+
+    def test_native_student_cannot_be_renamed_to_another_person(self):
+        self.kind = None
+        obj = self.student({
+            "student_applicant": "APP-1", "th_candidate_ref": "THV-ABC",
+            "first_name": "Another Person"}, new=False)
+        with self.assertRaises(Denied):
+            obj.validate()
+
     def test_synthetic_native_fixture_behavior_preserved(self):
         self.production = False
         self.student({"student_applicant": "APP-1"}).validate()
