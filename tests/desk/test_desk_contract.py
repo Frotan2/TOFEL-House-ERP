@@ -621,7 +621,8 @@ class LifecycleStageTests(unittest.TestCase):
             ("Draft", False, False, "Admission drafted", "Admission Reviewer"),
             ("Review", False, False, "Admission review", "Admission Approver"),
             ("Approved", False, False, "Admission decided", "Admission Officer"),
-            ("Conditional", False, False, "Conditional admission", "Admission Officer"),
+            ("Conditional", False, False, "Conditions awaiting verification", "Admission Approver"),
+            ("Conditional", True, False, "Conditions awaiting verification", "Admission Approver"),
             ("Approved", True, False, "Offer accepted", "Admission Approver"),
             ("Approved", True, True, "Student created", "Enrollment Officer"),
             ("Deferred", False, False, "Deferred", "Admission Officer"),
@@ -652,7 +653,7 @@ class LifecycleStageTests(unittest.TestCase):
     def test_every_stage_label_appears_in_the_funnel_order(self):
         produced = {"Placement session", "Marking", "Independent review",
                     "Awaiting release", "Admission drafted", "Admission review",
-                    "Admission decided", "Conditional admission", "Offer accepted",
+                    "Admission decided", "Conditions awaiting verification", "Offer accepted",
                     "Student created", "Awaiting enrollment", "Enrolled, no class",
                     "Enrolled", "Deferred"}
         for label in produced:
