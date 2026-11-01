@@ -260,6 +260,59 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(stored["offered_by"], ACTOR)
         self.assertEqual(stored["offer_expires_on"], "2026-09-29")
 
+    def test_offer_enforces_priority_and_time_order_at_server(self):
+        self.ops.seed_class(name="GRP-QUEUE", capacity=3, members=["STU-1"])
+        for student in ("STU-2", "STU-3", "STU-4"):
+            self.ops.seed_student(student)
+            self.ops.seed_enrollment(student)
+        self.ops.seed_policy()
+        earlier = self.ops.seed_waiting(
+            "GRP-QUEUE", "STU-2", priority=0,
+            requested_on="2026-09-20 08:00:00")
+        high = self.ops.seed_waiting(
+            "GRP-QUEUE", "STU-3", priority=10,
+            requested_on="2026-09-21 08:00:00")
+        later = self.ops.seed_waiting(
+            "GRP-QUEUE", "STU-4", priority=0,
+            requested_on="2026-09-21 09:00:00")
+        self.assertEqual(self.ops.capacity._queue_position(high, {
+            "student_group": "GRP-QUEUE"}), 1)
+        self.assertEqual(self.ops.capacity._queue_position(earlier, {
+            "student_group": "GRP-QUEUE"}), 2)
+        self.assertEqual(self.ops.capacity._queue_position(later, {
+            "student_group": "GRP-QUEUE"}), 3)
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.offer_waiting_list_seat(
+                "queue-skip-0001", earlier)
+        self.assertIn("Earlier waiting-list entries have priority", str(ctx.exception))
+        self.assertEqual(self.site.get("TH Class Waiting List", earlier)["status"],
+                         "Waiting")
+        result = self.ops.capacity.offer_waiting_list_seat(
+            "queue-first-0001", high)
+        self.assertEqual(result["status"], "Offered")
+        result = self.ops.capacity.offer_waiting_list_seat(
+            "queue-second-0001", earlier)
+        self.assertEqual(result["status"], "Offered")
+        with self.assertRaises(ValidationError):
+            self.ops.capacity.offer_waiting_list_seat("queue-full-0001", later)
+
+    def test_waiting_board_offers_only_the_first_waiting_student(self):
+        self.ops.seed_class(name="GRP-QUEUE", capacity=3, members=["STU-1"])
+        high = self.ops.seed_waiting(
+            "GRP-QUEUE", "STU-2", priority=8,
+            requested_on="2026-09-21 08:00:00")
+        lower = self.ops.seed_waiting(
+            "GRP-QUEUE", "STU-3", priority=0,
+            requested_on="2026-09-20 08:00:00")
+        self._log_in_branch_reception()
+        board = self.ops.capacity.waiting_list_board(student_group="GRP-QUEUE")
+        by_id = {row["entry"]: row for row in board["entries"]}
+        self.assertEqual(by_id[high]["position"], 1)
+        self.assertEqual(by_id[high]["next_command"], "offer_waiting_list_seat")
+        self.assertEqual(by_id[lower]["position"], 2)
+        self.assertEqual(by_id[lower]["next_command"], "")
+        self.assertIn("earlier waiting entries", by_id[lower]["next"])
+
     def test_offer_refuses_a_full_class_and_a_non_waiting_entry(self):
         group = self._full_class()
         self.ops.seed_policy()
