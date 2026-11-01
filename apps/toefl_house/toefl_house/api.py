@@ -628,6 +628,70 @@ def _seal(attempt, reason):
     return result, dict(target=attempt.name, after_hash=digest([attempt.name, "Sealed", reason]))
 
 
+@frappe.whitelist(methods=["GET"])
+def supervised_attempt_view(attempt):
+    """Recover a started supervised exam without leaking key, seed or manifest.
+
+    This is NOT a student-login examination endpoint. An authenticated,
+    separately authorized Placement Invigilator may use it on a supervised
+    staff terminal, within the case's verified branch. Candidates must never
+    receive the staff session or access to Frappe Desk navigation.
+    """
+    actor = authorize("Placement Invigilator")
+    if not isinstance(attempt, str) or not 1 <= len(attempt) <= 140:
+        raise frappe.ValidationError("A valid attempt reference is required")
+    row = frappe.db.get_value(
+        ATTEMPT, attempt,
+        ["name", "case_name", "allocated_by", "mode", "status",
+         "version", "started_at", "deadline_at"], as_dict=True)
+    if not row:
+        raise frappe.ValidationError("Placement attempt does not exist")
+    _require_session_operator(actor, row)
+    from toefl_house.command_scope import actor_branches
+    allowed = actor_branches(actor)
+    case_branch = frappe.db.get_value(CASE, row.case_name, "th_branch") if row.case_name else None
+    if not allowed or not case_branch or case_branch not in allowed:
+        raise frappe.PermissionError(
+            "A supervised session needs an explicitly permitted placement branch")
+    if row.status != "In Progress":
+        raise frappe.ValidationError(
+            "Only an in-progress exam can be opened in the supervised workspace")
+    if not row.deadline_at or deadline_reached(_now(), get_datetime(row.deadline_at)):
+        raise frappe.ValidationError(
+            "Exam time has ended. Ask the invigilator to seal the timed-out attempt.")
+    _, form = _manifest_form(row.name)
+    names = sorted({entry["item"] for entry in form["items"]})
+    published = frappe.get_all(
+        ITEM, filters={"name": ("in", names)},
+        fields=["name", "prompt", "question_type", "options_json", "status"],
+        ignore_permissions=True)
+    if len(published) != len(names):
+        raise frappe.ValidationError("An allocated question is missing")
+    catalog = {}
+    for item in published:
+        if item.status != "Published":
+            raise frappe.ValidationError("An allocated question has been withdrawn")
+        catalog[item.name] = {
+            "prompt": item.prompt, "question_type": item.question_type,
+            "options": json.loads(item.options_json),
+        }
+    projection = project_form(form, catalog)
+    latest = _latest_responses(row.name)
+    responses = [
+        {"occurrence": question["order"],
+         "revision": latest.get(question["order"], {}).get("revision", 0),
+         "option_id": latest.get(question["order"], {}).get("option_id", ""),
+         "missing": latest.get(question["order"], {}).get("missing", 0)}
+        for question in projection["items"]
+    ]
+    return {
+        "attempt": row.name, "status": row.status, "version": row.version,
+        "started_at": _iso(row.started_at), "deadline_at": _iso(row.deadline_at),
+        "projection": projection, "responses": responses,
+        "supervision": "Invigilator-only staff workstation",
+    }
+
+
 @frappe.whitelist(methods=["POST"])
 def verify_attempt(request_key, attempt, expected_version):
     def work(actor):
