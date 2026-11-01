@@ -34,7 +34,7 @@ frappe.provide("toefl_house.role_desks");
 			endpoint: "toefl_house.desk.reception.work",
 			title: "TOEFL House Reception Desk",
 			description: "Find any person in the admission funnel and see the stage, what is missing and who acts next.",
-			search: { endpoint: "toefl_house.desk.reception.lookup", placeholder: "Name or email of the person in front of you" },
+			search: { endpoint: "toefl_house.desk.reception.lookup", placeholder: "Visitor name, contact phone or student email" },
 		},
 		"th-academic-desk": {
 			endpoint: "toefl_house.desk.academic.work",
