@@ -961,6 +961,14 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "branch", label: "Reception branch", fieldtype: "Link", options: "Branch" },
 			{ fieldname: "notes", label: "Reception note (optional)", fieldtype: "Small Text" },
 		],
+		"toefl_house.reception_intake.correct_walkin_inquiry": [
+			{ fieldname: "inquiry", label: "Inquiry reference", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "expected_version", label: "Recorded version", fieldtype: "Int", reqd: 1, read_only: 1 },
+			{ fieldname: "person_name", label: "Corrected visitor name", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "phone", label: "Corrected contact phone (optional)", fieldtype: "Data" },
+			{ fieldname: "reason", label: "Reason for correction (required)", fieldtype: "Small Text", reqd: 1,
+				description: "Use only before the Placement case is created. Every correction is versioned and audited." },
+		],
 		"toefl_house.reception_intake.update_walkin_inquiry": [
 			{ fieldname: "inquiry", label: "Inquiry reference", fieldtype: "Data", reqd: 1, read_only: 1 },
 			{ fieldname: "expected_version", label: "Recorded version", fieldtype: "Int", reqd: 1, read_only: 1 },

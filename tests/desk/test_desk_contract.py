@@ -881,6 +881,8 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
             ["request_key", "person_name", "phone", "program_interest", "branch", "notes"]),
         "toefl_house.reception_intake.update_walkin_inquiry": ("reception_intake.py",
             ["request_key", "inquiry", "expected_version", "status", "notes"]),
+        "toefl_house.reception_intake.correct_walkin_inquiry": ("reception_intake.py",
+            ["request_key", "inquiry", "expected_version", "person_name", "phone", "reason"]),
         "toefl_house.enrollment.enroll_in_program": ("enrollment/__init__.py",
                                                      ["request_key", "admission_decision"]),
         "toefl_house.api.release_decision": ("api.py",

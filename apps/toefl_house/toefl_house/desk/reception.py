@@ -269,6 +269,12 @@ def _walkin_item(row, progress=None):
     # A short note preview allows staff to see the latest contact instruction
     # without repeatedly opening the editor. Full notes remain on the
     # protected inquiry projection and are escaped by the queue renderer.
+    correction = None if closed or progress else guided_action(
+        "Reception", "toefl_house.reception_intake.correct_walkin_inquiry",
+        "Correct visitor details",
+        {"inquiry": row["name"], "expected_version": row["version"],
+         "person_name": row.get("person_name") or "",
+         "phone": row.get("phone") or "", "reason": ""})
     note = (row.get("notes") or "").strip()
     preview = ("Latest note: " + note[:117] + ("…" if len(note) > 117 else "")) if note else ""
     if progress:
@@ -301,6 +307,7 @@ def _walkin_item(row, progress=None):
         "next_role": next_role if progress else (None if closed else next_role),
         "waiting_since": row.get("creation"),
         "action": action,
+        "actions": [correction] if correction else [],
     }
 
 
