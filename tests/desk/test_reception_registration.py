@@ -174,8 +174,13 @@ class RegistrationDeskTests(unittest.TestCase):
                          "room": "Room 2", "from_time": "08:00:00",
                          "to_time": "09:10:00", "schedule_date": "2026-11-10",
                          "th_session_status": "Scheduled"}]
+            if doctype == desk.ASSIGNMENT:
+                return [{"name": "ASSIGN-1", "student_group": "CLASS-A",
+                         "instructor": "INST-1", "effective_start": "2026-09-01",
+                         "effective_end": "", "course_schedule": ""}]
             if doctype == desk.INSTRUCTOR:
-                return [{"name": "INST-1", "instructor_name": "Test Instructor"}]
+                return [{"name": "INST-1", "instructor_name": "Test Instructor",
+                         "status": "Active"}]
             return []
         desk.project_rows = read
         info = desk._student_class_information(
@@ -193,6 +198,41 @@ class RegistrationDeskTests(unittest.TestCase):
             "schedule_date": (">=", desk.frappe.utils.today()),
             "th_session_status": "Scheduled",
         }), calls)
+
+    def test_instructor_not_named_without_effective_teaching_assignment(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        calls = []
+        def read(_surface, doctype, _fields, filters=None, **_kwargs):
+            calls.append(doctype)
+            if doctype == desk.ROSTER:
+                return [{"name": "M", "parent": "CLASS-A", "student": "STU", "active": 1}]
+            if doctype == desk.GROUP:
+                return [{"name": "CLASS-A", "student_group_name": "GE",
+                         "program": "GE", "academic_year": "2026",
+                         "academic_term": "Term 1", "th_branch": "Branch Alpha",
+                         "th_class_status": "Active", "disabled": 0}]
+            if doctype == desk.SCHEDULE:
+                return [{"name": "SESSION-1", "student_group": "CLASS-A",
+                         "instructor": "INST-1", "course": "Writing", "room": "Room 1",
+                         "schedule_date": "2026-11-15", "from_time": "08:00:00",
+                         "to_time": "09:00:00", "th_session_status": "Scheduled"}]
+            if doctype == desk.ASSIGNMENT:
+                return [{"name": "OLD-ASSIGN", "student_group": "CLASS-A",
+                         "instructor": "INST-1", "course_schedule": "",
+                         "effective_start": "2026-01-01",
+                         "effective_end": "2026-10-01"}]
+            if doctype == desk.INSTRUCTOR:
+                raise AssertionError("Do not resolve teacher names without valid assignment")
+            return []
+        desk.project_rows = read
+        info = desk._student_class_information(
+            [{"name": "STU", "enabled": 1}],
+            [{"student": "STU", "program": "GE", "academic_year": "2026",
+              "academic_term": "Term 1", "docstatus": 1}])
+        self.assertEqual(info["STU"]["stage"], "Class assigned, sessions scheduled")
+        self.assertIn("Writing", info["STU"]["next"])
+        self.assertIn("Instructor assignment unverified", info["STU"]["next"])
+        self.assertNotIn(desk.INSTRUCTOR, calls)
 
     def test_planned_class_does_not_claim_scheduled_meeting_or_teacher(self):
         desk, _ = self.desk(placement=False, applicant=False)
