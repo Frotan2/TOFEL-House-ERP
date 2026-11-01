@@ -119,10 +119,18 @@ def _group_facts(group_name, for_update=False):
 def _require_open_class(group_name, facts):
     if int(facts.disabled or 0):
         raise frappe.ValidationError(f"Student group {group_name} is disabled")
-    if facts.th_class_status in CLASS_TERMINAL:
+    if facts.th_class_status not in ("Planned", "Active"):
         raise frappe.ValidationError(
             f"Student group {group_name} is {facts.th_class_status}; seats apply "
             "to Planned or Active classes only")
+    # A forgotten Active lifecycle flag cannot reopen a semester that has
+    # already ended. Prefer refusing an unreliable date over enrolling a
+    # student into an expired class.
+    end_date = str(facts.th_class_end_date or "")
+    if not end_date or end_date < _today():
+        raise frappe.ValidationError(
+            f"Student group {group_name} has no current class end date; "
+            "ask Academic Manager to review the period before seating")
 
 
 def _require_active_student(student):
@@ -709,7 +717,8 @@ def class_availability(student_group="", program="", academic_year="",
     # A completed or cancelled class is not accepting learners, even if
     # its raw native roster count is below max_strength. Do not advertise
     # unusable seats at Reception.
-    filters = {"disabled": 0, "th_class_status": ("in", ["Planned", "Active"])}
+    filters = {"disabled": 0, "th_class_status": ("in", ["Planned", "Active"]),
+               "th_class_end_date": (">=", _today())}
     if student_group:
         filters["name"] = student_group
     else:
@@ -851,8 +860,11 @@ def waiting_list_board(student_group=""):
         for index, entry in enumerate(ordered, 1):
             offered = entry["status"] == "Offered"
             live = offered and unexpired(entry.get("offer_expires_on"))
-            if seats.get("class_status") not in ("Planned", "Active"):
-                next_step = "This class is no longer open for new seating. Refer to Academic Manager."
+            if (seats.get("class_status") not in ("Planned", "Active")
+                    or not seats.get("class_end_date")
+                    or seats["class_end_date"] < _today()):
+                next_step = ("This class is not open for new seating in the "
+                             "current period. Refer to Academic Manager.")
                 action = ""
             elif offered and not live:
                 # The offer command only accepts Waiting rows; trying it on
@@ -881,7 +893,9 @@ def waiting_list_board(student_group=""):
                 "seats_available": seats["available"],
                 "next": next_step,
                 "next_role": ("Academic Manager"
-                              if seats.get("class_status") not in ("Planned", "Active")
+                              if (seats.get("class_status") not in ("Planned", "Active")
+                                  or not seats.get("class_end_date")
+                                  or seats["class_end_date"] < _today())
                               else "Teaching Scheduler"),
                 "next_command": action,
             })
