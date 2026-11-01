@@ -4,6 +4,8 @@ Read-only. Sections and data sources are specified in docs/ROLE-DESKS.md.
 All reads go through toefl_house.desk.project_rows / project_count, which
 enforce the per-desk field allow-list and bounds.
 """
+import unicodedata
+
 import frappe
 
 from toefl_house.desk import (
@@ -339,6 +341,11 @@ def lookup(query):
                      frappe.ValidationError)
     if len(text) > 120:
         text = text[:120]
+    # Match a phone number regardless of whether Reception types Afghan
+    # Dari/Persian or Latin decimal digits in the search box.
+    text = "".join(
+        str(unicodedata.decimal(char)) if char.isdecimal() else char
+        for char in text)
     like = f"%{text}%"
 
     matches = project_rows("reception", APPLICANT, APPLICANT_FIELDS,
