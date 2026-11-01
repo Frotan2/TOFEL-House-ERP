@@ -1,6 +1,8 @@
 """Pinned email-optional native integration and no surrogate User creation."""
+import ast
 import json
 from pathlib import Path
+import types
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -27,6 +29,33 @@ class OptionalEmailFixtureTests(unittest.TestCase):
         self.assertIn('def validate_user(self):', code)
         self.assertNotIn('.insert(', code)
         self.assertNotIn('.save(', code)
+
+    def test_native_student_never_provisions_an_unsolicited_website_user(self):
+        source = (APP / "admission/native_student.py").read_text()
+        tree = ast.parse(source)
+        controller = next(node for node in tree.body
+                          if isinstance(node, ast.ClassDef) and
+                          node.name == "THEmailOptionalStudent")
+        method = next(node for node in controller.body
+                      if isinstance(node, ast.FunctionDef) and
+                      node.name == "validate_user")
+        scope = {"frappe": types.SimpleNamespace(
+            db=types.SimpleNamespace(get_value=lambda *_args: "verified@example.test"),
+            PermissionError=PermissionError)}
+        exec(compile(ast.fix_missing_locations(ast.Module(
+            body=[method], type_ignores=[])), "native_student.py", "exec"), scope)
+        guard = scope["validate_user"]
+        for student in (
+            types.SimpleNamespace(user=None, student_email_id=None),
+            types.SimpleNamespace(user=None, student_email_id="real@example.test"),
+        ):
+            with self.subTest(student=repr(student)):
+                self.assertIsNone(guard(student))
+        with self.assertRaises(PermissionError):
+            guard(types.SimpleNamespace(
+                user="staff@example.test", student_email_id=None))
+        self.assertIsNone(guard(types.SimpleNamespace(
+            user="staff@example.test", student_email_id="verified@example.test")))
 
     def test_candidate_id_fields_are_native_links_not_fake_email(self):
         data = json.loads((APP / "fixtures/custom_field.json").read_text())
