@@ -604,7 +604,7 @@ frappe.provide("toefl_house.command_pages");
 		const attemptField = $("<input type='text' class='form-control' autocomplete='off' maxlength='140'>")
 			.attr("aria-label", text("Attempt reference")).appendTo(idLabel);
 		const load = $("<button type='button' class='btn btn-primary'></button>")
-			.text(text("Load active exam")).appendTo(toolbar);
+			.text(text("Check exam status")).appendTo(toolbar);
 		const notice = $("<p class='th-placement-notice' role='status' aria-live='polite'></p>").appendTo(block);
 		const content = $("<div class='th-placement-content'></div>").appendTo(block);
 		let active = null;
@@ -785,11 +785,120 @@ frappe.provide("toefl_house.command_pages");
 				},
 			});
 		}
-		load.on("click", reload);
+
+		/*
+		 * A key-free server status check drives the preparation and delivery
+		 * stages. Never infer the attempt version or station authority locally.
+		 * Each POST is still a separate, idempotent domain command.
+		 */
+		function checkStatus() {
+			if (pending) return;
+			const attempt = attemptField.val().trim();
+			if (!attempt) {
+				inform("Enter an attempt reference issued by the placement team.");
+				return;
+			}
+			pendingWrite = null;
+			active = null;
+			content.empty();
+			setBusy(true);
+			inform("Checking the current, branch-authorized attempt status.");
+			frappe.call({
+				method: "toefl_house.api.supervised_attempt_status", type: "GET",
+				args: { attempt },
+				callback(response) {
+					const state = response.message || {};
+					setBusy(false);
+					if (state.attempt !== attempt || !Number.isInteger(Number(state.version))) {
+						inform("Attempt status could not be verified. Ask an Academic Manager to review it.");
+						return;
+					}
+					if (state.status === "In Progress" && !state.deadline_reached) {
+						reload();
+						return;
+					}
+					if (state.deadline_reached) {
+						inform("The server deadline has passed. Do not collect new answers; use the guarded Timeout seal command.");
+						return;
+					}
+					if (state.status === "Allocated") {
+						inform("This attempt is allocated. Check the real candidate's identity and branch before verification.");
+						const approval = $("<label class='th-placement-option'></label>").appendTo(content);
+						const check = $("<input type='checkbox'>").appendTo(approval);
+						$("<span></span>").text(text(
+							"I personally checked the candidate's identity, the correct Branch and the supervised station."
+						)).appendTo(approval);
+						const verify = $("<button type='button' class='btn btn-primary'></button>")
+							.text(text("Verify candidate and attempt")).prop("disabled", true).appendTo(content);
+						check.on("change", () => verify.prop("disabled", !check.prop("checked")));
+						verify.on("click", () => {
+							if (pending || !check.prop("checked")) return;
+							setBusy(true);
+							inform("Verifying attempt with the server.");
+							frappe.call({
+								method: "toefl_house.api.verify_attempt", type: "POST",
+								args: {
+									request_key: newRequestKey(), attempt: state.attempt,
+									expected_version: Number(state.version),
+								},
+								callback(reply) {
+									setBusy(false);
+									if ((reply.message || {}).status === "Verified") checkStatus();
+									else inform("Server verification was not confirmed. Check attempt status before retrying.");
+								},
+								error() {
+									setBusy(false);
+									inform("Verification outcome is unknown. Check current status; do not retry blindly.");
+								},
+							});
+						});
+						return;
+					}
+					if (state.status === "Verified") {
+						inform("Candidate verified. Start the timed session only when the candidate is seated and ready.");
+						const start = $("<button type='button' class='btn btn-primary'></button>")
+							.text(text("Start supervised timed exam")).appendTo(content);
+						start.on("click", () => {
+							if (pending) return;
+							frappe.confirm(text(
+								"Start the timed exam now? The server deadline begins immediately and cannot be paused."
+							), () => {
+								if (pending) return;
+								setBusy(true);
+								frappe.call({
+									method: "toefl_house.api.deliver_attempt", type: "POST",
+									args: {
+										request_key: newRequestKey(), attempt: state.attempt,
+										expected_version: Number(state.version),
+									},
+									callback(reply) {
+										setBusy(false);
+										if ((reply.message || {}).status === "In Progress") reload();
+										else inform("Exam start was not confirmed. Check current server status.");
+									},
+									error() {
+										setBusy(false);
+										inform("Start outcome is unknown. Check status before any retry.");
+									},
+								});
+							});
+						});
+						return;
+					}
+					inform("This attempt is " + (state.status || "unavailable") +
+						". No further supervised answers can be entered on this screen.");
+				},
+				error() {
+					setBusy(false);
+					inform("Attempt unavailable or access denied. Check the exact ID and assigned Branch.");
+				},
+			});
+		}
+		load.on("click", checkStatus);
 		attemptField.on("keydown", (event) => {
-			if (event.key === "Enter") { event.preventDefault(); reload(); }
+			if (event.key === "Enter") { event.preventDefault(); checkStatus(); }
 		});
-		inform("Enter a current in-progress attempt to resume a supervised test.");
+		inform("Enter an allocated, verified or in-progress attempt to review its next allowed step.");
 	}
 
 	function renderActionPage(wrapper, surface) {

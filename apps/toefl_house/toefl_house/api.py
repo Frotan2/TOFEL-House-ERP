@@ -651,6 +651,37 @@ def _seal(attempt, reason):
 
 
 @frappe.whitelist(methods=["GET"])
+def supervised_attempt_status(attempt):
+    """Branch-authorized, key-free status for a real invigilator's workflow.
+
+    Status lookup alone cannot start, verify, seal or extend any session. The
+    existing guarded POST commands remain the sole mutation authority.
+    """
+    actor = authorize("Placement Invigilator")
+    if not isinstance(attempt, str) or not 1 <= len(attempt) <= 140:
+        raise frappe.ValidationError("A valid attempt reference is required")
+    row = frappe.db.get_value(
+        ATTEMPT, attempt,
+        ["name", "case_name", "allocated_by", "mode", "status", "version",
+         "started_at", "deadline_at"], as_dict=True)
+    if not row:
+        raise frappe.ValidationError("Placement attempt does not exist")
+    _require_session_operator(actor, row)
+    from toefl_house.command_scope import actor_branches
+    allowed = actor_branches(actor)
+    branch = frappe.db.get_value(CASE, row.case_name, "th_branch") if row.case_name else None
+    if not allowed or not branch or branch not in allowed:
+        raise frappe.PermissionError("This attempt is outside the invigilator's assigned branch")
+    expired = (row.status == "In Progress"
+               and (not row.deadline_at or deadline_reached(_now(), get_datetime(row.deadline_at))))
+    return {
+        "attempt": row.name, "status": row.status,
+        "version": int(row.version), "deadline_at": _iso(row.deadline_at) if row.deadline_at else "",
+        "deadline_reached": bool(expired), "read_only": True,
+    }
+
+
+@frappe.whitelist(methods=["GET"])
 def supervised_attempt_view(attempt):
     """Recover a started supervised exam without leaking key, seed or manifest.
 

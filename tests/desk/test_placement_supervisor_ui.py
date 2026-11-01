@@ -16,6 +16,10 @@ class PlacementSupervisorUITests(unittest.TestCase):
 
     def test_never_print_candidate_answer_keys_and_recovers_server_state(self):
         self.assertIn('"toefl_house.api.supervised_attempt_view"', JS)
+        self.assertIn('"toefl_house.api.supervised_attempt_status"', JS)
+        self.assertIn('"toefl_house.api.verify_attempt"', JS)
+        self.assertIn('"toefl_house.api.deliver_attempt"', JS)
+        self.assertIn('function checkStatus()', JS)
         self.assertIn('type: "GET"', JS)
         self.assertIn('"toefl_house.api.save_response"', JS)
         self.assertIn('expected_revision: Number(saved.revision)', JS)
