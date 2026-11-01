@@ -795,7 +795,6 @@ def waiting_list_board(student_group=""):
         group_filters = {
             "th_branch": ("in", branches),
             "disabled": 0,
-            "th_class_status": ("in", ["Planned", "Active"]),
         }
         if student_group:
             group_filters["name"] = student_group
