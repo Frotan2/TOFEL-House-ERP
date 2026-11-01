@@ -29,9 +29,11 @@ class CommandScopeTests(unittest.TestCase):
         self.frappe.get_doc = Mock(side_effect=lambda dt, name: self.documents[(dt, name)])
         self.frappe.db = types.SimpleNamespace(get_value=lambda *key: self.values.get(key))
         permissions = types.ModuleType("toefl_house.permissions")
-        permissions.BRANCH_KINDS = {"Student Group": "group", "Student": "student"}
+        permissions.BRANCH_KINDS = {"Student Group": "group", "Student": "student",
+                                    "TH Reception Inquiry": "reception_inquiry"}
         permissions.BRANCH_NATIVE_DOCTYPES = ("Student Group", "Student")
         permissions._doc_branches = lambda doc, kind: doc["branches"]
+        permissions._doc_branches_guarded = lambda doc, kind: doc["branches"]
         permissions._student_branches = lambda name: self.student_branches.get(name, set())
         package = types.ModuleType("toefl_house")
         package.permissions = permissions
@@ -44,6 +46,23 @@ class CommandScopeTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("scope_under_test", path)
         self.scope = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.scope)
+
+    def test_reception_inquiry_followup_and_cached_receipt_recheck_branch(self):
+        self.documents[("TH Reception Inquiry", "INQ-ALPHA")] = {
+            "branches": {"A"}}
+        self.scope.authorize_command_scope(
+            "update_walkin_inquiry", {"inquiry": "INQ-ALPHA"}, "actor")
+        self.scope.authorize_command_scope(
+            "create_walkin_inquiry", {"branch": "A"}, "actor",
+            result={"name": "INQ-ALPHA"})
+        self.branches = ["B"]
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "update_walkin_inquiry", {"inquiry": "INQ-ALPHA"}, "actor")
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "create_walkin_inquiry", {"branch": "B"}, "actor",
+                result={"name": "INQ-ALPHA"})
 
     def test_sole_branch_defaults_and_foreign_branch_denied(self):
         self.assertEqual(self.scope.resolve_creation_branch(None, "actor"), "A")
