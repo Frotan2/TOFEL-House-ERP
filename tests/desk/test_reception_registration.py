@@ -57,7 +57,7 @@ class RegistrationDeskTests(unittest.TestCase):
                          "status": "Open", "th_branch": ""}]
             return []
         desk.project_rows = get_rows
-        self.assertEqual(desk._subject_index(rows), {} if False else {"PL-1": ""})
+        self.assertEqual(desk._subject_index(rows), {"PL-1": ""})
 
     def test_reception_without_branch_assignment_is_denied(self):
         desk, _ = self.desk(placement=False, applicant=False)

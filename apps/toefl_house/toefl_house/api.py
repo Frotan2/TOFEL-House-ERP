@@ -401,8 +401,14 @@ def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE, branch=""):
         raise frappe.ValidationError("Unsupported purpose in this synthetic increment")
 
     def work(actor):
-        from toefl_house.command_scope import resolve_creation_branch
-        chosen_branch = resolve_creation_branch(branch, actor)
+        # The synthetic API compatibility path may omit a Branch because the
+        # historical fixtures predate branch provenance. Such cases are never
+        # projected to Reception. Live cases require an explicit branch.
+        if branch or is_production():
+            from toefl_house.command_scope import resolve_creation_branch
+            chosen_branch = resolve_creation_branch(branch, actor)
+        else:
+            chosen_branch = ""
         if is_production() and not chosen_branch:
             raise frappe.ValidationError("Choose a verified placement branch before creating a case")
         if chosen_branch and not frappe.db.exists("Branch", chosen_branch):
