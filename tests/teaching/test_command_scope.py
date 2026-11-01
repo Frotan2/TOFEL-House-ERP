@@ -116,6 +116,38 @@ class CommandScopeTests(unittest.TestCase):
                 "create_walkin_inquiry", {"branch": "B"}, "actor",
                 result={"name": "INQ-ALPHA"})
 
+    def test_reception_commands_require_explicit_branch_permission(self):
+        # Native HQ semantics (no Branch User Permission) must NOT be used
+        # for the front counter, including creation and edits by known ID.
+        self.branches = []
+        for kind, payload in (
+            ("create_walkin_inquiry", {"branch": "A"}),
+            ("update_walkin_inquiry", {"inquiry": "INQ-ALPHA"}),
+            ("correct_walkin_inquiry", {"inquiry": "INQ-ALPHA"}),
+        ):
+            with self.subTest(kind=kind), self.assertRaises(PermissionError):
+                self.scope.authorize_command_scope(kind, payload, "actor")
+        self.frappe.get_doc.assert_not_called()
+
+    def test_reception_cached_result_fails_when_branch_assignment_revoked(self):
+        self.documents[("TH Reception Inquiry", "INQ-ALPHA")] = {
+            "branches": {"A"}}
+        creation = {"branch": "A"}
+        followup = {"inquiry": "INQ-ALPHA"}
+        result = {"name": "INQ-ALPHA"}
+        self.scope.authorize_command_scope(
+            "create_walkin_inquiry", creation, "actor", result=result)
+        self.scope.authorize_command_scope(
+            "correct_walkin_inquiry", followup, "actor")
+        self.branches = []
+        for kind, payload, saved in (
+            ("create_walkin_inquiry", creation, result),
+            ("update_walkin_inquiry", followup, None),
+            ("correct_walkin_inquiry", followup, None),
+        ):
+            with self.subTest(kind=kind), self.assertRaises(PermissionError):
+                self.scope.authorize_command_scope(kind, payload, "actor", result=saved)
+
     def test_sole_branch_defaults_and_foreign_branch_denied(self):
         self.assertEqual(self.scope.resolve_creation_branch(None, "actor"), "A")
         with self.assertRaises(PermissionError):
