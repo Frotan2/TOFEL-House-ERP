@@ -97,6 +97,7 @@ class S1GuardTests(unittest.TestCase):
                     reviewed_by="r@example.com", decided_by="e@example.com")
             if doctype == STUDENT and as_dict:
                 return SimpleNamespace(name="STU-1", student_applicant="APP-1",
+                                        enabled=1, th_candidate_ref=None,
                                         customer="CUST-1")
             if doctype == STUDENT and fieldname == "customer":
                 return "CUST-1"
