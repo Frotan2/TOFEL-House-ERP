@@ -139,10 +139,14 @@ def _walkin_progress(inquiries, released_subjects):
     if len(cases) >= BOUNCE_WINDOW:
         return {}
     case_by_inquiry = {}
+    case_conflicts = set()
     for case in cases:
         origin = by_inquiry.get(case.get("reception_inquiry"))
         if origin and case.get("th_branch") and origin.get("th_branch") == case.get("th_branch"):
-            case_by_inquiry[origin["name"]] = case
+            if origin["name"] in case_by_inquiry:
+                case_conflicts.add(origin["name"])
+            else:
+                case_by_inquiry[origin["name"]] = case
     if not case_by_inquiry:
         return {}
     applicants = project_rows(
@@ -158,8 +162,11 @@ def _walkin_progress(inquiries, released_subjects):
     for applicant in applicants:
         inquiry_id = applicant.get("th_reception_inquiry")
         case = case_by_inquiry.get(inquiry_id)
-        if not case or applicant.get("th_branch") != case.get("th_branch") or (
+        if not case:
+            continue
+        if applicant.get("th_branch") != case.get("th_branch") or (
                 applicant.get("th_candidate_ref") != case.get("subject")):
+            ambiguous.add(inquiry_id)
             continue
         if inquiry_id in applicant_by_inquiry:
             ambiguous.add(inquiry_id)
@@ -176,8 +183,14 @@ def _walkin_progress(inquiries, released_subjects):
         return {}
     student_by_applicant = {}
     ambiguous_students = set()
+    candidate_by_applicant = {
+        applicant["name"]: applicant.get("th_candidate_ref")
+        for applicant in applicant_by_inquiry.values()}
     for student in students:
         applicant_id = student.get("student_applicant")
+        if student.get("th_candidate_ref") != candidate_by_applicant.get(applicant_id):
+            ambiguous_students.add(applicant_id)
+            continue
         if applicant_id in student_by_applicant:
             ambiguous_students.add(applicant_id)
         else:
@@ -201,7 +214,7 @@ def _walkin_progress(inquiries, released_subjects):
     result = {}
     for inquiry_id, case in case_by_inquiry.items():
         applicant = applicant_by_inquiry.get(inquiry_id)
-        if inquiry_id in ambiguous or (
+        if inquiry_id in ambiguous or inquiry_id in case_conflicts or (
                 applicant and applicant["name"] in ambiguous_students):
             result[inquiry_id] = (
                 "Identity review needed",
@@ -217,8 +230,8 @@ def _walkin_progress(inquiries, released_subjects):
                     "Academic Manager")
             elif student["name"] in enrolled:
                 result[inquiry_id] = (
-                    "Program enrolled",
-                    "Program Enrollment is submitted. Ask Academic Manager to verify the assigned class and first session.",
+                    "Enrollment on file",
+                    "A submitted Program Enrollment exists for this Student. Verify the exact admission period and assigned class before confirming attendance.",
                     "Academic Manager")
             else:
                 result[inquiry_id] = (

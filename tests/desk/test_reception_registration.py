@@ -248,7 +248,7 @@ class RegistrationDeskTests(unittest.TestCase):
         }
         desk.project_rows = lambda _surface, dt, _fields, **kwargs: list(facts.get(dt, []))
         progress = desk._walkin_progress([{"name": "INQ-1", "th_branch": "Branch Alpha"}], [ref])
-        self.assertEqual(progress["INQ-1"][0], "Program enrolled")
+        self.assertEqual(progress["INQ-1"][0], "Enrollment on file")
         self.assertEqual(progress["INQ-1"][2], "Academic Manager")
         self.assertIn("assigned class", progress["INQ-1"][1])
 
@@ -269,11 +269,11 @@ class RegistrationDeskTests(unittest.TestCase):
         facts[desk.CASE][0]["th_branch"] = "Branch Alpha"
         facts[desk.APPLICANT][0]["th_candidate_ref"] = "THV-" + "b" * 32
         self.assertEqual(desk._walkin_progress([visit], [ref])["INQ-1"][0],
-                         "Placement result released")
+                         "Identity review needed")
         facts[desk.APPLICANT][0]["th_candidate_ref"] = ref
         facts[desk.STUDENT][0]["th_candidate_ref"] = "THV-" + "b" * 32
         self.assertEqual(desk._walkin_progress([visit], [ref])["INQ-1"][0],
-                         "Admission in progress")
+                         "Identity review needed")
 
     def test_reception_progress_requires_academic_review_on_duplicate_links(self):
         desk, _ = self.desk(placement=False, applicant=False)
