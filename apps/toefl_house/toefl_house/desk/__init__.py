@@ -630,7 +630,7 @@ def _branch_allowed_names(doctype, branches, *, require_complete=False):
     class -> branch and roster -> student chains."""
     # Enrollment queues make numeric/roster claims. A truncated scope chain
     # must report an error, not masquerade as an exact empty intake.
-    strict = require_complete or doctype == "Program Enrollment"
+    strict = require_complete or doctype in ("Program Enrollment", "Student")
 
     def checked(rows):
         if strict and len(rows) >= _CHAIN_LIMIT:
@@ -665,7 +665,53 @@ def _branch_allowed_names(doctype, branches, *, require_complete=False):
         "Student Group Student", filters={"parent": ("in", groups), "active": 1},
         fields=["student"], limit_page_length=_CHAIN_LIMIT))] if groups else []
     if doctype == "Student":
-        return roster
+        # A converted learner exists BEFORE first Program Enrollment or
+        # Student Group roster assignment. For Reception, that is the exact
+        # moment a Student lookup must work. Admit an unrostered Student only
+        # through a branch-visible converted Admission and their exact native
+        # Applicant link; a matching email, name or household phone proves
+        # nothing. A student rostered in a foreign/branchless group must
+        # never leak through a historical admission in another branch.
+        admissible = _branch_allowed_names(
+            "TH Admission Decision", branches, require_complete=True)
+        intake_rows = checked(frappe.get_all(
+            "TH Admission Decision",
+            filters={"name": ("in", admissible)},
+            fields=["name", "student_applicant", "native_student"],
+            limit_page_length=_CHAIN_LIMIT)) if admissible else []
+        verified = {(row.get("native_student"), row.get("student_applicant"))
+                    for row in intake_rows
+                    if row.get("native_student") and row.get("student_applicant")}
+        candidates = sorted(set(roster) | {pair[0] for pair in verified})
+        if not candidates:
+            return []
+        students = checked(frappe.get_all(
+            "Student", filters={"name": ("in", candidates)},
+            fields=["name", "student_applicant"], limit_page_length=_CHAIN_LIMIT))
+        all_memberships = checked(frappe.get_all(
+            "Student Group Student",
+            filters={"student": ("in", candidates), "active": 1},
+            fields=["student", "parent"], limit_page_length=_CHAIN_LIMIT))
+        parents = sorted({row.get("parent") for row in all_memberships if row.get("parent")})
+        all_groups = checked(frappe.get_all(
+            "Student Group", filters={"name": ("in", parents)},
+            fields=["name", "th_branch"], limit_page_length=_CHAIN_LIMIT)) if parents else []
+        by_parent = {group["name"]: group.get("th_branch") for group in all_groups}
+        membership_branches = {}
+        for row in all_memberships:
+            membership_branches.setdefault(row["student"], set()).add(
+                by_parent.get(row.get("parent")))
+        allowed = set(branches)
+        result = []
+        for student in students:
+            name = student["name"]
+            memberships = membership_branches.get(name, set())
+            if memberships and (not memberships <= allowed):
+                continue
+            if ((name in roster and memberships) or
+                    (name, student.get("student_applicant")) in verified):
+                result.append(name)
+        return sorted(result)
     if doctype == "Program Enrollment":
         # A new/late learner may have a submitted enrollment before any class
         # roster exists. Authorize that intake only through an already
