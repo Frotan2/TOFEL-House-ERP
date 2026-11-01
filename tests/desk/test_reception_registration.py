@@ -265,6 +265,65 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertIn("Instructor assignment unverified", info["STU"]["next"])
         self.assertNotIn(desk.INSTRUCTOR, calls)
 
+    def test_suspension_after_scheduling_blocks_wrong_front_counter_promise(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        def read(_surface, doctype, fields, filters=None, **_kw):
+            if doctype == desk.ROSTER:
+                return [{"name": "M", "parent": "CLASS-A", "student": "S", "active": 1}]
+            if doctype == desk.GROUP:
+                return [{"name": "CLASS-A", "student_group_name": "GE Morning",
+                         "program": "GE", "academic_year": "2026",
+                         "academic_term": "Term 1", "th_branch": "Branch Alpha",
+                         "th_class_status": "Active", "disabled": 0}]
+            if doctype == desk.SCHEDULE:
+                return [{"name": "SESS-1", "student_group": "CLASS-A",
+                         "instructor": "INST-1", "course": "Reading", "room": "A-1",
+                         "schedule_date": "2026-11-11", "from_time": "08:00:00",
+                         "to_time": "09:00:00", "th_session_status": "Scheduled"}]
+            if doctype == desk.ASSIGNMENT:
+                return [{"name": "AS-1", "student_group": "CLASS-A", "instructor": "INST-1",
+                         "course_schedule": "", "effective_start": "2026-09-01",
+                         "effective_end": ""}]
+            if doctype == desk.INSTRUCTOR:
+                return [{"name": "INST-1", "instructor_name": "Teacher One", "status": "Active"}]
+            if doctype == desk.SUSPENSION:
+                self.assertNotIn("reason", fields, "private suspension reason must not leave DB")
+                self.assertEqual(filters["student_group"], ("in", ["CLASS-A"]))
+                return self.suspensions
+            return []
+        desk.project_rows = read
+        self.suspensions = []
+        def stage():
+            return desk._student_class_information(
+                [{"name": "S", "enabled": 1}],
+                [{"student": "S", "program": "GE", "academic_year": "2026",
+                  "academic_term": "Term 1", "docstatus": 1}])["S"]
+
+        self.assertEqual(stage()["stage"], "Class assigned, sessions scheduled")
+        class_row = {"name": "SUSP-1", "student_group": "CLASS-A", "scope": "Class",
+                     "student": None, "status": "Active",
+                     "from_date": "2026-11-10", "until_date": "2026-11-12"}
+        self.suspensions = [class_row]
+        blocked = stage()
+        self.assertEqual(blocked["stage"], "Class sessions under review")
+        self.assertEqual(blocked["next_role"], "Teaching Scheduler")
+        self.assertNotIn("Teacher One", blocked["next"])
+        self.assertNotIn("A-1", blocked["next"])
+
+        # A restriction on someone ELSE must not alter this Student's view.
+        self.suspensions = [{**class_row, "scope": "Student", "student": "OTHER"}]
+        self.assertEqual(stage()["stage"], "Class assigned, sessions scheduled")
+        self.suspensions = [{**class_row, "scope": "Student", "student": "S"}]
+        personal = stage()
+        self.assertEqual(personal["stage"], "Attendance eligibility needs review")
+        self.assertEqual(personal["next_role"], "Academic Manager")
+        self.assertNotIn("Teacher One", personal["next"])
+        self.suspensions = [{**class_row, "scope": "Class",
+                             "from_date": "2026-11-20", "until_date": "2026-11-21"}]
+        self.assertEqual(stage()["stage"], "Class assigned, sessions scheduled")
+        self.suspensions = [{**class_row, "scope": "Class", "from_date": "broken"}]
+        self.assertEqual(stage()["stage"], "Class assigned, timetable needs review")
+
     def test_planned_class_does_not_claim_scheduled_meeting_or_teacher(self):
         desk, _ = self.desk(placement=False, applicant=False)
         group = {"name": "CLASS-PLAN", "student_group_name": "GE Planned",
