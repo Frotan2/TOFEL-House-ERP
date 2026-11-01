@@ -39,7 +39,8 @@
       "fieldname": "th_branch",
       "label": "Reception branch",
       "fieldtype": "Link",
-      "options": "Branch"
+      "options": "Branch",
+      "reqd": 1
     },
     {
       "fieldname": "status",

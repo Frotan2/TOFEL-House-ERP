@@ -173,6 +173,12 @@ class ReceptionWalkinTests(unittest.TestCase):
             with self.subTest(phone=phone), self.assertRaises(ValidationError):
                 self.module.create_walkin_inquiry("key-invalid-number-01", "Visitor", phone=phone)
 
+    def test_missing_branch_resolution_is_rejected_before_write(self):
+        self.module.resolve_creation_branch = lambda _branch, _actor: ""
+        with self.assertRaises(ValidationError):
+            self.module.create_walkin_inquiry("k", "Visitor")
+        self.assertEqual(self.saved, {})
+
     def test_branch_refused_before_any_document_is_written(self):
         with self.assertRaises(PermissionError):
             self.module.create_walkin_inquiry("k", "Visitor", branch="Other Branch")

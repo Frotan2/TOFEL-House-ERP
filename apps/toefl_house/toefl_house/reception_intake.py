@@ -98,7 +98,9 @@ def create_walkin_inquiry(request_key, person_name, phone="", program_interest="
         interest = _text(program_interest, "Program interest")
         remark = _text(notes, "Notes", length=1000)
         chosen = resolve_creation_branch(branch, actor)
-        if chosen and not frappe.db.exists("Branch", chosen):
+        if not chosen:
+            raise frappe.ValidationError("Choose a reception branch before saving the visitor")
+        if not frappe.db.exists("Branch", chosen):
             raise frappe.ValidationError("Unknown reception branch")
         doc = frappe.get_doc(dict(
             doctype=DOCTYPE, person_name=person, phone=contact,

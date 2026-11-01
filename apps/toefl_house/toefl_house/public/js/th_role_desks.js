@@ -1523,6 +1523,9 @@ frappe.provide("toefl_house.role_desks");
 		// One key per opened form, reused on a retry; do not rely on
 		// hidden Frappe inputs appearing in get_values().
 		const requestKey = newRequestKey();
+		// Keep the same operation key across a failed request and its retry.
+		// A double click must not issue concurrent writes from one dialog.
+		let commandPending = false;
 		const dialog = new frappe.ui.Dialog({
 			title: text(action.label),
 			fields: [{ fieldname: "request_key", label: text("Request reference"), fieldtype: "Data", hidden: 1, read_only: 1, default: requestKey }, ...contextFields, ...fields],
@@ -1731,7 +1734,10 @@ frappe.provide("toefl_house.role_desks");
 					// generated from selected human-friendly dropdowns.
 					args.statuses = JSON.stringify(statuses);
 				}
-				const submitAction = () => frappe.call({
+				const submitAction = () => {
+					if (commandPending) return;
+					commandPending = true;
+					frappe.call({
 					method: action.endpoint,
 					args,
 					freeze: true,
@@ -1743,6 +1749,7 @@ frappe.provide("toefl_house.role_desks");
 						else if (typeof currentReload === "function") currentReload();
 					},
 					error(response) {
+						commandPending = false;
 						// Direct ValidationError responses need not carry native
 						// _server_messages. Retain the entered form and retry key.
 						// Pinned Frappe passes parsed JSON directly for HTTP 417;
@@ -1756,6 +1763,7 @@ frappe.provide("toefl_house.role_desks");
 						frappe.msgprint({ title: text(action.label), message: escapeText(detail), indicator: "red" });
 					},
 				});
+				};
 				if (cashClose) {
 					frappe.confirm(text(
 						"Submit the actual counts and close this company's entire business day? This close cannot be edited; no payment or cash movement is created."
@@ -1925,6 +1933,8 @@ frappe.provide("toefl_house.role_desks");
 			"Search by name, phone or student email before creating a new record. No email or placement result is required to record a walk-in."
 		)).appendTo(body);
 		$("<div class='th-reception-quick-actions'></div>").appendTo(body);
+		// Search replies can arrive out of order; only the latest search owns the results.
+		const searchState = { revision: 0 };
 		const bar = $("<div class='th-search-bar'></div>").appendTo(body);
 		$("<div class='th-search-results' aria-live='polite'></div>").appendTo(body);
 		const input = $("<input type='search' class='form-control th-search-input' />")
@@ -1934,17 +1944,18 @@ frappe.provide("toefl_house.role_desks");
 		$("<button type='button' class='btn btn-primary btn-sm'></button>")
 			.text(text("Search"))
 			.attr("aria-label", text("Search for person"))
-			.on("click", () => runSearch(surface, body, input.val()))
+			.on("click", () => runSearch(surface, body, input.val(), searchState))
 			.appendTo(bar);
 		input.on("keydown", (event) => {
 			if (event.key === "Enter") {
 				event.preventDefault();
-				runSearch(surface, body, input.val());
+				runSearch(surface, body, input.val(), searchState);
 			}
 		});
 	}
 
-	function runSearch(surface, body, query) {
+	function runSearch(surface, body, query, searchState) {
+		const revision = ++searchState.revision;
 		const results = body.find(".th-search-results").empty();
 		const text_ = String(query || "").trim();
 		if (text_.length < 2) {
@@ -1956,10 +1967,12 @@ frappe.provide("toefl_house.role_desks");
 			method: surface.search.endpoint,
 			args: { query: text_ },
 			callback(response) {
+				if (revision !== searchState.revision) return;
 				loading.remove();
 				renderSearchResults(results, response.message || {});
 			},
 			error() {
+				if (revision !== searchState.revision) return;
 				loading.remove();
 				results.append(`<div class='th-alert th-alert--danger'><div><p class='th-alert-title'>${escapeText(text("Search failed"))}</p><p class='th-alert-body'>${escapeText(text("The lookup could not be completed. Nothing was changed; try again."))}</p></div></div>`);
 			},

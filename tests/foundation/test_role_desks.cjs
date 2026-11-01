@@ -488,9 +488,11 @@ function payloadWith(queueItems, factValue) {
 	};
 }
 
-function runScenario({ workPayload, failFirstWork = false, failLookup = false, lookupReply = null, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null, readableSources = [] }) {
+function runScenario({ workPayload, failFirstWork = false, failLookup = false, deferLookup = false, deferRegister = false, lookupReply = null, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null, readableSources = [] }) {
 	const calls = [];
 	const dialogs = [];
+	const pendingLookups = [];
+	const pendingRegistrations = [];
 	const routed = [];
 	const printed = [];
 	const body = $("body").appendTo({ children: [] });
@@ -543,8 +545,14 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, l
 				return;
 			}
 			if (opts.method === "toefl_house.desk.reception.lookup") {
+				if (deferLookup) { pendingLookups.push(opts); return; }
 				if (failLookup) { opts.error(); return; }
 				opts.callback({ message: lookupReply || { items: [hostileItem], students: [] } });
+				return;
+			}
+			if (opts.method === "toefl_house.reception_intake.create_walkin_inquiry") {
+				if (deferRegister) { pendingRegistrations.push(opts); return; }
+				opts.callback({ message: { name: "INQ-TEST", status: "New" } });
 				return;
 			}
 			if (opts.method === "toefl_house.admission.review_admission") {
@@ -563,7 +571,7 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, l
 	frappe.provide = (dotted) => { let target = sandbox; for (const part of dotted.split(".")) target = target[part] ||= {}; };
 	vm.runInNewContext(fs.readFileSync(SCRIPT, "utf8"), sandbox, { filename: SCRIPT });
 	frappe.pages["th-reception-desk"].on_page_load(body);
-	return { calls, dialogs, routed, printed, body, frappe, get workCalls() { return workCalls; } };
+	return { calls, dialogs, pendingLookups, pendingRegistrations, routed, printed, body, frappe, get workCalls() { return workCalls; } };
 }
 
 const hostileItem = {
@@ -745,12 +753,67 @@ const hostileItem = {
 	assert(serialize(scenario.body).includes("Register the first visitor"));
 	top[0].click();
 	assert.strictEqual(scenario.dialogs.length, 1, "register opens a single guided dialog");
-	const fields = scenario.dialogs[0].opts.fields.map((row) => row.fieldname);
+	const fields = Array.from(scenario.dialogs[0].opts.fields, (row) => row.fieldname);
 	assert.deepStrictEqual(fields,
 		["request_key", "person_name", "phone", "program_interest", "branch", "notes"],
 		"front counter should ask for real basic contact, not email or technical placement IDs");
 	assert(!scenario.calls.some((call) => call.method === register.endpoint),
 		"opening the form never creates a record");
+}
+
+{
+	// The newest query must own the results, even if the first HTTP response
+	// comes back after the second one or after an invalid short query.
+	const scenario = runScenario({ workPayload: payloadWith([], "0"), deferLookup: true });
+	const input = findAll(scenario.body, "th-search-input")[0];
+	const search = findAll(scenario.body, "th-search-bar")[0];
+	const button = search.children.find((node) => node.tag === "button");
+	input.attrs.value = "First";
+	button.click();
+	input.attrs.value = "Second";
+	button.click();
+	assert.strictEqual(scenario.pendingLookups.length, 2);
+	scenario.pendingLookups[1].callback({ message: { inquiries: [
+		{ id: "NEW", person: "Second visitor", stage: "Pre-registration", status: "New", next: "Call" },
+	] } });
+	scenario.pendingLookups[0].callback({ message: { inquiries: [
+		{ id: "OLD", person: "First visitor", stage: "Pre-registration", status: "New", next: "Call" },
+	] } });
+	assert(serialize(scenario.body).includes("Second visitor"), "current query result remains visible");
+	assert(!serialize(scenario.body).includes("First visitor"), "stale response cannot overwrite a newer result");
+	input.attrs.value = "Third";
+	button.click();
+	input.attrs.value = "X";
+	button.click();
+	scenario.pendingLookups[2].callback({ message: { inquiries: [
+		{ id: "LATE", person: "Late visitor", stage: "Pre-registration", status: "New", next: "Call" },
+	] } });
+	assert(!serialize(scenario.body).includes("Late visitor"),
+		"short-query guidance invalidates previous in-flight search requests");
+}
+
+{
+	// Fast double-click is common at a busy reception desk. Only one write
+	// request is issued while pending; a network error allows a same-key retry.
+	const register = {
+		role: "Reception", endpoint: "toefl_house.reception_intake.create_walkin_inquiry",
+		label: "Register a new visitor", args: { person_name: "", phone: "", program_interest: "", branch: "", notes: "" },
+	};
+	const payload = payloadWith([], "0");
+	payload.primary_action = register;
+	const scenario = runScenario({ workPayload: payload, deferRegister: true });
+	findAll(scenario.body, "th-register-visitor")[0].click();
+	const form = scenario.dialogs[0];
+	const values = { person_name: "Real Visitor", phone: "", program_interest: "", branch: "", notes: "" };
+	form.submit(values);
+	form.submit(values);
+	assert.strictEqual(scenario.pendingRegistrations.length, 1, "only one registration request while pending");
+	const firstKey = scenario.pendingRegistrations[0].args.request_key;
+	scenario.pendingRegistrations[0].error({ exc_type: "ValidationError", exception: "ValidationError: Retry" });
+	form.submit(values);
+	assert.strictEqual(scenario.pendingRegistrations.length, 2, "retry is possible after failure");
+	assert.strictEqual(scenario.pendingRegistrations[1].args.request_key, firstKey,
+		"the retry preserves the original idempotency key");
 }
 
 {
