@@ -1808,3 +1808,33 @@
 		border-width: 2px;
 	}
 }
+
+/* Placement invigilation: staff workstation, not a candidate kiosk. */
+.th-placement-console {
+	background: #fff;
+	border: 1px solid #e7cbd0;
+	border-top: 4px solid #bb2440;
+	border-radius: 12px;
+	padding: clamp(16px, 2vw, 28px);
+	color: #202127;
+	direction: ltr;
+	text-align: left;
+}
+.th-placement-toolbar,
+.th-placement-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.th-placement-label { display: grid; gap: 6px; font-weight: 600; min-width: 250px; }
+.th-placement-notice { min-height: 2.2rem; padding-top: 12px; }
+.th-placement-question { margin: 16px 0; padding: 18px; border: 1px solid #ddd; border-radius: 10px; }
+.th-placement-question legend { font-weight: 700; font-size: 1rem; }
+.th-placement-prompt { font-size: 1.2rem; line-height: 1.6; white-space: pre-wrap; }
+.th-placement-option {
+	display: flex; align-items: flex-start; gap: 10px; padding: 12px; margin: 8px 0;
+	border: 1px solid #ddd; border-radius: 8px; cursor: pointer; font-size: 1rem;
+}
+.th-placement-option:focus-within { outline: 2px solid #bb2440; outline-offset: 2px; }
+.th-placement-progress { font-weight: 700; }
+.th-placement-deadline { color: #6c4850; }
+@media (max-width: 620px) {
+	.th-placement-toolbar .btn, .th-placement-controls .btn { width: 100%; }
+	.th-placement-label { min-width: 100%; }
+}
