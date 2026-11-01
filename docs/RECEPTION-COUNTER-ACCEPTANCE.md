@@ -28,7 +28,7 @@ aware code projections; no real learner information was entered.
    cannot later be silently renamed to another person through native
    Education forms; use an independently reviewed identity correction,
    which is still a separate acceptance requirement.
-6. When Ready for Placement, mark Awaiting Placement; the desk assigns
+5. When Ready for Placement, mark Awaiting Placement; the desk assigns
    **Placement Publisher** as the next role and displays the Inquiry ID.
    The Publisher links the exact inquiry and Branch and generates an internal
    non-authenticating Candidate ID. Once a case consumes the referral,
@@ -36,8 +36,7 @@ aware code projections; no real learner information was entered.
    remain permitted.
 6. The desk displays source-verified stage transitions for a live inquiry:
    Awaiting placement allocation; Placement case opened; Placement result
-   released; Admission in progress; Student profile created; Program
-   enrolled. Student profile creation alone **never** means an approved
+   released; Admission in progress; Student profile created; Enrollment on file. Student profile creation alone **never** means an approved
    enrollment, paid tuition or assigned class.
 7. The desk checks native `Student Applicant`, `Student`, and submitted
    `Program Enrollment` through the same Branch scope. It never links by a
@@ -66,7 +65,7 @@ aware code projections; no real learner information was entered.
 | Applicant approved and Student created, before any class membership | Correct Branch can find native Student; other Branch cannot |
 | One Student active in classes at Branches A and B | Neither single-Branch counter receives a mixed-scope Student profile |
 | Student converted but no submitted Program Enrollment | Student profile created; Enrollment Officer next |
-| Correct submitted Program Enrollment | Program enrolled; Academic Manager checks the class and first session |
+| Correct submitted Program Enrollment | Enrollment on file; Academic Manager verifies that its academic period matches the inquiry |
 | Disabled Student | Visible as Inactive; no reactivation or enrollment control |
 | Same Candidate ref on two native applicants | Stop and refer to Academic Manager, do not pick one |
 | Printed Student/Inquiry ID with a Branch permission | Exact lookup works and intersects the scoped name list |
