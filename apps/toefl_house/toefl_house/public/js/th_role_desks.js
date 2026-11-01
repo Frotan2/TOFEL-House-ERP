@@ -920,6 +920,11 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
 			{ fieldname: "conditions", label: "Conditions", fieldtype: "Small Text" },
 		],
+		"toefl_house.admission.satisfy_conditions": [
+			{ fieldname: "name", label: "Admission decision", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "expected_version", label: "Expected version", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "evidence", label: "Independent evidence that all conditions are met", fieldtype: "Small Text", reqd: 1 },
+		],
 		"toefl_house.admission.accept_offer": [
 			{ fieldname: "name", label: "Admission decision", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "expected_version", label: "Expected version", fieldtype: "Int", reqd: 1 },
@@ -936,12 +941,27 @@ frappe.provide("toefl_house.role_desks");
 				{ fieldname: "academic_year", label: "Academic year", fieldtype: "Data", description: "Returning journeys only; blank inherits the applicant record." },
 				{ fieldname: "academic_term", label: "Academic term", fieldtype: "Data", description: "Returning journeys only; blank inherits the applicant record." },
 			],
+		"toefl_house.reception_intake.create_walkin_inquiry": [
+			{ fieldname: "person_name", label: "Visitor's full name", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "phone", label: "Contact phone (optional)", fieldtype: "Data" },
+			{ fieldname: "program_interest", label: "Program of interest", fieldtype: "Data" },
+			{ fieldname: "branch", label: "Reception branch", fieldtype: "Link", options: "Branch" },
+			{ fieldname: "notes", label: "Reception note (optional)", fieldtype: "Small Text" },
+		],
+		"toefl_house.reception_intake.update_walkin_inquiry": [
+			{ fieldname: "inquiry", label: "Inquiry reference", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "expected_version", label: "Recorded version", fieldtype: "Int", reqd: 1, read_only: 1 },
+			{ fieldname: "status", label: "Follow-up status", fieldtype: "Select",
+				options: "Contacted\nAwaiting Placement\nClosed", reqd: 1 },
+			{ fieldname: "notes", label: "Follow-up notes", fieldtype: "Small Text" },
+		],
 		"toefl_house.admission.record_applicant": [
 			{ fieldname: "placement_decision", label: "Released placement decision", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "first_name", label: "First name", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "program", label: "Program", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "last_name", label: "Family name (optional)", fieldtype: "Data" },
+			{ fieldname: "program", label: "Program", fieldtype: "Link", options: "Program", reqd: 1 },
 			{ fieldname: "academic_year", label: "Choose the academic year", fieldtype: "Link", options: "Academic Year", reqd: 1 },
-			{ fieldname: "branch", label: "Branch", fieldtype: "Data", description: "Blank: the recording officer's own branch." },
+			{ fieldname: "branch", label: "Branch", fieldtype: "Link", options: "Branch", description: "Blank: the recording officer's own branch." },
 		],
 		"toefl_house.enrollment.enroll_in_program": [
 			{ fieldname: "admission_decision", label: "Admission decision", fieldtype: "Data", reqd: 1 },
