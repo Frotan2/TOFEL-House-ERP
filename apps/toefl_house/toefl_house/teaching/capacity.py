@@ -765,6 +765,7 @@ def class_availability(student_group="", program="", academic_year="",
             "Too many classes for a complete seat report; narrow program, year or branch")
     names = [row["name"] for row in rows]
     waiting_counts = {}
+    waiting_priority_counts = {}
     if names:
         open_entries = frappe.get_all(
             WAITING, filters={"student_group": ("in", names),
@@ -774,13 +775,16 @@ def class_availability(student_group="", program="", academic_year="",
             raise frappe.ValidationError(
                 "Waiting-list totals exceed the complete read; narrow the class filter")
         for entry in open_entries:
-            waiting_counts[entry["student_group"]] = waiting_counts.get(
-                entry["student_group"], 0) + 1
+            group_key = entry["student_group"]
+            waiting_counts[group_key] = waiting_counts.get(group_key, 0) + 1
+            if entry.get("status") == "Waiting":
+                waiting_priority_counts[group_key] = waiting_priority_counts.get(group_key, 0) + 1
     classes = []
     intake = {}
     for row in rows:
         seats = seat_facts(row["name"])
         waiting = waiting_counts.get(row["name"], 0)
+        unoffered_waiting = waiting_priority_counts.get(row["name"], 0)
         item = {
             "student_group": row["name"],
             "name": row.get("student_group_name") or row["name"],
@@ -795,6 +799,11 @@ def class_availability(student_group="", program="", academic_year="",
             "capacity": seats["capacity"], "rostered": seats["rostered"],
             "reserved": seats["reserved"], "available": seats["available"],
             "waiting": waiting,
+            # Queue members must be processed before a newly-arrived walk-in.
+            # A physical free seat is not an immediately usable walk-in seat
+            # while any prior Waiting entries remain in this class.
+            "walk_in_available": 0 if unoffered_waiting else seats["available"],
+            "queue_has_priority": unoffered_waiting > 0,
             "full": seats["available"] < 1,
         }
         classes.append(item)
@@ -818,7 +827,11 @@ def class_availability(student_group="", program="", academic_year="",
                          key=lambda item: (item["program"], item["academic_year"])),
         "definitions": {
             "available": "capacity minus every roster row (native counting) "
-                         "minus unexpired seat offers",
+                         "minus unexpired seat offers; Waiting entries still "
+                         "have first claim, so this is not a walk-in promise",
+            "walk_in_available": "zero when the class has Waiting entries "
+                                 "awaiting the first authorized offer; "
+                                 "otherwise equals unreserved available seats",
             "reserved": "unexpired waiting-list offers holding a seat",
             "waiting": "open waiting-list entries (Waiting or Offered)",
         },
