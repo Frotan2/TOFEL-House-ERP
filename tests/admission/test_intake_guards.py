@@ -122,6 +122,11 @@ class IntakeGuardTests(unittest.TestCase):
             raise AssertionError(f"unexpected get_all {doctype}")
 
         stub.get_all = get_all
+        stub.get_meta = lambda dt: SimpleNamespace(
+            has_field=lambda field: (
+                dt == "Student Applicant" and field in ("th_candidate_ref", "th_reception_inquiry")
+            ),
+            get_field=lambda field: SimpleNamespace(reqd=0) if field == "student_email_id" else None)
 
         def get_doc(doctype, name=None, **kwargs):
             if isinstance(doctype, dict):

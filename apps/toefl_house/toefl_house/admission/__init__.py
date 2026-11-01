@@ -218,6 +218,11 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             raise frappe.PermissionError(
                 "Applicant branch must match the verified placement case branch")
         if is_production():
+            applicant_meta = frappe.get_meta(APPLICANT)
+            if (not applicant_meta.has_field("th_candidate_ref") or
+                    not applicant_meta.has_field("th_reception_inquiry")):
+                raise frappe.ValidationError(
+                    "Email-free Applicant fields are not installed; run the approved schema migration")
             # Stable native identity is the opaque, server-issued candidate
             # reference, never an invented or shared email address.
             if not subject.startswith("THV-") or len(subject) != 36:
@@ -693,8 +698,10 @@ def convert_applicant(request_key, name, expected_version):
             # mandatory, and an upgrade must import our verified property
             # setter before a real email-free admission is permitted.
             if is_production() and not applicant.student_email_id:
-                email_field = frappe.get_meta(STUDENT).get_field("student_email_id")
-                if not email_field or email_field.reqd:
+                student_meta = frappe.get_meta(STUDENT)
+                email_field = student_meta.get_field("student_email_id")
+                if (not student_meta.has_field("th_candidate_ref") or
+                        not email_field or email_field.reqd):
                     raise frappe.ValidationError(
                         "Email-free Student conversion is not installed; "
                         "an administrator must migrate the approved Education schema")
