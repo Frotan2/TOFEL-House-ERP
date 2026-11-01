@@ -630,6 +630,14 @@ def convert_applicant(request_key, name, expected_version):
         )
         if not applicant:
             raise frappe.ValidationError("Student Applicant not found")
+        # Re-verify the identity from the independently released placement
+        # immediately before conversion; a previously valid Applicant link
+        # is not permanent permission to convert a different person.
+        if is_production():
+            current_subject = _placement_subject(row)
+            if not current_subject.startswith("THV-") or applicant.th_candidate_ref != current_subject:
+                raise frappe.PermissionError(
+                    "Student Applicant no longer matches the released placement candidate")
         convert_status = applicant.application_status or "Applied"
         if convert_status == "Admitted" and not returning:
             raise frappe.ValidationError(
