@@ -570,6 +570,17 @@ def admit_from_waiting_list(request_key, entry, override=""):
         if previous == 1:
             raise frappe.ValidationError(
                 f"Student {student} is already an active member of {group_name}")
+        # Direct admission from Waiting otherwise bypasses the same priority
+        # rule enforced by offer_waiting_list_seat. An existing unexpired
+        # Offered row already earned its place when the seat was reserved.
+        if row["status"] == "Waiting":
+            waiting = sorted(_open_entries(group_name, ("Waiting",)),
+                             key=_queue_order)
+            if not waiting or waiting[0]["name"] != row["name"]:
+                raise frappe.ValidationError(
+                    "Earlier waiting-list entries have priority. Admit the "
+                    "first eligible waiting entry or withdraw a declined "
+                    "entry with a recorded reason before proceeding")
         seat = assert_seat_available(group_name, student, override,
                                      exclude_entry=row["name"])
         from toefl_house.teaching import _set_membership
