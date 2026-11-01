@@ -83,6 +83,11 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertIn((desk.STUDENT, {"student_email_id": ("like", "%700%"), "enabled": 1}), calls)
         self.assertIn((desk.INQUIRY, {"phone": ("like", "%700%")}), calls)
 
+    def test_afghan_digit_contact_lookup_matches_ascii_phone(self):
+        desk, calls = self.desk(placement=False, applicant=False)
+        desk.lookup("۷۰۰")
+        self.assertIn((desk.INQUIRY, {"phone": ("like", "%700%")}), calls)
+
     def test_closed_inquiry_has_no_action_that_would_be_denied(self):
         desk, _ = self.desk()
         item = desk._walkin_item({
