@@ -333,7 +333,7 @@ frappe.provide("toefl_house.command_pages");
 		version: "Version now",
 		expected_version: "Expected version",
 		status: "Status",
-		subject: "Synthetic subject",
+		subject: "Verified candidate User",
 		purpose: "Purpose",
 		reason: "Reason",
 		program: "Program",
