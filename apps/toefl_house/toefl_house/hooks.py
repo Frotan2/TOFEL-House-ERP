@@ -211,6 +211,9 @@ override_whitelisted_methods = {
 # frappe (delete_doc check_permission_and_not_submitted); drafts cannot
 # exist outside commands because insert is denied on validate.
 doc_events = {
+    "Student Applicant": {
+        "validate": "toefl_house.admission.native_student.protect_applicant_identity",
+    },
     "TH Reception Inquiry": {
         "validate": "toefl_house.reception_intake.protect_inquiry",
         "before_cancel": "toefl_house.reception_intake.protect_inquiry",
