@@ -130,6 +130,37 @@ class RegistrationDeskTests(unittest.TestCase):
         handover = next(x for x in view["sections"] if x["id"] == "handover")["items"]
         self.assertEqual(handover, [])
 
+    def test_reception_student_lookup_uses_own_roster_not_program_coverage(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        calls = []
+        student = {"name": "STU-1", "student_name": "Registered Learner",
+                   "student_email_id": "", "th_candidate_ref": "THV-1",
+                   "enabled": 1, "creation": "2026-09-01"}
+        def read(_surface, doctype, _fields, filters=None, **_kwargs):
+            calls.append((doctype, filters))
+            if doctype == desk.STUDENT:
+                return [student]
+            if doctype == desk.ENROLLMENT:
+                return [{"name": "PE-1", "student": "STU-1",
+                         "program": "GE", "academic_year": "2026",
+                         "academic_term": "Term 1", "docstatus": 1,
+                         "enrollment_date": "2026-09-12"}]
+            if doctype == desk.ROSTER:
+                return []
+            if doctype == desk.GROUP:
+                raise AssertionError("Unrelated class catalog is not membership evidence")
+            return []
+        desk.project_rows = read
+        desk.reception_sections = lambda **kwargs: []
+        results = desk.lookup("STU-1")
+        self.assertEqual(len(results["students"]), 1)
+        item = results["students"][0]
+        self.assertEqual(item["stage"], "Enrolled, class not confirmed")
+        self.assertIn("2026", item["detail"])
+        self.assertIn("Term 1", item["detail"])
+        self.assertEqual(item["next_role"], "Teaching Scheduler")
+        self.assertTrue(any(doctype == desk.ROSTER for doctype, _ in calls))
+
     def test_class_cannot_be_claimed_from_an_unrelated_open_group(self):
         desk, _ = self.desk(placement=False, applicant=False)
         calls = []
