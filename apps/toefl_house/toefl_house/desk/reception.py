@@ -188,6 +188,39 @@ def _person_item(applicant, decisions_by_applicant, subject_to_decision):
     return item
 
 
+def _verified_returning_students(applicants):
+    """Find the one native Student for each admitted applicant, within desk scope.
+
+    Never infer identity from name or a shared phone. A Student must carry the
+    exact native applicant link AND the same verified email, be enabled, and
+    remain visible through the normal branch-scoped Reception projection.
+    Missing, ambiguous or truncated lookups produce no automatic action.
+    """
+    admitted = [row for row in applicants if row.get("application_status") == "Admitted"
+                and row.get("student_email_id")]
+    if not admitted:
+        return {}
+    by_name = {row["name"]: row for row in admitted}
+    student_rows = project_rows(
+        "reception", STUDENT, ["name", "student_applicant", "student_email_id"],
+        filters={"student_applicant": ("in", list(by_name)), "enabled": 1},
+        order_by="name", limit=BOUNCE_WINDOW)
+    if len(student_rows) >= BOUNCE_WINDOW:
+        return {}
+    verified = {}
+    ambiguous = set()
+    for student in student_rows:
+        applicant_id = student.get("student_applicant")
+        original = by_name.get(applicant_id)
+        if not original or student.get("student_email_id") != original["student_email_id"]:
+            continue
+        if applicant_id in verified:
+            ambiguous.add(applicant_id)
+        else:
+            verified[applicant_id] = student["name"]
+    return {name: student for name, student in verified.items() if name not in ambiguous}
+
+
 def _funnel(handover_count):
     return [
         {"label": "Placement sessions running",
@@ -261,6 +294,7 @@ def work():
                             order_by="creation desc", limit=BOUNCE_WINDOW) if subject_to_decision else []
     existing_by_email = {row["student_email_id"]: row for row in existing
                          if row.get("student_email_id")}
+    returning_students = _verified_returning_students(existing)
     decisions_by_applicant = {}
     for row in admissions:
         # Rows are newest-first. Never overwrite the latest with older state.
@@ -275,22 +309,47 @@ def work():
         applicant = existing_by_email.get(subject)
         if applicant and applicant["name"] in pending_applicants:
             continue
-        if applicant:
+        context = {
+            "placement_course_code": row.get("course_code") or "",
+            "placement_level": row.get("internal_level") or "",
+        }
+        if applicant and applicant.get("application_status") == "Admitted":
+            existing_student = returning_students.get(applicant["name"])
+            if existing_student:
+                action = guided_action("Admission Officer", "toefl_house.admission.create_admission",
+                                       "Open returning admission", {
+                                           "student_applicant": applicant["name"],
+                                           "placement_decision": row["name"],
+                                           "existing_student": existing_student, **context})
+                next_step = "Confirm the new program and academic period before opening the returning admission."
+                next_role = "Admission Officer"
+            else:
+                # The native admission command requires a linked existing Student.
+                # A misleading button would fail; never guess an identity here.
+                action = None
+                next_step = ("Ask Academic Manager to verify the previous Student record and branch. "
+                             "Do not create a duplicate applicant or Student.")
+                next_role = "Academic Manager"
+        elif applicant:
             action = guided_action("Admission Officer", "toefl_house.admission.create_admission",
                                    "Open admission", {"student_applicant": applicant["name"],
-                                                      "placement_decision": row["name"]})
+                                                      "placement_decision": row["name"], **context})
             next_step = "Open the admission for the existing applicant."
+            next_role = "Admission Officer"
         else:
             action = guided_action("Admission Officer", "toefl_house.admission.record_applicant",
                                    "Record applicant", {"placement_decision": row["name"],
                                                         "first_name": "", "program": "",
-                                                        "academic_year": ""})
+                                                        "academic_year": "", **context})
             next_step = "Record the applicant, then open the admission."
+            next_role = "Admission Officer"
         handover.append({
-            "id": row["name"], "person": subject, "detail": row.get("course_code") or "",
+            "id": row["name"], "person": subject,
+            "detail": " · ".join(value for value in
+                                 (row.get("course_code") or "", row.get("internal_level") or "") if value),
             "status": row["status"], "stage": "Ready for intake",
             "stage_definition": "Valid released placement with no unconsumed admission.",
-            "next": next_step, "next_role": "Admission Officer",
+            "next": next_step, "next_role": next_role,
             "waiting_since": row.get("released_at"), "action": action,
         })
 

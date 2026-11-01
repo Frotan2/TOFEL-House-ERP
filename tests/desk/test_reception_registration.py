@@ -4,7 +4,7 @@ from tests.desk.test_desk_contract import _import_desk
 
 
 class RegistrationDeskTests(unittest.TestCase):
-    def desk(self, *, placement=True, applicant=True, expired=False):
+    def desk(self, *, placement=True, applicant=True, expired=False, applicant_status="Applied", returning_students=None):
         desk = _import_desk("reception", roles={"Reception", "Admission Officer", "Admission Approver"})
         desk.reception_sections = lambda **_kwargs: []
         desk.project_count = lambda *_args, **_kwargs: 0
@@ -29,8 +29,10 @@ class RegistrationDeskTests(unittest.TestCase):
                     "name": "APP-1", "title": "Learner Name",
                     "student_email_id": "learner@example.test",
                     "program": "GE-P1", "academic_year": "2026",
-                    "application_status": "Applied", "creation": "2026-09-16",
+                    "application_status": applicant_status, "creation": "2026-09-16",
                 }] if applicant else [])
+            if doctype == desk.STUDENT:
+                return list(returning_students or []) if filters and "student_applicant" in filters else []
             if doctype == desk.INQUIRY:
                 return [{
                     "name": "INQ-1", "person_name": "Visitor Name", "phone": "+93700000001",
@@ -51,6 +53,47 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertEqual(handover[0]["action"]["args"]["student_applicant"], "APP-1")
         self.assertEqual(people[0]["action"]["endpoint"], "toefl_house.admission.create_admission")
         self.assertEqual(people[0]["action"]["args"]["placement_decision"], "PL-1")
+
+    def test_admitted_applicant_reuses_verified_linked_student(self):
+        desk, calls = self.desk(applicant_status="Admitted", returning_students=[{
+            "name": "STU-1", "student_applicant": "APP-1",
+            "student_email_id": "learner@example.test",
+        }])
+        view = desk.work()
+        item = next(x for x in view["sections"] if x["id"] == "handover")["items"][0]
+        self.assertEqual(item["action"]["endpoint"], "toefl_house.admission.create_admission")
+        self.assertEqual(item["action"]["args"]["existing_student"], "STU-1")
+        self.assertEqual(item["action"]["args"]["placement_course_code"], "GE-P1")
+        self.assertEqual(item["next_role"], "Admission Officer")
+        self.assertIn((desk.STUDENT, {
+            "student_applicant": ("in", ["APP-1"]), "enabled": 1}), calls)
+
+    def test_admitted_applicant_with_no_visible_native_student_has_no_dead_button(self):
+        desk, _ = self.desk(applicant_status="Admitted")
+        view = desk.work()
+        item = next(x for x in view["sections"] if x["id"] == "handover")["items"][0]
+        self.assertIsNone(item["action"])
+        self.assertEqual(item["next_role"], "Academic Manager")
+        self.assertIn("Do not create a duplicate", item["next"])
+
+    def test_returning_identity_requires_exact_native_link_and_email(self):
+        desk, _ = self.desk(applicant_status="Admitted", returning_students=[
+            {"name": "STU-WRONG", "student_applicant": "APP-1",
+             "student_email_id": "other@example.test"},
+        ])
+        view = desk.work()
+        item = next(x for x in view["sections"] if x["id"] == "handover")["items"][0]
+        self.assertIsNone(item["action"])
+
+    def test_ambiguous_returning_students_are_refused(self):
+        desk, _ = self.desk(applicant_status="Admitted", returning_students=[
+            {"name": "STU-1", "student_applicant": "APP-1",
+             "student_email_id": "learner@example.test"},
+            {"name": "STU-2", "student_applicant": "APP-1",
+             "student_email_id": "learner@example.test"},
+        ])
+        item = next(x for x in desk.work()["sections"] if x["id"] == "handover")["items"][0]
+        self.assertIsNone(item["action"])
 
     def test_unrecorded_candidate_uses_record_applicant(self):
         desk, _ = self.desk(applicant=False)

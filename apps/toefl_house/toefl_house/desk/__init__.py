@@ -108,7 +108,7 @@ PROJECTION_FIELDS = {
         "name", "subject", "status",
     ],
     ("reception", "Student"): [
-        "name", "student_name", "student_email_id", "creation",
+        "name", "student_name", "student_email_id", "student_applicant", "creation",
     ],
     # Cohort truth for the walk-in lookup: the class lifecycle lives on the
     # governed th_class_status custom field (planned/active classes open a

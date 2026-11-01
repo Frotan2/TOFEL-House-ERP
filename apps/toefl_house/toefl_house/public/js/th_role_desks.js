@@ -1516,7 +1516,8 @@ frappe.provide("toefl_house.role_desks");
 			});
 		}
 		const contextKeys = ["outstanding", "expected_amount", "currency", "receipt_list",
-			"recipient", "tuition_bill", "refund_amount", "refund_reason", "supporting_evidence", "approved_by", "approval_evidence"];
+			"recipient", "tuition_bill", "refund_amount", "refund_reason", "supporting_evidence", "approved_by", "approval_evidence",
+			"placement_course_code", "placement_level"];
 		const contextFacts = contextKeys.filter((key) => action.args && action.args[key] !== undefined)
 			.map((key) => `<dt>${escapeText(key.replace(/_/g, " "))}</dt><dd style="white-space:pre-wrap">${escapeText(action.args[key])}</dd>`).join("");
 		const contextFields = contextFacts ? [{ fieldname: "cash_context", fieldtype: "HTML", options: `<dl>${contextFacts}</dl>` }] : [];
