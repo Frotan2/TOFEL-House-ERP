@@ -74,6 +74,15 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertEqual(walkins["items"][0]["action"]["endpoint"],
                          "toefl_house.reception_intake.update_walkin_inquiry")
 
+    def test_walkin_and_student_contact_searches_are_both_scoped(self):
+        desk, calls = self.desk(placement=False, applicant=False)
+        # The desk may read only through the previously scoped and allowlisted
+        # project_rows path. The same user-entered substring must reach both
+        # Student email and inquiry phone filters, not unrestricted SQL.
+        desk.lookup("700")
+        self.assertIn((desk.STUDENT, {"student_email_id": ("like", "%700%"), "enabled": 1}), calls)
+        self.assertIn((desk.INQUIRY, {"phone": ("like", "%700%")}), calls)
+
     def test_conditions_show_evidence_not_unlawful_conversion(self):
         desk, _ = self.desk()
         item = desk._admission_item(
