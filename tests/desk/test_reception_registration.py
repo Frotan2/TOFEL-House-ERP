@@ -130,6 +130,130 @@ class RegistrationDeskTests(unittest.TestCase):
         handover = next(x for x in view["sections"] if x["id"] == "handover")["items"]
         self.assertEqual(handover, [])
 
+    def test_class_cannot_be_claimed_from_an_unrelated_open_group(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        calls = []
+        def read(_surface, doctype, _fields, filters=None, **_kwargs):
+            calls.append((doctype, filters))
+            if doctype == desk.ROSTER:
+                return []
+            if doctype == desk.GROUP:
+                return [{"name": "CLASS-OTHER", "program": "GE",
+                         "academic_year": "2026", "academic_term": "Term 1",
+                         "th_branch": "Branch Alpha", "th_class_status": "Active",
+                         "disabled": 0}]
+            return []
+        desk.project_rows = read
+        info = desk._student_class_information(
+            [{"name": "STU-1", "enabled": 1}],
+            [{"student": "STU-1", "program": "GE", "academic_year": "2026",
+              "academic_term": "Term 1", "docstatus": 1}])
+        self.assertEqual(info["STU-1"]["stage"], "Enrolled, class not confirmed")
+        self.assertNotIn("CLASS-OTHER", info["STU-1"]["detail"])
+        self.assertNotIn((desk.GROUP, None), calls)
+        self.assertEqual(calls[0][0], desk.ROSTER)
+        self.assertEqual(calls[0][1]["student"], ("in", ["STU-1"]))
+
+    def test_unique_verified_roster_shows_dated_session_and_instructor(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        calls = []
+        group = {"name": "CLASS-A", "student_group_name": "GE Morning A",
+                 "program": "GE", "academic_year": "2026",
+                 "academic_term": "Term 1", "th_branch": "Branch Alpha",
+                 "th_class_status": "Active", "disabled": 0}
+        def read(_surface, doctype, _fields, filters=None, **_kwargs):
+            calls.append((doctype, filters))
+            if doctype == desk.ROSTER:
+                return [{"name": "MEM-1", "parent": "CLASS-A",
+                         "student": "STU-1", "active": 1}]
+            if doctype == desk.GROUP:
+                return [group]
+            if doctype == desk.SCHEDULE:
+                return [{"name": "SESSION-1", "student_group": "CLASS-A",
+                         "instructor": "INST-1", "course": "Speaking",
+                         "room": "Room 2", "from_time": "08:00:00",
+                         "to_time": "09:10:00", "schedule_date": "2026-11-10",
+                         "th_session_status": "Scheduled"}]
+            if doctype == desk.INSTRUCTOR:
+                return [{"name": "INST-1", "instructor_name": "Test Instructor"}]
+            return []
+        desk.project_rows = read
+        info = desk._student_class_information(
+            [{"name": "STU-1", "enabled": 1}],
+            [{"student": "STU-1", "program": "GE", "academic_year": "2026",
+              "academic_term": "Term 1", "docstatus": 1}])
+        self.assertEqual(info["STU-1"]["stage"], "Class assigned, sessions scheduled")
+        self.assertIn("GE Morning A", info["STU-1"]["detail"])
+        self.assertIn("Speaking", info["STU-1"]["next"])
+        self.assertIn("Test Instructor", info["STU-1"]["next"])
+        self.assertIn("Room 2", info["STU-1"]["next"])
+        self.assertIn("not a recurring weekly timetable", info["STU-1"]["next"])
+        self.assertIn((desk.SCHEDULE, {
+            "student_group": ("in", ["CLASS-A"]),
+            "schedule_date": (">=", desk.frappe.utils.today()),
+            "th_session_status": "Scheduled",
+        }), calls)
+
+    def test_planned_class_does_not_claim_scheduled_meeting_or_teacher(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        group = {"name": "CLASS-PLAN", "student_group_name": "GE Planned",
+                 "program": "GE", "academic_year": "2026",
+                 "academic_term": "Term 1", "th_branch": "Branch Alpha",
+                 "th_class_status": "Planned", "disabled": 0}
+        observed = []
+        def read(_surface, doctype, _fields, filters=None, **_kwargs):
+            observed.append(doctype)
+            if doctype == desk.ROSTER:
+                return [{"name": "MEM-1", "parent": "CLASS-PLAN",
+                         "student": "STU-1", "active": 1}]
+            if doctype == desk.GROUP:
+                return [group]
+            return []
+        desk.project_rows = read
+        info = desk._student_class_information(
+            [{"name": "STU-1", "enabled": 1}],
+            [{"student": "STU-1", "program": "GE", "academic_year": "2026",
+              "academic_term": "Term 1", "docstatus": 1}])
+        self.assertEqual(info["STU-1"]["stage"], "Class planned")
+        self.assertNotIn(desk.SCHEDULE, observed)
+        self.assertNotIn(desk.INSTRUCTOR, observed)
+
+    def test_multiple_class_rosters_do_not_choose_teacher_arbitrarily(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        called = []
+        def read(_surface, doctype, _fields, filters=None, **_kwargs):
+            called.append(doctype)
+            if doctype == desk.ROSTER:
+                return [{"name": "M1", "parent": "CLASS-1", "student": "S", "active": 1},
+                        {"name": "M2", "parent": "CLASS-2", "student": "S", "active": 1}]
+            if doctype == desk.GROUP:
+                return [{"name": key, "student_group_name": key, "program": "GE",
+                         "academic_year": "2026", "academic_term": "Term 1",
+                         "th_branch": "Branch Alpha", "th_class_status": "Active",
+                         "disabled": 0} for key in ("CLASS-1", "CLASS-2")]
+            return []
+        desk.project_rows = read
+        info = desk._student_class_information(
+            [{"name": "S", "enabled": 1}],
+            [{"student": "S", "program": "GE", "academic_year": "2026",
+              "academic_term": "Term 1", "docstatus": 1}])
+        self.assertEqual(info["S"]["stage"], "Multiple class memberships")
+        self.assertEqual(info["S"]["next_role"], "Academic Manager")
+        self.assertNotIn(desk.SCHEDULE, called)
+        self.assertNotIn(desk.INSTRUCTOR, called)
+
+    def test_large_incomplete_roster_refuses_class_and_session_claims(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        desk.project_rows = lambda _surface, doctype, _fields, **_kw: (
+            [{"name": str(i), "parent": "CLASS", "student": "S", "active": 1}
+             for i in range(desk.BOUNCE_WINDOW)] if doctype == desk.ROSTER else [])
+        info = desk._student_class_information(
+            [{"name": "S", "enabled": 1}],
+            [{"student": "S", "program": "GE", "academic_year": "2026",
+              "academic_term": "Term 1", "docstatus": 1}])
+        self.assertEqual(info["S"]["stage"], "Class details require review")
+        self.assertEqual(info["S"]["next_role"], "Academic Manager")
+
     def test_reception_can_search_student_by_internal_candidate_reference(self):
         desk, calls = self.desk(placement=False, applicant=False)
         ref = "THV-" + "a" * 32
