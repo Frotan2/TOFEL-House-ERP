@@ -679,6 +679,12 @@ frappe.provide("toefl_house.role_desks");
 			if (payload.comparison) body.append(comparisonMarkup(payload.comparison));
 			if (payload.chart) body.append(barChartMarkup(payload.chart));
 		}
+		// Clearly disclose bounded queues, so older contacts never appear
+		// to have been deleted or forgotten when more than 25 remain open.
+		if (payload.notes) {
+			$("<p class='th-page-purpose th-queue-note'></p>")
+				.text(text(payload.notes)).appendTo(body);
+		}
 		// Inline contextual actions below queue
 		renderSectionActions(body, payload.actions);
 	}

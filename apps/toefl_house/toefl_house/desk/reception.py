@@ -296,8 +296,10 @@ def work():
 
     people = [_person_item(row, decisions_by_applicant, subject_to_decision) for row in applicants]
 
+    open_statuses = {"status": ("in", ["New", "Contacted", "Awaiting Placement"])}
+    inquiry_count = project_count("reception", INQUIRY, open_statuses)
     inquiries = project_rows("reception", INQUIRY, INQUIRY_FIELDS,
-                             filters={"status": ("in", ["New", "Contacted", "Awaiting Placement"])},
+                             filters=open_statuses,
                              order_by="creation desc", limit=LIMIT_QUEUES)
     register = guided_action("Reception", "toefl_house.reception_intake.create_walkin_inquiry",
                              "Register a new visitor",
@@ -309,10 +311,13 @@ def work():
         "title": DESKS[SLUG]["title"],
         "primary_action": register,
         "sections": [
-            section("walkins", "New visitors and follow-ups", "queue",
+            section("walkins", f"New visitors and follow-ups ({inquiry_count})", "queue",
                     items=[_walkin_item(row) for row in inquiries],
                     empty_title="No open reception inquiries",
                     empty_body="Register a visitor before placement or any student account exists.",
+                    notes=(f"Showing the newest {len(inquiries)} of {inquiry_count} open visits. "
+                           "Use the search box above for older visitors."
+                           if inquiry_count > len(inquiries) else ""),
                     actions=[register] if register else []),
             section("handover", "Ready for admission intake", "queue", items=handover,
                     empty_title="No released result is waiting",
