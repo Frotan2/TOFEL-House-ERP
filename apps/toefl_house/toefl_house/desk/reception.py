@@ -15,7 +15,7 @@ from toefl_house.desk import (
     LIMIT_LOOKUP,
     LIMIT_QUEUES,
     guided_action,
-    open_cohort_keys,
+    cohort_state,
     project_count,
     project_rows,
     require_desk_audience,
@@ -42,8 +42,13 @@ CASE = "TH Placement Case"
 STUDENT = "Student"
 ENROLLMENT = "Program Enrollment"
 GROUP = "Student Group"
-GROUP_COHORT_FIELDS = ["name", "program", "academic_year", "disabled",
-                       "th_class_status"]
+ROSTER = "Student Group Student"
+SCHEDULE = "Course Schedule"
+INSTRUCTOR = "Instructor"
+GROUP_COHORT_FIELDS = [
+    "name", "student_group_name", "program", "academic_year",
+    "academic_term", "th_branch", "disabled", "th_class_status",
+]
 
 APPLICANT_FIELDS = ["name", "title", "student_email_id", "th_candidate_ref", "th_reception_inquiry", "program",
                     "academic_year", "application_status", "creation"]
@@ -656,6 +661,158 @@ def work():
     }
 
 
+
+def _student_class_information(students, enrollments):
+    """Verified individual roster + dated session facts for Reception.
+
+    A Program Enrollment proves admission to the PROGRAM, never membership
+    in a particular class. Class membership requires that exact Student's
+    active native Student Group Student row, a scoped native Student Group,
+    and the same program/year/term as their latest submitted enrollment.
+    A Course Schedule is a dated session, NOT a recurring weekly timetable.
+    """
+    latest = {}
+    for entry in enrollments:
+        if int(entry.get("docstatus") or 0) == 1 and entry.get("student"):
+            latest.setdefault(entry["student"], entry)
+    active = sorted({
+        row["name"] for row in students
+        if int(row.get("enabled") or 0) == 1 and row.get("name") in latest
+    })
+    if not active:
+        return {}
+    review = {
+        "stage": "Class details require review",
+        "next": "Class records exceed the complete permitted read; ask Academic Manager to verify. Do not quote an unverified class or time.",
+        "next_role": "Academic Manager", "detail": "",
+    }
+    roster = project_rows(
+        "reception", ROSTER, ["name", "parent", "student", "active"],
+        filters={"student": ("in", active), "active": 1},
+        order_by="name asc", limit=BOUNCE_WINDOW)
+    if len(roster) >= BOUNCE_WINDOW:
+        return {name: dict(review) for name in active}
+    names = sorted({row.get("parent") for row in roster if row.get("parent")})
+    groups = project_rows(
+        "reception", GROUP, GROUP_COHORT_FIELDS,
+        filters={"name": ("in", names)},
+        order_by="name asc", limit=BOUNCE_WINDOW) if names else []
+    if len(groups) >= BOUNCE_WINDOW:
+        return {name: dict(review) for name in active}
+    by_name = {group["name"]: group for group in groups}
+    matches = {name: {} for name in active}
+    for member in roster:
+        student = member.get("student")
+        group = by_name.get(member.get("parent"))
+        entry = latest.get(student)
+        if not entry or not group or not group.get("th_branch") or int(group.get("disabled") or 0):
+            continue
+        if cohort_state(group) not in ("Planned", "Active"):
+            continue
+        if (group.get("program"), group.get("academic_year"),
+                group.get("academic_term") or "") != (
+                entry.get("program"), entry.get("academic_year"),
+                entry.get("academic_term") or ""):
+            continue
+        matches[student][group["name"]] = group
+
+    # Only a unique, individually verified Active class can provide a dated
+    # session to this learner. Multiple matching groups are not auto-selected.
+    active_groups = sorted({
+        next(iter(groups_for_student)) for groups_for_student in matches.values()
+        if len(groups_for_student) == 1
+        and cohort_state(next(iter(groups_for_student.values()))) == "Active"
+    })
+    sessions = project_rows(
+        "reception", SCHEDULE,
+        ["name", "student_group", "instructor", "course", "room",
+         "from_time", "to_time", "schedule_date", "th_session_status"],
+        filters={"student_group": ("in", active_groups),
+                 "schedule_date": (">=", frappe.utils.today()),
+                 "th_session_status": "Scheduled"},
+        order_by="schedule_date asc, from_time asc, name asc",
+        limit=BOUNCE_WINDOW) if active_groups else []
+    truncated_sessions = len(sessions) >= BOUNCE_WINDOW
+    instructors = {}
+    if not truncated_sessions and sessions:
+        keys = sorted({row.get("instructor") for row in sessions
+                       if row.get("instructor")})
+        names_rows = project_rows(
+            "reception", INSTRUCTOR, ["name", "instructor_name"],
+            filters={"name": ("in", keys)},
+            order_by="name asc", limit=BOUNCE_WINDOW) if keys else []
+        if len(names_rows) >= BOUNCE_WINDOW:
+            truncated_sessions = True
+        else:
+            instructors = {row["name"]: row.get("instructor_name")
+                           for row in names_rows}
+    sessions_by_group = {}
+    if not truncated_sessions:
+        for row in sessions:
+            sessions_by_group.setdefault(row.get("student_group"), []).append(row)
+
+    result = {}
+    for name in active:
+        choices = matches[name]
+        if not choices:
+            result[name] = {
+                "stage": "Enrolled, class not confirmed",
+                "next": "Submitted program enrollment exists, but this Student has no verified active roster in a matching planned or active class. Ask Teaching Scheduler to confirm placement.",
+                "next_role": "Teaching Scheduler", "detail": "",
+            }
+            continue
+        if len(choices) != 1:
+            result[name] = {
+                "stage": "Multiple class memberships",
+                "next": "Multiple matching class rosters are active for this academic period. Academic Manager must verify the correct class and timetable.",
+                "next_role": "Academic Manager", "detail": "",
+            }
+            continue
+        group = next(iter(choices.values()))
+        label = group.get("student_group_name") or group["name"]
+        detail = "Class: " + label + " (" + group["name"] + ")"
+        if cohort_state(group) == "Planned":
+            result[name] = {
+                "stage": "Class planned",
+                "next": "This Student is on a planned class roster. Classes and meeting times are not confirmed until activation and scheduled sessions.",
+                "next_role": "Teaching Scheduler", "detail": detail,
+            }
+        elif truncated_sessions:
+            result[name] = {
+                "stage": "Class assigned, timetable needs review",
+                "next": "Session or teacher lookup is incomplete; ask Teaching Scheduler to verify the timetable before informing the learner.",
+                "next_role": "Teaching Scheduler", "detail": detail,
+            }
+        else:
+            upcoming = sessions_by_group.get(group["name"], [])
+            if not upcoming:
+                result[name] = {
+                    "stage": "Class assigned, schedule pending",
+                    "next": "An active class roster is verified, but no upcoming Scheduled session is on file. Ask Teaching Scheduler for confirmed dates.",
+                    "next_role": "Teaching Scheduler", "detail": detail,
+                }
+                continue
+            previews = []
+            for session in upcoming[:3]:
+                teacher_id = session.get("instructor")
+                teacher = instructors.get(teacher_id)
+                parts = [
+                    str(session.get("schedule_date") or ""),
+                    str(session.get("from_time") or "") + "–" + str(session.get("to_time") or ""),
+                    session.get("course") or "",
+                    "Room: " + str(session["room"]) if session.get("room") else "Room unassigned",
+                    "Session instructor: " + teacher if teacher else "Instructor name unverified",
+                ]
+                previews.append(" / ".join(part for part in parts if part))
+            result[name] = {
+                "stage": "Class assigned, sessions scheduled",
+                "next": "Next dated session(s): " + "; ".join(previews)
+                        + ". This is not a recurring weekly timetable.",
+                "next_role": None, "detail": detail,
+            }
+    return result
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def lookup(query):
     """Find a person across applicants and students; answer with the stage.
@@ -754,23 +911,24 @@ def lookup(query):
     if student_rows:
         enrollments = project_rows("reception", ENROLLMENT,
                                    ["name", "student", "student_name", "program",
-                                    "academic_year", "enrollment_date", "docstatus"],
+                                    "academic_year", "academic_term",
+                                    "enrollment_date", "docstatus"],
                                    filters={"student": ("in", [r["name"] for r in student_rows]),
                                             "docstatus": 1},
-                                   order_by="enrollment_date desc", limit=BOUNCE_WINDOW)
-        enrolled = {row["student"]: row for row in enrollments}
-        # Cohort truth is the class lifecycle (planned or active), derived
-        # from the same governed fact every other surface uses — never a
-        # flag this desk would have to maintain itself.
-        group_rows = project_rows("reception", GROUP, GROUP_COHORT_FIELDS,
-                                  filters={"disabled": 0},
-                                  order_by="name asc", limit=BOUNCE_WINDOW)
-        open_cohorts = open_cohort_keys(group_rows)
+                                   order_by="enrollment_date desc, name desc", limit=BOUNCE_WINDOW)
+        # Never infer this learner's own class from an unrelated class with
+        # the same program/year. Read the verified individual roster instead.
+        # Incomplete enrollment reads must not generate a false class claim.
+        enrollment_complete = len(enrollments) < BOUNCE_WINDOW
+        enrolled = {}
+        for entry in enrollments:
+            if entry.get("student"):
+                enrolled.setdefault(entry["student"], entry)
+        classes = (_student_class_information(student_rows, enrollments)
+                   if enrollment_complete else {})
         for row in student_rows:
             enrollment = enrolled.get(row["name"])
-            has_cohort = bool(enrollment) and (
-                enrollment.get("program"), enrollment.get("academic_year")
-            ) in open_cohorts
+            class_info = classes.get(row["name"])
             inactive = not bool(int(row.get("enabled", 1) or 0))
             if inactive:
                 stage = {
@@ -780,13 +938,26 @@ def lookup(query):
                     "role": "Academic Manager",
                 }
             else:
-                stage = lifecycle.enrollment_stage(bool(enrollment), has_cohort)
+                stage = ({"label": "Enrollment records need review",
+                          "definition": "The submitted enrollment read is incomplete.",
+                          "next": "Ask Academic Manager to verify the program and period before confirming a class.",
+                          "role": "Academic Manager"}
+                         if not enrollment_complete else
+                         {"label": class_info["stage"],
+                          "definition": "Verified submitted enrollment and individual class-roster facts.",
+                          "next": class_info["next"],
+                          "role": class_info["next_role"]}
+                         if enrollment and class_info else
+                         lifecycle.enrollment_stage(False, False))
             student_items.append({
                 "id": row["name"],
                 "person": row.get("student_name") or row["name"],
                 "detail": " · ".join(x for x in (
                     row.get("th_candidate_ref") or row["name"],
-                    (enrollment or {}).get("program") or "") if x),
+                    (enrollment or {}).get("program") or "",
+                    (enrollment or {}).get("academic_year") or "",
+                    (enrollment or {}).get("academic_term") or "",
+                    (class_info or {}).get("detail") or "") if x),
                 "status": "Inactive" if inactive else "Student",
                 "stage": stage["label"],
                 "stage_definition": stage["definition"],
