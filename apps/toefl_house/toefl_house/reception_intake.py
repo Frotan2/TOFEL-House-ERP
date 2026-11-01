@@ -47,8 +47,8 @@ def _result(doc):
 
 def protect_inquiry(doc, method=None):
     """Fail-closed document lifecycle; direct CRUD cannot bypass command scope."""
-    if method == "on_trash":
-        raise frappe.PermissionError("Reception inquiries cannot be deleted")
+    if method in ("on_trash", "before_cancel", "before_update_after_submit"):
+        raise frappe.PermissionError("Reception inquiries cannot be cancelled, deleted or edited after submit")
     kind, actor = require_command(DOCTYPE)
     if kind not in {"create_walkin_inquiry", "update_walkin_inquiry"}:
         raise frappe.PermissionError("Unauthorized reception inquiry command")
