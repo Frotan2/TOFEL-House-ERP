@@ -696,7 +696,8 @@ const hostileItem = {
 	})(scenario.body);
 	search[0].click();
 	const words = serialize(findAll(scenario.body, "th-search-results")[0]);
-	assert(words.includes("Walk-in visitors (not yet enrolled)"));
+	assert(words.includes("Reception visits (check current stage)"),
+		"reception history must not imply that linked learners are still unenrolled");
 	assert(words.includes("+93700000001"));
 	assert(!words.includes("In the admission funnel"),
 		"reception inquiries must never be represented as academic applicants");
