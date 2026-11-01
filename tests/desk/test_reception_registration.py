@@ -368,6 +368,57 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertIn((desk.STUDENT, {"student_email_id": ("like", "%700%"), "enabled": ("in", [0, 1])}), calls)
         self.assertIn((desk.INQUIRY, {"phone": ("like", "%700%")}), calls)
 
+    def test_search_normalizes_phone_separators_and_afghan_digits(self):
+        desk, calls = self.desk(placement=False, applicant=False)
+        desk.lookup("۰۷۹-۴۳۵ ۷۵۰۹")
+        self.assertIn((desk.INQUIRY, {
+            "phone": ("like", "%0794357509%")
+        }), calls)
+        # A non-phone name query remains literal, not stripped of punctuation.
+        desk.lookup("Ali-Teacher")
+        self.assertIn((desk.INQUIRY, {
+            "phone": ("like", "%Ali-Teacher%")
+        }), calls)
+
+    def test_search_rejects_nontext_input_before_any_data_read(self):
+        desk, calls = self.desk(placement=False, applicant=False)
+        with self.assertRaises(desk.frappe.ValidationError):
+            desk.lookup({"name": "Someone"})
+        self.assertEqual(calls, [])
+
+    def test_targeted_lookup_uses_current_case_release_not_dashboard_page(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        ref = "THV-" + "b" * 32
+        visit = {"name": "INQ-1", "person_name": "Visitor", "phone": "",
+                 "th_branch": "Branch Alpha", "status": "Awaiting Placement",
+                 "version": 2}
+        facts = {
+            desk.INQUIRY: [visit],
+            desk.CASE: [{"name": "CASE-1", "subject": ref,
+                         "th_branch": "Branch Alpha", "reception_inquiry": "INQ-1"}],
+            desk.ATTEMPT: [{"name": "ATT-1", "case_name": "CASE-1",
+                            "status": "Finalized"}],
+            desk.DECISION: [{"name": "DEC-1", "attempt": "ATT-1",
+                             "status": "Released", "expires_at": "2027-01-01 00:00:00"}],
+        }
+        query_log = []
+        def read(surface, doctype, fields, filters=None, **kwargs):
+            query_log.append((doctype, filters))
+            return list(facts.get(doctype, []))
+        desk.project_rows = read
+        item = desk.lookup("INQ-1")["inquiries"][0]
+        self.assertEqual(item["stage"], "Placement result released")
+        self.assertEqual(item["next_role"], "Admission Officer")
+        self.assertIn((desk.ATTEMPT, {"case_name": ("in", ["CASE-1"])}), query_log)
+        # Expired or unpublished decisions cannot be shown as released.
+        facts[desk.DECISION][0]["expires_at"] = "2026-01-01 00:00:00"
+        self.assertEqual(desk.lookup("INQ-1")["inquiries"][0]["stage"],
+                         "Placement case opened")
+        facts[desk.DECISION][0]["expires_at"] = "2027-01-01 00:00:00"
+        facts[desk.DECISION][0]["status"] = "Draft"
+        self.assertEqual(desk.lookup("INQ-1")["inquiries"][0]["stage"],
+                         "Placement case opened")
+
     def test_afghan_digit_contact_lookup_matches_ascii_phone(self):
         desk, calls = self.desk(placement=False, applicant=False)
         desk.lookup("۷۰۰")
