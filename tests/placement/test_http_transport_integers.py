@@ -50,6 +50,9 @@ class PlacementHTTPIntegerTests(unittest.TestCase):
             "verify_attempt", "deliver_attempt", "save_response", "seal_attempt",
             "score_attempt", "review_attempt", "finalize_attempt", "release_decision",
             "allocate_attempt",
+            "create_draft", "revise_draft", "publish",
+            "create_draft_config", "revise_draft_config",
+            "review_config", "publish_config", "retire_config",
         }
         for node in TREE.body:
             if not isinstance(node, ast.FunctionDef) or node.name not in names:

@@ -147,6 +147,7 @@ def _locked_item(name, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def create_draft(request_key, family, revision, content):
+    revision = _web_integer(revision, "revision")
     content = _content(content)
     try:
         validate_family(family, revision, production=is_production())
@@ -177,6 +178,7 @@ def create_draft(request_key, family, revision, content):
 
 @frappe.whitelist(methods=["POST"])
 def revise_draft(request_key, item_name, expected_version, content):
+    expected_version = _web_integer(expected_version, "expected_version")
     content = _content(content)
 
     def work(actor):
@@ -197,6 +199,7 @@ def revise_draft(request_key, item_name, expected_version, content):
 
 @frappe.whitelist(methods=["POST"])
 def publish(request_key, item_name, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         item = _locked_item(item_name, expected_version)
         if item.owner == actor:
@@ -262,6 +265,7 @@ def _locked_config(doctype, name, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def create_draft_config(request_key, config, code, revision, definition):
+    revision = _web_integer(revision, "revision")
     doctype, _ = _config(config)
     definition = _definition(config, definition)
     try:
@@ -282,6 +286,7 @@ def create_draft_config(request_key, config, code, revision, definition):
 
 @frappe.whitelist(methods=["POST"])
 def revise_draft_config(request_key, config, name, expected_version, definition):
+    expected_version = _web_integer(expected_version, "expected_version")
     doctype, _ = _config(config)
     definition = _definition(config, definition)
 
@@ -304,6 +309,7 @@ def revise_draft_config(request_key, config, name, expected_version, definition)
 
 @frappe.whitelist(methods=["POST"])
 def review_config(request_key, config, name, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     doctype, _ = _config(config)
 
     def work(actor):
@@ -324,6 +330,7 @@ def review_config(request_key, config, name, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def publish_config(request_key, config, name, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     doctype, validator = _config(config)
 
     def work(actor):
@@ -354,6 +361,7 @@ def publish_config(request_key, config, name, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def retire_config(request_key, config, name, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     doctype, _ = _config(config)
 
     def work(actor):
