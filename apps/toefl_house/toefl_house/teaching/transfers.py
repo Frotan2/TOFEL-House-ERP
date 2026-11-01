@@ -494,18 +494,6 @@ def approve_class_transfer(request_key, transfer, override=""):
                 "A transfer cannot be approved by the person who requested it")
         source, target, student = row["from_group"], row["to_group"], row["student"]
         effective_day = str(row["effective_date"])
-        # Approve-and-execute changes the live native roster immediately.
-        # Never approve a future-dated request early (or backdate a missed
-        # effective day): Reception would then advertise the wrong class.
-        execution_day = str(frappe.utils.today())
-        if effective_day > execution_day:
-            raise frappe.ValidationError(
-                "The transfer is scheduled for " + effective_day
-                + "; approve and execute it on the effective date")
-        if effective_day < execution_day:
-            raise frappe.ValidationError(
-                "The transfer effective date has passed; cancel and re-request "
-                "under the current approval and roster policies")
         _lock(GROUP, source)
         _lock(GROUP, target)
         evidence, _seats = _eligibility(student, source, target,
@@ -515,6 +503,19 @@ def approve_class_transfer(request_key, transfer, override=""):
         # must not execute if its classes have since changed kind/level.
         _require_transfer_scope(evidence["source"], evidence["target"],
                                 evidence["kind"])
+        # The live roster is changed on approval, not by a future scheduler.
+        # Check the date after policy/scope verification so stronger D5 and
+        # foreign-kind denials remain authoritative, but BEFORE any override
+        # or membership can be consumed.
+        execution_day = str(frappe.utils.today())
+        if effective_day > execution_day:
+            raise frappe.ValidationError(
+                "The transfer is scheduled for " + effective_day
+                + "; approve and execute it on the effective date")
+        if effective_day < execution_day:
+            raise frappe.ValidationError(
+                "The transfer effective date has passed; cancel and re-request "
+                "under the current approval and roster policies")
         seat = capacity.assert_seat_available(target, student, override)
         # Executing the transfer IS a roster change, so it obeys the same owner
         # window as add/move/remove. Without this, an approved transfer would
