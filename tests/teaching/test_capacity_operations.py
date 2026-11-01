@@ -66,6 +66,23 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(seats["reserved"], 1, "an expired offer holds no seat")
         self.assertEqual(seats["available"], 0)
 
+    def test_more_than_maximum_live_offers_cannot_be_counted_as_free_seats(self):
+        # A finite get_all limit must never undercount offers and let staff
+        # reserve a seat that the existing live offers have already held.
+        group = self._full_class(capacity=260, roster=0)
+        for i in range(self.ops.capacity.MAX_ENTRIES):
+            self.ops.seed_waiting(group, f"WAIT-TEST-{i}",
+                                  status="Offered", expires="2026-09-30")
+        self.assertEqual(self.ops.capacity.seat_facts(group)["reserved"],
+                         self.ops.capacity.MAX_ENTRIES)
+        self.ops.seed_waiting(group, "WAIT-OVERFLOW",
+                              status="Offered", expires="2026-09-30")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.seat_facts(group)
+        self.assertIn("complete seat reservation read", str(ctx.exception))
+        with self.assertRaises(ValidationError):
+            self.ops.capacity.assert_seat_available(group, "STU-1")
+
     def test_deactivated_rows_still_occupy_the_native_seat(self):
         # Native Education counts len(students): a moved-out member keeps the
         # seat. Availability must agree with what a native save would accept.
@@ -193,6 +210,18 @@ class CapacityTests(unittest.TestCase):
         with self.assertRaises(ValidationError) as ctx:
             self.ops.capacity.join_waiting_list("join-dup-0001", group, "STU-3")
         self.assertIn("already has an open waiting-list entry", str(ctx.exception))
+
+    def test_full_waiting_queue_refuses_new_join_before_creation(self):
+        group = self._full_class()
+        self.ops.seed_policy()
+        for i in range(self.ops.capacity.MAX_ENTRIES):
+            self.ops.seed_waiting(group, f"WAIT-TEST-{i}", status="Waiting")
+        before = len(self.site.all("TH Class Waiting List"))
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.join_waiting_list(
+                "join-over-cap-0001", group, "STU-3")
+        self.assertIn("reached the complete read limit", str(ctx.exception))
+        self.assertEqual(len(self.site.all("TH Class Waiting List")), before)
 
     def test_offer_holds_a_seat_for_exactly_the_policy_window(self):
         self.ops.seed_class(name="GRP-OPEN", capacity=3, members=["STU-1"])
@@ -391,8 +420,9 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(by_student["STU-3"]["next_command"],
                          "admit_from_waiting_list")
         self.assertEqual(by_student["STU-4"]["next_command"],
-                         "offer_waiting_list_seat")
+                         "leave_waiting_list")
         self.assertIn("expired", by_student["STU-4"]["next"])
+        self.assertIn("Withdraw the old entry", by_student["STU-4"]["next"])
         self.assertEqual(by_student["STU-2"]["next_role"], "Teaching Scheduler")
 
 
