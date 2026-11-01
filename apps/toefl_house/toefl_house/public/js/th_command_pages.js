@@ -74,13 +74,13 @@ frappe.provide("toefl_house.command_pages");
 		"th-placement-author": {
 			role: "Placement Author",
 			title: "TOEFL House Placement Authoring",
-			description: "Create or revise synthetic item and configuration drafts. Publication stays with a different command authority.",
+			description: "Create and revise question-bank and exam-configuration drafts. A different authorized employee must approve publication.",
 			commands: [
 				{
 					label: "Create item draft",
 					method: "toefl_house.api.create_draft",
 					dispatches: ["create_draft"],
-					fields: [data("family", "Synthetic family", { reqd: 1 }), integer("revision", "Revision", { reqd: 1 }), json("content", "Content JSON", { reqd: 1 })],
+					fields: [data("family", "Question family", { reqd: 1 }), integer("revision", "Revision", { reqd: 1 }), json("content", "Content JSON", { reqd: 1 })],
 				},
 				{
 					label: "Revise item draft",
@@ -92,7 +92,7 @@ frappe.provide("toefl_house.command_pages");
 					label: "Create configuration draft",
 					method: "toefl_house.api.create_draft_config",
 					dispatches: ["create_blueprint", "create_policy", "create_course_map"],
-					fields: [select("config", "Configuration type", CONFIG_TYPES, { reqd: 1 }), data("code", "Synthetic code", { reqd: 1 }), integer("revision", "Revision", { reqd: 1 }), json("definition", "Definition JSON", { reqd: 1 })],
+					fields: [select("config", "Configuration type", CONFIG_TYPES, { reqd: 1 }), data("code", "Configuration code", { reqd: 1 }), integer("revision", "Revision", { reqd: 1 }), json("definition", "Definition JSON", { reqd: 1 })],
 				},
 				{
 					label: "Revise configuration draft",
@@ -105,7 +105,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-placement-publisher": {
 			role: "Placement Publisher",
 			title: "TOEFL House Placement Publication",
-			description: "Publish item revisions, govern configuration revisions, and create or allocate synthetic placement cases. Server-side separation checks still apply.",
+			description: "Publish reviewed exam material and allocate placement attempts. The server enforces independent roles and verifies the candidate and Branch.",
 			commands: [
 				{
 					label: "Publish item revision",
@@ -160,7 +160,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-placement-assessment": {
 			role: "Placement Assessor",
 			title: "TOEFL House Placement Assessment",
-			description: "Run objective scoring for a sealed synthetic attempt. The scoring command, not this page, loads protected key material.",
+			description: "Score sealed digital exam answers. Only the server loads confidential answer keys.",
 			commands: [
 				{ label: "Score attempt", method: "toefl_house.api.score_attempt", dispatches: ["score_attempt"], fields: [data("attempt", "Attempt", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 })] },
 			],
@@ -177,7 +177,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-placement-release": {
 			role: "Placement Releaser",
 			title: "TOEFL House Placement Release",
-			description: "Release an already finalized synthetic placement decision. The server independently checks scorer, reviewer and finalizer separation.",
+			description: "Release a finalized placement decision after independent scoring, review and finalization. Production level mapping remains blocked until academically approved.",
 			commands: [
 				{ label: "Release placement decision", method: "toefl_house.api.release_decision", dispatches: ["release_decision"], fields: [data("attempt", "Attempt", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 })] },
 			],
