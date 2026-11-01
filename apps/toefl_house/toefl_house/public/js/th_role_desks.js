@@ -34,7 +34,7 @@ frappe.provide("toefl_house.role_desks");
 			endpoint: "toefl_house.desk.reception.work",
 			title: "TOEFL House Reception Desk",
 			description: "Find any person in the admission funnel and see the stage, what is missing and who acts next.",
-			search: { endpoint: "toefl_house.desk.reception.lookup", placeholder: "Visitor name, contact phone or student email" },
+			search: { endpoint: "toefl_house.desk.reception.lookup", placeholder: "Name, phone, candidate, inquiry or Student ID" },
 		},
 		"th-academic-desk": {
 			endpoint: "toefl_house.desk.academic.work",
@@ -972,6 +972,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "placement_decision", label: "Released placement decision", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "first_name", label: "First name", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "last_name", label: "Family name (optional)", fieldtype: "Data" },
+			{ fieldname: "email", label: "Email (optional)", fieldtype: "Data", description: "Only enter a genuine address; leave blank if none." },
 			{ fieldname: "program", label: "Program", fieldtype: "Link", options: "Program", reqd: 1 },
 			{ fieldname: "academic_year", label: "Choose the academic year", fieldtype: "Link", options: "Academic Year", reqd: 1 },
 			{ fieldname: "branch", label: "Branch", fieldtype: "Link", options: "Branch", description: "Blank: the recording officer's own branch." },
@@ -1940,7 +1941,7 @@ frappe.provide("toefl_house.role_desks");
 		$("<h2 class='th-section-title'></h2>").text(text("Find or register a visitor")).appendTo(block);
 		const body = $("<div class='th-section-body'></div>").appendTo(block);
 		$("<p class='th-page-purpose'></p>").text(text(
-			"Search by name, phone or student email before creating a new record. No email or placement result is required to record a walk-in."
+			"Search by name, phone, Candidate reference, Student ID or inquiry reference. No email or placement result is needed to record a walk-in."
 		)).appendTo(body);
 		$("<div class='th-reception-quick-actions'></div>").appendTo(body);
 		// Search replies can arrive out of order; only the latest search owns the results.
@@ -1949,7 +1950,7 @@ frappe.provide("toefl_house.role_desks");
 		$("<div class='th-search-results' aria-live='polite'></div>").appendTo(body);
 		const input = $("<input type='search' class='form-control th-search-input' />")
 			.attr("placeholder", text(surface.search.placeholder))
-			.attr("aria-label", text("Visitor name, phone or student email"))
+			.attr("aria-label", text("Name, phone, Candidate reference, Student ID or inquiry reference"))
 			.appendTo(bar);
 		$("<button type='button' class='btn btn-primary btn-sm'></button>")
 			.text(text("Search"))
@@ -1969,7 +1970,7 @@ frappe.provide("toefl_house.role_desks");
 		const results = body.find(".th-search-results").empty();
 		const text_ = String(query || "").trim();
 		if (text_.length < 2) {
-			results.append(`<div class='th-alert th-alert--info'><div><p class='th-alert-title'>${escapeText(text("Type more of the name"))}</p><p class='th-alert-body'>${escapeText(text("Enter at least two characters of a name, phone or student email."))}</p></div></div>`);
+			results.append(`<div class='th-alert th-alert--info'><div><p class='th-alert-title'>${escapeText(text("Type more of the name"))}</p><p class='th-alert-body'>${escapeText(text("Enter at least two characters of a name, phone or internal reference."))}</p></div></div>`);
 			return;
 		}
 		const loading = loadingState(results, "Searching…");
