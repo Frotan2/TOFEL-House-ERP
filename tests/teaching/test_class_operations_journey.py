@@ -31,6 +31,29 @@ class RosterControlTests(unittest.TestCase):
         for student in ("STU-1", "STU-2", "STU-3"):
             self.ops.seed_enrollment(student)
 
+    def test_direct_roster_add_cannot_jump_over_waiting_learners(self):
+        self.ops.seed_policy()
+        self.ops.seed_class(name="GRP-SPARE", capacity=3,
+                            members=["STU-1"])
+        first = self.ops.seed_waiting("GRP-SPARE", "STU-3",
+                                      priority=0)
+        before = self.ops.roster("GRP-SPARE")
+        for student in ("STU-2", "STU-3"):
+            with self.subTest(student=student):
+                with self.assertRaises(ValidationError) as ctx:
+                    self.ops.teaching.add_class_member(
+                        f"direct-queue-bypass-{student}", "GRP-SPARE", student)
+                self.assertIn("pending waiting-list entries", str(ctx.exception))
+                self.assertEqual(self.ops.roster("GRP-SPARE"), before)
+        enrolled = self.ops.capacity.admit_from_waiting_list(
+            "first-wait-join-0001", first)
+        self.assertEqual(enrolled["status"], "Admitted")
+        final = self.ops.teaching.add_class_member(
+            "direct-after-queue-0001", "GRP-SPARE", "STU-2")
+        self.assertFalse(final["reactivated"])
+        self.assertEqual(self.ops.roster("GRP-SPARE"),
+                         [("STU-1", 1), ("STU-3", 1), ("STU-2", 1)])
+
     def test_removing_a_member_keeps_the_row_as_history(self):
         self.ops.seed_policy()
         result = self.ops.teaching.remove_class_member(
