@@ -211,6 +211,8 @@ override_whitelisted_methods = {
 doc_events = {
     "TH Reception Inquiry": {
         "validate": "toefl_house.reception_intake.protect_inquiry",
+        "before_cancel": "toefl_house.reception_intake.protect_inquiry",
+        "before_update_after_submit": "toefl_house.reception_intake.protect_inquiry",
         "on_trash": "toefl_house.reception_intake.protect_inquiry",
     },
     # Office 365 identity uniqueness (2026-10-18): one signed subject, at most one User.
