@@ -15,7 +15,8 @@
     "notes",
     "recorded_by",
     "version",
-    "synthetic"
+    "synthetic",
+    "open_identity_key"
   ],
   "fields": [
     {
@@ -78,6 +79,15 @@
       "fieldtype": "Check",
       "default": "1",
       "read_only": 1
+    },
+    {
+      "fieldname": "open_identity_key",
+      "label": "Open inquiry uniqueness key",
+      "fieldtype": "Data",
+      "unique": 1,
+      "read_only": 1,
+      "hidden": 1,
+      "description": "System-only index preventing simultaneous identical open intake. NULL when closed or no contact; not a person identity."
     }
   ],
   "permissions": [],

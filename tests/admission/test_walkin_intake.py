@@ -17,6 +17,10 @@ class PermissionError(Exception):
     pass
 
 
+class DuplicateEntryError(Exception):
+    pass
+
+
 class Row(dict):
     def __getattr__(self, key):
         try:
@@ -54,6 +58,11 @@ class Inquiry:
     def insert(self, ignore_permissions=False):
         assert ignore_permissions
         self.fixture.module.protect_inquiry(self)
+        active_key = self.data.get("open_identity_key")
+        if active_key and any(
+                row.get("open_identity_key") == active_key
+                for row in self.fixture.saved.values()):
+            raise DuplicateEntryError("Duplicate open inquiry key")
         self.fixture.saved[self.name] = dict(self.data)
         self.new = False
         return self
@@ -78,6 +87,7 @@ class ReceptionWalkinTests(unittest.TestCase):
         frappe = ModuleType("frappe")
         frappe.ValidationError = ValidationError
         frappe.PermissionError = PermissionError
+        frappe.DuplicateEntryError = DuplicateEntryError
         frappe.session = SimpleNamespace(user=ACTOR)
         frappe.whitelist = lambda **_kwargs: lambda fn: fn
 
@@ -193,9 +203,21 @@ class ReceptionWalkinTests(unittest.TestCase):
         self.module.create_walkin_inquiry("two", "Visitor B", phone="0794357509")
         self.assertEqual(len(self.saved), 2)
 
+    def test_unique_index_rejects_simultaneous_same_open_intake(self):
+        # Simulate two requests both reading an empty pre-insert duplicate
+        # list. The database uniqueness seam must reject the second write.
+        self.module.frappe.get_all = lambda *_args, **_kwargs: []
+        self.module.create_walkin_inquiry(
+            "first", "Visitor", phone="0794357509")
+        with self.assertRaisesRegex(ValidationError, "open inquiry already exists"):
+            self.module.create_walkin_inquiry(
+                "second", "Visitor", phone="079-435-7509")
+        self.assertEqual(len(self.saved), 1)
+
     def test_closed_visit_permits_a_new_visit(self):
         self.module.create_walkin_inquiry("one", "Visitor", phone="0794357509")
         self.module.update_walkin_inquiry("done", "INQ-001", 1, "Closed", notes="Finished")
+        self.assertIsNone(self.saved["INQ-001"]["open_identity_key"])
         self.module.create_walkin_inquiry("two", "Visitor", phone="0794357509")
         self.assertEqual(len(self.saved), 2)
 

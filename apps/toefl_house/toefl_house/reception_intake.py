@@ -53,6 +53,19 @@ def _phone(value):
     return re.sub(r"[ ()-]", "", normalized)
 
 
+def _open_identity_key(branch, person_name, contact):
+    """One open record for an exact name+phone+Branch, protected by a DB index.
+
+    A name/household phone is NOT proof of person identity. The key is only a
+    duplicate-warning concurrency guard; phone-less inquiries remain distinct.
+    Closed inquiries release the key by storing NULL (not a shared empty string).
+    """
+    if not contact:
+        return None
+    normalized_name = " ".join(person_name.split()).casefold()
+    return "RI-" + digest(["reception-open-v1", branch, normalized_name, contact])[:32]
+
+
 def _result(doc):
     return {
         "name": doc.name, "person_name": doc.person_name,
@@ -70,6 +83,12 @@ def protect_inquiry(doc, method=None):
         raise frappe.PermissionError("Unauthorized reception inquiry command")
     if doc.status not in STATUSES or int(doc.version or 0) < 1:
         raise frappe.ValidationError("Invalid inquiry status or version")
+    expected_open_key = (
+        _open_identity_key(doc.th_branch, doc.person_name, doc.phone or "")
+        if doc.status != "Closed" else None)
+    if doc.get("open_identity_key") != expected_open_key:
+        raise frappe.PermissionError(
+            "Reception open-record uniqueness stamp does not match the verified visitor")
     if (_text(doc.person_name, "Visitor name", required=True) != doc.person_name
             or _phone(doc.phone or "") != (doc.phone or "")
             or _text(doc.program_interest or "", "Program interest") != (doc.program_interest or "")
@@ -131,8 +150,14 @@ def create_walkin_inquiry(request_key, person_name, phone="", program_interest="
             doctype=DOCTYPE, person_name=person, phone=contact,
             program_interest=interest, th_branch=chosen or None,
             notes=remark, status="New", recorded_by=actor,
+            open_identity_key=_open_identity_key(chosen, person, contact),
             version=1, synthetic=record_synthetic_flag()))
-        doc.insert(ignore_permissions=True)
+        try:
+            doc.insert(ignore_permissions=True)
+        except frappe.DuplicateEntryError as exc:
+            raise frappe.ValidationError(
+                "An open inquiry already exists for this visitor and phone in this Branch; "
+                "search and update the existing record") from exc
         return _result(doc), dict(target=doc.name, after_hash=digest([doc.name, person, chosen]))
     return _execute("create_walkin_inquiry", request_key, {
         "person_name": person_name, "phone": phone, "program_interest": program_interest,
@@ -165,6 +190,9 @@ def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes=
         if doc.status == status and (doc.notes or "") == new_notes:
             raise frappe.ValidationError("Nothing changed; update the status or follow-up note")
         doc.status = status
+        doc.open_identity_key = (
+            _open_identity_key(doc.th_branch, doc.person_name, doc.phone or "")
+            if status != "Closed" else None)
         doc.notes = new_notes
         doc.version += 1
         doc.save(ignore_permissions=True)
