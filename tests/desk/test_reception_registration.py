@@ -1,4 +1,5 @@
 """Reception queue and guided-action integration tests on the actual desk source."""
+from datetime import datetime, timedelta
 import unittest
 from tests.desk.test_desk_contract import _import_desk
 
@@ -160,6 +161,23 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertIn("Term 1", item["detail"])
         self.assertEqual(item["next_role"], "Teaching Scheduler")
         self.assertTrue(any(doctype == desk.ROSTER for doctype, _ in calls))
+
+    def test_upcoming_meeting_does_not_include_already_finished_today(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        now = datetime(2026, 11, 11, 10, 0, 0)
+        row = {"schedule_date": "2026-11-11", "to_time": "09:10:00"}
+        self.assertEqual(desk._upcoming_session_state(row, now), "elapsed")
+        row["to_time"] = "10:30:00"
+        self.assertEqual(desk._upcoming_session_state(row, now), "future")
+        row["to_time"] = timedelta(hours=10, minutes=30)
+        self.assertEqual(desk._upcoming_session_state(row, now), "future")
+        row["schedule_date"] = "2026-11-12"
+        self.assertEqual(desk._upcoming_session_state(row, now), "future")
+        row["schedule_date"] = "2026-11-10"
+        self.assertEqual(desk._upcoming_session_state(row, now), "elapsed")
+        row["schedule_date"] = "2026-11-11"
+        row["to_time"] = "not-a-native-time"
+        self.assertEqual(desk._upcoming_session_state(row, now), "invalid")
 
     def test_class_cannot_be_claimed_from_an_unrelated_open_group(self):
         desk, _ = self.desk(placement=False, applicant=False)
