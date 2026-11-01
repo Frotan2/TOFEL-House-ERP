@@ -29,6 +29,8 @@ GUARDS = {
     "Stock Reconciliation": "toefl_house.finance.books.guard_stock_reconciliation",
     # The cashier day close is a control record: command-only on every seam.
     "TH Cashier Day": "toefl_house.finance.cashier.guard",
+    # Visitor identity is a protected operational record, not a free-edit CRM lead.
+    "TH Reception Inquiry": "toefl_house.reception_intake.protect_inquiry",
     "Program Enrollment": "toefl_house.enrollment.guard_program_enrollment",
     "Course Enrollment": "toefl_house.enrollment.guard_course_enrollment",
     "Sales Invoice": "toefl_house.finance.guard_sales_invoice",
@@ -42,6 +44,7 @@ MODULE_FILES = {
     "toefl_house.enrollment": ROOT / "apps/toefl_house/toefl_house/enrollment/__init__.py",
     "toefl_house.finance": ROOT / "apps/toefl_house/toefl_house/finance/__init__.py",
     "toefl_house.finance.cashier": ROOT / "apps/toefl_house/toefl_house/finance/cashier.py",
+    "toefl_house.reception_intake": ROOT / "apps/toefl_house/toefl_house/reception_intake.py",
     "toefl_house.finance.refunds": ROOT / "apps/toefl_house/toefl_house/finance/refunds.py",
     "toefl_house.finance.student_journals": ROOT / "apps/toefl_house/toefl_house/finance/student_journals.py",
     "toefl_house.finance.books": ROOT / "apps/toefl_house/toefl_house/finance/books.py",
