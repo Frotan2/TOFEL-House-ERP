@@ -710,6 +710,16 @@ frappe.provide("toefl_house.command_pages");
 					method: "toefl_house.api.save_response", type: "POST", args: pendingWrite,
 					callback(response) {
 						const result = response.message || {};
+						if (result.status === "Sealed") {
+							// The response arrived after the authoritative server
+							// deadline, so the command sealed unanswered items.
+							active = null;
+							pendingWrite = null;
+							setBusy(false);
+							draw();
+							inform("The server timed out and sealed this exam. No further answers can be saved.");
+							return;
+						}
 						if (result.occurrence !== question.order || !Number.isInteger(Number(result.revision))) {
 							inform("Unconfirmed answer save. Reload this attempt before doing anything else.");
 							setBusy(false);
@@ -843,7 +853,34 @@ frappe.provide("toefl_house.command_pages");
 						return;
 					}
 					if (state.deadline_reached) {
-						inform("The server deadline has passed. Do not collect new answers; use the guarded Timeout seal command.");
+						inform("The server deadline has passed. No new answers can be entered.");
+						const timeoutSeal = $("<button type='button' class='btn btn-danger'></button>")
+							.text(text("Seal timed-out exam")).appendTo(content);
+						timeoutSeal.on("click", () => {
+							if (pending) return;
+							frappe.confirm(text(
+								"Permanently seal the timed-out exam now? All unanswered questions will be marked missing."
+							), () => {
+								if (pending) return;
+								setBusy(true);
+								frappe.call({
+									method: "toefl_house.api.seal_attempt", type: "POST",
+									args: {
+										request_key: newRequestKey(), attempt: state.attempt,
+										expected_version: Number(state.version), reason: "Timeout",
+									},
+									callback(reply) {
+										setBusy(false);
+										if ((reply.message || {}).status === "Sealed") checkStatus();
+										else inform("Timeout seal was not confirmed. Recheck the current attempt status.");
+									},
+									error() {
+										setBusy(false);
+										inform("Timeout seal outcome is unknown. Recheck status before retrying.");
+									},
+								});
+							});
+						});
 						return;
 					}
 					if (state.status === "Allocated") {
