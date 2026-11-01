@@ -70,6 +70,7 @@ class ReceptionWalkinTests(unittest.TestCase):
         previous = dict(sys.modules)
         self.addCleanup(lambda: (sys.modules.clear(), sys.modules.update(previous)))
         self.saved = {}
+        self.placement_attached = False
         self.kind = None
         self.audit = []
         f = self
@@ -97,7 +98,10 @@ class ReceptionWalkinTests(unittest.TestCase):
             return Inquiry(f, f.saved[name])
 
         frappe.db = SimpleNamespace(
-            exists=lambda doctype, value: doctype == "Branch" and value == "Branch Alpha",
+            exists=lambda doctype, value: (
+                doctype == "Branch" and value == "Branch Alpha"
+                or doctype == "TH Placement Case" and f.placement_attached
+                and value == {"reception_inquiry": "INQ-001"}),
             get_value=get_value)
         frappe.get_doc = get_doc
         def get_all(doctype, filters=None, fields=None, limit_page_length=None):
@@ -234,6 +238,19 @@ class ReceptionWalkinTests(unittest.TestCase):
         self.module.update_walkin_inquiry("close", "INQ-001", 2, "Closed")
         with self.assertRaises(ValidationError):
             self.module.update_walkin_inquiry("reopen", "INQ-001", 3, "Contacted")
+
+    def test_cannot_downgrade_referred_visitor_after_placement_case_created(self):
+        self.module.create_walkin_inquiry("new", "Visitor")
+        self.module.update_walkin_inquiry(
+            "sent", "INQ-001", 1, "Awaiting Placement")
+        self.placement_attached = True
+        with self.assertRaisesRegex(PermissionError, "linked to Placement"):
+            self.module.update_walkin_inquiry(
+                "reverse", "INQ-001", 2, "Contacted")
+        self.assertEqual(self.saved["INQ-001"]["version"], 2)
+        self.module.update_walkin_inquiry(
+            "close", "INQ-001", 2, "Closed")
+        self.assertEqual(self.saved["INQ-001"]["status"], "Closed")
 
     def test_unchanged_followup_does_not_create_an_audit_revision(self):
         self.module.create_walkin_inquiry("new", "Visitor")

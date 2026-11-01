@@ -91,6 +91,13 @@ def protect_inquiry(doc, method=None):
     for key in ("person_name", "phone", "program_interest", "th_branch", "recorded_by", "synthetic"):
         if (doc.get(key) or "") != (original.get(key) or ""):
             raise frappe.PermissionError("An inquiry's original identity and branch cannot be silently rewritten")
+    if original.status == "Awaiting Placement" and doc.status == "Contacted":
+        # Once Placement has consumed a referral, Reception must not move
+        # its status backwards and incorrectly offer another test.
+        # Notes and eventual closure remain available.
+        if frappe.db.exists("TH Placement Case", {"reception_inquiry": doc.name}):
+            raise frappe.PermissionError(
+                "This inquiry is already linked to Placement; do not move it backwards")
 
 
 @frappe.whitelist(methods=["POST"])

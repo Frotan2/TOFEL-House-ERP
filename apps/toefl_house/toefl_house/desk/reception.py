@@ -240,10 +240,18 @@ def _walkin_item(row, progress=None):
     # protected inquiry projection and are escaped by the queue renderer.
     note = (row.get("notes") or "").strip()
     preview = ("Latest note: " + note[:117] + ("…" if len(note) > 117 else "")) if note else ""
-    stage, next_step, next_role = progress or (
-        "Pre-registration",
-        "Contact the visitor and arrange the separately authorized placement or admission step.",
-        "Reception")
+    if progress:
+        stage, next_step, next_role = progress
+    elif row.get("status") == "Awaiting Placement":
+        stage, next_step, next_role = (
+            "Awaiting placement allocation",
+            "Give this Inquiry reference to Placement Publisher; do not create a second visitor record.",
+            "Placement Publisher")
+    else:
+        stage, next_step, next_role = (
+            "Pre-registration",
+            "Contact the visitor and arrange the separately authorized placement or admission step.",
+            "Reception")
     return {
         "id": row["name"],
         "person": row.get("person_name") or "",

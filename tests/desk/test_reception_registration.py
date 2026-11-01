@@ -280,6 +280,15 @@ class RegistrationDeskTests(unittest.TestCase):
         visit = {"name": "INQ-1", "th_branch": "Branch Alpha"}
         self.assertEqual(desk._walkin_progress([visit], []), {})
 
+    def test_awaiting_placement_inquiry_points_to_publisher_not_reception(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        row = {"name": "INQ-1", "person_name": "Visitor",
+               "status": "Awaiting Placement", "version": 2}
+        item = desk._walkin_item(row)
+        self.assertEqual(item["stage"], "Awaiting placement allocation")
+        self.assertEqual(item["next_role"], "Placement Publisher")
+        self.assertIn("INQ-1", item["detail"])
+
     def test_walkin_registration_is_visible_even_without_placement(self):
         desk, _ = self.desk(placement=False, applicant=False)
         view = desk.work()
