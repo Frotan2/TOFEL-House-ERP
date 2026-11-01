@@ -91,11 +91,16 @@ def _walkin_item(row):
                              "status": ("Contacted" if row.get("status") == "New"
                                         else row.get("status")),
                              "notes": row.get("notes") or ""})
+    # A short note preview allows staff to see the latest contact instruction
+    # without repeatedly opening the editor. Full notes remain on the
+    # protected inquiry projection and are escaped by the queue renderer.
+    note = (row.get("notes") or "").strip()
+    preview = ("Latest note: " + note[:117] + ("…" if len(note) > 117 else "")) if note else ""
     return {
         "id": row["name"],
         "person": row.get("person_name") or "",
         "detail": " · ".join(part for part in
-                             (row.get("phone") or "", row.get("program_interest") or "") if part),
+                             (row.get("phone") or "", row.get("program_interest") or "", preview) if part),
         "status": row.get("status") or "New",
         "stage": "Pre-registration",
         "stage_definition": "Reception inquiry only; no candidate account, placement, enrollment or bill was created.",

@@ -148,6 +148,16 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertIn("+93700000001", results["inquiries"][0]["detail"])
         self.assertIn("English", results["inquiries"][0]["detail"])
 
+    def test_latest_followup_note_is_visible_but_bounded(self):
+        desk, _ = self.desk()
+        item = desk._walkin_item({
+            "name": "INQ-1", "person_name": "Visitor", "status": "Contacted",
+            "version": 2, "notes": "A" * 250, "creation": "2026-10-01",
+        })
+        self.assertIn("Latest note:", item["detail"])
+        self.assertIn("…", item["detail"])
+        self.assertLess(len(item["detail"]), 160)
+
     def test_closed_inquiry_has_no_action_that_would_be_denied(self):
         desk, _ = self.desk()
         item = desk._walkin_item({

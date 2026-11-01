@@ -8,7 +8,7 @@
 3. Enter the person's **real full name**. Add an optional contact phone, interested program and brief operational note. Every inquiry needs a valid Branch. With one assigned branch the backend selects it; with multiple assigned branches the staff member must choose one. An unassigned branch is rejected.
 4. Save once. The system provides a unique internal inquiry reference and keeps an auditable operation receipt. The visitor appears in the follow-up queue.
 5. Search by name or phone before registering another contact; same-family phone numbers alone are not proof of the same identity.
-6. Use **Update follow-up** to mark **Contacted**, **Awaiting Placement**, or **Closed**, adding the real next-step note. A closed record remains in the audit trail and is no longer editable from this queue.
+6. Use **Update follow-up** to mark **Contacted**, **Awaiting Placement**, or **Closed**, adding the real next-step note. The queue displays only a short preview of the latest note. Closing a visit requires explicit confirmation; its record remains in the audit trail and is no longer editable from this queue.
 
 **This is not student registration.** No actual Student, User, placement case, academic enrollment, receipt, invoice or tuition charge is created merely because a visitor walks in. Do not enter invented or third-party email addresses.
 
