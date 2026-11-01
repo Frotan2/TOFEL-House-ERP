@@ -66,7 +66,7 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(seats["reserved"], 1, "an expired offer holds no seat")
         self.assertEqual(seats["available"], 0)
 
-    def test_more_than_maximum_live_offers_cannot_be_counted_as_free_seats(self):
+    def test_more_than_maximum_live_offers_are_counted_exactly(self):
         # A finite get_all limit must never undercount offers and let staff
         # reserve a seat that the existing live offers have already held.
         group = self._full_class(capacity=260, roster=0)
@@ -75,13 +75,15 @@ class CapacityTests(unittest.TestCase):
                                   status="Offered", expires="2026-09-30")
         self.assertEqual(self.ops.capacity.seat_facts(group)["reserved"],
                          self.ops.capacity.MAX_ENTRIES)
-        self.ops.seed_waiting(group, "WAIT-OVERFLOW",
-                              status="Offered", expires="2026-09-30")
-        with self.assertRaises(ValidationError) as ctx:
-            self.ops.capacity.seat_facts(group)
-        self.assertIn("complete seat reservation read", str(ctx.exception))
-        with self.assertRaises(ValidationError):
-            self.ops.capacity.assert_seat_available(group, "STU-1")
+        overflow = self.ops.seed_waiting(group, "WAIT-OVERFLOW",
+                                         status="Offered", expires="2026-09-30")
+        seats = self.ops.capacity.seat_facts(group)
+        self.assertEqual(seats["reserved"], self.ops.capacity.MAX_ENTRIES + 1)
+        self.assertEqual(seats["available"], 260 - (self.ops.capacity.MAX_ENTRIES + 1))
+        # A held seat for the exact entry being admitted is counted once,
+        # not again as a competing reservation.
+        self.assertEqual(self.ops.capacity.reserved_offers(
+            group, exclude_entry=overflow), self.ops.capacity.MAX_ENTRIES)
 
     def test_deactivated_rows_still_occupy_the_native_seat(self):
         # Native Education counts len(students): a moved-out member keeps the
