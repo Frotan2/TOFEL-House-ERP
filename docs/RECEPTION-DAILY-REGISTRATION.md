@@ -5,7 +5,7 @@
 ## Walk-in: no email or placement result
 1. Sign in with your own Reception account and open **TOEFL House Reception Desk**.
 2. Under **New visitors and follow-ups**, choose **Register a new visitor**.
-3. Enter the person's **real full name**. Add contact phone (optional, Afghan numerals work), interested program and brief contact note. Choose your authorized branch if the account has more than one branch.
+3. Enter the person's **real full name**. Add an optional contact phone, interested program and brief operational note. Every inquiry needs a valid Branch. With one assigned branch the backend selects it; with multiple assigned branches the staff member must choose one. An unassigned branch is rejected.
 4. Save once. The system provides a unique internal inquiry reference and keeps an auditable operation receipt. The visitor appears in the follow-up queue.
 5. Search by name or phone before registering another contact; same-family phone numbers alone are not proof of the same identity.
 6. Use **Update follow-up** to mark **Contacted**, **Awaiting Placement**, or **Closed**, adding the real next-step note. A closed record remains in the audit trail and is no longer editable from this queue.
@@ -30,6 +30,10 @@
 - No final production readiness is implied by successful static tests. Test full Windows on a restored, synthetic-only site first, including role boundaries, same-key replay, branching, candidate verification, admission and ledger reconciliation.
 
 ## Acceptance checklist for an independent reviewer
+- [ ] All UI labels, statuses, dialogs, validation messages, staff help, and developer-authored code comments in this workflow are in English. Real visitor names remain as provided.
+- [ ] Search results never revert to an older query response, even when HTTP requests finish out of order.
+- [ ] Double-clicking Save while one registration POST is pending cannot send two requests; a failed request can be retried with the same operation key.
+- [ ] Visitor wildcard characters are treated literally, and updating a visit without any changed data does not create an audit revision.
 - [ ] New, phone-free walk-in records without any email or candidate account.
 - [ ] Afghan and Latin phone numerals normalize and search consistently.
 - [ ] Same-key replay yields exactly one inquiry; different-key multi-submit is explicitly monitored.
