@@ -277,12 +277,15 @@ def _walkin_progress(inquiries, released_subjects):
             elif student["name"] in enrolled:
                 result[inquiry_id] = (
                     "Enrollment on file",
-                    "A submitted Program Enrollment exists for this Student. Verify the exact admission period and assigned class before confirming attendance.",
+                    "A submitted Program Enrollment exists. Search verified Student ID "
+                    + student["name"]
+                    + " in Reception Desk for the class and upcoming dated sessions; confirm the academic period before attendance.",
                     "Academic Manager")
             else:
                 result[inquiry_id] = (
                     "Student profile created",
-                    "Student record exists. Ask Enrollment Officer to complete Program Enrollment.",
+                    "Student ID " + student["name"]
+                    + " exists. Ask Enrollment Officer to complete Program Enrollment; no class schedule can yet be promised.",
                     "Enrollment Officer")
         elif applicant:
             result[inquiry_id] = (
