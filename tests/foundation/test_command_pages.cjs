@@ -234,8 +234,9 @@ const client = {
 };
 vm.runInNewContext(source, client, { filename: SCRIPT });
 client.frappe.pages["th-placement-invigilation"].on_page_load({});
-assert.strictEqual(buttons.length, 4, "invigilation Page must render its four guarded actions");
-buttons[0]();
+assert.strictEqual(buttons.length, 5,
+	"invigilation must render one supervised-session load control plus its four guarded commands");
+buttons[1](); // The first control loads the guarded supervised exam; the second verifies the attempt.
 assert.strictEqual(dialogs.length, 1, "action must open a native Dialog");
 assert(dialogs[0].shown, "native Dialog must be shown");
 dialogs[0].options.primary_action(dialogs[0].get_values());
