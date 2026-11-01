@@ -6,7 +6,7 @@ from tests.desk.test_desk_contract import _import_desk
 class RegistrationDeskTests(unittest.TestCase):
     def desk(self, *, placement=True, applicant=True, expired=False):
         desk = _import_desk("reception", roles={"Reception", "Admission Officer", "Admission Approver"})
-        desk.reception_sections = lambda: []
+        desk.reception_sections = lambda **_kwargs: []
         desk.project_count = lambda *_args, **_kwargs: 0
         desk._subject_index = lambda rows: {
             row["name"]: "learner@example.test" for row in rows}
