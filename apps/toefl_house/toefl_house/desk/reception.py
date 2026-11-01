@@ -48,6 +48,7 @@ SCHEDULE = "Course Schedule"
 INSTRUCTOR = "Instructor"
 ASSIGNMENT = "TH Teaching Assignment"
 SUSPENSION = "TH Class Suspension"
+TRANSFER = "TH Class Transfer"
 GROUP_COHORT_FIELDS = [
     "name", "student_group_name", "program", "academic_year",
     "academic_term", "th_branch", "disabled", "th_class_status",
@@ -839,6 +840,30 @@ def _student_class_information(students, enrollments):
         for row in sessions:
             sessions_by_group.setdefault(row.get("student_group"), []).append(row)
 
+    # Surface only REQUESTED transfers that cite this learner's own
+    # verified source roster. An unapproved move never changes class truth.
+    source_students = sorted({
+        student for student, groups_for_student in matches.items()
+        if len(groups_for_student) == 1
+    })
+    pending = project_rows(
+        "reception", TRANSFER,
+        ["name", "student", "from_group", "to_group", "transfer_kind",
+         "status", "effective_date"],
+        filters={"student": ("in", source_students), "status": "Requested"},
+        order_by="effective_date asc, name asc",
+        limit=BOUNCE_WINDOW) if source_students else []
+    complete_transfers = len(pending) < BOUNCE_WINDOW
+    pending_by_student = {}
+    for transfer in pending:
+        if transfer.get("transfer_kind") != "Class":
+            continue
+        student = transfer.get("student")
+        groups_for_student = matches.get(student, {})
+        if len(groups_for_student) != 1 or transfer.get("from_group") not in groups_for_student:
+            continue
+        pending_by_student.setdefault(student, []).append(transfer)
+
     result = {}
     for name in active:
         choices = matches[name]
@@ -948,6 +973,49 @@ def _student_class_information(students, enrollments):
                         + ". This is not a recurring weekly timetable.",
                 "next_role": None, "detail": detail,
             }
+    for name in active:
+        if name not in result:
+            continue
+        if not complete_transfers and len(matches.get(name, {})) == 1:
+            result[name] = {
+                "stage": "Class transfer status needs review",
+                "next": "The class transfer register exceeds the complete permitted read. Ask Academic Manager to verify the current roster and pending moves.",
+                "next_role": "Academic Manager",
+                "detail": result[name].get("detail", ""),
+            }
+            continue
+        rows = pending_by_student.get(name, [])
+        if not rows:
+            continue
+        if len(rows) != 1:
+            result[name] = {
+                "stage": "Class transfer requests need review",
+                "next": "Multiple requested transfers refer to the current class. Academic Manager must resolve them before confirming a new class.",
+                "next_role": "Academic Manager",
+                "detail": result[name].get("detail", ""),
+            }
+            continue
+        transfer = rows[0]
+        try:
+            target_day = date.fromisoformat(str(transfer.get("effective_date") or ""))
+        except (ValueError, TypeError):
+            result[name] = {
+                "stage": "Class transfer requests need review",
+                "next": "The pending transfer date is invalid. Ask Academic Manager to verify the original request.",
+                "next_role": "Academic Manager",
+                "detail": result[name].get("detail", ""),
+            }
+            continue
+        target = transfer.get("to_group") or "unverified"
+        progress = ("its requested date has passed and it needs academic review"
+                    if target_day < date.fromisoformat(str(frappe.utils.today()))
+                    else "it has not been approved or executed")
+        result[name]["next"] += (
+            " Transfer REQUESTED to class " + target
+            + " for " + target_day.isoformat()
+            + "; " + progress
+            + ". Current class stays as recorded above until the roster changes.")
+        result[name]["next_role"] = "Academic Manager"
     return result
 
 
