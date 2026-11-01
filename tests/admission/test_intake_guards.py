@@ -130,6 +130,7 @@ class IntakeGuardTests(unittest.TestCase):
                 return doc
             if doctype == "Student Applicant":
                 return SimpleNamespace(name=name, program="TH-PROG",
+                                       student_email_id="subject@example.test",
                                        academic_year="2026-27",
                                        application_status=fake.prior_status,
                                        paid=fake.prior_paid)
