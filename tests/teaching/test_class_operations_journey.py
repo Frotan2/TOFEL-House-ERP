@@ -181,6 +181,9 @@ class ClassOperationsJourneyTests(unittest.TestCase):
                 "journey-transfer-0001", "STU-2", "GRP-A", "GRP-B",
                 "moves to the afternoon cohort", "2026-09-25")
             self.assertEqual(transfer["transfer_kind"], "Class")
+            # A pending future transfer is NOT a roster move. Execute when
+            # the approved effective day arrives in this synthetic journey.
+            self.site.today = "2026-09-25"
             self.ops.login(APPROVER)
             executed = self.ops.transfers.approve_class_transfer(
                 "journey-transfer-0002", transfer["name"])
