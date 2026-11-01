@@ -83,6 +83,16 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertIn((desk.STUDENT, {"student_email_id": ("like", "%700%"), "enabled": 1}), calls)
         self.assertIn((desk.INQUIRY, {"phone": ("like", "%700%")}), calls)
 
+    def test_closed_inquiry_has_no_action_that_would_be_denied(self):
+        desk, _ = self.desk()
+        item = desk._walkin_item({
+            "name": "INQ-CLOSED", "person_name": "Visitor", "status": "Closed",
+            "version": 2, "notes": "", "creation": "2026-09-01",
+        })
+        self.assertIsNone(item["action"])
+        self.assertIsNone(item["next_role"])
+        self.assertIn("closed", item["next"])
+
     def test_conditions_show_evidence_not_unlawful_conversion(self):
         desk, _ = self.desk()
         item = desk._admission_item(
