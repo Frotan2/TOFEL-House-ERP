@@ -668,6 +668,34 @@ def work():
 
 
 
+def _upcoming_session_state(row, now):
+    """Return future, elapsed or invalid for a native dated Course Schedule.
+
+    Native TIME values can be strings, datetime.time or MariaDB timedeltas.
+    A class session earlier today must not be advertised as NEXT just because
+    its stored lifecycle still says Scheduled.
+    """
+    try:
+        day = date.fromisoformat(str(row.get("schedule_date") or ""))
+        today = now.date()
+        if day < today:
+            return "elapsed"
+        end_value = str(row.get("to_time") or "")
+        bits = end_value.split(":")
+        if len(bits) != 3 or not all(bit.isascii() and bit.isdecimal() for bit in bits):
+            return "invalid"
+        hours, minutes, seconds = (int(bit) for bit in bits)
+        if not (0 <= hours <= 23 and 0 <= minutes <= 59 and 0 <= seconds <= 59):
+            return "invalid"
+        if day > today:
+            return "future"
+        end_second = hours * 3600 + minutes * 60 + seconds
+        now_second = now.hour * 3600 + now.minute * 60 + now.second
+        return "future" if end_second > now_second else "elapsed"
+    except (TypeError, ValueError, AttributeError, OverflowError):
+        return "invalid"
+
+
 def _student_class_information(students, enrollments):
     """Verified individual roster + dated session facts for Reception.
 
@@ -739,6 +767,13 @@ def _student_class_information(students, enrollments):
         order_by="schedule_date asc, from_time asc, name asc",
         limit=BOUNCE_WINDOW) if active_groups else []
     truncated_sessions = len(sessions) >= BOUNCE_WINDOW
+    # Today may already be over for a Scheduled row: include only sessions
+    # that have not ended. Unknown TIME representations fail closed.
+    now = frappe.utils.now_datetime()
+    session_states = [(_upcoming_session_state(row, now), row) for row in sessions]
+    if any(state == "invalid" for state, _row in session_states):
+        truncated_sessions = True
+    sessions = [row for state, row in session_states if state == "future"]
     # An already Scheduled meeting can subsequently become subject to a
     # class-wide or student-specific suspension. Do not promise attendance
     # from the schedule alone, and never disclose a private suspension reason.
