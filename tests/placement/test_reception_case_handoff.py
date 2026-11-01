@@ -140,6 +140,9 @@ class ReceptionToPlacementHandoffTests(unittest.TestCase):
         self.mode_stamp = 1
         with self.assertRaises(Denied):
             self.create()
+        self.mode_stamp = None
+        with self.assertRaises(Denied):
+            self.create()
         self.mode_stamp = 0
         self.has_inquiry = False
         with self.assertRaises(Denied):
