@@ -47,6 +47,7 @@ TABLES = {
     "course_map": "`tabTH Placement Course Map Revision`",
     "decision": "`tabTH Placement Decision`",
     "admission_decision": "`tabTH Admission Decision`",
+    "reception_inquiry": "`tabTH Reception Inquiry`",
     "enrollment_exit": "`tabTH Enrollment Exit`",
     "contract": "`tabTH Instructor Contract`",
     "assignment": "`tabTH Teaching Assignment`",
@@ -118,6 +119,7 @@ BRANCH_KINDS = {
     "Student Applicant": "student_applicant",
     "Program Enrollment": "program_enrollment",
     "TH Admission Decision": "admission_decision",
+    "TH Reception Inquiry": "reception_inquiry",
     "TH Enrollment Exit": "enrollment_exit",
     "TH Teaching Assignment": "assignment",
     "TH Correction Request": "correction_request",
@@ -336,6 +338,16 @@ def _doc_branches_guarded(doc, kind):
                     branches.add(branch)
         return branches
     return set()
+
+
+def reception_inquiry_has_permission(doc, ptype=None, user=None, **kwargs):
+    """No general document CRUD/read. Reception uses scoped desk projections."""
+    return False
+
+
+def query_reception_inquiry(user=None):
+    """No direct list export of contact details; only guarded desk queries."""
+    return "1=0"
 
 
 def branch_has_permission(doc, ptype=None, user=None, **kwargs):
