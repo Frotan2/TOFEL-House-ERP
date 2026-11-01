@@ -124,7 +124,7 @@ PROJECTION_FIELDS = {
     ("reception", "Student Applicant"): [
         # `title` is the pinned native full-name column (education
         # 93bc70757533); Student Applicant has no `applicant_name` column.
-        "name", "title", "student_email_id", "th_candidate_ref", "program",
+        "name", "title", "student_email_id", "th_candidate_ref", "th_reception_inquiry", "program",
         "academic_year", "application_status", "creation",
     ],
     ("reception", "TH Admission Decision"): [

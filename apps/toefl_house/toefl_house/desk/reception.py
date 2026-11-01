@@ -44,7 +44,7 @@ GROUP = "Student Group"
 GROUP_COHORT_FIELDS = ["name", "program", "academic_year", "disabled",
                        "th_class_status"]
 
-APPLICANT_FIELDS = ["name", "title", "student_email_id", "th_candidate_ref", "program",
+APPLICANT_FIELDS = ["name", "title", "student_email_id", "th_candidate_ref", "th_reception_inquiry", "program",
                     "academic_year", "application_status", "creation"]
 ADMISSION_FIELDS = ["name", "student_applicant", "program", "academic_year",
                     "placement_decision", "status", "accepted", "native_student",
@@ -121,8 +121,112 @@ def _referral_display_names(subjects):
     return result
 
 
-def _walkin_item(row):
-    """Visitor is NOT yet an Applicant, Student or enrolled fee payer."""
+def _walkin_progress(inquiries, released_subjects):
+    """What happened after this inquiry, using only branch-scoped, verified links.
+
+    No loose name or shared-phone joins; no sensitive grades, keys or invoices.
+    Missing/ambiguous/truncated projections NEVER claim an identity match.
+    """
+    if not inquiries or len(inquiries) >= BOUNCE_WINDOW:
+        return {}
+    by_inquiry = {row["name"]: row for row in inquiries}
+    ids = sorted(by_inquiry)
+    cases = project_rows(
+        "reception", CASE,
+        ["name", "subject", "status", "th_branch", "reception_inquiry"],
+        filters={"reception_inquiry": ("in", ids)},
+        order_by="name", limit=BOUNCE_WINDOW)
+    if len(cases) >= BOUNCE_WINDOW:
+        return {}
+    case_by_inquiry = {}
+    for case in cases:
+        origin = by_inquiry.get(case.get("reception_inquiry"))
+        if origin and case.get("th_branch") and origin.get("th_branch") == case.get("th_branch"):
+            case_by_inquiry[origin["name"]] = case
+    if not case_by_inquiry:
+        return {}
+    applicants = project_rows(
+        "reception", APPLICANT,
+        ["name", "th_candidate_ref", "th_reception_inquiry",
+         "th_branch", "application_status"],
+        filters={"th_reception_inquiry": ("in", sorted(case_by_inquiry))},
+        order_by="name", limit=BOUNCE_WINDOW)
+    if len(applicants) >= BOUNCE_WINDOW:
+        return {}
+    applicant_by_inquiry = {}
+    ambiguous = set()
+    for applicant in applicants:
+        inquiry_id = applicant.get("th_reception_inquiry")
+        case = case_by_inquiry.get(inquiry_id)
+        if not case or applicant.get("th_branch") != case.get("th_branch") or (
+                applicant.get("th_candidate_ref") != case.get("subject")):
+            continue
+        if inquiry_id in applicant_by_inquiry:
+            ambiguous.add(inquiry_id)
+        else:
+            applicant_by_inquiry[inquiry_id] = applicant
+    for inquiry_id in ambiguous:
+        applicant_by_inquiry.pop(inquiry_id, None)
+    applicant_names = sorted({a["name"] for a in applicant_by_inquiry.values()})
+    students = project_rows(
+        "reception", STUDENT, ["name", "student_applicant", "th_candidate_ref", "enabled"],
+        filters={"student_applicant": ("in", applicant_names)},
+        order_by="name", limit=BOUNCE_WINDOW) if applicant_names else []
+    if len(students) >= BOUNCE_WINDOW:
+        return {}
+    student_by_applicant = {}
+    ambiguous_students = set()
+    for student in students:
+        applicant_id = student.get("student_applicant")
+        if applicant_id in student_by_applicant:
+            ambiguous_students.add(applicant_id)
+        else:
+            student_by_applicant[applicant_id] = student
+    for applicant_id in ambiguous_students:
+        student_by_applicant.pop(applicant_id, None)
+    released = set(released_subjects)
+    result = {}
+    for inquiry_id, case in case_by_inquiry.items():
+        applicant = applicant_by_inquiry.get(inquiry_id)
+        if inquiry_id in ambiguous or (
+                applicant and applicant["name"] in ambiguous_students):
+            result[inquiry_id] = (
+                "Identity review needed",
+                "Academic Manager must investigate multiple linked records; do not register another Student.",
+                "Academic Manager")
+            continue
+        student = student_by_applicant.get(applicant["name"]) if applicant else None
+        if student and student.get("th_candidate_ref") == case["subject"]:
+            if not int(student.get("enabled") or 0):
+                result[inquiry_id] = (
+                    "Inactive student",
+                    "Ask Academic Manager to verify inactive status; do not enroll or reactivate here.",
+                    "Academic Manager")
+            else:
+                result[inquiry_id] = (
+                    "Student profile created",
+                    "Student record exists. Verify Program Enrollment separately before confirming a class.",
+                    "Enrollment Officer")
+        elif applicant:
+            result[inquiry_id] = (
+                "Admission in progress",
+                "Applicant exists; Admission Officer must complete the independent decision and Student conversion.",
+                "Admission Officer")
+        elif case.get("subject") in released:
+            result[inquiry_id] = (
+                "Placement result released",
+                "Ask Admission Officer to record the Applicant from this reviewed result.",
+                "Admission Officer")
+        else:
+            result[inquiry_id] = (
+                "Placement case opened",
+                "Placement team must complete the supervised test and independent result release.",
+                "Placement Invigilator")
+    return result
+
+
+def _walkin_item(row, progress=None):
+    """Branch-scoped reception handover stage; no change to student's records."""
     closed = row.get("status") == "Closed"
     action = None if closed else guided_action(
         "Reception", "toefl_house.reception_intake.update_walkin_inquiry",
@@ -136,6 +240,10 @@ def _walkin_item(row):
     # protected inquiry projection and are escaped by the queue renderer.
     note = (row.get("notes") or "").strip()
     preview = ("Latest note: " + note[:117] + ("…" if len(note) > 117 else "")) if note else ""
+    stage, next_step, next_role = progress or (
+        "Pre-registration",
+        "Contact the visitor and arrange the separately authorized placement or admission step.",
+        "Reception")
     return {
         "id": row["name"],
         "person": row.get("person_name") or "",
@@ -143,11 +251,13 @@ def _walkin_item(row):
                              ("Inquiry reference: " + row["name"], row.get("phone") or "",
                               row.get("program_interest") or "", preview) if part),
         "status": row.get("status") or "New",
-        "stage": "Pre-registration",
-        "stage_definition": "Reception inquiry only; no candidate account, placement, enrollment or bill was created.",
+        "stage": "Closed inquiry" if closed else stage,
+        "stage_definition": ("Reception inquiry closed." if closed
+                             else "Verified stage from branch-scoped candidate and native Student links."
+                             if progress else "Reception inquiry only; no placement, Applicant or Student exists."),
         "next": ("This inquiry is closed; register a new visit if needed." if closed
-                 else "Contact the visitor and arrange the separately authorized placement or admission step."),
-        "next_role": None if closed else "Reception",
+                 else next_step),
+        "next_role": None if closed else next_role,
         "waiting_since": row.get("creation"),
         "action": action,
     }
@@ -426,6 +536,7 @@ def work():
     inquiries = project_rows("reception", INQUIRY, INQUIRY_FIELDS,
                              filters=open_statuses,
                              order_by="creation desc", limit=LIMIT_QUEUES)
+    progress = _walkin_progress(inquiries, subjects.values())
     register = guided_action("Reception", "toefl_house.reception_intake.create_walkin_inquiry",
                              "Register a new visitor",
                              {"person_name": "", "phone": "", "program_interest": "",
@@ -437,7 +548,7 @@ def work():
         "primary_action": register,
         "sections": [
             section("walkins", f"New visitors and follow-ups ({inquiry_count})", "queue",
-                    items=[_walkin_item(row) for row in inquiries],
+                    items=[_walkin_item(row, progress.get(row["name"])) for row in inquiries],
                     empty_title="No open reception inquiries",
                     empty_body="Register a visitor before placement or any student account exists.",
                     notes=(f"Showing the newest {len(inquiries)} of {inquiry_count} open visits. "
