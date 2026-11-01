@@ -152,6 +152,29 @@ class RegistrationDeskTests(unittest.TestCase):
             "name": ("like", "%INQ-001%")
         }), calls)
 
+    def test_disabled_student_is_visible_as_inactive_not_enrollable(self):
+        desk, _calls = self.desk(placement=False, applicant=False)
+        ref = "THV-" + "a" * 32
+        original = desk.project_rows
+        def project_rows(surface, doctype, fields, filters=None, **kwargs):
+            if doctype == desk.STUDENT:
+                if filters and "th_candidate_ref" in filters:
+                    return [{"name": "STU-OLD", "student_name": "Former Learner",
+                             "student_email_id": "", "th_candidate_ref": ref,
+                             "enabled": 0, "creation": "2025-01-01"}]
+                return []
+            if doctype == desk.ENROLLMENT or doctype == desk.GROUP:
+                return []
+            return original(surface, doctype, fields, filters=filters, **kwargs)
+        desk.project_rows = project_rows
+        desk.reception_sections = lambda **kwargs: []
+        student = desk.lookup(ref)["students"][0]
+        self.assertEqual(student["status"], "Inactive")
+        self.assertEqual(student["stage"], "Inactive student")
+        self.assertIn("Academic Manager", student["next"])
+        self.assertIn(ref, student["detail"])
+        self.assertNotIn("action", student)
+
     def test_verified_inquiry_name_is_used_in_admission_handover(self):
         desk, calls = self.desk(applicant=False)
         ref = "THV-" + "a" * 32
