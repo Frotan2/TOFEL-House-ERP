@@ -425,6 +425,7 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertEqual(item["stage"], "Student profile created")
         self.assertEqual(item["next_role"], "Enrollment Officer")
         self.assertIn("complete Program Enrollment", item["next"])
+        self.assertIn("Student ID STU-1", item["next"])
         # An active Student does not imply any Program Enrollment or Fees.
         self.assertNotIn("Enrolled", item["stage"])
 
@@ -446,6 +447,7 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertEqual(progress["INQ-1"][0], "Enrollment on file")
         self.assertEqual(progress["INQ-1"][2], "Academic Manager")
         self.assertIn("assigned class", progress["INQ-1"][1])
+        self.assertIn("Student ID STU-1", progress["INQ-1"][1])
 
     def test_reception_progress_does_not_join_wrong_branch_or_reused_phone(self):
         desk, _ = self.desk(placement=False, applicant=False)
