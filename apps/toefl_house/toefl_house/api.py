@@ -64,8 +64,8 @@ def _web_integer(value, field, *, minimum=1, maximum=1000000000):
     """
     if type(value) is int:
         parsed = value
-    elif isinstance(value, str) and value.isascii() and value.isdecimal() \
-            and value == str(int(value)) and len(value) <= 10:
+    elif isinstance(value, str) and len(value) <= 10 and value.isascii() \
+            and value.isdecimal() and value == str(int(value)):
         parsed = int(value)
     else:
         raise frappe.ValidationError(f"{field} must be a canonical whole number")
