@@ -105,7 +105,9 @@ class IntakeGuardTests(unittest.TestCase):
         stub.flags = SimpleNamespace()
         stub.utils = SimpleNamespace(
             today=lambda: "2026-09-22",
-            get_datetime=lambda v=None: v if isinstance(v, datetime) else datetime.fromisoformat(str(v)))
+            get_datetime=lambda v=None: v if isinstance(v, datetime) else datetime.fromisoformat(str(v)),
+            validate_email_address=lambda value, throw=False: (
+                value if "@" in value and "." in value.split("@")[-1] else None))
         def exists(doctype, name):
             if doctype == "Student Applicant":
                 return bool(fake.applicant_probe)
@@ -184,6 +186,24 @@ class IntakeGuardTests(unittest.TestCase):
         self.assertIsNone(self.created[0]._payload["student_email_id"])
         self.assertIn("th_candidate_ref=%s", self.calls[1][0])
         self.assertEqual(self.calls[1][1], (self.subject_value,))
+
+    def test_real_email_is_optional_and_normalized_when_provided(self):
+        self.production_mode = True
+        self.subject_value = "THV-" + "a" * 32
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Alpha"]
+        result = self.admission.record_applicant(
+            "request-optional-email-01", "PD-1", "Visitor", "TH-PROG", "2026-27",
+            email="REAL@EXAMPLE.COM")
+        self.assertEqual(result["student_email_id"], "real@example.com")
+        self.assertEqual(self.created[0]._payload["student_email_id"], "real@example.com")
+
+    def test_invalid_provided_email_is_refused_without_inventing_one(self):
+        with self.assertRaises(_ValidationError):
+            self.admission.record_applicant(
+                "request-invalid-email-01", "PD-1", "SYNTHETIC Probe",
+                "TH-PROG", "2026-27", email="not-an-email")
+        self.assertFalse(self.created)
 
     def test_real_candidate_requires_original_reception_referral(self):
         self.production_mode = True
