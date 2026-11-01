@@ -689,6 +689,40 @@ const hostileItem = {
 }
 
 {
+	// Staff must be able to begin work even on the first day when the
+	// reception queue is empty. The action is supplied by the server,
+	// not exposed via a guessed browser permission.
+	const payload = payloadWith([], "0");
+	const register = {
+		role: "Reception",
+		endpoint: "toefl_house.reception_intake.create_walkin_inquiry",
+		label: "Register a new visitor",
+		args: { person_name: "", phone: "", program_interest: "", branch: "", notes: "" },
+	};
+	payload.primary_action = register;
+	payload.sections.unshift({
+		id: "walkins", title: "New visitors and follow-ups", kind: "queue",
+		items: [],
+		actions: [register],
+		empty: { title: "No open reception inquiries", body: "Register the first visitor" },
+	});
+	const scenario = runScenario({ workPayload: payload });
+	const top = findAll(scenario.body, "th-register-visitor");
+	assert.strictEqual(top.length, 1, "a fresh reception desk must show its primary Register button");
+	const empty = findAll(scenario.body, "th-section-actions");
+	assert(empty.length >= 1, "empty queue must keep its server-authorized action");
+	assert(serialize(scenario.body).includes("Register the first visitor"));
+	top[0].click();
+	assert.strictEqual(scenario.dialogs.length, 1, "register opens a single guided dialog");
+	const fields = scenario.dialogs[0].opts.fields.map((row) => row.fieldname);
+	assert.deepStrictEqual(fields,
+		["request_key", "person_name", "phone", "program_interest", "branch", "notes"],
+		"front counter should ask for real basic contact, not email or technical placement IDs");
+	assert(!scenario.calls.some((call) => call.method === register.endpoint),
+		"opening the form never creates a record");
+}
+
+{
 	// Reception search: the lookup renders into its own results container,
 	// refuses short queries with guidance, and escapes hostile matches.
 	const scenario = runScenario({ workPayload: payloadWith([], "0") });

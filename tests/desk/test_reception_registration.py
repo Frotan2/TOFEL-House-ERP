@@ -68,6 +68,8 @@ class RegistrationDeskTests(unittest.TestCase):
         desk, _ = self.desk(placement=False, applicant=False)
         view = desk.work()
         walkins = next(x for x in view["sections"] if x["id"] == "walkins")
+        self.assertEqual(view["primary_action"]["endpoint"],
+                         "toefl_house.reception_intake.create_walkin_inquiry")
         self.assertEqual(walkins["items"][0]["stage"], "Pre-registration")
         self.assertEqual(walkins["actions"][0]["endpoint"],
                          "toefl_house.reception_intake.create_walkin_inquiry")

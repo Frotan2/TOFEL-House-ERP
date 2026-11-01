@@ -625,6 +625,21 @@ frappe.provide("toefl_house.role_desks");
 		return group;
 	}
 
+	function renderSectionActions(body, actions) {
+		if (!Array.isArray(actions) || !actions.length) return;
+		const bar = $("<div class='th-route-group th-section-actions'></div>").appendTo(body);
+		actions.forEach((action) => {
+			if (!action || (!action.route && !action.endpoint)) return;
+			$("<button type='button' class='btn btn-secondary btn-sm'></button>")
+				.text(text(action.label || "Continue"))
+				.on("click", () => {
+					if (action.route) frappe.set_route(action.route);
+					else openGuidedAction(action);
+				})
+				.appendTo(bar);
+		});
+	}
+
 	function renderSectionBody(body, payload) {
 		body.empty();
 		const kind = payload.kind;
@@ -665,18 +680,7 @@ frappe.provide("toefl_house.role_desks");
 			if (payload.chart) body.append(barChartMarkup(payload.chart));
 		}
 		// Inline contextual actions below queue
-		if (payload.actions) {
-			const actionsBar = $("<div class='th-route-group' style='margin-top:1rem'></div>").appendTo(body);
-			payload.actions.forEach((act) => {
-				$("<button type='button' class='btn btn-secondary btn-sm'></button>")
-					.text(text(act.label))
-					.on("click", () => {
-						if (act.route) frappe.set_route(act.route);
-						else if (act.endpoint) openGuidedAction(act);
-					})
-					.appendTo(actionsBar);
-			});
-		}
+		renderSectionActions(body, payload.actions);
 	}
 
 	/*
@@ -1824,6 +1828,9 @@ frappe.provide("toefl_house.role_desks");
 			const hasAnalytics = sectionPayload.kind === "analytics" && (sectionPayload.hero || sectionPayload.groups);
 			if (!items.length && !hasAnalytics && sectionPayload.kind !== "analytics") {
 				emptyState(body, sectionPayload.empty || {});
+				// A fresh installation must not hide the only "Register visitor"
+				// action merely because its inquiry queue is still empty.
+				renderSectionActions(body, sectionPayload.actions);
 				return;
 			}
 			if (sectionPayload.kind === "analytics" && !items.length && !hasAnalytics) {
@@ -1832,6 +1839,19 @@ frappe.provide("toefl_house.role_desks");
 			}
 			renderSectionBody(body, sectionPayload);
 		});
+	}
+
+	function renderReceptionPrimaryAction(page, payload) {
+		const area = $(page.body).find(".th-reception-quick-actions").empty();
+		const action = payload.primary_action;
+		// Only render the server's role-authorized action. No client-side
+		// permission guess or bypass can enable a Reception write.
+		if (!action || !action.endpoint) return;
+		$("<button type='button' class='btn btn-primary btn-sm th-register-visitor'></button>")
+			.text(text(action.label))
+			.attr("aria-label", text("Register a new walk-in visitor"))
+			.on("click", () => openGuidedAction(action))
+			.appendTo(area);
 	}
 
 	function loadDesk(page, surface, slug) {
@@ -1849,6 +1869,9 @@ frappe.provide("toefl_house.role_desks");
 			method: surface.endpoint,
 			callback(response) {
 				loadingWrap.remove();
+				if (slug === "th-reception-desk") {
+					renderReceptionPrimaryAction(page, response.message || {});
+				}
 				loadSections(sections, response.message || {});
 				// Announce completion to screen readers
 				const announcement = $("<div class='th-visually-hidden' role='status' aria-live='polite'></div>")
@@ -1860,6 +1883,7 @@ frappe.provide("toefl_house.role_desks");
 			},
 			error() {
 				loadingWrap.remove();
+				if (slug === "th-reception-desk") renderReceptionPrimaryAction(page, {});
 				const block = $("<section class='th-section'></section>").appendTo(sections);
 				$("<h2 class='th-section-title'></h2>").text(text("Your work")).appendTo(block);
 				const sectionBody = $("<div class='th-section-body'></div>").appendTo(block);
@@ -1870,6 +1894,9 @@ frappe.provide("toefl_house.role_desks");
 						method: surface.endpoint,
 						callback(response) {
 							sectionBody.parent().remove();
+							if (slug === "th-reception-desk") {
+								renderReceptionPrimaryAction(page, response.message || {});
+							}
 							loadSections(sections, response.message || {});
 						},
 						error() {
@@ -1886,13 +1913,17 @@ frappe.provide("toefl_house.role_desks");
 	function mountSearch(page, surface) {
 		if (!surface.search) return;
 		const block = $("<section class='th-section'></section>").appendTo(page.body);
-		$("<h2 class='th-section-title'></h2>").text(text("Find a person")).appendTo(block);
+		$("<h2 class='th-section-title'></h2>").text(text("Find or register a visitor")).appendTo(block);
 		const body = $("<div class='th-section-body'></div>").appendTo(block);
+		$("<p class='th-page-purpose'></p>").text(text(
+			"Search by name, phone or student email before creating a new record. No email or placement result is required to record a walk-in."
+		)).appendTo(body);
+		$("<div class='th-reception-quick-actions'></div>").appendTo(body);
 		const bar = $("<div class='th-search-bar'></div>").appendTo(body);
 		$("<div class='th-search-results' aria-live='polite'></div>").appendTo(body);
 		const input = $("<input type='search' class='form-control th-search-input' />")
 			.attr("placeholder", text(surface.search.placeholder))
-			.attr("aria-label", text("Name or email"))
+			.attr("aria-label", text("Visitor name, phone or student email"))
 			.appendTo(bar);
 		$("<button type='button' class='btn btn-primary btn-sm'></button>")
 			.text(text("Search"))
@@ -1911,7 +1942,7 @@ frappe.provide("toefl_house.role_desks");
 		const results = body.find(".th-search-results").empty();
 		const text_ = String(query || "").trim();
 		if (text_.length < 2) {
-			results.append(`<div class='th-alert th-alert--info'><div><p class='th-alert-title'>${escapeText(text("Type more of the name"))}</p><p class='th-alert-body'>${escapeText(text("Enter at least two characters of the person's name or email."))}</p></div></div>`);
+			results.append(`<div class='th-alert th-alert--info'><div><p class='th-alert-title'>${escapeText(text("Type more of the name"))}</p><p class='th-alert-body'>${escapeText(text("Enter at least two characters of a name, phone or student email."))}</p></div></div>`);
 			return;
 		}
 		const loading = loadingState(results, "Searching…");
@@ -1933,7 +1964,7 @@ frappe.provide("toefl_house.role_desks");
 		const applicants = payload.items || [];
 		const students = payload.students || [];
 		if (!applicants.length && !students.length) {
-			results.append(`<div class='th-empty'><p class='th-empty-title'>${escapeText(text("No match found"))}</p><p class='th-empty-body'>${escapeText(text("No open applicant or active student matches that name or email. Check the spelling, or start them through the placement workflow."))}</p></div>`);
+			results.append(`<div class='th-empty'><p class='th-empty-title'>${escapeText(text("No match found"))}</p><p class='th-empty-body'>${escapeText(text("No matching visitor, applicant or active student. Check the spelling or register a new visitor above; placement can happen later."))}</p></div>`);
 			return;
 		}
 		if (applicants.length) {
