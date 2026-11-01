@@ -277,13 +277,15 @@ def _walkin_item(row, progress=None):
                              ("Inquiry reference: " + row["name"], row.get("phone") or "",
                               row.get("program_interest") or "", preview) if part),
         "status": row.get("status") or "New",
-        "stage": "Closed inquiry" if closed else stage,
-        "stage_definition": ("Reception inquiry closed." if closed
-                             else "Verified stage from branch-scoped candidate and native Student links."
-                             if progress else "Reception inquiry only; no placement, Applicant or Student exists."),
-        "next": ("This inquiry is closed; register a new visit if needed." if closed
-                 else next_step),
-        "next_role": None if closed else next_role,
+        "stage": stage if progress else ("Closed inquiry" if closed else stage),
+        "stage_definition": (
+            "Verified stage from branch-scoped Candidate and native Student links."
+            if progress else "Reception inquiry closed." if closed
+            else "Reception inquiry only; no placement, Applicant or Student exists."),
+        "next": (next_step if progress
+                 else "This inquiry is closed; register a new visit if needed."
+                 if closed else next_step),
+        "next_role": next_role if progress else (None if closed else next_role),
         "waiting_since": row.get("creation"),
         "action": action,
     }
@@ -743,7 +745,11 @@ def lookup(query):
             seen_inquiries.add(row["name"])
     # Preliminary visitors are NOT yet applicants. Keep them in their own
     # results category so Reception never mistakes a contact for enrollment.
-    visitor_items = [_walkin_item(row) for row in inquiries[:LIMIT_LOOKUP]]
+    visible_inquiries = inquiries[:LIMIT_LOOKUP]
+    linked_progress = _walkin_progress(visible_inquiries, [])
+    visitor_items = [
+        _walkin_item(row, linked_progress.get(row["name"]))
+        for row in visible_inquiries]
     return {"desk": SLUG, "query": text, "items": items,
             "inquiries": visitor_items, "students": student_items,
             "collection_sections": reception_sections(students=[row["name"] for row in student_rows])}

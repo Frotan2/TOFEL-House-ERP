@@ -293,6 +293,33 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertEqual(stage[0], "Identity review needed")
         self.assertEqual(stage[2], "Academic Manager")
 
+    def test_closed_inquiry_lookup_retains_progress_without_edit_button(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        visit = {"name": "INQ-1", "person_name": "Visitor",
+                 "status": "Closed", "version": 3, "th_branch": "Branch Alpha"}
+        ref = "THV-" + "a" * 32
+        facts = {
+            desk.CASE: [{"name": "CASE-1", "subject": ref,
+                         "th_branch": "Branch Alpha", "reception_inquiry": "INQ-1"}],
+            desk.APPLICANT: [{"name": "APP-1", "th_candidate_ref": ref,
+                              "th_branch": "Branch Alpha",
+                              "th_reception_inquiry": "INQ-1"}],
+            desk.STUDENT: [{"name": "STU-1", "student_applicant": "APP-1",
+                            "th_candidate_ref": ref, "enabled": 1}],
+        }
+        original = desk.project_rows
+        def read(surface, doctype, fields, filters=None, **kwargs):
+            if doctype == desk.INQUIRY:
+                return [visit]
+            if doctype in facts:
+                return list(facts[doctype])
+            return original(surface, doctype, fields, filters=filters, **kwargs)
+        desk.project_rows = read
+        item = desk.lookup("INQ-1")["inquiries"][0]
+        self.assertEqual(item["status"], "Closed")
+        self.assertEqual(item["stage"], "Student profile created")
+        self.assertIsNone(item["action"])
+
     def test_no_placement_cannot_claim_progressed_student(self):
         desk, _ = self.desk(placement=False, applicant=False)
         desk.project_rows = lambda *_args, **_kwargs: []
