@@ -44,7 +44,7 @@ GROUP = "Student Group"
 GROUP_COHORT_FIELDS = ["name", "program", "academic_year", "disabled",
                        "th_class_status"]
 
-APPLICANT_FIELDS = ["name", "title", "student_email_id", "program",
+APPLICANT_FIELDS = ["name", "title", "student_email_id", "th_candidate_ref", "program",
                     "academic_year", "application_status", "creation"]
 ADMISSION_FIELDS = ["name", "student_applicant", "program", "academic_year",
                     "placement_decision", "status", "accepted", "native_student",
@@ -169,10 +169,9 @@ def _person_item(applicant, decisions_by_applicant, subject_to_decision):
         "label": "Applicant recorded",
         "definition": "The applicant is on file, but no admission decision has been opened yet.",
         "next": (
-            "Open the admission decision once a placement result is released for this "
-            "applicant's email. A placement result appears after the Placement Publisher "
-            "finalizes the attempt and the Placement Releaser releases it — ask those "
-            "roles to publish the result if it is not yet visible."
+            "Open the admission decision after the Placement Releaser issues the "
+            "candidate's reviewed result. Ask the Academic Manager to check the "
+            "internal candidate reference when a result is not visible."
         ),
         "role": "Admission Officer",
         "command": "create_admission",
@@ -188,7 +187,8 @@ def _person_item(applicant, decisions_by_applicant, subject_to_decision):
         "next_role": stage["role"],
         "waiting_since": applicant.get("creation"),
     }
-    decision = subject_to_decision.get(applicant.get("student_email_id") or "")
+    decision = subject_to_decision.get(
+        applicant.get("th_candidate_ref") or applicant.get("student_email_id") or "")
     if decision:
         item["action"] = guided_action("Admission Officer", "toefl_house.admission.create_admission",
                                        "Create admission",
@@ -206,12 +206,13 @@ def _verified_returning_students(applicants):
     Missing, ambiguous or truncated lookups produce no automatic action.
     """
     admitted = [row for row in applicants if row.get("application_status") == "Admitted"
-                and row.get("student_email_id")]
+                and (row.get("th_candidate_ref") or row.get("student_email_id"))]
     if not admitted:
         return {}
     by_name = {row["name"]: row for row in admitted}
     student_rows = project_rows(
-        "reception", STUDENT, ["name", "student_applicant", "student_email_id"],
+        "reception", STUDENT, ["name", "student_applicant", "student_email_id",
+                               "th_candidate_ref"],
         filters={"student_applicant": ("in", list(by_name)), "enabled": 1},
         order_by="name", limit=BOUNCE_WINDOW)
     if len(student_rows) >= BOUNCE_WINDOW:
@@ -221,7 +222,13 @@ def _verified_returning_students(applicants):
     for student in student_rows:
         applicant_id = student.get("student_applicant")
         original = by_name.get(applicant_id)
-        if not original or student.get("student_email_id") != original["student_email_id"]:
+        if not original:
+            continue
+        candidate_ref = original.get("th_candidate_ref")
+        if candidate_ref:
+            if student.get("th_candidate_ref") != candidate_ref:
+                continue
+        elif not original.get("student_email_id") or student.get("student_email_id") != original["student_email_id"]:
             continue
         if applicant_id in verified:
             ambiguous.add(applicant_id)
@@ -298,11 +305,22 @@ def work():
                               filters={"application_status": "Applied"},
                               order_by="creation desc", limit=LIMIT_QUEUES)
     # Include returning learners whose native Applicant is already Admitted.
-    existing = project_rows("reception", APPLICANT, APPLICANT_FIELDS,
-                            filters={"student_email_id": ("in", list(subject_to_decision))},
-                            order_by="creation desc", limit=BOUNCE_WINDOW) if subject_to_decision else []
-    existing_by_email = {row["student_email_id"]: row for row in existing
-                         if row.get("student_email_id")}
+    candidate_subjects = sorted(s for s in subject_to_decision if s.startswith("THV-"))
+    email_subjects = sorted(s for s in subject_to_decision if not s.startswith("THV-"))
+    existing_candidates = project_rows(
+        "reception", APPLICANT, APPLICANT_FIELDS,
+        filters={"th_candidate_ref": ("in", candidate_subjects)},
+        order_by="creation desc", limit=BOUNCE_WINDOW) if candidate_subjects else []
+    existing_emails = project_rows(
+        "reception", APPLICANT, APPLICANT_FIELDS,
+        filters={"student_email_id": ("in", email_subjects)},
+        order_by="creation desc", limit=BOUNCE_WINDOW) if email_subjects else []
+    existing = list({row["name"]: row for row in existing_emails + existing_candidates}.values())
+    existing_by_subject = {}
+    for item in existing:
+        key = item.get("th_candidate_ref") or item.get("student_email_id")
+        if key:
+            existing_by_subject[key] = item
     returning_students = _verified_returning_students(existing)
     decisions_by_applicant = {}
     for row in admissions:
@@ -315,7 +333,7 @@ def work():
                           if not r.get("native_student")}
     for row in ready:
         subject = subjects[row["name"]]
-        applicant = existing_by_email.get(subject)
+        applicant = existing_by_subject.get(subject)
         if applicant and applicant["name"] in pending_applicants:
             continue
         context = {
