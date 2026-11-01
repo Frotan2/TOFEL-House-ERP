@@ -621,7 +621,8 @@ class LifecycleStageTests(unittest.TestCase):
             ("Draft", False, False, "Admission drafted", "Admission Reviewer"),
             ("Review", False, False, "Admission review", "Admission Approver"),
             ("Approved", False, False, "Admission decided", "Admission Officer"),
-            ("Conditional", False, False, "Conditional admission", "Admission Officer"),
+            ("Conditional", False, False, "Conditions awaiting verification", "Admission Approver"),
+            ("Conditional", True, False, "Conditions awaiting verification", "Admission Approver"),
             ("Approved", True, False, "Offer accepted", "Admission Approver"),
             ("Approved", True, True, "Student created", "Enrollment Officer"),
             ("Deferred", False, False, "Deferred", "Admission Officer"),
@@ -652,7 +653,7 @@ class LifecycleStageTests(unittest.TestCase):
     def test_every_stage_label_appears_in_the_funnel_order(self):
         produced = {"Placement session", "Marking", "Independent review",
                     "Awaiting release", "Admission drafted", "Admission review",
-                    "Admission decided", "Conditional admission", "Offer accepted",
+                    "Admission decided", "Conditions awaiting verification", "Offer accepted",
                     "Student created", "Awaiting enrollment", "Enrolled, no class",
                     "Enrolled", "Deferred"}
         for label in produced:
@@ -864,6 +865,8 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                    ["request_key", "name", "expected_version"]),
         "toefl_house.admission.decide_admission": ("admission/__init__.py",
                                                    ["request_key", "name", "expected_version", "outcome", "reason", "conditions"]),
+        "toefl_house.admission.satisfy_conditions": ("admission/__init__.py",
+            ["request_key", "name", "expected_version", "evidence"]),
         "toefl_house.admission.accept_offer": ("admission/__init__.py",
                                                ["request_key", "name", "expected_version"]),
         "toefl_house.admission.convert_applicant": ("admission/__init__.py",
@@ -873,7 +876,13 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                     "program", "academic_year", "academic_term"]),
         "toefl_house.admission.record_applicant": ("admission/__init__.py",
                                                    ["request_key", "placement_decision", "first_name", "program", "academic_year",
-                                                    "branch"]),
+                                                    "branch", "last_name", "email"]),
+        "toefl_house.reception_intake.create_walkin_inquiry": ("reception_intake.py",
+            ["request_key", "person_name", "phone", "program_interest", "branch", "notes"]),
+        "toefl_house.reception_intake.update_walkin_inquiry": ("reception_intake.py",
+            ["request_key", "inquiry", "expected_version", "status", "notes"]),
+        "toefl_house.reception_intake.correct_walkin_inquiry": ("reception_intake.py",
+            ["request_key", "inquiry", "expected_version", "person_name", "phone", "reason"]),
         "toefl_house.enrollment.enroll_in_program": ("enrollment/__init__.py",
                                                      ["request_key", "admission_decision"]),
         "toefl_house.api.release_decision": ("api.py",
@@ -1780,6 +1789,86 @@ class DeskBranchScopeTests(unittest.TestCase):
     (scope applies where the schema supports it) executes on every affected
     projection call."""
 
+    def test_reception_transfer_requires_both_classes_in_permitted_branch(self):
+        module = _import_desk("reception", roles={"Reception"})
+        world = {
+            "Student Group": [
+                {"name": "GROUP-A", "th_branch": "BR-A"},
+                {"name": "GROUP-B", "th_branch": "BR-A"},
+                {"name": "GROUP-X", "th_branch": "BR-B"},
+            ],
+            "TH Class Transfer": [
+                {"name": "TR-VALID", "student": "STU-1",
+                 "from_group": "GROUP-A", "to_group": "GROUP-B",
+                 "status": "Requested", "transfer_kind": "Class",
+                 "effective_date": "2026-11-11",
+                 "reason": "PRIVATE family note"},
+                {"name": "TR-OUT", "student": "STU-1",
+                 "from_group": "GROUP-A", "to_group": "GROUP-X",
+                 "status": "Requested", "transfer_kind": "Branch",
+                 "effective_date": "2026-11-11"},
+                {"name": "TR-IN", "student": "STU-1",
+                 "from_group": "GROUP-X", "to_group": "GROUP-A",
+                 "status": "Requested", "transfer_kind": "Branch",
+                 "effective_date": "2026-11-11"},
+            ],
+        }
+        fake = desk_world_get_all("reception transfer branch", world)
+        def read(doctype, filters=None, fields=None, pluck=None, **kwargs):
+            if doctype == "User Permission" and pluck == "for_value":
+                return ["BR-A"] if (filters or {}).get("allow") == "Branch" else []
+            rows = fake(doctype, filters=filters, fields=fields, **kwargs)
+            return [{field: row.get(field) for field in fields} for row in rows] if fields else rows
+        module.frappe.get_all = read
+        module.frappe.db.get_all = read
+        fields = ["name", "student", "from_group", "to_group",
+                  "transfer_kind", "status", "effective_date"]
+        rows = module.project_rows("reception", "TH Class Transfer", fields,
+                                   filters={"student": "STU-1", "status": "Requested"},
+                                   limit=30)
+        self.assertEqual([row["name"] for row in rows], ["TR-VALID"])
+        self.assertNotIn("reason", rows[0])
+        with self.assertRaises(module.frappe.ValidationError):
+            module.project_rows("reception", "TH Class Transfer", fields + ["reason"])
+
+    def test_reception_suspension_read_is_branch_scoped_without_private_reason(self):
+        module = _import_desk("reception", roles={"Reception"})
+        world = {
+            "Student Group": [
+                {"name": "CLASS-A", "th_branch": "BR-A"},
+                {"name": "CLASS-B", "th_branch": "BR-B"},
+            ],
+            "TH Class Suspension": [
+                {"name": "SUSP-A", "scope": "Class", "student_group": "CLASS-A",
+                 "student": None, "status": "Active",
+                 "from_date": "2026-11-10", "until_date": "2026-11-12",
+                 "reason": "PRIVATE REASON A"},
+                {"name": "SUSP-B", "scope": "Student", "student_group": "CLASS-B",
+                 "student": "FOREIGN-STUDENT", "status": "Active",
+                 "from_date": "2026-11-10", "until_date": "2026-11-12",
+                 "reason": "PRIVATE REASON B"},
+            ],
+        }
+        fake = desk_world_get_all("reception suspension branch", world)
+        def read(doctype, filters=None, fields=None, pluck=None, **kwargs):
+            if doctype == "User Permission" and pluck == "for_value":
+                return ["BR-A"] if (filters or {}).get("allow") == "Branch" else []
+            rows = fake(doctype, filters=filters, fields=fields, **kwargs)
+            # The reusable fixture matcher returns the full source dict; real
+            # Frappe get_all sends ONLY requested columns across the network.
+            return [{field: row.get(field) for field in fields} for row in rows] if fields else rows
+        module.frappe.get_all = read
+        fields = ["name", "scope", "student_group", "status",
+                  "from_date", "until_date"]
+        rows = module.project_rows("reception", "TH Class Suspension", fields,
+                                   filters={"status": "Active"}, limit=30)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], "SUSP-A")
+        self.assertNotIn("reason", rows[0])
+        with self.assertRaises(module.frappe.ValidationError):
+            module.project_rows("reception", "TH Class Suspension",
+                                fields + ["reason"], filters={"status": "Active"})
+
     def test_scope_filters_apply_only_where_the_schema_supports_them(self):
         seen = []
 
@@ -2567,6 +2656,63 @@ class AdmissionMultiBranchProjectionTests(unittest.TestCase):
         desk.frappe.get_all = desk_world_get_all("intake isolation", world)
         self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["A"]), ["PE-A"])
         self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["B"]), ["PE-MOVED"])
+
+    def test_student_without_roster_is_visible_at_its_verified_admission_branch(self):
+        world = {
+            "Student Group": [
+                {"name": "GA", "th_branch": "A"},
+                {"name": "GB", "th_branch": "B"},
+            ],
+            "Student Group Student": [
+                {"name": "R-A", "parent": "GA", "student": "ST-A", "active": 1},
+                {"name": "R-B", "parent": "GB", "student": "ST-B", "active": 1},
+                {"name": "R-MIX-A", "parent": "GA", "student": "ST-MIX", "active": 1},
+                {"name": "R-MIX-B", "parent": "GB", "student": "ST-MIX", "active": 1},
+            ],
+            "Student Applicant": [
+                {"name": "AP-A", "th_branch": "A"},
+                {"name": "AP-B", "th_branch": "B"},
+            ],
+            "TH Admission Decision": [
+                {"name": "D-NEW", "student_applicant": "AP-A",
+                 "native_student": "ST-NEW", "existing_student": None},
+                {"name": "D-FOREIGN", "student_applicant": "AP-A",
+                 "native_student": "ST-B", "existing_student": None},
+                {"name": "D-MISMATCH", "student_applicant": "AP-A",
+                 "native_student": "ST-BADLINK", "existing_student": None},
+            ],
+            "Student": [
+                {"name": "ST-NEW", "student_applicant": "AP-A"},
+                {"name": "ST-A", "student_applicant": "AP-A"},
+                {"name": "ST-B", "student_applicant": "AP-B"},
+                {"name": "ST-MIX", "student_applicant": "AP-A"},
+                {"name": "ST-BADLINK", "student_applicant": "AP-B"},
+            ],
+        }
+        desk = _import_desk("__init__", roles={"Reception"})
+        desk.frappe.get_all = desk_world_get_all("student intake branch", world)
+        self.assertEqual(desk._branch_allowed_names("Student", ["A"]),
+                         ["ST-A", "ST-NEW"])
+        self.assertEqual(desk._branch_allowed_names("Student", ["B"]), ["ST-B"])
+
+    def test_student_scope_refuses_truncated_memberships(self):
+        world = {
+            "Student Group": [{"name": "GA", "th_branch": "A"}],
+            "Student Group Student": [
+                {"name": "R1", "parent": "GA", "student": "ST-1", "active": 1},
+                {"name": "R2", "parent": "GA", "student": "ST-2", "active": 1},
+            ],
+            "Student Applicant": [], "TH Admission Decision": [],
+            "Student": [
+                {"name": "ST-1", "student_applicant": None},
+                {"name": "ST-2", "student_applicant": None},
+            ],
+        }
+        desk = _import_desk("__init__", roles={"Reception"})
+        desk._CHAIN_LIMIT = 2
+        desk.frappe.get_all = desk_world_get_all("truncated student memberships", world)
+        with self.assertRaisesRegex(desk.frappe.ValidationError, "safe read limit"):
+            desk._branch_allowed_names("Student", ["A"])
 
     def test_truncated_first_enrollment_candidates_do_not_expand_scope(self):
         world = {

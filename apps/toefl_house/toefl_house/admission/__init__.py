@@ -162,12 +162,30 @@ def deny_enroll_student(source_name=None):
 
 
 @frappe.whitelist(methods=["POST"])
-def record_applicant(request_key, placement_decision, first_name, program, academic_year, branch=""):
+def record_applicant(request_key, placement_decision, first_name, program, academic_year,
+                     branch="", last_name="", email=""):
+    if email is None:
+        email = ""
+    if not isinstance(email, str) or len(email) > 254 or any(ord(char) < 33 for char in email):
+        if email != "":
+            raise frappe.ValidationError("Email is optional but must be a valid address when supplied")
+    if email:
+        from frappe.utils import validate_email_address
+        if not validate_email_address(email, throw=False):
+            raise frappe.ValidationError("Enter a valid email or leave the field blank")
+        email = email.lower()
     def work(actor):
         row = _placement_row(placement_decision)
         _unexpired(row)
         subject = _placement_subject(row)
-        first = _name(first_name, "First name")
+        first = _name(first_name, "First name").strip()
+        if not first or any(char in first for char in ("\\r", "\\n", "\\x00")):
+            raise frappe.ValidationError("A valid first name is required")
+        if not isinstance(last_name, str) or len(last_name) > 140:
+            raise frappe.ValidationError("Last name must be bounded text")
+        surname = last_name.strip()
+        if any(char in surname for char in ("\\r", "\\n", "\\x00")):
+            raise frappe.ValidationError("Last name contains unsupported characters")
         # D16 mirror: synthetic sites accept only marked fixture names;
         # production accepts real bounded names and refuses test markers.
         if is_production():
@@ -204,9 +222,50 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             raise frappe.ValidationError("Placement decision is missing its attempt case")
         frappe.db.sql("select name from `tabTH Placement Case` where name=%s for update",
                       (case_name,))
-        prior = frappe.db.sql("select name from `tabStudent Applicant` "
-                               "where student_email_id=%s for update", (subject,),
-                               as_dict=True)
+        placement_branch = frappe.db.get_value("TH Placement Case", case_name, "th_branch")
+        if is_production() and not placement_branch:
+            raise frappe.PermissionError("Placement origin has no verified Branch")
+        if placement_branch and placement_branch != branch_name:
+            raise frappe.PermissionError(
+                "Applicant branch must match the verified placement case branch")
+        if is_production():
+            applicant_meta = frappe.get_meta(APPLICANT)
+            if (not applicant_meta.has_field("th_candidate_ref") or
+                    not applicant_meta.has_field("th_reception_inquiry")):
+                raise frappe.ValidationError(
+                    "Email-free Applicant fields are not installed; run the approved schema migration")
+            # Stable native identity is the opaque, server-issued candidate
+            # reference, never an invented or shared email address.
+            if not subject.startswith("THV-") or len(subject) != 36:
+                raise frappe.PermissionError(
+                    "Placement must use a server-issued internal candidate reference")
+            origin_inquiry = frappe.db.get_value(
+                "TH Placement Case", case_name, "reception_inquiry")
+            if not origin_inquiry:
+                raise frappe.PermissionError(
+                    "No verified Reception origin for this placement candidate")
+            verified_intake = frappe.db.get_value(
+                "TH Reception Inquiry", origin_inquiry,
+                ["person_name", "th_branch"], as_dict=True)
+            if (not verified_intake or verified_intake.th_branch != placement_branch or
+                    not isinstance(verified_intake.person_name, str) or
+                    not verified_intake.person_name.strip()):
+                raise frappe.PermissionError(
+                    "Reception identity or Branch no longer matches the released Placement")
+            applicant_name = " ".join(" ".join((first, surname)).split()).casefold()
+            original_name = " ".join(verified_intake.person_name.split()).casefold()
+            if applicant_name != original_name:
+                raise frappe.ValidationError(
+                    "Applicant name must match the original Reception registration; "
+                    "ask Academic Manager to review an incorrect name before conversion")
+            prior = frappe.db.sql(
+                "select name from `tabStudent Applicant` "
+                "where th_candidate_ref=%s for update", (subject,), as_dict=True)
+        else:
+            origin_inquiry = None
+            prior = frappe.db.sql(
+                "select name from `tabStudent Applicant` "
+                "where student_email_id=%s for update", (subject,), as_dict=True)
         if prior:
             # OD-NEW-01/B: native applicant email is unique, so a
             # returning student re-sitting placement REUSES their one
@@ -224,11 +283,15 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
                     "This subject has an open admission journey; a returning "
                     "journey starts only after the previous journey converts")
             applicant = frappe.get_doc(APPLICANT, prior[0]["name"])
+            if placement_branch and applicant.get("th_branch") != placement_branch:
+                raise frappe.PermissionError(
+                    "Returning applicant has a different branch; approve the branch transfer before admission")
             if int(applicant.paid or 0):
                 raise frappe.ValidationError("Paid applicants are not an admission substitute")
             result = {
                 "name": applicant.name,
-                "student_email_id": subject,
+                "student_email_id": applicant.student_email_id or "",
+                "candidate_reference": subject if is_production() else "",
                 "program": applicant.program,
                 "academic_year": applicant.academic_year,
                 "application_status": applicant.application_status or "Applied",
@@ -242,8 +305,10 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
         applicant = frappe.get_doc(dict(
             doctype=APPLICANT,
             first_name=first,
-            last_name="Applicant",
-            student_email_id=subject,
+            last_name=surname,
+            student_email_id=(email or None) if is_production() else subject,
+            th_candidate_ref=subject if is_production() else None,
+            th_reception_inquiry=origin_inquiry,
             program=program_name,
             academic_year=year_name,
             th_branch=branch_name or None,
@@ -260,7 +325,8 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             raise frappe.ValidationError("Admission must not mark the native applicant paid")
         result = {
             "name": applicant.name,
-            "student_email_id": subject,
+            "student_email_id": email if is_production() else subject,
+            "candidate_reference": subject if is_production() else "",
             "program": program_name,
             "academic_year": year_name,
             "application_status": applicant.application_status or "Applied",
@@ -271,10 +337,15 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
         }
         return result, dict(target=applicant.name, after_hash=digest([applicant.name, subject, program_name]))
 
-    return _execute("record_applicant", request_key,
-                    {"placement_decision": placement_decision, "first_name": first_name,
-                     "program": program, "academic_year": academic_year,
-                     "branch": branch}, work)
+    payload = {"placement_decision": placement_decision, "first_name": first_name,
+               "program": program, "academic_year": academic_year, "branch": branch}
+    # Preserve historical request-key digests when old callers did not supply
+    # a surname. New nonempty surnames become part of idempotency identity.
+    if last_name:
+        payload["last_name"] = last_name
+    if email:
+        payload["email"] = email
+    return _execute("record_applicant", request_key, payload, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -312,17 +383,38 @@ def create_admission(request_key, student_applicant, placement_decision, existin
         row = _placement_row(placement_decision)
         _unexpired(row)
         subject = _placement_subject(row)
-        if (applicant.student_email_id or "") != subject:
+        if is_production():
+            if not subject.startswith("THV-") or getattr(applicant, "th_candidate_ref", None) != subject:
+                raise frappe.PermissionError(
+                    "Placement candidate reference does not match native Applicant")
+        elif (applicant.student_email_id or "") != subject:
             raise frappe.ValidationError("Placement subject does not match the native applicant")
+        source_case = frappe.db.get_value(ATTEMPT, row.attempt, "case_name")
+        source_branch = frappe.db.get_value("TH Placement Case", source_case, "th_branch") if source_case else None
+        if is_production() and not source_branch:
+            raise frappe.PermissionError("Placement origin has no verified Branch")
+        if source_branch and applicant.get("th_branch") != source_branch:
+            raise frappe.PermissionError(
+                "Applicant's branch differs from the verified placement case")
         returning = None
         if existing_student:
             returning = _name(existing_student, "Existing Student")
             linked_email = frappe.db.get_value(STUDENT, returning, "student_email_id")
-            if linked_email is None:
-                raise frappe.ValidationError("Existing Student not found")
-            if (linked_email or "") != (applicant.student_email_id or ""):
-                raise frappe.ValidationError(
-                    "Existing Student does not belong to this applicant")
+            if is_production():
+                linked_candidate = frappe.db.get_value(STUDENT, returning, "th_candidate_ref")
+                if (not linked_candidate or linked_candidate != applicant.get("th_candidate_ref")):
+                    raise frappe.PermissionError(
+                        "Existing Student does not belong to the verified candidate")
+            else:
+                if linked_email is None:
+                    raise frappe.ValidationError("Existing Student not found")
+                if (linked_email or "") != (applicant.student_email_id or ""):
+                    raise frappe.ValidationError(
+                        "Existing Student does not belong to this applicant")
+            linked_applicant = frappe.db.get_value(STUDENT, returning, "student_applicant")
+            if linked_applicant != applicant_name:
+                raise frappe.PermissionError(
+                    "Existing Student must be natively linked to this exact applicant")
         if _open_decision_for_applicant(applicant_name):
             raise frappe.ValidationError("Applicant already has an open admission decision")
         linked = frappe.db.sql(
@@ -564,11 +656,20 @@ def convert_applicant(request_key, name, expected_version):
         _unexpired(row)
         applicant = frappe.db.get_value(
             APPLICANT, doc.student_applicant,
-            ["name", "first_name", "last_name", "student_email_id", "application_status"],
+            ["name", "first_name", "last_name", "student_email_id", "th_candidate_ref",
+             "application_status"],
             as_dict=True,
         )
         if not applicant:
             raise frappe.ValidationError("Student Applicant not found")
+        # Re-verify the identity from the independently released placement
+        # immediately before conversion; a previously valid Applicant link
+        # is not permanent permission to convert a different person.
+        if is_production():
+            current_subject = _placement_subject(row)
+            if not current_subject.startswith("THV-") or applicant.th_candidate_ref != current_subject:
+                raise frappe.PermissionError(
+                    "Student Applicant no longer matches the released placement candidate")
         convert_status = applicant.application_status or "Applied"
         if convert_status == "Admitted" and not returning:
             raise frappe.ValidationError(
@@ -591,16 +692,24 @@ def convert_applicant(request_key, name, expected_version):
             # structurally — no new Customer row is created.
             linked = frappe.db.get_value(
                 STUDENT, returning,
-                ["name", "student_email_id", "enabled", "customer"],
+                ["name", "student_email_id", "th_candidate_ref",
+                 "student_applicant", "enabled", "customer"],
                 as_dict=True,
             )
             if not linked:
                 raise frappe.ValidationError("Existing Student not found")
             if not int(linked.enabled or 0):
                 raise frappe.ValidationError("Existing Student is disabled")
-            if (linked.student_email_id or "") != (applicant.student_email_id or ""):
+            if is_production():
+                if not applicant.th_candidate_ref or linked.th_candidate_ref != applicant.th_candidate_ref:
+                    raise frappe.PermissionError(
+                        "Returning Student candidate reference does not match Applicant")
+            elif (linked.student_email_id or "") != (applicant.student_email_id or ""):
                 raise frappe.ValidationError(
                     "Existing Student does not belong to this applicant")
+            if linked.student_applicant != applicant.name:
+                raise frappe.PermissionError(
+                    "Existing Student's native Applicant link changed; conversion is refused")
             if frappe.db.sql(
                     "select name from `tabProgram Enrollment` where student=%s "
                     "and program=%s and academic_year=%s "
@@ -611,15 +720,28 @@ def convert_applicant(request_key, name, expected_version):
             student_name = linked.name
             customer = linked.customer or frappe.db.get_value(STUDENT, student_name, "customer")
         else:
-            # First-time lane only: no Student may already point at this
-            # applicant, otherwise this would double-convert one person.
+            # First-time lane only. Refuse deployment misconfiguration before
+            # attempting a write: standard Education marks Student email as
+            # mandatory, and an upgrade must import our verified property
+            # setter before a real email-free admission is permitted.
+            if is_production() and not applicant.student_email_id:
+                student_meta = frappe.get_meta(STUDENT)
+                email_field = student_meta.get_field("student_email_id")
+                if (not student_meta.has_field("th_candidate_ref") or
+                        not email_field or email_field.reqd):
+                    raise frappe.ValidationError(
+                        "Email-free Student conversion is not installed; "
+                        "an administrator must migrate the approved Education schema")
+            # No Student may already point at this applicant; otherwise
+            # the first-time lane would double-convert one person.
             if frappe.db.exists(STUDENT, {"student_applicant": applicant.name}):
                 raise frappe.ValidationError("A native Student already exists for this applicant")
             student = frappe.get_doc(dict(
                 doctype=STUDENT,
                 first_name=applicant.first_name,
                 last_name=applicant.last_name,
-                student_email_id=applicant.student_email_id,
+                student_email_id=applicant.student_email_id or None,
+                th_candidate_ref=applicant.th_candidate_ref if is_production() else None,
                 student_applicant=applicant.name,
                 joining_date=frappe.utils.today(),
                 naming_series="EDU-STU-.YYYY.-",

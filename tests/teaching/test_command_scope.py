@@ -11,6 +11,7 @@ class CommandScopeTests(unittest.TestCase):
     def setUp(self):
         self.branches = ["A"]
         self.companies = []
+        self.production = False
         self.documents = {}
         self.student_branches = {}
         self.values = {}
@@ -29,14 +30,19 @@ class CommandScopeTests(unittest.TestCase):
         self.frappe.get_doc = Mock(side_effect=lambda dt, name: self.documents[(dt, name)])
         self.frappe.db = types.SimpleNamespace(get_value=lambda *key: self.values.get(key))
         permissions = types.ModuleType("toefl_house.permissions")
-        permissions.BRANCH_KINDS = {"Student Group": "group", "Student": "student"}
+        permissions.BRANCH_KINDS = {"Student Group": "group", "Student": "student",
+                                    "TH Reception Inquiry": "reception_inquiry"}
         permissions.BRANCH_NATIVE_DOCTYPES = ("Student Group", "Student")
         permissions._doc_branches = lambda doc, kind: doc["branches"]
+        permissions._doc_branches_guarded = lambda doc, kind: doc["branches"]
         permissions._student_branches = lambda name: self.student_branches.get(name, set())
         package = types.ModuleType("toefl_house")
         package.permissions = permissions
+        security = types.ModuleType("toefl_house.security")
+        security.is_production = lambda: self.production
         modules = {"frappe": self.frappe, "toefl_house": package,
-                   "toefl_house.permissions": permissions}
+                   "toefl_house.permissions": permissions,
+                   "toefl_house.security": security}
         context = patch.dict(sys.modules, modules)
         context.start()
         self.addCleanup(context.stop)
@@ -44,6 +50,103 @@ class CommandScopeTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("scope_under_test", path)
         self.scope = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.scope)
+
+    def test_production_exam_commands_reject_foreign_case(self):
+        self.production = True
+        self.documents[("TH Placement Case", "CASE-A")] = {"th_branch": "A"}
+        self.values[("TH Placement Attempt", "ATT-A", "case_name")] = "CASE-A"
+        for kind in self.scope.PLACEMENT_ATTEMPT_COMMANDS:
+            self.scope.authorize_command_scope(kind, {"attempt": "ATT-A"}, "actor")
+        self.branches = ["B"]
+        for kind in self.scope.PLACEMENT_ATTEMPT_COMMANDS:
+            with self.subTest(kind=kind), self.assertRaises(PermissionError):
+                self.scope.authorize_command_scope(kind, {"attempt": "ATT-A"}, "actor")
+
+    def test_production_exam_commands_require_branch_assignment(self):
+        self.production = True
+        self.branches = []
+        for kind in (*self.scope.PLACEMENT_ATTEMPT_COMMANDS, "create_case", "allocate_attempt"):
+            with self.subTest(kind=kind), self.assertRaises(PermissionError):
+                self.scope.authorize_command_scope(
+                    kind, {"attempt": "ATT-A", "branch": "A", "case": "CASE-A"}, "actor")
+
+    def test_exam_receipt_rechecks_branch_after_reassignment(self):
+        self.production = True
+        self.documents[("TH Placement Case", "CASE-A")] = {"th_branch": "A"}
+        self.values[("TH Placement Attempt", "ATT-A", "case_name")] = "CASE-A"
+        payload = {"attempt": "ATT-A", "expected_version": 3}
+        self.scope.authorize_command_scope(
+            "deliver_attempt", payload, "actor", result={"projection": {"items": []}})
+        self.branches = ["B"]
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "deliver_attempt", payload, "actor", result={"projection": {"items": []}})
+
+    def test_placement_case_cannot_move_between_scoped_branches(self):
+        self.documents[("TH Placement Case", "CASE-A")] = {"th_branch": "A"}
+        self.scope.authorize_command_scope("allocate_attempt", {"case": "CASE-A"}, "actor")
+        self.scope.authorize_command_scope(
+            "create_case", {"branch": "A"}, "actor", result={"name": "CASE-A"})
+        self.branches = ["B"]
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope("allocate_attempt", {"case": "CASE-A"}, "actor")
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "create_case", {"branch": "B"}, "actor", result={"name": "CASE-A"})
+
+    def test_branchless_placement_case_fails_closed_for_scoped_staff(self):
+        self.documents[("TH Placement Case", "CASE-NONE")] = {"th_branch": None}
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope("allocate_attempt", {"case": "CASE-NONE"}, "actor")
+
+    def test_reception_inquiry_followup_and_cached_receipt_recheck_branch(self):
+        self.documents[("TH Reception Inquiry", "INQ-ALPHA")] = {
+            "branches": {"A"}}
+        self.scope.authorize_command_scope(
+            "update_walkin_inquiry", {"inquiry": "INQ-ALPHA"}, "actor")
+        self.scope.authorize_command_scope(
+            "create_walkin_inquiry", {"branch": "A"}, "actor",
+            result={"name": "INQ-ALPHA"})
+        self.branches = ["B"]
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "update_walkin_inquiry", {"inquiry": "INQ-ALPHA"}, "actor")
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "create_walkin_inquiry", {"branch": "B"}, "actor",
+                result={"name": "INQ-ALPHA"})
+
+    def test_reception_commands_require_explicit_branch_permission(self):
+        # Native HQ semantics (no Branch User Permission) must NOT be used
+        # for the front counter, including creation and edits by known ID.
+        self.branches = []
+        for kind, payload in (
+            ("create_walkin_inquiry", {"branch": "A"}),
+            ("update_walkin_inquiry", {"inquiry": "INQ-ALPHA"}),
+            ("correct_walkin_inquiry", {"inquiry": "INQ-ALPHA"}),
+        ):
+            with self.subTest(kind=kind), self.assertRaises(PermissionError):
+                self.scope.authorize_command_scope(kind, payload, "actor")
+        self.frappe.get_doc.assert_not_called()
+
+    def test_reception_cached_result_fails_when_branch_assignment_revoked(self):
+        self.documents[("TH Reception Inquiry", "INQ-ALPHA")] = {
+            "branches": {"A"}}
+        creation = {"branch": "A"}
+        followup = {"inquiry": "INQ-ALPHA"}
+        result = {"name": "INQ-ALPHA"}
+        self.scope.authorize_command_scope(
+            "create_walkin_inquiry", creation, "actor", result=result)
+        self.scope.authorize_command_scope(
+            "correct_walkin_inquiry", followup, "actor")
+        self.branches = []
+        for kind, payload, saved in (
+            ("create_walkin_inquiry", creation, result),
+            ("update_walkin_inquiry", followup, None),
+            ("correct_walkin_inquiry", followup, None),
+        ):
+            with self.subTest(kind=kind), self.assertRaises(PermissionError):
+                self.scope.authorize_command_scope(kind, payload, "actor", result=saved)
 
     def test_sole_branch_defaults_and_foreign_branch_denied(self):
         self.assertEqual(self.scope.resolve_creation_branch(None, "actor"), "A")

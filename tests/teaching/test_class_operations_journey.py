@@ -75,6 +75,121 @@ class RosterControlTests(unittest.TestCase):
         self.assertEqual(self.ops.roster("GRP-B"), [("STU-1", 1)])
 
 
+class ReceptionBranchAvailabilityTests(unittest.TestCase):
+    """A front-desk login must not read another branch's seats or waiting students."""
+
+    def setUp(self):
+        self.ops = OperationsSite()
+        self.addCleanup(self.ops.close)
+        self.site = self.ops.site
+        self.ops.seed_class(name="GRP-A", branch="BR-A", capacity=3,
+                            members=["STU-1"])
+        self.ops.seed_class(name="GRP-B", branch="BR-B", capacity=3,
+                            members=["STU-2"])
+        self.site.add("TH Class Waiting List", name="WAIT-A",
+                      student="STU-3", student_group="GRP-A",
+                      status="Waiting", priority=0, requested_on="2026-09-22")
+        self.site.add("TH Class Waiting List", name="WAIT-B",
+                      student="STU-FOREIGN", student_group="GRP-B",
+                      status="Waiting", priority=0, requested_on="2026-09-22")
+        self.ops.login(RECEPTION)
+
+    def test_without_branch_assignment_both_read_endpoints_deny(self):
+        for fn in (self.ops.capacity.class_availability,
+                   self.ops.capacity.waiting_list_board):
+            with self.subTest(method=fn.__name__):
+                with self.assertRaises(PermissionError_):
+                    fn()
+
+    def test_one_assigned_branch_sees_only_its_classes_and_waiting_students(self):
+        self.site.add("User Permission", name="BR-ALLOW-A",
+                      user=RECEPTION, allow="Branch", for_value="BR-A")
+        available = self.ops.capacity.class_availability()
+        self.assertEqual([r["student_group"] for r in available["classes"]], ["GRP-A"])
+        board = self.ops.capacity.waiting_list_board()
+        self.assertEqual([r["student"] for r in board["entries"]], ["STU-3"])
+        self.assertEqual([r["entry"] for r in board["entries"]], ["WAIT-A"])
+        with self.assertRaises(PermissionError_):
+            self.ops.capacity.class_availability(branch="BR-B")
+        with self.assertRaises(PermissionError_):
+            self.ops.capacity.waiting_list_board(student_group="GRP-B")
+        self.assertEqual(self.ops.capacity.class_availability(
+            student_group="GRP-B")["classes"], [])
+
+    def test_truncated_availability_and_waiting_board_cannot_claim_exact_counts(self):
+        self.site.add("User Permission", name="BR-LIMIT-A",
+                      user=RECEPTION, allow="Branch", for_value="BR-A")
+        for i in range(self.ops.capacity.MAX_CLASSES):
+            self.site.add("Student Group", name=f"MORE-A-{i}",
+                          th_branch="BR-A", disabled=0,
+                          student_group_name=f"Many {i}")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.class_availability()
+        self.assertIn("Too many classes", str(ctx.exception))
+
+        # The class-specific read must remain available even when the
+        # overall branch scope has too many classes to show completely.
+        single = self.ops.capacity.class_availability(student_group="GRP-A")
+        self.assertEqual([c["student_group"] for c in single["classes"]], ["GRP-A"])
+        for i in range(self.ops.capacity.MAX_ENTRIES):
+            self.site.add("TH Class Waiting List", name=f"WAIT-A-{i}",
+                          student=f"STU-{i}", student_group="GRP-A",
+                          status="Waiting", priority=0,
+                          requested_on="2026-09-22")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.waiting_list_board(student_group="GRP-A")
+        self.assertIn("choose one class", str(ctx.exception))
+
+        # Even when class is selected, a seat summary cannot silently
+        # undercount a large waiting queue.
+        for i in range(self.ops.capacity.MAX_CLASSES * 4):
+            self.site.add("TH Class Waiting List", name=f"WAIT-EXTRA-{i}",
+                          student=f"OTHER-{i}", student_group="GRP-A",
+                          status="Waiting", priority=0,
+                          requested_on="2026-09-22")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.class_availability(student_group="GRP-A")
+        self.assertIn("Waiting-list totals exceed", str(ctx.exception))
+
+    def test_terminal_or_archived_class_does_not_advertise_free_seats(self):
+        self.site.add("User Permission", name="BR-TERMINAL-A",
+                      user=RECEPTION, allow="Branch", for_value="BR-A")
+        self.ops.seed_class(name="GRP-COMPLETED", branch="BR-A",
+                            status="Completed", capacity=20)
+        self.ops.seed_class(name="GRP-CANCELLED", branch="BR-A",
+                            status="Cancelled", capacity=20)
+        self.ops.seed_class(name="GRP-ARCHIVED", branch="BR-A",
+                            status="Active", capacity=20)
+        self.site.get("Student Group", "GRP-ARCHIVED")["disabled"] = 1
+        self.site.add("TH Class Waiting List", name="WAIT-CLOSED",
+                      student="STU-PRIVATE", student_group="GRP-COMPLETED",
+                      status="Waiting", priority=0, requested_on="2026-09-22")
+        report = self.ops.capacity.class_availability()
+        self.assertEqual([row["student_group"] for row in report["classes"]],
+                         ["GRP-A"])
+        front_desk = self.ops.capacity.waiting_list_board(
+            student_group="GRP-COMPLETED")
+        self.assertEqual(len(front_desk["entries"]), 1)
+        self.assertEqual(front_desk["entries"][0]["next_command"], "")
+        self.assertEqual(front_desk["entries"][0]["next_role"], "Academic Manager")
+        self.ops.login(APPROVER)
+        self.site.set_roles(APPROVER, ["Academic Manager"])
+        board = self.ops.capacity.waiting_list_board(student_group="GRP-COMPLETED")
+        self.assertEqual(len(board["entries"]), 1)
+        self.assertEqual(board["entries"][0]["next_command"], "")
+        self.assertEqual(board["entries"][0]["next_role"], "Academic Manager")
+
+    def test_branch_rule_restricts_academic_manager_but_hq_without_one_can_read(self):
+        self.ops.login(APPROVER)
+        self.site.set_roles(APPROVER, ["Academic Manager"])
+        self.assertEqual(len(self.ops.capacity.class_availability()["classes"]), 2)
+        self.site.add("User Permission", name="BR-MANAGER-ALLOW",
+                      user=APPROVER, allow="Branch", for_value="BR-A")
+        self.assertEqual(
+            [row["student_group"] for row in self.ops.capacity.class_availability()["classes"]],
+            ["GRP-A"])
+
+
 class ClassOperationsJourneyTests(unittest.TestCase):
     def setUp(self):
         self.ops = OperationsSite()
@@ -181,6 +296,9 @@ class ClassOperationsJourneyTests(unittest.TestCase):
                 "journey-transfer-0001", "STU-2", "GRP-A", "GRP-B",
                 "moves to the afternoon cohort", "2026-09-25")
             self.assertEqual(transfer["transfer_kind"], "Class")
+            # A pending future transfer is NOT a roster move. Execute when
+            # the approved effective day arrives in this synthetic journey.
+            self.site.today = "2026-09-25"
             self.ops.login(APPROVER)
             executed = self.ops.transfers.approve_class_transfer(
                 "journey-transfer-0002", transfer["name"])
@@ -255,7 +373,13 @@ class ClassOperationsJourneyTests(unittest.TestCase):
         with self.assertRaises(PermissionError_):
             self.ops.capacity.class_availability()
 
-        # 10. Reception sees the final, truthful seat picture.
+        # 10. Reception sees ONLY the class seats in its assigned Branch.
+        # The synthetic earlier scheduling scenario left Branch blank; bind
+        # its existing classes at the desk checkpoint, not retroactively.
+        for group in self.site.all("Student Group"):
+            group["th_branch"] = "BR-A"
+        self.site.add("User Permission", name="RECEPTION-BR-A",
+                      user=RECEPTION, allow="Branch", for_value="BR-A")
         self.ops.login(RECEPTION)
         final = self.ops.capacity.class_availability(program="TH-PROG")
         by_group = {row["student_group"]: row for row in final["classes"]}

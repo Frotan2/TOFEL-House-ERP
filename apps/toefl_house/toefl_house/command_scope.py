@@ -7,6 +7,8 @@ REFERENCES = {
     "to_group": "Student Group", "course_schedule": "Course Schedule",
     "session": "Course Schedule",
     "student": "Student", "student_applicant": "Student Applicant",
+    "inquiry": "TH Reception Inquiry",
+    "case": "TH Placement Case",
     "admission_decision": "TH Admission Decision",
     "program_enrollment": "Program Enrollment", "attendance": "Student Attendance",
     "transfer": "TH Class Transfer", "exit": "TH Enrollment Exit",
@@ -19,6 +21,8 @@ ADMISSION_NAMES = frozenset({
 })
 RESULT_NAMES = {
     "create_student_group": "Student Group", "record_applicant": "Student Applicant",
+    "create_walkin_inquiry": "TH Reception Inquiry",
+    "create_case": "TH Placement Case",
     "create_admission": "TH Admission Decision", "schedule_session": "Course Schedule",
     "assign_teaching_skill": "TH Teaching Assignment",
 }
@@ -41,6 +45,11 @@ CORRECTION_COMMANDS = frozenset({
 # the refund request's Fees document, exactly like correction approvals.
 REFUND_COMMANDS = frozenset({
     "approve_tuition_refund", "deny_tuition_refund", "pay_tuition_refund", "void_tuition_refund",
+})
+
+PLACEMENT_ATTEMPT_COMMANDS = frozenset({
+    "verify_attempt", "deliver_attempt", "save_response", "seal_attempt",
+    "score_attempt", "review_attempt", "finalize_attempt", "release_decision",
 })
 
 
@@ -140,7 +149,10 @@ def _require_document(doctype, name, allowed):
         raise frappe.PermissionError("The command target must resolve to a permitted branch")
     doc = frappe.get_doc(doctype, name)
     from toefl_house import permissions
-    if doctype in ("Student", "Program Enrollment"):
+    if doctype == "TH Placement Case":
+        branch = doc.get("th_branch")
+        branches = {branch} if branch else set()
+    elif doctype in ("Student", "Program Enrollment"):
         student = name if doctype == "Student" else doc.get("student")
         branches = _effective_student_branches(student)
     elif doctype in ("Course Schedule", "Student Attendance"):
@@ -209,6 +221,28 @@ def authorize_command_scope(kind, payload, actor, *, result=None):
         from toefl_house.teaching import _require_own_instructor_session
         _require_own_instructor_session(actor, row, schedule)
     allowed = actor_branches(actor)
+    # Placement attempts have no direct branch column. The frozen Case is
+    # their sole authoritative origin. Every production operator must carry
+    # an explicitly assigned Branch, including when replaying an old receipt;
+    # role possession alone is not enough to cross campus boundaries.
+    if kind in PLACEMENT_ATTEMPT_COMMANDS or kind in {"create_case", "allocate_attempt"}:
+        from toefl_house.security import is_production
+        if is_production():
+            if not allowed:
+                raise frappe.PermissionError(
+                    "A verified Branch assignment is required for placement commands")
+            if kind in PLACEMENT_ATTEMPT_COMMANDS:
+                case_name = frappe.db.get_value(
+                    "TH Placement Attempt", payload.get("attempt"), "case_name")
+                _require_document("TH Placement Case", case_name, allowed)
+    # Reception is a physical front-counter role, never an unrestricted HQ
+    # reader/writer. Desk access already requires an explicit Branch User
+    # Permission; the POST commands and cached receipts must enforce the
+    # same boundary even when Frappe writes use ignore_permissions=True.
+    if kind in {"create_walkin_inquiry", "update_walkin_inquiry",
+                "correct_walkin_inquiry"} and not allowed:
+        raise frappe.PermissionError(
+            "Reception commands require an explicitly assigned Branch")
     if allowed is None:
         return
     if "branch" in payload:

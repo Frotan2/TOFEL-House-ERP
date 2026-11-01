@@ -29,6 +29,8 @@ GUARDS = {
     "Stock Reconciliation": "toefl_house.finance.books.guard_stock_reconciliation",
     # The cashier day close is a control record: command-only on every seam.
     "TH Cashier Day": "toefl_house.finance.cashier.guard",
+    # Visitor identity is a protected operational record, not a free-edit CRM lead.
+    "TH Reception Inquiry": "toefl_house.reception_intake.protect_inquiry",
     "Program Enrollment": "toefl_house.enrollment.guard_program_enrollment",
     "Course Enrollment": "toefl_house.enrollment.guard_course_enrollment",
     "Sales Invoice": "toefl_house.finance.guard_sales_invoice",
@@ -42,6 +44,7 @@ MODULE_FILES = {
     "toefl_house.enrollment": ROOT / "apps/toefl_house/toefl_house/enrollment/__init__.py",
     "toefl_house.finance": ROOT / "apps/toefl_house/toefl_house/finance/__init__.py",
     "toefl_house.finance.cashier": ROOT / "apps/toefl_house/toefl_house/finance/cashier.py",
+    "toefl_house.reception_intake": ROOT / "apps/toefl_house/toefl_house/reception_intake.py",
     "toefl_house.finance.refunds": ROOT / "apps/toefl_house/toefl_house/finance/refunds.py",
     "toefl_house.finance.student_journals": ROOT / "apps/toefl_house/toefl_house/finance/student_journals.py",
     "toefl_house.finance.books": ROOT / "apps/toefl_house/toefl_house/finance/books.py",
@@ -111,7 +114,12 @@ class ContainmentHookWiringTests(unittest.TestCase):
                             "TH Timetable Template",
                             # 2026-10-18: unconditional validate-only integrity hook (Office 365 link
                             # uniqueness, toefl_house/identity_links.py). Not a command guard.
-                            "User"}
+                            "User",
+                            # Student Applicant is a pinned non-submittable
+                            # native record. Its validate-only hook blocks
+                            # direct production creation and immutable
+                            # candidate/referral provenance edits.
+                            "Student Applicant"}
         self.assertEqual(extra, allowed_extras,
                          "doc_events changed; update this guard deliberately — the "
                          "only sanctioned extras are the governance configuration "

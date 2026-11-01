@@ -91,6 +91,12 @@ PROJECTION_FIELDS = {
         "reason", "evidence", "approval_evidence", "status", "requested_by",
         "approved_by", "paying_user", "credit_journal", "payment_entry", "modified", "voided_by", "void_reason", "voided_on",
     ],
+    # Preliminary walk-in records are visible ONLY through this bounded,
+    # role-gated, branch-filtered desk (no native DocType read grants).
+    ("reception", "TH Reception Inquiry"): [
+        "name", "person_name", "phone", "program_interest", "th_branch",
+        "status", "notes", "recorded_by", "version", "creation",
+    ],
     ("reception", "TH Placement Decision"): [
         "name", "attempt", "status", "released_at", "expires_at",
         "course_code", "internal_level",
@@ -99,26 +105,58 @@ PROJECTION_FIELDS = {
         "name", "case_name", "status",
     ],
     ("reception", "TH Placement Case"): [
-        "name", "subject", "status",
+        "name", "subject", "status", "th_branch", "reception_inquiry",
     ],
     ("reception", "Student"): [
-        "name", "student_name", "student_email_id", "creation",
+        "name", "student_name", "student_email_id", "th_candidate_ref", "student_applicant", "enabled", "creation",
     ],
     # Cohort truth for the walk-in lookup: the class lifecycle lives on the
     # governed th_class_status custom field (planned/active classes open a
     # cohort; completed/cancelled ones do not). No `active` column exists on
     # the pinned native Student Group (education 93bc70757533).
+    # Front-counter class lookup: class and timetable facts may only derive
+    # from an in-scope Student, submitted Program Enrollment, and this
+    # Student's own active native roster membership. A class merely existing
+    # for the same program is NOT proof the learner belongs to that class.
     ("reception", "Student Group"): [
-        "name", "program", "academic_year", "disabled", "th_class_status",
+        "name", "student_group_name", "program", "academic_year",
+        "academic_term", "th_branch", "disabled", "th_class_status",
+    ],
+    ("reception", "Student Group Student"): [
+        "name", "parent", "student", "active",
+    ],
+    ("reception", "Course Schedule"): [
+        "name", "student_group", "instructor", "course", "room",
+        "from_time", "to_time", "schedule_date", "th_session_status",
+    ],
+    ("reception", "TH Teaching Assignment"): [
+        "name", "student_group", "instructor", "course_schedule",
+        "effective_start", "effective_end",
+    ],
+    # Read suspension *state/window only*, never sensitive free-text reason or
+    # other students' names. All queries stay scoped to the caller's branch.
+    ("reception", "TH Class Suspension"): [
+        "name", "scope", "student_group", "student", "status",
+        "from_date", "until_date",
+    ],
+    # A pending class move is not the same as a changed roster. Only show
+    # operational facts, never the student's confidential transfer reason,
+    # requester, audit evidence or names of unrelated learners.
+    ("reception", "TH Class Transfer"): [
+        "name", "student", "from_group", "to_group", "transfer_kind",
+        "status", "effective_date",
+    ],
+    ("reception", "Instructor"): [
+        "name", "instructor_name", "status",
     ],
     ("reception", "Program Enrollment"): [
         "name", "student", "student_name", "program", "academic_year",
-        "enrollment_date", "docstatus",
+        "academic_term", "enrollment_date", "docstatus",
     ],
     ("reception", "Student Applicant"): [
         # `title` is the pinned native full-name column (education
         # 93bc70757533); Student Applicant has no `applicant_name` column.
-        "name", "title", "student_email_id", "program",
+        "name", "title", "student_email_id", "th_candidate_ref", "th_reception_inquiry", "program",
         "academic_year", "application_status", "creation",
     ],
     ("reception", "TH Admission Decision"): [
@@ -570,6 +608,11 @@ def require_desk_audience(slug):
         )
     if not frappe.db.get_value("User", user, "enabled"):
         frappe.throw("This account has been disabled.", frappe.PermissionError)
+    if slug == "th-reception-desk" and not frappe.db.get_value(
+            "User Permission", {"user": user, "allow": "Branch"}, "for_value"):
+        frappe.throw(
+            "Reception needs an assigned Branch before customer records can be viewed. "
+            "Ask the Course Owner to assign your branch.", frappe.PermissionError)
     return user
 
 
@@ -607,9 +650,10 @@ def scope_filters(desk):
 # matches nothing (fail closed). Doctypes without an entry (placement
 # content, configuration, system records, identity) are intentionally
 # branch-wide.
-BRANCH_CHAIN_FILTERS = ("Student", "Student Group Student", "Student Attendance",
+BRANCH_CHAIN_FILTERS = ("TH Reception Inquiry", "Student", "Student Group Student", "Student Attendance",
                         "Course Schedule", "Program Enrollment", "Fees",
                         "TH Enrollment Exit", "TH Teaching Assignment",
+                        "TH Class Suspension", "TH Class Transfer",
                         "TH Correction Request", "TH Admission Decision")
 _CHAIN_LIMIT = 10000  # bounded scope resolution; truncation is fail-closed
 
@@ -619,13 +663,21 @@ def _branch_allowed_names(doctype, branches, *, require_complete=False):
     class -> branch and roster -> student chains."""
     # Enrollment queues make numeric/roster claims. A truncated scope chain
     # must report an error, not masquerade as an exact empty intake.
-    strict = require_complete or doctype == "Program Enrollment"
+    strict = require_complete or doctype in ("Program Enrollment", "Student")
 
     def checked(rows):
         if strict and len(rows) >= _CHAIN_LIMIT:
             raise frappe.ValidationError(
                 "Branch enrollment scope exceeds the safe read limit; narrow the scope or contact an administrator")
         return rows
+
+    if doctype == "TH Reception Inquiry":
+        rows = frappe.get_all(
+            doctype, filters={"th_branch": ("in", branches)},
+            fields=["name"], limit_page_length=_CHAIN_LIMIT)
+        if len(rows) >= _CHAIN_LIMIT:
+            raise frappe.ValidationError("Reception inquiry branch scope exceeds the safe read limit")
+        return [row["name"] for row in rows]
 
     groups = [row["name"] for row in checked(frappe.get_all(
         "Student Group", filters={"th_branch": ("in", branches)},
@@ -636,7 +688,21 @@ def _branch_allowed_names(doctype, branches, *, require_complete=False):
         return [row["name"] for row in frappe.get_all(
             doctype, filters={"parent": ("in", groups), "active": 1},
             fields=["name"], limit_page_length=_CHAIN_LIMIT)]
-    if doctype in ("Student Attendance", "Course Schedule", "TH Teaching Assignment"):
+    if doctype == "TH Class Transfer":
+        if not groups:
+            return []
+        # BOTH groups must be in the same authorized Branch set, not merely
+        # the source. A future/old cross-branch transfer is never exposed.
+        rows = frappe.get_all(
+            doctype, filters={"from_group": ("in", groups),
+                              "to_group": ("in", groups)},
+            fields=["name"], limit_page_length=_CHAIN_LIMIT)
+        if len(rows) >= _CHAIN_LIMIT:
+            raise frappe.ValidationError(
+                "Branch transfer scope exceeds the safe read limit; ask an administrator")
+        return [row["name"] for row in rows]
+    if doctype in ("Student Attendance", "Course Schedule", "TH Teaching Assignment",
+                   "TH Class Suspension"):
         if not groups:
             return []
         return [row["name"] for row in frappe.get_all(
@@ -646,7 +712,53 @@ def _branch_allowed_names(doctype, branches, *, require_complete=False):
         "Student Group Student", filters={"parent": ("in", groups), "active": 1},
         fields=["student"], limit_page_length=_CHAIN_LIMIT))] if groups else []
     if doctype == "Student":
-        return roster
+        # A converted learner exists BEFORE first Program Enrollment or
+        # Student Group roster assignment. For Reception, that is the exact
+        # moment a Student lookup must work. Admit an unrostered Student only
+        # through a branch-visible converted Admission and their exact native
+        # Applicant link; a matching email, name or household phone proves
+        # nothing. A student rostered in a foreign/branchless group must
+        # never leak through a historical admission in another branch.
+        admissible = _branch_allowed_names(
+            "TH Admission Decision", branches, require_complete=True)
+        intake_rows = checked(frappe.get_all(
+            "TH Admission Decision",
+            filters={"name": ("in", admissible)},
+            fields=["name", "student_applicant", "native_student"],
+            limit_page_length=_CHAIN_LIMIT)) if admissible else []
+        verified = {(row.get("native_student"), row.get("student_applicant"))
+                    for row in intake_rows
+                    if row.get("native_student") and row.get("student_applicant")}
+        candidates = sorted(set(roster) | {pair[0] for pair in verified})
+        if not candidates:
+            return []
+        students = checked(frappe.get_all(
+            "Student", filters={"name": ("in", candidates)},
+            fields=["name", "student_applicant"], limit_page_length=_CHAIN_LIMIT))
+        all_memberships = checked(frappe.get_all(
+            "Student Group Student",
+            filters={"student": ("in", candidates), "active": 1},
+            fields=["student", "parent"], limit_page_length=_CHAIN_LIMIT))
+        parents = sorted({row.get("parent") for row in all_memberships if row.get("parent")})
+        all_groups = checked(frappe.get_all(
+            "Student Group", filters={"name": ("in", parents)},
+            fields=["name", "th_branch"], limit_page_length=_CHAIN_LIMIT)) if parents else []
+        by_parent = {group["name"]: group.get("th_branch") for group in all_groups}
+        membership_branches = {}
+        for row in all_memberships:
+            membership_branches.setdefault(row["student"], set()).add(
+                by_parent.get(row.get("parent")))
+        allowed = set(branches)
+        result = []
+        for student in students:
+            name = student["name"]
+            memberships = membership_branches.get(name, set())
+            if memberships and (not memberships <= allowed):
+                continue
+            if ((name in roster and memberships) or
+                    (name, student.get("student_applicant")) in verified):
+                result.append(name)
+        return sorted(result)
     if doctype == "Program Enrollment":
         # A new/late learner may have a submitted enrollment before any class
         # roster exists. Authorize that intake only through an already
@@ -913,7 +1025,7 @@ def project_count(desk, doctype, filters=None):
     return frappe.db.count(doctype, filters)
 
 
-def section(sid, title, kind, *, items=None, facts=None, empty_title="", empty_body="", notes=None):
+def section(sid, title, kind, *, items=None, facts=None, empty_title="", empty_body="", notes=None, actions=None):
     """A desk section envelope. The client renders these uniformly."""
     payload = {"id": sid, "title": title, "kind": kind}
     if facts is not None:
@@ -923,6 +1035,8 @@ def section(sid, title, kind, *, items=None, facts=None, empty_title="", empty_b
     payload["empty"] = {"title": empty_title, "body": empty_body}
     if notes:
         payload["notes"] = notes
+    if actions:
+        payload["actions"] = actions
     return payload
 
 

@@ -54,7 +54,10 @@ def load_security_constants():
 # validate-family integrity check (toefl_house/identity_links.py). Frappe fires
 # before_cancel and before_update_after_submit only for submittable documents, so they
 # are exempt from the three-seam rule. Adding any doctype here needs the same review.
-UNCONDITIONAL_VALIDATE_ONLY = {"User"}
+# The pinned Education Student Applicant is also non-submittable. Its
+# validate-only hook enforces both approved command creation and immutable
+# provenance on any subsequent native form update; there is no cancel seam.
+UNCONDITIONAL_VALIDATE_ONLY = {"User", "Student Applicant"}
 
 class AppAssemblyTests(unittest.TestCase):
     @classmethod

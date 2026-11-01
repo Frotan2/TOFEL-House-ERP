@@ -32,6 +32,14 @@ class CapacityTests(unittest.TestCase):
             self.ops.seed_enrollment(student=f"STU-{index}")
         return "GRP-FULL"
 
+    def _log_in_branch_reception(self, branch="BR-A"):
+        """Synthetic Reception requires explicit native Branch permission."""
+        for group in self.site.all("Student Group"):
+            group["th_branch"] = branch
+        self.site.add("User Permission", name=f"RECEPTION-{branch}",
+                      user=RECEPTION, allow="Branch", for_value=branch)
+        self.ops.login(RECEPTION)
+
     # --- pure seat arithmetic -------------------------------------------
     def test_available_seats_never_goes_negative(self):
         self.assertEqual(self.ops.capacity.available_seats(20, 12, 3), 5)
@@ -332,7 +340,7 @@ class CapacityTests(unittest.TestCase):
     def test_availability_is_readable_by_reception_and_refused_to_others(self):
         group = self._full_class(capacity=3, roster=2)
         self.ops.seed_waiting(group, "STU-3")
-        self.ops.login(RECEPTION)
+        self._log_in_branch_reception()
         report = self.ops.capacity.class_availability()
         self.assertEqual(report["as_of"], "2026-09-22")
         row = next(item for item in report["classes"]
@@ -355,7 +363,7 @@ class CapacityTests(unittest.TestCase):
         self.ops.seed_student("STU-3")
         for name in ("STU-3", "STU-4"):
             self.ops.seed_waiting("GRP-A", name)
-        self.ops.login(RECEPTION)
+        self._log_in_branch_reception()
         report = self.ops.capacity.class_availability(program="TH-PROG",
                                                        academic_year="2026-27")
         intake = report["intake"][0]
@@ -374,7 +382,7 @@ class CapacityTests(unittest.TestCase):
                               expires="2026-09-25")
         self.ops.seed_waiting("GRP-OPEN", "STU-4", status="Offered",
                               expires="2026-09-01")
-        self.ops.login(RECEPTION)
+        self._log_in_branch_reception()
         board = self.ops.capacity.waiting_list_board("GRP-OPEN")
         by_student = {row["student"]: row for row in board["entries"]}
         self.assertEqual(by_student["STU-2"]["next_command"],

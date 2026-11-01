@@ -1,0 +1,113 @@
+{
+  "doctype": "DocType",
+  "name": "TH Reception Inquiry",
+  "module": "Operations",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "track_changes": 1,
+  "allow_rename": 0,
+  "field_order": [
+    "person_name",
+    "phone",
+    "program_interest",
+    "th_branch",
+    "status",
+    "notes",
+    "recorded_by",
+    "version",
+    "synthetic",
+    "open_identity_key",
+    "last_correction_reason",
+    "last_corrected_by"
+  ],
+  "fields": [
+    {
+      "fieldname": "person_name",
+      "label": "Visitor name",
+      "fieldtype": "Data",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "phone",
+      "label": "Contact phone (optional)",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "program_interest",
+      "label": "Interested program",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "th_branch",
+      "label": "Reception branch",
+      "fieldtype": "Link",
+      "options": "Branch",
+      "reqd": 1
+    },
+    {
+      "fieldname": "status",
+      "label": "Follow-up status",
+      "fieldtype": "Select",
+      "options": "New\nContacted\nAwaiting Placement\nClosed",
+      "default": "New",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "notes",
+      "label": "Reception notes",
+      "fieldtype": "Small Text"
+    },
+    {
+      "fieldname": "recorded_by",
+      "label": "Recorded by",
+      "fieldtype": "Link",
+      "options": "User",
+      "reqd": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "version",
+      "label": "Version",
+      "fieldtype": "Int",
+      "default": "1",
+      "reqd": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    },
+    {
+      "fieldname": "open_identity_key",
+      "label": "Open inquiry uniqueness key",
+      "fieldtype": "Data",
+      "unique": 1,
+      "read_only": 1,
+      "hidden": 1,
+      "description": "System-only index preventing simultaneous identical open intake. NULL when closed or no contact; not a person identity."
+    },
+    {
+      "fieldname": "last_correction_reason",
+      "label": "Last identity correction reason",
+      "fieldtype": "Small Text",
+      "read_only": 1,
+      "hidden": 1
+    },
+    {
+      "fieldname": "last_corrected_by",
+      "label": "Last corrected by",
+      "fieldtype": "Link",
+      "options": "User",
+      "read_only": 1,
+      "hidden": 1
+    }
+  ],
+  "permissions": [],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

@@ -34,7 +34,7 @@ frappe.provide("toefl_house.role_desks");
 			endpoint: "toefl_house.desk.reception.work",
 			title: "TOEFL House Reception Desk",
 			description: "Find any person in the admission funnel and see the stage, what is missing and who acts next.",
-			search: { endpoint: "toefl_house.desk.reception.lookup", placeholder: "Name or email of the person in front of you" },
+			search: { endpoint: "toefl_house.desk.reception.lookup", placeholder: "Name, phone, candidate, inquiry or Student ID" },
 		},
 		"th-academic-desk": {
 			endpoint: "toefl_house.desk.academic.work",
@@ -625,6 +625,21 @@ frappe.provide("toefl_house.role_desks");
 		return group;
 	}
 
+	function renderSectionActions(body, actions) {
+		if (!Array.isArray(actions) || !actions.length) return;
+		const bar = $("<div class='th-route-group th-section-actions'></div>").appendTo(body);
+		actions.forEach((action) => {
+			if (!action || (!action.route && !action.endpoint)) return;
+			$("<button type='button' class='btn btn-secondary btn-sm'></button>")
+				.text(text(action.label || "Continue"))
+				.on("click", () => {
+					if (action.route) frappe.set_route(action.route);
+					else openGuidedAction(action);
+				})
+				.appendTo(bar);
+		});
+	}
+
 	function renderSectionBody(body, payload) {
 		body.empty();
 		const kind = payload.kind;
@@ -664,19 +679,14 @@ frappe.provide("toefl_house.role_desks");
 			if (payload.comparison) body.append(comparisonMarkup(payload.comparison));
 			if (payload.chart) body.append(barChartMarkup(payload.chart));
 		}
-		// Inline contextual actions below queue
-		if (payload.actions) {
-			const actionsBar = $("<div class='th-route-group' style='margin-top:1rem'></div>").appendTo(body);
-			payload.actions.forEach((act) => {
-				$("<button type='button' class='btn btn-secondary btn-sm'></button>")
-					.text(text(act.label))
-					.on("click", () => {
-						if (act.route) frappe.set_route(act.route);
-						else if (act.endpoint) openGuidedAction(act);
-					})
-					.appendTo(actionsBar);
-			});
+		// Clearly disclose bounded queues, so older contacts never appear
+		// to have been deleted or forgotten when more than 25 remain open.
+		if (payload.notes) {
+			$("<p class='th-page-purpose th-queue-note'></p>")
+				.text(text(payload.notes)).appendTo(body);
 		}
+		// Inline contextual actions below queue
+		renderSectionActions(body, payload.actions);
 	}
 
 	/*
@@ -920,6 +930,11 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
 			{ fieldname: "conditions", label: "Conditions", fieldtype: "Small Text" },
 		],
+		"toefl_house.admission.satisfy_conditions": [
+			{ fieldname: "name", label: "Admission decision", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "expected_version", label: "Expected version", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "evidence", label: "Independent evidence that all conditions are met", fieldtype: "Small Text", reqd: 1 },
+		],
 		"toefl_house.admission.accept_offer": [
 			{ fieldname: "name", label: "Admission decision", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "expected_version", label: "Expected version", fieldtype: "Int", reqd: 1 },
@@ -932,16 +947,44 @@ frappe.provide("toefl_house.role_desks");
 				{ fieldname: "student_applicant", label: "Student applicant", fieldtype: "Data", reqd: 1 },
 				{ fieldname: "placement_decision", label: "Released placement decision", fieldtype: "Data", reqd: 1 },
 				{ fieldname: "existing_student", label: "Existing student", fieldtype: "Data" },
-				{ fieldname: "program", label: "Program", fieldtype: "Data", description: "Returning journeys only; blank inherits the applicant record." },
-				{ fieldname: "academic_year", label: "Academic year", fieldtype: "Data", description: "Returning journeys only; blank inherits the applicant record." },
-				{ fieldname: "academic_term", label: "Academic term", fieldtype: "Data", description: "Returning journeys only; blank inherits the applicant record." },
+				{ fieldname: "program", label: "Program (returning admission)", fieldtype: "Link", options: "Program",
+					description: "Choose the approved Program for the new journey. Blank inherits the prior applicant program; verify against the released placement." },
+				{ fieldname: "academic_year", label: "Academic year (returning admission)", fieldtype: "Link", options: "Academic Year",
+					description: "Select the correct year for the new journey; blank inherits the prior year." },
+				{ fieldname: "academic_term", label: "Academic term (returning admission)", fieldtype: "Link", options: "Academic Term",
+					description: "Select the new term if applicable; blank inherits the prior term." },
 			],
+		"toefl_house.reception_intake.create_walkin_inquiry": [
+			{ fieldname: "person_name", label: "Visitor's full name", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "phone", label: "Contact phone (optional)", fieldtype: "Data" },
+			{ fieldname: "program_interest", label: "Program of interest", fieldtype: "Data" },
+			{ fieldname: "branch", label: "Reception branch", fieldtype: "Link", options: "Branch" },
+			{ fieldname: "notes", label: "Reception note (optional)", fieldtype: "Small Text" },
+		],
+		"toefl_house.reception_intake.correct_walkin_inquiry": [
+			{ fieldname: "inquiry", label: "Inquiry reference", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "expected_version", label: "Recorded version", fieldtype: "Int", reqd: 1, read_only: 1 },
+			{ fieldname: "person_name", label: "Corrected visitor name", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "phone", label: "Corrected contact phone (optional)", fieldtype: "Data" },
+			{ fieldname: "reason", label: "Reason for correction (required)", fieldtype: "Small Text", reqd: 1,
+				description: "Use only before the Placement case is created. Every correction is versioned and audited." },
+		],
+		"toefl_house.reception_intake.update_walkin_inquiry": [
+			{ fieldname: "inquiry", label: "Inquiry reference", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "expected_version", label: "Recorded version", fieldtype: "Int", reqd: 1, read_only: 1 },
+			{ fieldname: "status", label: "Follow-up status", fieldtype: "Select",
+				options: "Contacted\nAwaiting Placement\nClosed", reqd: 1 },
+			{ fieldname: "notes", label: "Follow-up notes", fieldtype: "Small Text" },
+		],
 		"toefl_house.admission.record_applicant": [
 			{ fieldname: "placement_decision", label: "Released placement decision", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "first_name", label: "First name", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "program", label: "Program", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "first_name", label: "Registered name (required)", fieldtype: "Data", reqd: 1,
+				description: "Must match the name recorded at Reception. Keep the full registered name here if no separate family name was recorded." },
+			{ fieldname: "last_name", label: "Family name (optional)", fieldtype: "Data" },
+			{ fieldname: "email", label: "Email (optional)", fieldtype: "Data", description: "Only enter a genuine address; leave blank if none." },
+			{ fieldname: "program", label: "Program", fieldtype: "Link", options: "Program", reqd: 1 },
 			{ fieldname: "academic_year", label: "Choose the academic year", fieldtype: "Link", options: "Academic Year", reqd: 1 },
-			{ fieldname: "branch", label: "Branch", fieldtype: "Data", description: "Blank: the recording officer's own branch." },
+			{ fieldname: "branch", label: "Branch", fieldtype: "Link", options: "Branch", description: "Blank: the recording officer's own branch." },
 		],
 		"toefl_house.enrollment.enroll_in_program": [
 			{ fieldname: "admission_decision", label: "Admission decision", fieldtype: "Data", reqd: 1 },
@@ -1486,13 +1529,17 @@ frappe.provide("toefl_house.role_desks");
 			});
 		}
 		const contextKeys = ["outstanding", "expected_amount", "currency", "receipt_list",
-			"recipient", "tuition_bill", "refund_amount", "refund_reason", "supporting_evidence", "approved_by", "approval_evidence"];
+			"recipient", "tuition_bill", "refund_amount", "refund_reason", "supporting_evidence", "approved_by", "approval_evidence",
+			"placement_course_code", "placement_level"];
 		const contextFacts = contextKeys.filter((key) => action.args && action.args[key] !== undefined)
 			.map((key) => `<dt>${escapeText(key.replace(/_/g, " "))}</dt><dd style="white-space:pre-wrap">${escapeText(action.args[key])}</dd>`).join("");
 		const contextFields = contextFacts ? [{ fieldname: "cash_context", fieldtype: "HTML", options: `<dl>${contextFacts}</dl>` }] : [];
 		// One key per opened form, reused on a retry; do not rely on
 		// hidden Frappe inputs appearing in get_values().
 		const requestKey = newRequestKey();
+		// Keep the same operation key across a failed request and its retry.
+		// A double click must not issue concurrent writes from one dialog.
+		let commandPending = false;
 		const dialog = new frappe.ui.Dialog({
 			title: text(action.label),
 			fields: [{ fieldname: "request_key", label: text("Request reference"), fieldtype: "Data", hidden: 1, read_only: 1, default: requestKey }, ...contextFields, ...fields],
@@ -1701,7 +1748,10 @@ frappe.provide("toefl_house.role_desks");
 					// generated from selected human-friendly dropdowns.
 					args.statuses = JSON.stringify(statuses);
 				}
-				const submitAction = () => frappe.call({
+				const submitAction = () => {
+					if (commandPending) return;
+					commandPending = true;
+					frappe.call({
 					method: action.endpoint,
 					args,
 					freeze: true,
@@ -1713,6 +1763,7 @@ frappe.provide("toefl_house.role_desks");
 						else if (typeof currentReload === "function") currentReload();
 					},
 					error(response) {
+						commandPending = false;
 						// Direct ValidationError responses need not carry native
 						// _server_messages. Retain the entered form and retry key.
 						// Pinned Frappe passes parsed JSON directly for HTTP 417;
@@ -1726,10 +1777,16 @@ frappe.provide("toefl_house.role_desks");
 						frappe.msgprint({ title: text(action.label), message: escapeText(detail), indicator: "red" });
 					},
 				});
+				};
 				if (cashClose) {
 					frappe.confirm(text(
 						"Submit the actual counts and close this company's entire business day? This close cannot be edited; no payment or cash movement is created."
 					), submitAction);
+				} else if (action.endpoint === "toefl_house.reception_intake.update_walkin_inquiry" &&
+						args.status === "Closed") {
+					// Closing cannot be undone through this workflow; make the
+					// operator explicitly confirm before sending the guarded POST.
+					frappe.confirm(text("Close this visitor inquiry? Future follow-ups will not be possible on this visit. The existing record will be retained."), submitAction);
 				} else if (teachingContractForm) {
 					frappe.confirm(text(
 						action.endpoint === "toefl_house.teaching.compensation.revise_teaching_contract"
@@ -1804,6 +1861,9 @@ frappe.provide("toefl_house.role_desks");
 			const hasAnalytics = sectionPayload.kind === "analytics" && (sectionPayload.hero || sectionPayload.groups);
 			if (!items.length && !hasAnalytics && sectionPayload.kind !== "analytics") {
 				emptyState(body, sectionPayload.empty || {});
+				// A fresh installation must not hide the only "Register visitor"
+				// action merely because its inquiry queue is still empty.
+				renderSectionActions(body, sectionPayload.actions);
 				return;
 			}
 			if (sectionPayload.kind === "analytics" && !items.length && !hasAnalytics) {
@@ -1812,6 +1872,19 @@ frappe.provide("toefl_house.role_desks");
 			}
 			renderSectionBody(body, sectionPayload);
 		});
+	}
+
+	function renderReceptionPrimaryAction(page, payload) {
+		const area = $(page.body).find(".th-reception-quick-actions").empty();
+		const action = payload.primary_action;
+		// Only render the server's role-authorized action. No client-side
+		// permission guess or bypass can enable a Reception write.
+		if (!action || !action.endpoint) return;
+		$("<button type='button' class='btn btn-primary btn-sm th-register-visitor'></button>")
+			.text(text(action.label))
+			.attr("aria-label", text("Register a new walk-in visitor"))
+			.on("click", () => openGuidedAction(action))
+			.appendTo(area);
 	}
 
 	function loadDesk(page, surface, slug) {
@@ -1829,6 +1902,9 @@ frappe.provide("toefl_house.role_desks");
 			method: surface.endpoint,
 			callback(response) {
 				loadingWrap.remove();
+				if (slug === "th-reception-desk") {
+					renderReceptionPrimaryAction(page, response.message || {});
+				}
 				loadSections(sections, response.message || {});
 				// Announce completion to screen readers
 				const announcement = $("<div class='th-visually-hidden' role='status' aria-live='polite'></div>")
@@ -1840,6 +1916,7 @@ frappe.provide("toefl_house.role_desks");
 			},
 			error() {
 				loadingWrap.remove();
+				if (slug === "th-reception-desk") renderReceptionPrimaryAction(page, {});
 				const block = $("<section class='th-section'></section>").appendTo(sections);
 				$("<h2 class='th-section-title'></h2>").text(text("Your work")).appendTo(block);
 				const sectionBody = $("<div class='th-section-body'></div>").appendTo(block);
@@ -1850,6 +1927,9 @@ frappe.provide("toefl_house.role_desks");
 						method: surface.endpoint,
 						callback(response) {
 							sectionBody.parent().remove();
+							if (slug === "th-reception-desk") {
+								renderReceptionPrimaryAction(page, response.message || {});
+							}
 							loadSections(sections, response.message || {});
 						},
 						error() {
@@ -1865,33 +1945,41 @@ frappe.provide("toefl_house.role_desks");
 
 	function mountSearch(page, surface) {
 		if (!surface.search) return;
-		const block = $("<section class='th-section'></section>").appendTo(page.body);
-		$("<h2 class='th-section-title'></h2>").text(text("Find a person")).appendTo(block);
+		const block = $("<section class='th-section th-reception-intake'></section>")
+			.attr("lang", "en").attr("dir", "ltr").appendTo(page.body);
+		$("<h2 class='th-section-title'></h2>").text(text("Find or register a visitor")).appendTo(block);
 		const body = $("<div class='th-section-body'></div>").appendTo(block);
+		$("<p class='th-page-purpose'></p>").text(text(
+			"Search by name, phone, Candidate reference, Student ID or inquiry reference. No email or placement result is needed to record a walk-in."
+		)).appendTo(body);
+		$("<div class='th-reception-quick-actions'></div>").appendTo(body);
+		// Search replies can arrive out of order; only the latest search owns the results.
+		const searchState = { revision: 0 };
 		const bar = $("<div class='th-search-bar'></div>").appendTo(body);
 		$("<div class='th-search-results' aria-live='polite'></div>").appendTo(body);
 		const input = $("<input type='search' class='form-control th-search-input' />")
 			.attr("placeholder", text(surface.search.placeholder))
-			.attr("aria-label", text("Name or email"))
+			.attr("aria-label", text("Name, phone, Candidate reference, Student ID or inquiry reference"))
 			.appendTo(bar);
 		$("<button type='button' class='btn btn-primary btn-sm'></button>")
 			.text(text("Search"))
 			.attr("aria-label", text("Search for person"))
-			.on("click", () => runSearch(surface, body, input.val()))
+			.on("click", () => runSearch(surface, body, input.val(), searchState))
 			.appendTo(bar);
 		input.on("keydown", (event) => {
 			if (event.key === "Enter") {
 				event.preventDefault();
-				runSearch(surface, body, input.val());
+				runSearch(surface, body, input.val(), searchState);
 			}
 		});
 	}
 
-	function runSearch(surface, body, query) {
+	function runSearch(surface, body, query, searchState) {
+		const revision = ++searchState.revision;
 		const results = body.find(".th-search-results").empty();
 		const text_ = String(query || "").trim();
 		if (text_.length < 2) {
-			results.append(`<div class='th-alert th-alert--info'><div><p class='th-alert-title'>${escapeText(text("Type more of the name"))}</p><p class='th-alert-body'>${escapeText(text("Enter at least two characters of the person's name or email."))}</p></div></div>`);
+			results.append(`<div class='th-alert th-alert--info'><div><p class='th-alert-title'>${escapeText(text("Type more of the name"))}</p><p class='th-alert-body'>${escapeText(text("Enter at least two characters of a name, phone or internal reference."))}</p></div></div>`);
 			return;
 		}
 		const loading = loadingState(results, "Searching…");
@@ -1899,10 +1987,12 @@ frappe.provide("toefl_house.role_desks");
 			method: surface.search.endpoint,
 			args: { query: text_ },
 			callback(response) {
+				if (revision !== searchState.revision) return;
 				loading.remove();
 				renderSearchResults(results, response.message || {});
 			},
 			error() {
+				if (revision !== searchState.revision) return;
 				loading.remove();
 				results.append(`<div class='th-alert th-alert--danger'><div><p class='th-alert-title'>${escapeText(text("Search failed"))}</p><p class='th-alert-body'>${escapeText(text("The lookup could not be completed. Nothing was changed; try again."))}</p></div></div>`);
 			},
@@ -1911,17 +2001,22 @@ frappe.provide("toefl_house.role_desks");
 
 	function renderSearchResults(results, payload) {
 		const applicants = payload.items || [];
+		const inquiries = payload.inquiries || [];
 		const students = payload.students || [];
-		if (!applicants.length && !students.length) {
-			results.append(`<div class='th-empty'><p class='th-empty-title'>${escapeText(text("No match found"))}</p><p class='th-empty-body'>${escapeText(text("No open applicant or active student matches that name or email. Check the spelling, or start them through the placement workflow."))}</p></div>`);
+		if (!applicants.length && !students.length && !inquiries.length) {
+			results.append(`<div class='th-empty'><p class='th-empty-title'>${escapeText(text("No match found"))}</p><p class='th-empty-body'>${escapeText(text("No matching visitor, applicant or student. Check the spelling or register a new visitor above; placement can happen later."))}</p></div>`);
 			return;
+		}
+		if (inquiries.length) {
+			$("<h3 class='th-search-heading'></h3>").text(text("Reception visits (check current stage)")).appendTo(results);
+			results.append(queueMarkup(inquiries, [text("Visitor"), text("Follow-up"), text("Next action"), text("Recorded"), text("Act")]));
 		}
 		if (applicants.length) {
 			$("<h3 class='th-search-heading'></h3>").text(text("In the admission funnel")).appendTo(results);
 			results.append(queueMarkup(applicants, [text("Record"), text("Status"), text("Next action"), text("Waiting"), text("Act")]));
 		}
 		if (students.length) {
-			$("<h3 class='th-search-heading'></h3>").text(text("Enrolled students")).appendTo(results);
+			$("<h3 class='th-search-heading'></h3>").text(text("Student records (check enrollment stage)")).appendTo(results);
 			results.append(queueMarkup(students, [text("Record"), text("Status"), text("Next action"), text("Waiting"), text("Act")]));
 		}
 		(payload.collection_sections || []).forEach((part) => {

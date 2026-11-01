@@ -15,6 +15,7 @@ KINDS = {
     "TH Placement Course Map Revision": "course_map",
     "TH Placement Decision": "decision",
     "TH Admission Decision": "admission_decision",
+    "TH Reception Inquiry": "reception_inquiry",
     "TH Enrollment Exit": "enrollment_exit",
     "TH Instructor Contract": "contract",
     "TH Teaching Assignment": "assignment",
@@ -46,6 +47,7 @@ TABLES = {
     "course_map": "`tabTH Placement Course Map Revision`",
     "decision": "`tabTH Placement Decision`",
     "admission_decision": "`tabTH Admission Decision`",
+    "reception_inquiry": "`tabTH Reception Inquiry`",
     "enrollment_exit": "`tabTH Enrollment Exit`",
     "contract": "`tabTH Instructor Contract`",
     "assignment": "`tabTH Teaching Assignment`",
@@ -117,6 +119,7 @@ BRANCH_KINDS = {
     "Student Applicant": "student_applicant",
     "Program Enrollment": "program_enrollment",
     "TH Admission Decision": "admission_decision",
+    "TH Reception Inquiry": "reception_inquiry",
     "TH Enrollment Exit": "enrollment_exit",
     "TH Teaching Assignment": "assignment",
     "TH Correction Request": "correction_request",
@@ -269,7 +272,10 @@ def _doc_branches(doc, kind):
 
 
 def _doc_branches_guarded(doc, kind):
-    """Branch resolution for the five GUARDED kinds (via their link fields)."""
+    """Resolve each guarded record to its existing native Branch fact."""
+    if kind == "reception_inquiry":
+        branch = doc.get("th_branch")
+        return {branch} if branch else set()
     if kind == "admission_decision":
         branches = set()
         if doc.get("student_applicant"):
@@ -332,6 +338,16 @@ def _doc_branches_guarded(doc, kind):
                     branches.add(branch)
         return branches
     return set()
+
+
+def reception_inquiry_has_permission(doc, ptype=None, user=None, **kwargs):
+    """No general document CRUD/read. Reception uses scoped desk projections."""
+    return False
+
+
+def query_reception_inquiry(user=None):
+    """No direct list export of contact details; only guarded desk queries."""
+    return "1=0"
 
 
 def branch_has_permission(doc, ptype=None, user=None, **kwargs):
@@ -507,7 +523,7 @@ def _query_role(kind, user=None):
         return "1=0"
     user = user or frappe.session.user
     roles = set(frappe.get_roles(user))
-    if kind == "guard":
+    if kind in ("guard", "reception_inquiry"):
         return "1=0"
     if kind == "admission_decision":
         return "1=1" if roles & {"Admission Officer", "Admission Reviewer",

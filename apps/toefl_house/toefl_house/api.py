@@ -54,6 +54,26 @@ def _content(value):
         raise frappe.ValidationError(str(exc)) from exc
 
 
+def _web_integer(value, field, *, minimum=1, maximum=1000000000):
+    """Canonical bounded integer at the Frappe form transport boundary.
+
+    Frappe browser POSTs may carry Int form values as decimal strings.
+    Reject booleans, signs, decimals, Unicode numerals and ambiguous leading
+    zeros rather than handing the domain command an unvalidated string.
+    Normalization happens before idempotency input hashing.
+    """
+    if type(value) is int:
+        parsed = value
+    elif isinstance(value, str) and len(value) <= 10 and value.isascii() \
+            and value.isdecimal() and value == str(int(value)):
+        parsed = int(value)
+    else:
+        raise frappe.ValidationError(f"{field} must be a canonical whole number")
+    if not minimum <= parsed <= maximum:
+        raise frappe.ValidationError(f"{field} is outside the valid range")
+    return parsed
+
+
 def _execute(kind, request_key, payload, work):
     return run_with_retry(lambda: _execute_once(kind, request_key, payload, work))
 
@@ -127,6 +147,7 @@ def _locked_item(name, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def create_draft(request_key, family, revision, content):
+    revision = _web_integer(revision, "revision")
     content = _content(content)
     try:
         validate_family(family, revision, production=is_production())
@@ -157,6 +178,7 @@ def create_draft(request_key, family, revision, content):
 
 @frappe.whitelist(methods=["POST"])
 def revise_draft(request_key, item_name, expected_version, content):
+    expected_version = _web_integer(expected_version, "expected_version")
     content = _content(content)
 
     def work(actor):
@@ -177,6 +199,7 @@ def revise_draft(request_key, item_name, expected_version, content):
 
 @frappe.whitelist(methods=["POST"])
 def publish(request_key, item_name, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         item = _locked_item(item_name, expected_version)
         if item.owner == actor:
@@ -242,6 +265,7 @@ def _locked_config(doctype, name, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def create_draft_config(request_key, config, code, revision, definition):
+    revision = _web_integer(revision, "revision")
     doctype, _ = _config(config)
     definition = _definition(config, definition)
     try:
@@ -262,6 +286,7 @@ def create_draft_config(request_key, config, code, revision, definition):
 
 @frappe.whitelist(methods=["POST"])
 def revise_draft_config(request_key, config, name, expected_version, definition):
+    expected_version = _web_integer(expected_version, "expected_version")
     doctype, _ = _config(config)
     definition = _definition(config, definition)
 
@@ -284,6 +309,7 @@ def revise_draft_config(request_key, config, name, expected_version, definition)
 
 @frappe.whitelist(methods=["POST"])
 def review_config(request_key, config, name, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     doctype, _ = _config(config)
 
     def work(actor):
@@ -304,6 +330,7 @@ def review_config(request_key, config, name, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def publish_config(request_key, config, name, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     doctype, validator = _config(config)
 
     def work(actor):
@@ -334,6 +361,7 @@ def publish_config(request_key, config, name, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def retire_config(request_key, config, name, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     doctype, _ = _config(config)
 
     def work(actor):
@@ -386,9 +414,13 @@ def _pinned_published(doctype, validator, name, expected_version, label):
 
 
 @frappe.whitelist(methods=["POST"])
-def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE):
-    if not isinstance(subject, str) or not 3 <= len(subject) <= 140:
-        raise frappe.ValidationError("Subject user reference required")
+def create_case(request_key, subject="", purpose=SYNTHETIC_PURPOSE, branch="", inquiry=""):
+    if is_production():
+        if subject not in ("", None):
+            raise frappe.ValidationError(
+                "Real visitors use a server-issued candidate reference, not a User or email")
+    elif not isinstance(subject, str) or not 3 <= len(subject) <= 140:
+        raise frappe.ValidationError("Synthetic test User reference required")
     # D16 mirror: the synthetic increment accepts only its purpose marker;
     # production requires a staff-entered bounded purpose and refuses the
     # test marker (no purpose vocabulary is invented — staff enter it).
@@ -401,21 +433,78 @@ def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE):
         raise frappe.ValidationError("Unsupported purpose in this synthetic increment")
 
     def work(actor):
-        if subject in ("Administrator", "Guest") or not frappe.db.get_value("User", subject, "enabled"):
-            raise frappe.ValidationError("Subject must be an enabled non-privileged native user")
-        if frappe.db.exists(CASE, {"subject": subject}):
-            raise frappe.ValidationError("Subject already has a case in this increment")
-        case = frappe.get_doc(dict(doctype=CASE, subject=subject, purpose=purpose,
+        # The synthetic API compatibility path may omit a Branch because the
+        # historical fixtures predate branch provenance. Such cases are never
+        # projected to Reception. Live cases require an explicit branch.
+        if branch or is_production():
+            from toefl_house.command_scope import resolve_creation_branch
+            chosen_branch = resolve_creation_branch(branch, actor)
+        else:
+            chosen_branch = ""
+        if is_production() and not chosen_branch:
+            raise frappe.ValidationError("Choose a verified placement branch before creating a case")
+        if chosen_branch and not frappe.db.exists("Branch", chosen_branch):
+            raise frappe.ValidationError("Unknown placement branch")
+        if not is_production() and (
+                subject in ("Administrator", "Guest") or
+                not frappe.db.get_value("User", subject, "enabled")):
+            raise frappe.ValidationError("Synthetic subject must be an enabled non-privileged native User")
+        # In production a real visitor does NOT need a User, email or phone.
+        # The referral ID is not authentication: it is an internal record key.
+        # The authorized invigilator checks physical identity before the test.
+        if is_production() and not inquiry:
+            raise frappe.ValidationError(
+                "Register the visitor at Reception and provide the inquiry reference before placement")
+        if inquiry:
+            if not isinstance(inquiry, str) or not 1 <= len(inquiry) <= 140:
+                raise frappe.ValidationError("A valid reception inquiry reference is required")
+            if is_production():
+                # Synchronize case handoff with a Reception typo correction.
+                # Both commands lock the SAME inquiry row. Do not read an
+                # origin while another counter is changing its identity.
+                frappe.db.sql(
+                    "select name from `tabTH Reception Inquiry` where name=%s for update",
+                    (inquiry,))
+            intake = frappe.db.get_value(
+                "TH Reception Inquiry", inquiry,
+                ["name", "person_name", "th_branch", "status", "synthetic"],
+                as_dict=True)
+            if not intake or intake.th_branch != chosen_branch:
+                raise frappe.PermissionError(
+                    "Reception inquiry is missing or belongs to another Branch")
+            if intake.status != "Awaiting Placement":
+                raise frappe.ValidationError(
+                    "Reception must mark the visitor Awaiting Placement before allocating the test")
+            if intake.synthetic is None or int(intake.synthetic) != record_synthetic_flag():
+                raise frappe.PermissionError("Reception inquiry site mode does not match this case")
+            if not isinstance(intake.person_name, str) or not intake.person_name.strip():
+                raise frappe.ValidationError("Reception inquiry has no verified visitor name")
+            if frappe.db.exists(CASE, {"reception_inquiry": inquiry}):
+                raise frappe.ValidationError(
+                    "This reception inquiry is already attached to a placement case")
+        candidate_ref = ("THV-" + digest(["TOEFL House visitor", inquiry])[:32]
+                         if is_production() else subject)
+        if frappe.db.exists(CASE, {"subject": candidate_ref}):
+            raise frappe.ValidationError("Candidate already has a placement case")
+        case = frappe.get_doc(dict(doctype=CASE, subject=candidate_ref, purpose=purpose,
+                                   th_branch=chosen_branch or None,
+                                   reception_inquiry=inquiry or None,
                                    status="Open", synthetic=record_synthetic_flag()))
         case.insert(ignore_permissions=True)
-        return {"name": case.name, "subject": subject, "purpose": purpose, "status": case.status}, \
-               dict(target=case.name, after_hash=digest([subject, purpose]))
+        return {"name": case.name, "subject": candidate_ref, "purpose": purpose,
+                "branch": chosen_branch, "reception_inquiry": inquiry,
+                "status": case.status}, \
+               dict(target=case.name, after_hash=digest([candidate_ref, purpose, chosen_branch, inquiry]))
 
-    return _execute("create_case", request_key, {"subject": subject, "purpose": purpose}, work)
+    return _execute("create_case", request_key,
+                    {"subject": subject, "purpose": purpose, "branch": branch,
+                     "inquiry": inquiry}, work)
 
 
 @frappe.whitelist(methods=["POST"])
 def allocate_attempt(request_key, case, blueprint, blueprint_version, policy, policy_version):
+    blueprint_version = _web_integer(blueprint_version, "blueprint_version")
+    policy_version = _web_integer(policy_version, "policy_version")
     def work(actor):
         # Canonical lock order (spec 8): case -> allocation guard -> family
         # exposure -> result rows. The per-key operation receipt inserted by
@@ -549,6 +638,13 @@ def _require_session_operator(actor, attempt):
         raise frappe.PermissionError("Allocator cannot operate the session")
     if attempt.mode != "Digital":
         raise frappe.ValidationError("Only digital delivery is implemented in this increment")
+    # Verification binds an attempt to ONE invigilator. A shared role and
+    # Branch do not permit silent station takeover; that needs an audited
+    # transfer command before being allowed in live operations.
+    if attempt.status in ("Verified", "In Progress") and \
+            getattr(attempt, "verified_by", None) != actor:
+        raise frappe.PermissionError(
+            "Only the verifying invigilator may operate this session")
 
 
 def _advance(attempt, status, **fields):
@@ -613,8 +709,153 @@ def _seal(attempt, reason):
     return result, dict(target=attempt.name, after_hash=digest([attempt.name, "Sealed", reason]))
 
 
+@frappe.whitelist(methods=["GET"])
+def supervised_attempt_choices():
+    """Bounded choice list for a Branch-assigned Placement Invigilator.
+
+    Only this actor's permitted Branches and supervised digital attempts
+    appear. The candidate reference is branch-local staff metadata, not a
+    public or candidate-login endpoint. Truncation refuses rather than
+    silently showing an incomplete queue.
+    """
+    actor = authorize("Placement Invigilator")
+    from toefl_house.command_scope import actor_branches
+    branches = actor_branches(actor)
+    if not branches:
+        raise frappe.PermissionError("An assigned Branch is required")
+    max_cases = 4000
+    cases = frappe.get_all(
+        CASE, filters={"th_branch": ("in", sorted(branches))},
+        fields=["name", "subject"], limit_page_length=max_cases)
+    if len(cases) >= max_cases:
+        raise frappe.ValidationError("Branch placement queue is too large; contact Academic Manager")
+    if not cases:
+        return []
+    by_case = {row["name"]: row.get("subject") or "" for row in cases}
+    limit = 101
+    attempts = frappe.get_all(
+        ATTEMPT, filters={
+            "case_name": ("in", list(by_case)),
+            "mode": "Digital",
+            "status": ("in", ["Allocated", "Verified", "In Progress"]),
+        },
+        fields=["name", "case_name", "allocated_by", "verified_by",
+                "mode", "status", "version"],
+        order_by="creation desc", limit_page_length=limit)
+    if len(attempts) >= limit:
+        raise frappe.ValidationError("Too many active placement attempts; contact Academic Manager")
+    choices = []
+    for row in attempts:
+        if row.get("allocated_by") == actor:
+            continue  # A creator must not invigilate their own allocation.
+        if row.get("status") in ("Verified", "In Progress") and row.get("verified_by") != actor:
+            continue  # A different invigilator already owns the session.
+        choices.append({
+            "attempt": row["name"],
+            "status": row["status"],
+            "candidate_reference": by_case[row["case_name"]],
+        })
+    return choices
+
+
+@frappe.whitelist(methods=["GET"])
+def supervised_attempt_status(attempt):
+    """Branch-authorized, key-free status for a real invigilator's workflow.
+
+    Status lookup alone cannot start, verify, seal or extend any session. The
+    existing guarded POST commands remain the sole mutation authority.
+    """
+    actor = authorize("Placement Invigilator")
+    if not isinstance(attempt, str) or not 1 <= len(attempt) <= 140:
+        raise frappe.ValidationError("A valid attempt reference is required")
+    row = frappe.db.get_value(
+        ATTEMPT, attempt,
+        ["name", "case_name", "allocated_by", "verified_by", "mode", "status", "version",
+         "started_at", "deadline_at"], as_dict=True)
+    if not row:
+        raise frappe.ValidationError("Placement attempt does not exist")
+    _require_session_operator(actor, row)
+    from toefl_house.command_scope import actor_branches
+    allowed = actor_branches(actor)
+    branch = frappe.db.get_value(CASE, row.case_name, "th_branch") if row.case_name else None
+    if not allowed or not branch or branch not in allowed:
+        raise frappe.PermissionError("This attempt is outside the invigilator's assigned branch")
+    expired = (row.status == "In Progress"
+               and (not row.deadline_at or deadline_reached(_now(), get_datetime(row.deadline_at))))
+    return {
+        "attempt": row.name, "status": row.status,
+        "version": int(row.version), "deadline_at": _iso(row.deadline_at) if row.deadline_at else "",
+        "deadline_reached": bool(expired), "read_only": True,
+    }
+
+
+@frappe.whitelist(methods=["GET"])
+def supervised_attempt_view(attempt):
+    """Recover a started supervised exam without leaking key, seed or manifest.
+
+    This is NOT a student-login examination endpoint. An authenticated,
+    separately authorized Placement Invigilator may use it on a supervised
+    staff terminal, within the case's verified branch. Candidates must never
+    receive the staff session or access to Frappe Desk navigation.
+    """
+    actor = authorize("Placement Invigilator")
+    if not isinstance(attempt, str) or not 1 <= len(attempt) <= 140:
+        raise frappe.ValidationError("A valid attempt reference is required")
+    row = frappe.db.get_value(
+        ATTEMPT, attempt,
+        ["name", "case_name", "allocated_by", "verified_by", "mode", "status",
+         "version", "started_at", "deadline_at"], as_dict=True)
+    if not row:
+        raise frappe.ValidationError("Placement attempt does not exist")
+    _require_session_operator(actor, row)
+    from toefl_house.command_scope import actor_branches
+    allowed = actor_branches(actor)
+    case_branch = frappe.db.get_value(CASE, row.case_name, "th_branch") if row.case_name else None
+    if not allowed or not case_branch or case_branch not in allowed:
+        raise frappe.PermissionError(
+            "A supervised session needs an explicitly permitted placement branch")
+    if row.status != "In Progress":
+        raise frappe.ValidationError(
+            "Only an in-progress exam can be opened in the supervised workspace")
+    if not row.deadline_at or deadline_reached(_now(), get_datetime(row.deadline_at)):
+        raise frappe.ValidationError(
+            "Exam time has ended. Ask the invigilator to seal the timed-out attempt.")
+    _, form = _manifest_form(row.name)
+    names = sorted({entry["item"] for entry in form["items"]})
+    published = frappe.get_all(
+        ITEM, filters={"name": ("in", names)},
+        fields=["name", "prompt", "question_type", "options_json", "status"],
+        ignore_permissions=True)
+    if len(published) != len(names):
+        raise frappe.ValidationError("An allocated question is missing")
+    catalog = {}
+    for item in published:
+        if item.status != "Published":
+            raise frappe.ValidationError("An allocated question has been withdrawn")
+        catalog[item.name] = {
+            "prompt": item.prompt, "question_type": item.question_type,
+            "options": json.loads(item.options_json),
+        }
+    projection = project_form(form, catalog)
+    latest = _latest_responses(row.name)
+    responses = [
+        {"occurrence": question["order"],
+         "revision": latest.get(question["order"], {}).get("revision", 0),
+         "option_id": latest.get(question["order"], {}).get("option_id", ""),
+         "missing": latest.get(question["order"], {}).get("missing", 0)}
+        for question in projection["items"]
+    ]
+    return {
+        "attempt": row.name, "status": row.status, "version": row.version,
+        "started_at": _iso(row.started_at), "deadline_at": _iso(row.deadline_at),
+        "projection": projection, "responses": responses,
+        "supervision": "Invigilator-only staff workstation",
+    }
+
+
 @frappe.whitelist(methods=["POST"])
 def verify_attempt(request_key, attempt, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         _require_session_operator(actor, doc)
@@ -632,6 +873,7 @@ def verify_attempt(request_key, attempt, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def deliver_attempt(request_key, attempt, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         _require_session_operator(actor, doc)
@@ -679,6 +921,10 @@ def deliver_attempt(request_key, attempt, expected_version):
 @frappe.whitelist(methods=["POST"])
 def save_response(request_key, attempt, expected_version, occurrence, expected_revision,
                   option_id="", missing=0):
+    expected_version = _web_integer(expected_version, "expected_version")
+    occurrence = _web_integer(occurrence, "occurrence")
+    expected_revision = _web_integer(expected_revision, "expected_revision", minimum=0)
+    missing = _web_integer(missing, "missing", minimum=0, maximum=1)
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         _require_session_operator(actor, doc)
@@ -721,6 +967,7 @@ def save_response(request_key, attempt, expected_version, occurrence, expected_r
 
 @frappe.whitelist(methods=["POST"])
 def seal_attempt(request_key, attempt, expected_version, reason):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         _require_session_operator(actor, doc)
@@ -778,6 +1025,7 @@ def _key_catalog(form):
 
 @frappe.whitelist(methods=["POST"])
 def score_attempt(request_key, attempt, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         if doc.mode != "Digital":
@@ -816,6 +1064,7 @@ def score_attempt(request_key, attempt, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def review_attempt(request_key, attempt, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         if doc.mode != "Digital":
@@ -839,6 +1088,7 @@ def review_attempt(request_key, attempt, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def finalize_attempt(request_key, attempt, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         if doc.mode != "Digital":
@@ -900,6 +1150,7 @@ def _pinned_attempt_policy(attempt):
 
 @frappe.whitelist(methods=["POST"])
 def release_decision(request_key, attempt, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         if doc.mode != "Digital":

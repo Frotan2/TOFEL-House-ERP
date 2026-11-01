@@ -74,13 +74,13 @@ frappe.provide("toefl_house.command_pages");
 		"th-placement-author": {
 			role: "Placement Author",
 			title: "TOEFL House Placement Authoring",
-			description: "Create or revise synthetic item and configuration drafts. Publication stays with a different command authority.",
+			description: "Create and revise question-bank and exam-configuration drafts. A different authorized employee must approve publication.",
 			commands: [
 				{
 					label: "Create item draft",
 					method: "toefl_house.api.create_draft",
 					dispatches: ["create_draft"],
-					fields: [data("family", "Synthetic family", { reqd: 1 }), integer("revision", "Revision", { reqd: 1 }), json("content", "Content JSON", { reqd: 1 })],
+					fields: [data("family", "Question family", { reqd: 1 }), integer("revision", "Revision", { reqd: 1 }), json("content", "Content JSON", { reqd: 1 })],
 				},
 				{
 					label: "Revise item draft",
@@ -92,7 +92,7 @@ frappe.provide("toefl_house.command_pages");
 					label: "Create configuration draft",
 					method: "toefl_house.api.create_draft_config",
 					dispatches: ["create_blueprint", "create_policy", "create_course_map"],
-					fields: [select("config", "Configuration type", CONFIG_TYPES, { reqd: 1 }), data("code", "Synthetic code", { reqd: 1 }), integer("revision", "Revision", { reqd: 1 }), json("definition", "Definition JSON", { reqd: 1 })],
+					fields: [select("config", "Configuration type", CONFIG_TYPES, { reqd: 1 }), data("code", "Configuration code", { reqd: 1 }), integer("revision", "Revision", { reqd: 1 }), json("definition", "Definition JSON", { reqd: 1 })],
 				},
 				{
 					label: "Revise configuration draft",
@@ -105,7 +105,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-placement-publisher": {
 			role: "Placement Publisher",
 			title: "TOEFL House Placement Publication",
-			description: "Publish item revisions, govern configuration revisions, and create or allocate synthetic placement cases. Server-side separation checks still apply.",
+			description: "Publish reviewed exam material and allocate placement attempts. The server enforces independent roles and verifies the candidate and Branch.",
 			commands: [
 				{
 					label: "Publish item revision",
@@ -135,7 +135,9 @@ frappe.provide("toefl_house.command_pages");
 					label: "Create placement case",
 					method: "toefl_house.api.create_case",
 					dispatches: ["create_case"],
-					fields: [data("subject", "Synthetic subject", { reqd: 1 }), data("purpose", "Purpose")],
+					fields: [data("subject", "Candidate reference", { description: "Leave blank for real visitors. The server issues a unique internal candidate reference from the Reception inquiry." }), data("purpose", "Purpose"),
+                        data("branch", "Branch", { reqd: 1, description: "Select the authorized placement branch for this candidate. The branch is immutable after case creation." }),
+                        data("inquiry", "Reception inquiry reference", { description: "Required for real candidates. Reception must mark this visitor Awaiting Placement. This link is not proof of identity." })],
 				},
 				{
 					label: "Allocate placement attempt",
@@ -159,7 +161,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-placement-assessment": {
 			role: "Placement Assessor",
 			title: "TOEFL House Placement Assessment",
-			description: "Run objective scoring for a sealed synthetic attempt. The scoring command, not this page, loads protected key material.",
+			description: "Score sealed digital exam answers. Only the server loads confidential answer keys.",
 			commands: [
 				{ label: "Score attempt", method: "toefl_house.api.score_attempt", dispatches: ["score_attempt"], fields: [data("attempt", "Attempt", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 })] },
 			],
@@ -176,7 +178,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-placement-release": {
 			role: "Placement Releaser",
 			title: "TOEFL House Placement Release",
-			description: "Release an already finalized synthetic placement decision. The server independently checks scorer, reviewer and finalizer separation.",
+			description: "Release a finalized placement decision after independent scoring, review and finalization. Production level mapping remains blocked until academically approved.",
 			commands: [
 				{ label: "Release placement decision", method: "toefl_house.api.release_decision", dispatches: ["release_decision"], fields: [data("attempt", "Attempt", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 })] },
 			],
@@ -186,7 +188,7 @@ frappe.provide("toefl_house.command_pages");
 			title: "TOEFL House Admission Intake",
 			description: "Run the thin admission intake and officer transitions over native Student Applicant and Student authorities. The page does not create an enrollment or a billing record.",
 			commands: [
-				{ label: "Record applicant", method: "toefl_house.admission.record_applicant", dispatches: ["record_applicant"], fields: [data("placement_decision", "Released placement decision", { reqd: 1 }), data("first_name", "Synthetic first name", { reqd: 1 }), data("program", "Program", { reqd: 1 }), data("academic_year", "Academic year", { reqd: 1 }), data("branch", "Branch", { description: "Blank: the recording officer's own branch." })] },
+				{ label: "Record applicant", method: "toefl_house.admission.record_applicant", dispatches: ["record_applicant"], fields: [data("placement_decision", "Released placement decision", { reqd: 1 }), data("first_name", "First name", { reqd: 1 }), data("program", "Program", { reqd: 1 }), data("academic_year", "Academic year", { reqd: 1 }), data("branch", "Branch", { description: "Blank: the recording officer's own branch." }), data("last_name", "Family name (optional)"), data("email", "Email (optional)", { description: "Leave blank if the learner has no email. Never invent an address." })] },
 				{ label: "Create admission decision", method: "toefl_house.admission.create_admission", dispatches: ["create_admission"], fields: [data("student_applicant", "Student applicant", { reqd: 1 }), data("placement_decision", "Released placement decision", { reqd: 1 }), data("existing_student", "Existing student"), data("program", "Program", { description: "Returning journeys only; blank inherits the applicant record." }), data("academic_year", "Academic year", { description: "Returning journeys only; blank inherits the applicant record." }), data("academic_term", "Academic term", { description: "Returning journeys only; blank inherits the applicant record." })] },
 				{ label: "Accept offer", method: "toefl_house.admission.accept_offer", dispatches: ["accept_offer"], fields: [data("name", "Admission decision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 })] },
 				{ label: "Withdraw admission", method: "toefl_house.admission.withdraw_admission", dispatches: ["withdraw_admission"], fields: [data("name", "Admission decision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 }), note("reason", "Reason", { reqd: 1 })] },
@@ -332,7 +334,7 @@ frappe.provide("toefl_house.command_pages");
 		version: "Version now",
 		expected_version: "Expected version",
 		status: "Status",
-		subject: "Synthetic subject",
+		subject: "Candidate reference",
 		purpose: "Purpose",
 		reason: "Reason",
 		program: "Program",
@@ -582,6 +584,398 @@ frappe.provide("toefl_house.command_pages");
 		});
 	}
 
+	/*
+	 * Invigilator-operated answer workstation. This is intentionally NOT a
+	 * candidate kiosk: a candidate must never be given an authenticated
+	 * Frappe staff session, its navigation, or command cards.
+	 *
+	 * The read API exposes only a protected question projection and latest
+	 * response revisions. It never includes item keys, seed or manifest data.
+	 */
+	function mountSupervisedPlacement(page) {
+		const block = section(page.body, text("Supervised digital exam workspace"));
+		block.addClass("th-placement-console").attr("lang", "en").attr("dir", "ltr");
+		$("<p class='th-card-hint'></p>").text(text(
+			"Staff-operated only. Check the candidate's identity and branch before starting. " +
+			"Never hand a Frappe staff login to an examinee. Saved answers can be recovered after refreshing."
+		)).appendTo(block);
+		const toolbar = $("<div class='th-placement-toolbar'></div>").appendTo(block);
+		const idLabel = $("<label class='th-placement-label'></label>")
+			.text(text("Attempt reference")).appendTo(toolbar);
+		const attemptField = $("<input type='text' class='form-control' autocomplete='off' maxlength='140'>")
+			.attr("aria-label", text("Attempt reference")).appendTo(idLabel);
+		const load = $("<button type='button' class='btn btn-primary'></button>")
+			.text(text("Check exam status")).appendTo(toolbar);
+		const suggestions = $("<datalist id='th-placement-attempt-choices'></datalist>").appendTo(block);
+		attemptField.attr("list", "th-placement-attempt-choices");
+		let choicesPending = false;
+		attemptField.on("focus", () => {
+			if (choicesPending) return;
+			choicesPending = true;
+			frappe.call({
+				method: "toefl_house.api.supervised_attempt_choices", type: "GET",
+				callback(reply) {
+					choicesPending = false;
+					suggestions.empty();
+					const rows = Array.isArray(reply.message) ? reply.message : [];
+					rows.forEach((item) => {
+						if (!item || !item.attempt) return;
+						$("<option></option>").attr("value", item.attempt)
+							.attr("label", String(item.status || "") + " · " +
+								String(item.candidate_reference || "")).appendTo(suggestions);
+					});
+				},
+				error() {
+					choicesPending = false;
+					inform("The Branch attempt list is unavailable. You may enter an exact Attempt reference.");
+				},
+			});
+		});
+		const notice = $("<p class='th-placement-notice' role='status' aria-live='polite'></p>").appendTo(block);
+		const content = $("<div class='th-placement-content'></div>").appendTo(block);
+		let active = null;
+		let position = 0;
+		let pending = false;
+		let pendingWrite = null;
+
+		function inform(message) { notice.text(text(message)); }
+		function setBusy(value) {
+			pending = value;
+			load.prop("disabled", value);
+			content.find("button,input").prop("disabled", value);
+		}
+		function currentResponse(question) {
+			return (active.responses || []).find((answer) =>
+				Number(answer.occurrence) === Number(question.order)) ||
+				{ occurrence: question.order, revision: 0, option_id: "", missing: 0 };
+		}
+		function draw() {
+			content.empty();
+			if (!active) return;
+			const items = active.projection.items;
+			if (!items.length) {
+				inform("No valid questions were returned. Ask the Academic Manager to review this exam.");
+				return;
+			}
+			position = Math.min(Math.max(0, position), items.length - 1);
+			const question = items[position];
+			const saved = currentResponse(question);
+			const answered = (active.responses || []).filter((r) => r.option_id && !r.missing).length;
+			$("<p class='th-placement-progress'></p>").text(text(
+				"Question " + (position + 1) + " of " + items.length +
+				" · " + answered + " saved · " + (items.length - answered) + " unanswered"
+			)).appendTo(content);
+			$("<p class='th-placement-deadline'></p>").text(text(
+				"Server deadline: " + active.deadline_at + " (course-site time). " +
+				"The server enforces time limits; this display is not a timer."
+			)).appendTo(content);
+			let unsavedSelection = false;
+			const form = $("<fieldset class='th-placement-question'></fieldset>").appendTo(content);
+			$("<legend></legend>").text(text(question.skill + " · " + question.question_type)).appendTo(form);
+			$("<p class='th-placement-prompt'></p>").text(question.prompt).appendTo(form);
+			const optionName = "th-exam-" + question.order;
+			(question.options || []).forEach((option) => {
+				const label = $("<label class='th-placement-option'></label>").appendTo(form);
+				const radio = $("<input type='radio'>").attr("name", optionName).val(option.id).appendTo(label);
+				if (!saved.missing && option.id === saved.option_id) radio.prop("checked", true);
+				radio.on("change", () => { unsavedSelection = true; });
+				$("<span></span>").text(option.text).appendTo(label);
+			});
+			const actions = $("<div class='th-placement-controls'></div>").appendTo(content);
+			$("<button type='button' class='btn btn-secondary'></button>").text(text("Previous"))
+				.prop("disabled", position === 0).on("click", () => {
+					if (unsavedSelection) { inform("Save or clear the selected answer before changing questions."); return; }
+					position -= 1; draw();
+				}).appendTo(actions);
+			$("<button type='button' class='btn btn-secondary'></button>").text(text("Next"))
+				.prop("disabled", position === items.length - 1)
+				.on("click", () => {
+					if (unsavedSelection) { inform("Save or clear the selected answer before changing questions."); return; }
+					position += 1; draw();
+				}).appendTo(actions);
+			const save = $("<button type='button' class='btn btn-primary'></button>")
+				.text(text("Save selected answer")).appendTo(actions);
+			const clear = $("<button type='button' class='btn btn-secondary'></button>")
+				.text(text("Clear saved answer")).appendTo(actions);
+			function sendAnswer(missing) {
+				if (pending || pendingWrite) return;
+				const selected = form.find("input[type='radio']:checked").val();
+				if (!missing && !selected) {
+					inform("Choose an option before saving, or use Clear saved answer.");
+					return;
+				}
+				pendingWrite = {
+					request_key: newRequestKey(),
+					attempt: active.attempt,
+					expected_version: Number(active.version),
+					occurrence: Number(question.order),
+					expected_revision: Number(saved.revision),
+					option_id: missing ? "" : selected,
+					missing: missing ? 1 : 0,
+				};
+				setBusy(true);
+				inform("Saving this answer securely.");
+				frappe.call({
+					method: "toefl_house.api.save_response", type: "POST", args: pendingWrite,
+					callback(response) {
+						const result = response.message || {};
+						if (result.status === "Sealed") {
+							// The response arrived after the authoritative server
+							// deadline, so the command sealed unanswered items.
+							active = null;
+							pendingWrite = null;
+							setBusy(false);
+							draw();
+							inform("The server timed out and sealed this exam. No further answers can be saved.");
+							return;
+						}
+						if (result.occurrence !== question.order || !Number.isInteger(Number(result.revision))) {
+							inform("Unconfirmed answer save. Reload this attempt before doing anything else.");
+							setBusy(false);
+							return;
+						}
+						active.responses = active.responses.filter((r) => Number(r.occurrence) !== Number(question.order));
+						active.responses.push({
+							occurrence: question.order, revision: Number(result.revision),
+							option_id: missing ? "" : selected, missing: missing ? 1 : 0,
+						});
+						pendingWrite = null;
+						setBusy(false);
+						inform("Answer saved. You can move to the next question.");
+						draw();
+					},
+					error() {
+						inform("Save outcome is unknown. Reload the exam to confirm it; do not assume the answer was saved.");
+						setBusy(false);
+					},
+				});
+			}
+			save.on("click", () => sendAnswer(false));
+			clear.on("click", () => sendAnswer(true));
+			const submit = $("<button type='button' class='btn btn-danger'></button>")
+				.text(text("Submit and close exam")).appendTo(actions);
+			submit.on("click", () => {
+				if (unsavedSelection) {
+					inform("Your selected answer is not saved. Save or clear it before submitting.");
+					return;
+				}
+				if (pending || pendingWrite) {
+					inform("Reload the exam to resolve an uncertain save before submitting.");
+					return;
+				}
+				const count = active.responses.filter((r) => r.option_id && !r.missing).length;
+				frappe.confirm(text(
+					"Submit and permanently seal this attempt? " + (items.length - count) +
+					" question(s) are unanswered. No more changes will be accepted."
+				), () => {
+					if (pending) return;
+					setBusy(true);
+					const args = {
+						request_key: newRequestKey(), attempt: active.attempt,
+						expected_version: Number(active.version), reason: "Submitted",
+					};
+					frappe.call({
+						method: "toefl_house.api.seal_attempt", type: "POST", args,
+						callback(response) {
+							const result = response.message || {};
+							if (result.status !== "Sealed") {
+								inform("Seal confirmation was not returned. Reload and check the attempt state.");
+								setBusy(false);
+								return;
+							}
+							active = null;
+							pendingWrite = null;
+							setBusy(false);
+							draw();
+							inform("Exam sealed. Answers are locked. Continue with independent scoring and review.");
+						},
+						error() {
+							setBusy(false);
+							inform("Seal status is unknown. Ask the invigilator to verify the attempt before retrying.");
+						},
+					});
+				});
+			});
+		}
+
+		function reload() {
+			if (pending) return;
+			const attempt = attemptField.val().trim();
+			if (!attempt) {
+				inform("Enter an attempt reference issued by the placement team.");
+				return;
+			}
+			pendingWrite = null;
+			active = null;
+			draw();
+			setBusy(true);
+			inform("Checking session access and recovering confirmed answers.");
+			frappe.call({
+				method: "toefl_house.api.supervised_attempt_view", type: "GET",
+				args: { attempt },
+				callback(response) {
+					const result = response.message || {};
+					if (!result.projection || !Array.isArray(result.projection.items) ||
+							!Array.isArray(result.responses) || result.status !== "In Progress") {
+						setBusy(false);
+						inform("No active supervised exam was returned. Check its status with the invigilator.");
+						return;
+					}
+					active = result;
+					position = 0;
+					setBusy(false);
+					inform("Active exam loaded. Only confirmed server responses are marked saved.");
+					draw();
+				},
+				error() {
+					setBusy(false);
+					inform("Exam unavailable or permission denied. Check branch, attempt state and deadline.");
+				},
+			});
+		}
+
+		/*
+		 * A key-free server status check drives the preparation and delivery
+		 * stages. Never infer the attempt version or station authority locally.
+		 * Each POST is still a separate, idempotent domain command.
+		 */
+		function checkStatus() {
+			if (pending) return;
+			const attempt = attemptField.val().trim();
+			if (!attempt) {
+				inform("Enter an attempt reference issued by the placement team.");
+				return;
+			}
+			pendingWrite = null;
+			active = null;
+			content.empty();
+			setBusy(true);
+			inform("Checking the current, branch-authorized attempt status.");
+			frappe.call({
+				method: "toefl_house.api.supervised_attempt_status", type: "GET",
+				args: { attempt },
+				callback(response) {
+					const state = response.message || {};
+					setBusy(false);
+					if (state.attempt !== attempt || !Number.isInteger(Number(state.version))) {
+						inform("Attempt status could not be verified. Ask an Academic Manager to review it.");
+						return;
+					}
+					if (state.status === "In Progress" && !state.deadline_reached) {
+						reload();
+						return;
+					}
+					if (state.deadline_reached) {
+						inform("The server deadline has passed. No new answers can be entered.");
+						const timeoutSeal = $("<button type='button' class='btn btn-danger'></button>")
+							.text(text("Seal timed-out exam")).appendTo(content);
+						timeoutSeal.on("click", () => {
+							if (pending) return;
+							frappe.confirm(text(
+								"Permanently seal the timed-out exam now? All unanswered questions will be marked missing."
+							), () => {
+								if (pending) return;
+								setBusy(true);
+								frappe.call({
+									method: "toefl_house.api.seal_attempt", type: "POST",
+									args: {
+										request_key: newRequestKey(), attempt: state.attempt,
+										expected_version: Number(state.version), reason: "Timeout",
+									},
+									callback(reply) {
+										setBusy(false);
+										if ((reply.message || {}).status === "Sealed") checkStatus();
+										else inform("Timeout seal was not confirmed. Recheck the current attempt status.");
+									},
+									error() {
+										setBusy(false);
+										inform("Timeout seal outcome is unknown. Recheck status before retrying.");
+									},
+								});
+							});
+						});
+						return;
+					}
+					if (state.status === "Allocated") {
+						inform("This attempt is allocated. Check the real candidate's identity and branch before verification.");
+						const approval = $("<label class='th-placement-option'></label>").appendTo(content);
+						const check = $("<input type='checkbox'>").appendTo(approval);
+						$("<span></span>").text(text(
+							"I personally checked the candidate's identity, the correct Branch and the supervised station."
+						)).appendTo(approval);
+						const verify = $("<button type='button' class='btn btn-primary'></button>")
+							.text(text("Verify candidate and attempt")).prop("disabled", true).appendTo(content);
+						check.on("change", () => verify.prop("disabled", !check.prop("checked")));
+						verify.on("click", () => {
+							if (pending || !check.prop("checked")) return;
+							setBusy(true);
+							inform("Verifying attempt with the server.");
+							frappe.call({
+								method: "toefl_house.api.verify_attempt", type: "POST",
+								args: {
+									request_key: newRequestKey(), attempt: state.attempt,
+									expected_version: Number(state.version),
+								},
+								callback(reply) {
+									setBusy(false);
+									if ((reply.message || {}).status === "Verified") checkStatus();
+									else inform("Server verification was not confirmed. Check attempt status before retrying.");
+								},
+								error() {
+									setBusy(false);
+									inform("Verification outcome is unknown. Check current status; do not retry blindly.");
+								},
+							});
+						});
+						return;
+					}
+					if (state.status === "Verified") {
+						inform("Candidate verified. Start the timed session only when the candidate is seated and ready.");
+						const start = $("<button type='button' class='btn btn-primary'></button>")
+							.text(text("Start supervised timed exam")).appendTo(content);
+						start.on("click", () => {
+							if (pending) return;
+							frappe.confirm(text(
+								"Start the timed exam now? The server deadline begins immediately and cannot be paused."
+							), () => {
+								if (pending) return;
+								setBusy(true);
+								frappe.call({
+									method: "toefl_house.api.deliver_attempt", type: "POST",
+									args: {
+										request_key: newRequestKey(), attempt: state.attempt,
+										expected_version: Number(state.version),
+									},
+									callback(reply) {
+										setBusy(false);
+										if ((reply.message || {}).status === "In Progress") reload();
+										else inform("Exam start was not confirmed. Check current server status.");
+									},
+									error() {
+										setBusy(false);
+										inform("Start outcome is unknown. Check status before any retry.");
+									},
+								});
+							});
+						});
+						return;
+					}
+					inform("This attempt is " + (state.status || "unavailable") +
+						". No further supervised answers can be entered on this screen.");
+				},
+				error() {
+					setBusy(false);
+					inform("Attempt unavailable or access denied. Check the exact ID and assigned Branch.");
+				},
+			});
+		}
+		load.on("click", checkStatus);
+		attemptField.on("keydown", (event) => {
+			if (event.key === "Enter") { event.preventDefault(); checkStatus(); }
+		});
+		inform("Enter an allocated, verified or in-progress attempt to review its next allowed step.");
+	}
+
 	function renderActionPage(wrapper, surface) {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: text(surface.title), single_column: true });
 		ensureStyleSheet();
@@ -592,6 +986,7 @@ frappe.provide("toefl_house.command_pages");
 		// that the first opened dialog can populate selects correctly. Skills
 		// are the only config-driven select on the command pages today.
 		if (surface.role === "Teaching Scheduler") loadActiveSkills();
+		if (surface.role === "Placement Invigilator") mountSupervisedPlacement(page);
 
 		const block = section(page.body, text("Available actions"));
 		const grid = $("<div class='th-grid'></div>").appendTo(block);

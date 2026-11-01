@@ -56,6 +56,11 @@ class IntakeGuardTests(unittest.TestCase):
         self.open_journeys = []
         self.prior_status = "Admitted"
         self.prior_paid = 0
+        self.placement_branch = None
+        self.production_mode = False
+        self.subject_value = "subject@example.test"
+        self.origin_inquiry = "INQ-001"
+        self.origin_name = "Visitor"
         self.branch_ups = []          # the actor's native User Permissions on Branch
         self.created = []             # applicant docs created through the command
         previous = dict(sys.modules)
@@ -81,9 +86,16 @@ class IntakeGuardTests(unittest.TestCase):
                                        expires_at="2026-12-31 00:00:00",
                                        course_code="TH-A1", internal_level="A1")
             if doctype == "TH Placement Attempt" and fieldname == "subject":
-                return "subject@example.test"
+                return fake.subject_value
             if doctype == "TH Placement Attempt" and fieldname == "case_name":
                 return fake.case_name
+            if doctype == "TH Placement Case" and fieldname == "th_branch":
+                return fake.placement_branch
+            if doctype == "TH Placement Case" and fieldname == "reception_inquiry":
+                return fake.origin_inquiry
+            if doctype == "TH Reception Inquiry" and as_dict:
+                return SimpleNamespace(person_name=fake.origin_name,
+                                       th_branch=fake.placement_branch)
             raise AssertionError(f"unexpected get_value {doctype} {fieldname}")
 
         stub = types.ModuleType("frappe")
@@ -97,7 +109,9 @@ class IntakeGuardTests(unittest.TestCase):
         stub.flags = SimpleNamespace()
         stub.utils = SimpleNamespace(
             today=lambda: "2026-09-22",
-            get_datetime=lambda v=None: v if isinstance(v, datetime) else datetime.fromisoformat(str(v)))
+            get_datetime=lambda v=None: v if isinstance(v, datetime) else datetime.fromisoformat(str(v)),
+            validate_email_address=lambda value, throw=False: (
+                value if "@" in value and "." in value.split("@")[-1] else None))
         def exists(doctype, name):
             if doctype == "Student Applicant":
                 return bool(fake.applicant_probe)
@@ -114,6 +128,11 @@ class IntakeGuardTests(unittest.TestCase):
             raise AssertionError(f"unexpected get_all {doctype}")
 
         stub.get_all = get_all
+        stub.get_meta = lambda dt: SimpleNamespace(
+            has_field=lambda field: (
+                dt == "Student Applicant" and field in ("th_candidate_ref", "th_reception_inquiry")
+            ),
+            get_field=lambda field: SimpleNamespace(reqd=0) if field == "student_email_id" else None)
 
         def get_doc(doctype, name=None, **kwargs):
             if isinstance(doctype, dict):
@@ -122,6 +141,7 @@ class IntakeGuardTests(unittest.TestCase):
                 return doc
             if doctype == "Student Applicant":
                 return SimpleNamespace(name=name, program="TH-PROG",
+                                       student_email_id="subject@example.test",
                                        academic_year="2026-27",
                                        application_status=fake.prior_status,
                                        paid=fake.prior_paid)
@@ -136,7 +156,7 @@ class IntakeGuardTests(unittest.TestCase):
         sys.modules["toefl_house"] = package
         _load_real("toefl_house.policy", APP / "policy.py")
         security = types.ModuleType("toefl_house.security")
-        security.is_production = lambda: False
+        security.is_production = lambda: fake.production_mode
         security.record_synthetic_flag = lambda: 1
         sys.modules["toefl_house.security"] = security
         api = types.ModuleType("toefl_house.api")
@@ -154,6 +174,74 @@ class IntakeGuardTests(unittest.TestCase):
     def _record(self, key="test-key-record-00000001"):
         return self.admission.record_applicant(
             key, "PD-1", "SYNTHETIC Probe", "TH-PROG", "2026-27")
+
+    def test_real_candidate_without_email_is_a_native_applicant(self):
+        self.production_mode = True
+        self.subject_value = "THV-" + "a" * 32
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Alpha"]
+        result = self.admission.record_applicant(
+            "request-email-free-01", "PD-1", "Visitor", "TH-PROG", "2026-27")
+        self.assertEqual(result["student_email_id"], "")
+        self.assertEqual(result["candidate_reference"], self.subject_value)
+        self.assertEqual(result["branch"], "Branch Alpha")
+        self.assertEqual(self.created[0]._payload["th_candidate_ref"], self.subject_value)
+        self.assertEqual(self.created[0]._payload["th_reception_inquiry"], "INQ-001")
+        self.assertIsNone(self.created[0]._payload["student_email_id"])
+        self.assertIn("th_candidate_ref=%s", self.calls[1][0])
+        self.assertEqual(self.calls[1][1], (self.subject_value,))
+
+    def test_production_refuses_applicant_name_changed_after_reception(self):
+        self.production_mode = True
+        self.subject_value = "THV-" + "a" * 32
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Alpha"]
+        self.origin_name = "Another Visitor"
+        with self.assertRaisesRegex(_ValidationError, "must match"):
+            self.admission.record_applicant(
+                "mismatch-reception-name-0001", "PD-1", "Visitor",
+                "TH-PROG", "2026-27")
+        self.assertFalse(self.created)
+
+    def test_registered_full_name_can_be_kept_in_first_name_field(self):
+        self.production_mode = True
+        self.subject_value = "THV-" + "a" * 32
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Alpha"]
+        self.origin_name = "Arefa Mohammadi"
+        result = self.admission.record_applicant(
+            "verified-full-name-00001", "PD-1", "Arefa Mohammadi",
+            "TH-PROG", "2026-27")
+        self.assertEqual(result["candidate_reference"], self.subject_value)
+
+    def test_real_email_is_optional_and_normalized_when_provided(self):
+        self.production_mode = True
+        self.subject_value = "THV-" + "a" * 32
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Alpha"]
+        result = self.admission.record_applicant(
+            "request-optional-email-01", "PD-1", "Visitor", "TH-PROG", "2026-27",
+            email="REAL@EXAMPLE.COM")
+        self.assertEqual(result["student_email_id"], "real@example.com")
+        self.assertEqual(self.created[0]._payload["student_email_id"], "real@example.com")
+
+    def test_invalid_provided_email_is_refused_without_inventing_one(self):
+        with self.assertRaises(_ValidationError):
+            self.admission.record_applicant(
+                "request-invalid-email-01", "PD-1", "SYNTHETIC Probe",
+                "TH-PROG", "2026-27", email="not-an-email")
+        self.assertFalse(self.created)
+
+    def test_real_candidate_requires_original_reception_referral(self):
+        self.production_mode = True
+        self.subject_value = "THV-" + "a" * 32
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Alpha"]
+        self.origin_inquiry = None
+        with self.assertRaises(_PermissionError):
+            self.admission.record_applicant(
+                "request-missing-inquiry-01", "PD-1", "Visitor", "TH-PROG", "2026-27")
+        self.assertFalse(self.created)
 
     def test_intake_locks_case_then_probes_applicant_with_lock(self):
         result = self._record()
@@ -207,6 +295,23 @@ class IntakeGuardTests(unittest.TestCase):
         result = self._record()
         self.assertFalse(result["reused"])
 
+    def test_fresh_intake_preserves_optional_real_surname(self):
+        self.admission.record_applicant(
+            "test-key-record-surname-00001", "PD-1", "SYNTHETIC Probe",
+            "TH-PROG", "2026-27", last_name="Nazari")
+        self.assertEqual(self.created[0]._payload["last_name"], "Nazari")
+
+    def test_fresh_intake_never_invents_applicant_surname(self):
+        self._record()
+        self.assertEqual(self.created[0]._payload["last_name"], "")
+
+    def test_intake_rejects_invisible_and_overlong_surnames(self):
+        for surname in ("X\\nY", "X" * 141, "\\x00"):
+            with self.subTest(surname=surname), self.assertRaises(_ValidationError):
+                self.admission.record_applicant(
+                    "test-key-record-surname-00002", "PD-1", "SYNTHETIC Probe",
+                    "TH-PROG", "2026-27", last_name=surname)
+
     def test_paid_prior_applicant_is_refused(self):
         self.applicant_probe = [{"name": "APP-OLD"}]
         self.returning_mode = "placement_per_term"
@@ -243,6 +348,26 @@ class IntakeGuardTests(unittest.TestCase):
             "test-key-record-00000099", "PD-1", "SYNTHETIC Probe",
             "TH-PROG", "2026-27", branch="Branch Beta")
         self.assertEqual(result["branch"], "Branch Beta")
+
+    def test_production_refuses_branchless_placement_origin(self):
+        self.production_mode = True
+        self.branch_ups = ["Branch Alpha"]
+        with self.assertRaises(_PermissionError):
+            self.admission.record_applicant(
+                "test-prod-branch-missing-00001", "PD-1",
+                "Real Learner", "TH-PROG", "2026-27")
+
+    def test_branch_provenance_rejects_cross_branch_admission(self):
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Beta"]
+        with self.assertRaises(_PermissionError):
+            self._record()
+
+    def test_branch_provenance_allows_verified_matching_branch(self):
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Alpha"]
+        result = self._record()
+        self.assertEqual(result["branch"], "Branch Alpha")
 
     def test_explicit_unknown_branch_is_refused(self):
         self.branch_ups = []

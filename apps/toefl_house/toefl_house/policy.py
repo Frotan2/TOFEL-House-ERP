@@ -227,6 +227,13 @@ def recommend_course(score, course_map, *, production=False):
     if presented < 1 or presented != correct + incorrect + missing:
         raise ValueError("Score completeness mismatch")
     course_map = validate_course_map(course_map, production=production)
+    if production:
+        # An uncalibrated "one correct answer" rule must never assign a real
+        # candidate to a course. A governed, validated level-cutoff policy and
+        # owner approval are required before production release is enabled.
+        raise ValueError(
+            "Placement course mapping is not qualified for real students: "
+            "the fixture any_correct rule cannot issue a production placement")
     for entry in course_map["entries"]:
         if entry["match"] == "any_correct" and correct >= 1:
             rationale = ("Configured course mapping from observed correct evidence; "
@@ -571,7 +578,9 @@ def validate_request_key(key):
 def can_read(kind, roles, actor, owner, status=None):
     roles = set(roles)
     # The allocation guard is an internal lock row: no business role reads it.
-    if kind == "guard":
+    if kind in ("guard", "reception_inquiry"):
+        # Contact notes are available only through the branch-scoped
+        # allowlisted Reception desk, never generic native record readers.
         return False
     if kind == "admission_decision":
         return bool(roles & {"Admission Officer", "Admission Reviewer",
