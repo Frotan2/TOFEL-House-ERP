@@ -105,7 +105,7 @@ def admission_stage(admission_status, accepted, has_native_student):
                 "command": "convert_applicant",
             }
         return {
-            "label": "Admission decided" if admission_status == "Approved" else "Conditional admission",
+            "label": "Admission decided" if admission_status == "Approved" else "Conditions awaiting verification",
             "definition": f"The admission outcome is {admission_status}.",
             "next": "Record the offer acceptance.",
             "role": "Admission Officer",
