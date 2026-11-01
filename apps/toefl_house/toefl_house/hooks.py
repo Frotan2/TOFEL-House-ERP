@@ -92,6 +92,7 @@ has_permission = {
                  "TH Class Transfer", "TH Class Waiting List",
                  "TH Capacity Approval", "TH Class Suspension")
 }
+has_permission["TH Reception Inquiry"] = "toefl_house.permissions.reception_inquiry_has_permission"
 has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Program Level"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Discount Rule"] = "toefl_house.permissions.configuration_has_permission"
@@ -153,6 +154,7 @@ permission_query_conditions = {
         ("TH Capacity Approval", "capacity_approval"),
         ("TH Class Suspension", "class_suspension"))
 }
+permission_query_conditions["TH Reception Inquiry"] = "toefl_house.permissions.query_reception_inquiry"
 # Governance configuration is queried through the non-synthetic checker.
 permission_query_conditions["TH Academic Program"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Program Level"] = "toefl_house.permissions.configuration_query"
@@ -207,6 +209,10 @@ override_whitelisted_methods = {
 # frappe (delete_doc check_permission_and_not_submitted); drafts cannot
 # exist outside commands because insert is denied on validate.
 doc_events = {
+    "TH Reception Inquiry": {
+        "validate": "toefl_house.reception_intake.protect_inquiry",
+        "on_trash": "toefl_house.reception_intake.protect_inquiry",
+    },
     # Office 365 identity uniqueness (2026-10-18): one signed subject, at most one User.
     "User": {
         "validate": "toefl_house.identity_links.validate_office365_links",
