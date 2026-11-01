@@ -58,6 +58,8 @@ class IntakeGuardTests(unittest.TestCase):
         self.prior_paid = 0
         self.placement_branch = None
         self.production_mode = False
+        self.subject_value = "subject@example.test"
+        self.origin_inquiry = "INQ-001"
         self.branch_ups = []          # the actor's native User Permissions on Branch
         self.created = []             # applicant docs created through the command
         previous = dict(sys.modules)
@@ -83,11 +85,13 @@ class IntakeGuardTests(unittest.TestCase):
                                        expires_at="2026-12-31 00:00:00",
                                        course_code="TH-A1", internal_level="A1")
             if doctype == "TH Placement Attempt" and fieldname == "subject":
-                return "subject@example.test"
+                return fake.subject_value
             if doctype == "TH Placement Attempt" and fieldname == "case_name":
                 return fake.case_name
             if doctype == "TH Placement Case" and fieldname == "th_branch":
                 return fake.placement_branch
+            if doctype == "TH Placement Case" and fieldname == "reception_inquiry":
+                return fake.origin_inquiry
             raise AssertionError(f"unexpected get_value {doctype} {fieldname}")
 
         stub = types.ModuleType("frappe")
@@ -158,6 +162,33 @@ class IntakeGuardTests(unittest.TestCase):
     def _record(self, key="test-key-record-00000001"):
         return self.admission.record_applicant(
             key, "PD-1", "SYNTHETIC Probe", "TH-PROG", "2026-27")
+
+    def test_real_candidate_without_email_is_a_native_applicant(self):
+        self.production_mode = True
+        self.subject_value = "THV-" + "a" * 32
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Alpha"]
+        result = self.admission.record_applicant(
+            "request-email-free-01", "PD-1", "Visitor", "TH-PROG", "2026-27")
+        self.assertEqual(result["student_email_id"], "")
+        self.assertEqual(result["candidate_reference"], self.subject_value)
+        self.assertEqual(result["branch"], "Branch Alpha")
+        self.assertEqual(self.created[0]._payload["th_candidate_ref"], self.subject_value)
+        self.assertEqual(self.created[0]._payload["th_reception_inquiry"], "INQ-001")
+        self.assertIsNone(self.created[0]._payload["student_email_id"])
+        self.assertIn("th_candidate_ref=%s", self.calls[1][0])
+        self.assertEqual(self.calls[1][1], (self.subject_value,))
+
+    def test_real_candidate_requires_original_reception_referral(self):
+        self.production_mode = True
+        self.subject_value = "THV-" + "a" * 32
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Alpha"]
+        self.origin_inquiry = None
+        with self.assertRaises(_PermissionError):
+            self.admission.record_applicant(
+                "request-missing-inquiry-01", "PD-1", "Visitor", "TH-PROG", "2026-27")
+        self.assertFalse(self.created)
 
     def test_intake_locks_case_then_probes_applicant_with_lock(self):
         result = self._record()
