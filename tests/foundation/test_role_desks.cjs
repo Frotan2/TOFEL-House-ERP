@@ -748,6 +748,7 @@ const hostileItem = {
 	const scenario = runScenario({ workPayload: payload });
 	const top = findAll(scenario.body, "th-register-visitor");
 	assert.strictEqual(top.length, 1, "a fresh reception desk must show its primary Register button");
+	assert.strictEqual(findAll(scenario.body, "th-reception-intake").length, 1, "dedicated first-contact workspace renders");
 	const empty = findAll(scenario.body, "th-section-actions");
 	assert(empty.length >= 1, "empty queue must keep its server-authorized action");
 	assert(serialize(scenario.body).includes("Register the first visitor"));

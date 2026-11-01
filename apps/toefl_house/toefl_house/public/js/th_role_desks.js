@@ -1926,7 +1926,7 @@ frappe.provide("toefl_house.role_desks");
 
 	function mountSearch(page, surface) {
 		if (!surface.search) return;
-		const block = $("<section class='th-section'></section>").appendTo(page.body);
+		const block = $("<section class='th-section th-reception-intake'></section>").appendTo(page.body);
 		$("<h2 class='th-section-title'></h2>").text(text("Find or register a visitor")).appendTo(block);
 		const body = $("<div class='th-section-body'></div>").appendTo(block);
 		$("<p class='th-page-purpose'></p>").text(text(
