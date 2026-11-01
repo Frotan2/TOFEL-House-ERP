@@ -708,14 +708,21 @@ def class_availability(student_group="", program="", academic_year="",
                 "academic_term", "max_strength", "th_class_status",
                 "th_delivery_mode", "th_branch", "th_class_start_date",
                 "th_class_end_date"],
-        order_by="student_group_name asc", limit_page_length=MAX_CLASSES)
+        order_by="student_group_name asc", limit_page_length=MAX_CLASSES + 1)
+    if len(rows) > MAX_CLASSES:
+        raise frappe.ValidationError(
+            "Too many classes for a complete seat report; narrow program, year or branch")
     names = [row["name"] for row in rows]
     waiting_counts = {}
     if names:
-        for entry in frappe.get_all(
-                WAITING, filters={"student_group": ("in", names),
-                                  "status": ("in", list(OPEN_WAITING_STATUSES))},
-                fields=["student_group", "status"], limit_page_length=MAX_CLASSES * 4):
+        open_entries = frappe.get_all(
+            WAITING, filters={"student_group": ("in", names),
+                              "status": ("in", list(OPEN_WAITING_STATUSES))},
+            fields=["student_group", "status"], limit_page_length=MAX_CLASSES * 4 + 1)
+        if len(open_entries) > MAX_CLASSES * 4:
+            raise frappe.ValidationError(
+                "Waiting-list totals exceed the complete read; narrow the class filter")
+        for entry in open_entries:
             waiting_counts[entry["student_group"]] = waiting_counts.get(
                 entry["student_group"], 0) + 1
     classes = []
@@ -803,7 +810,10 @@ def waiting_list_board(student_group=""):
         WAITING, filters=filters,
         fields=["name", "student", "student_group", "status", "priority",
                 "requested_on", "offer_expires_on", "requested_by"],
-        order_by="requested_on asc", limit_page_length=MAX_ENTRIES)
+        order_by="requested_on asc", limit_page_length=MAX_ENTRIES + 1)
+    if len(rows) > MAX_ENTRIES:
+        raise frappe.ValidationError(
+            "The waiting-list board exceeds the complete read; choose one class")
     groups = {}
     for row in rows:
         groups.setdefault(row["student_group"], []).append(row)
