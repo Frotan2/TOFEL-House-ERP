@@ -22,6 +22,7 @@
 7. Academic staff place the student in a class with available capacity. Authorized finance staff issue tuition separately under the Owner-approved billing policy, without duplicate billing.
 
 ## Staff safety and exceptions
+- The reception intake workspace is explicitly English LTR, and a test checks authored English-only source strings. Keep authentic visitor names in their original spelling; never manufacture an English name.
 - An inquiry is not linked automatically to an email-based candidate account. Only a verified identity and an authorized placement/admission journey may make that association. Never assume two matching names or shared phone numbers are the same person.
 - If the result is expired, the case does not exist, the selected Program differs from approved academic placement, or required approver roles are missing: **stop and refer to Academic Manager**. Do not bypass the guards or choose arbitrary levels.
 - Branch User Permissions restrict front-counter record visibility. A reception account without Branch User Permissions is considered headquarters-wide by the existing application scope model: **the Owner must assign branch restrictions deliberately**.
