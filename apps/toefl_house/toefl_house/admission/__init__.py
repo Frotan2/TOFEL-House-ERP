@@ -235,6 +235,9 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
                     "This subject has an open admission journey; a returning "
                     "journey starts only after the previous journey converts")
             applicant = frappe.get_doc(APPLICANT, prior[0]["name"])
+            if placement_branch and applicant.get("th_branch") != placement_branch:
+                raise frappe.PermissionError(
+                    "Returning applicant has a different branch; approve the branch transfer before admission")
             if int(applicant.paid or 0):
                 raise frappe.ValidationError("Paid applicants are not an admission substitute")
             result = {
