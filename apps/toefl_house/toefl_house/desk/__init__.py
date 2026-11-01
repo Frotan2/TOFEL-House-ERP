@@ -91,6 +91,12 @@ PROJECTION_FIELDS = {
         "reason", "evidence", "approval_evidence", "status", "requested_by",
         "approved_by", "paying_user", "credit_journal", "payment_entry", "modified", "voided_by", "void_reason", "voided_on",
     ],
+    # Preliminary walk-in records are visible ONLY through this bounded,
+    # role-gated, branch-filtered desk (no native DocType read grants).
+    ("reception", "TH Reception Inquiry"): [
+        "name", "person_name", "phone", "program_interest", "th_branch",
+        "status", "notes", "recorded_by", "version", "creation",
+    ],
     ("reception", "TH Placement Decision"): [
         "name", "attempt", "status", "released_at", "expires_at",
         "course_code", "internal_level",
@@ -607,7 +613,7 @@ def scope_filters(desk):
 # matches nothing (fail closed). Doctypes without an entry (placement
 # content, configuration, system records, identity) are intentionally
 # branch-wide.
-BRANCH_CHAIN_FILTERS = ("Student", "Student Group Student", "Student Attendance",
+BRANCH_CHAIN_FILTERS = ("TH Reception Inquiry", "Student", "Student Group Student", "Student Attendance",
                         "Course Schedule", "Program Enrollment", "Fees",
                         "TH Enrollment Exit", "TH Teaching Assignment",
                         "TH Correction Request", "TH Admission Decision")
@@ -626,6 +632,14 @@ def _branch_allowed_names(doctype, branches, *, require_complete=False):
             raise frappe.ValidationError(
                 "Branch enrollment scope exceeds the safe read limit; narrow the scope or contact an administrator")
         return rows
+
+    if doctype == "TH Reception Inquiry":
+        rows = frappe.get_all(
+            doctype, filters={"th_branch": ("in", branches)},
+            fields=["name"], limit_page_length=_CHAIN_LIMIT)
+        if len(rows) >= _CHAIN_LIMIT:
+            raise frappe.ValidationError("Reception inquiry branch scope exceeds the safe read limit")
+        return [row["name"] for row in rows]
 
     groups = [row["name"] for row in checked(frappe.get_all(
         "Student Group", filters={"th_branch": ("in", branches)},
@@ -913,7 +927,7 @@ def project_count(desk, doctype, filters=None):
     return frappe.db.count(doctype, filters)
 
 
-def section(sid, title, kind, *, items=None, facts=None, empty_title="", empty_body="", notes=None):
+def section(sid, title, kind, *, items=None, facts=None, empty_title="", empty_body="", notes=None, actions=None):
     """A desk section envelope. The client renders these uniformly."""
     payload = {"id": sid, "title": title, "kind": kind}
     if facts is not None:
@@ -923,6 +937,8 @@ def section(sid, title, kind, *, items=None, facts=None, empty_title="", empty_b
     payload["empty"] = {"title": empty_title, "body": empty_body}
     if notes:
         payload["notes"] = notes
+    if actions:
+        payload["actions"] = actions
     return payload
 
 
