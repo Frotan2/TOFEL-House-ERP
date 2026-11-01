@@ -7,6 +7,7 @@ All writes use operation receipts, native Branch scope, version locks and
 the guarded document controller.
 """
 import re
+import unicodedata
 
 import frappe
 
@@ -32,9 +33,20 @@ def _text(value, label, *, required=False, length=140):
 
 def _phone(value):
     clean = _text(value, "Phone", length=32)
-    if clean and not PHONE_PATTERN.fullmatch(clean):
-        raise frappe.ValidationError("Phone must contain only digits, spaces, +, - or parentheses")
-    return clean
+    if not clean:
+        return ""
+    # Afghan Dari and Arabic keyboards produce different Unicode decimal
+    # glyphs; store normalized ASCII digits so contact lookup and duplicate
+    # detection do not depend on the keyboard language.
+    normalized = "".join(
+        str(unicodedata.decimal(char)) if char.isdecimal() else char
+        for char in clean
+    )
+    digits = sum(char.isdigit() for char in normalized)
+    if not PHONE_PATTERN.fullmatch(normalized) or not 5 <= digits <= 15:
+        raise frappe.ValidationError(
+            "Phone must have 5–15 digits and contain only spaces, +, - or parentheses")
+    return normalized
 
 
 def _result(doc):
@@ -105,13 +117,22 @@ def create_walkin_inquiry(request_key, person_name, phone="", program_interest="
 def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes=""):
     """Follow up a preliminary visitor with an audited optimistic revision."""
     def work(actor):
-        if type(expected_version) is not int or expected_version < 1:
+        # Frappe browser form and URL-encoded POST may transmit Int values
+        # as decimal strings. Accept exactly canonical positive integers; never
+        # accept booleans, signs, floats or arbitrary text.
+        if type(expected_version) is int:
+            version = expected_version
+        elif isinstance(expected_version, str) and re.fullmatch(r"[1-9][0-9]{0,8}", expected_version):
+            version = int(expected_version)
+        else:
+            raise frappe.ValidationError("An integer inquiry version is required")
+        if version < 1 or version > 999999999:
             raise frappe.ValidationError("An integer inquiry version is required")
         if status not in STATUSES or status == "New":
             raise frappe.ValidationError("Choose a valid follow-up status")
         name = _text(inquiry, "Inquiry", required=True)
         doc = frappe.get_doc(DOCTYPE, name, for_update=True)
-        if doc.status == "Closed" or int(doc.version) != expected_version:
+        if doc.status == "Closed" or int(doc.version) != version:
             raise frappe.ValidationError("Inquiry changed or is closed; refresh first")
         doc.status = status
         doc.notes = _text(notes, "Notes", length=1000)
