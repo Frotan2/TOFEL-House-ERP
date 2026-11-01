@@ -167,8 +167,11 @@ class ReceptionBranchAvailabilityTests(unittest.TestCase):
         report = self.ops.capacity.class_availability()
         self.assertEqual([row["student_group"] for row in report["classes"]],
                          ["GRP-A"])
-        self.assertEqual(self.ops.capacity.waiting_list_board(
-            student_group="GRP-COMPLETED")["entries"], [])
+        front_desk = self.ops.capacity.waiting_list_board(
+            student_group="GRP-COMPLETED")
+        self.assertEqual(len(front_desk["entries"]), 1)
+        self.assertEqual(front_desk["entries"][0]["next_command"], "")
+        self.assertEqual(front_desk["entries"][0]["next_role"], "Academic Manager")
         self.ops.login(APPROVER)
         self.site.set_roles(APPROVER, ["Academic Manager"])
         board = self.ops.capacity.waiting_list_board(student_group="GRP-COMPLETED")
