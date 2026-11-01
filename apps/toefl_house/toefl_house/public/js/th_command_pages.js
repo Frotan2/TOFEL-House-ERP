@@ -668,6 +668,7 @@ frappe.provide("toefl_house.command_pages");
 				"Server deadline: " + active.deadline_at + " (course-site time). " +
 				"The server enforces time limits; this display is not a timer."
 			)).appendTo(content);
+			let unsavedSelection = false;
 			const form = $("<fieldset class='th-placement-question'></fieldset>").appendTo(content);
 			$("<legend></legend>").text(text(question.skill + " · " + question.question_type)).appendTo(form);
 			$("<p class='th-placement-prompt'></p>").text(question.prompt).appendTo(form);
@@ -676,14 +677,21 @@ frappe.provide("toefl_house.command_pages");
 				const label = $("<label class='th-placement-option'></label>").appendTo(form);
 				const radio = $("<input type='radio'>").attr("name", optionName).val(option.id).appendTo(label);
 				if (!saved.missing && option.id === saved.option_id) radio.prop("checked", true);
+				radio.on("change", () => { unsavedSelection = true; });
 				$("<span></span>").text(option.text).appendTo(label);
 			});
 			const actions = $("<div class='th-placement-controls'></div>").appendTo(content);
 			$("<button type='button' class='btn btn-secondary'></button>").text(text("Previous"))
-				.prop("disabled", position === 0).on("click", () => { position -= 1; draw(); }).appendTo(actions);
+				.prop("disabled", position === 0).on("click", () => {
+					if (unsavedSelection) { inform("Save or clear the selected answer before changing questions."); return; }
+					position -= 1; draw();
+				}).appendTo(actions);
 			$("<button type='button' class='btn btn-secondary'></button>").text(text("Next"))
 				.prop("disabled", position === items.length - 1)
-				.on("click", () => { position += 1; draw(); }).appendTo(actions);
+				.on("click", () => {
+					if (unsavedSelection) { inform("Save or clear the selected answer before changing questions."); return; }
+					position += 1; draw();
+				}).appendTo(actions);
 			const save = $("<button type='button' class='btn btn-primary'></button>")
 				.text(text("Save selected answer")).appendTo(actions);
 			const clear = $("<button type='button' class='btn btn-secondary'></button>")
@@ -746,6 +754,10 @@ frappe.provide("toefl_house.command_pages");
 			const submit = $("<button type='button' class='btn btn-danger'></button>")
 				.text(text("Submit and close exam")).appendTo(actions);
 			submit.on("click", () => {
+				if (unsavedSelection) {
+					inform("Your selected answer is not saved. Save or clear it before submitting.");
+					return;
+				}
 				if (pending || pendingWrite) {
 					inform("Reload the exam to resolve an uncertain save before submitting.");
 					return;
