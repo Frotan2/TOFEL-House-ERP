@@ -1768,6 +1768,11 @@ frappe.provide("toefl_house.role_desks");
 					frappe.confirm(text(
 						"Submit the actual counts and close this company's entire business day? This close cannot be edited; no payment or cash movement is created."
 					), submitAction);
+				} else if (action.endpoint === "toefl_house.reception_intake.update_walkin_inquiry" &&
+						args.status === "Closed") {
+					// Closing cannot be undone through this workflow; make the
+					// operator explicitly confirm before sending the guarded POST.
+					frappe.confirm(text("Close this visitor inquiry? Future follow-ups will not be possible on this visit. The existing record will be retained."), submitAction);
 				} else if (teachingContractForm) {
 					frappe.confirm(text(
 						action.endpoint === "toefl_house.teaching.compensation.revise_teaching_contract"

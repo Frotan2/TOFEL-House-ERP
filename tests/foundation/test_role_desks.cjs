@@ -495,6 +495,7 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, d
 	const pendingRegistrations = [];
 	const routed = [];
 	const printed = [];
+	const confirmations = [];
 	const body = $("body").appendTo({ children: [] });
 	let workCalls = 0;
 	const frappe = {
@@ -504,6 +505,7 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, d
 		set_route(route) { routed.push(route); },
 		model: { can_read(doctype) { return readableSources.includes(doctype); } },
 		msgprint(opts) { printed.push(opts); },
+		confirm(message, callback) { confirmations.push({ message, callback }); },
 		ui: {
 			make_app_page() { return { body, main: { addClass() {} } }; },
 			Dialog: class {
@@ -555,6 +557,10 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, d
 				opts.callback({ message: { name: "INQ-TEST", status: "New" } });
 				return;
 			}
+			if (opts.method === "toefl_house.reception_intake.update_walkin_inquiry") {
+				opts.callback({ message: { name: "INQ-TEST", status: opts.args.status } });
+				return;
+			}
 			if (opts.method === "toefl_house.admission.review_admission") {
 				opts.callback({ message: { name: HOSTILE, status: HOSTILE } });
 				return;
@@ -571,7 +577,7 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, d
 	frappe.provide = (dotted) => { let target = sandbox; for (const part of dotted.split(".")) target = target[part] ||= {}; };
 	vm.runInNewContext(fs.readFileSync(SCRIPT, "utf8"), sandbox, { filename: SCRIPT });
 	frappe.pages["th-reception-desk"].on_page_load(body);
-	return { calls, dialogs, pendingLookups, pendingRegistrations, routed, printed, body, frappe, get workCalls() { return workCalls; } };
+	return { calls, dialogs, pendingLookups, pendingRegistrations, confirmations, routed, printed, body, frappe, get workCalls() { return workCalls; } };
 }
 
 const hostileItem = {
@@ -815,6 +821,30 @@ const hostileItem = {
 	assert.strictEqual(scenario.pendingRegistrations.length, 2, "retry is possible after failure");
 	assert.strictEqual(scenario.pendingRegistrations[1].args.request_key, firstKey,
 		"the retry preserves the original idempotency key");
+}
+
+{
+	// Closing an inquiry is irreversible. The form must not send a
+	// close command without a deliberate confirmation from Reception.
+	const payload = payloadWith([{
+		id: "INQ-CLOSE", person: "Real Visitor", stage: "Pre-registration", status: "Contacted",
+		next: "Follow up", action: {
+			role: "Reception", endpoint: "toefl_house.reception_intake.update_walkin_inquiry",
+			label: "Update follow-up", args: { inquiry: "INQ-CLOSE", expected_version: 1, status: "Contacted", notes: "" },
+		},
+	}], "0");
+	const scenario = runScenario({ workPayload: payload });
+	findAll(scenario.body, "th-queue-action")[0].click();
+	const form = scenario.dialogs[0];
+	form.submit({ inquiry: "INQ-CLOSE", expected_version: 1, status: "Closed", notes: "No longer interested" });
+	const endpoint = "toefl_house.reception_intake.update_walkin_inquiry";
+	assert.strictEqual(scenario.calls.filter((call) => call.method === endpoint).length, 0,
+		"no irreversible closure occurs before confirmation");
+	assert.strictEqual(scenario.confirmations.length, 1, "explicit closure confirmation appears");
+	assert(scenario.confirmations[0].message.includes("Close this visitor inquiry?"));
+	scenario.confirmations[0].callback();
+	assert.strictEqual(scenario.calls.filter((call) => call.method === endpoint).length, 1,
+		"confirmed closure uses the existing guarded endpoint");
 }
 
 {
