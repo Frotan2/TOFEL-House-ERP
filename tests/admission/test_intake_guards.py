@@ -56,6 +56,7 @@ class IntakeGuardTests(unittest.TestCase):
         self.open_journeys = []
         self.prior_status = "Admitted"
         self.prior_paid = 0
+        self.placement_branch = None
         self.branch_ups = []          # the actor's native User Permissions on Branch
         self.created = []             # applicant docs created through the command
         previous = dict(sys.modules)
@@ -84,6 +85,8 @@ class IntakeGuardTests(unittest.TestCase):
                 return "subject@example.test"
             if doctype == "TH Placement Attempt" and fieldname == "case_name":
                 return fake.case_name
+            if doctype == "TH Placement Case" and fieldname == "th_branch":
+                return fake.placement_branch
             raise AssertionError(f"unexpected get_value {doctype} {fieldname}")
 
         stub = types.ModuleType("frappe")
@@ -260,6 +263,18 @@ class IntakeGuardTests(unittest.TestCase):
             "test-key-record-00000099", "PD-1", "SYNTHETIC Probe",
             "TH-PROG", "2026-27", branch="Branch Beta")
         self.assertEqual(result["branch"], "Branch Beta")
+
+    def test_branch_provenance_rejects_cross_branch_admission(self):
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Beta"]
+        with self.assertRaises(_PermissionError):
+            self._record()
+
+    def test_branch_provenance_allows_verified_matching_branch(self):
+        self.placement_branch = "Branch Alpha"
+        self.branch_ups = ["Branch Alpha"]
+        result = self._record()
+        self.assertEqual(result["branch"], "Branch Alpha")
 
     def test_explicit_unknown_branch_is_refused(self):
         self.branch_ups = []

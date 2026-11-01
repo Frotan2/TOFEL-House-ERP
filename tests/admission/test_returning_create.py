@@ -58,6 +58,8 @@ class ReturningCreateTests(unittest.TestCase):
         self.applicant_email = SUBJECT
         self.student_email = SUBJECT
         self.student_missing = False
+        self.placement_branch = None
+        self.applicant_branch = None
         self.open_decisions = []
         self.unknown_program = False
         self.execute_calls = []
@@ -73,6 +75,10 @@ class ReturningCreateTests(unittest.TestCase):
                                        course_code="TH-A1", internal_level="A1")
             if doctype == "TH Placement Attempt" and fieldname == "subject":
                 return SUBJECT
+            if doctype == "TH Placement Attempt" and fieldname == "case_name":
+                return "CASE-1"
+            if doctype == "TH Placement Case" and fieldname == "th_branch":
+                return fake.placement_branch
             if doctype == "Student" and fieldname == "student_email_id":
                 return None if fake.student_missing else fake.student_email
             raise AssertionError(f"unexpected get_value {doctype} {fieldname}")
@@ -100,7 +106,7 @@ class ReturningCreateTests(unittest.TestCase):
                                        student_email_id=fake.applicant_email,
                                        application_status=fake.applicant_status,
                                        paid=0,
-                                       get=lambda field: {"academic_term": ""}.get(field))
+                                       get=lambda field: {"academic_term": "", "th_branch": fake.applicant_branch}.get(field))
             raise AssertionError(f"unexpected get_doc {doctype}")
 
         stub = types.ModuleType("frappe")
@@ -193,6 +199,17 @@ class ReturningCreateTests(unittest.TestCase):
         with self.assertRaises(_ValidationError) as ctx:
             self._create()
         self.assertIn("open admission decision", str(ctx.exception))
+
+    def test_returning_admission_denies_foreign_placement_branch(self):
+        self.placement_branch = "Branch Alpha"
+        self.applicant_branch = "Branch Beta"
+        with self.assertRaises(_PermissionError):
+            self._create()
+
+    def test_returning_admission_accepts_matching_verified_branch(self):
+        self.placement_branch = "Branch Alpha"
+        self.applicant_branch = "Branch Alpha"
+        self.assertEqual(self._create()["student_applicant"], "APP-OLD")
 
     def test_unknown_override_program_refused(self):
         self.unknown_program = True

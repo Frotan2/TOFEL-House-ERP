@@ -45,7 +45,7 @@ class RegistrationDeskTests(unittest.TestCase):
         return desk, calls
 
     def test_branchless_placement_case_does_not_expose_subject(self):
-        desk, _ = self.desk(placement=False, applicant=False)
+        desk = _import_desk("reception", roles={"Reception"})
         rows = [{
             "name": "PL-1", "attempt": "ATT-1", "status": "Released",
         }]
