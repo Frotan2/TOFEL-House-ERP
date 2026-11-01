@@ -523,7 +523,7 @@ def _query_role(kind, user=None):
         return "1=0"
     user = user or frappe.session.user
     roles = set(frappe.get_roles(user))
-    if kind == "guard":
+    if kind in ("guard", "reception_inquiry"):
         return "1=0"
     if kind == "admission_decision":
         return "1=1" if roles & {"Admission Officer", "Admission Reviewer",
