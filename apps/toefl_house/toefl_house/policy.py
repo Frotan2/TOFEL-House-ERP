@@ -571,7 +571,9 @@ def validate_request_key(key):
 def can_read(kind, roles, actor, owner, status=None):
     roles = set(roles)
     # The allocation guard is an internal lock row: no business role reads it.
-    if kind == "guard":
+    if kind in ("guard", "reception_inquiry"):
+        # Contact notes are available only through the branch-scoped
+        # allowlisted Reception desk, never generic native record readers.
         return False
     if kind == "admission_decision":
         return bool(roles & {"Admission Officer", "Admission Reviewer",
