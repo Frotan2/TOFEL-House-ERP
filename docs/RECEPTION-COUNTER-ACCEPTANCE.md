@@ -21,27 +21,34 @@ aware code projections; no real learner information was entered.
    double-click/two-counter race. The key is released on closing; no-phone
    records have no stamp. This is **duplicate prevention, not proof of
    personal identity**; different people on one household phone may coexist.
-4. When Ready for Placement, mark Awaiting Placement; the desk assigns
+4. The Admission Officer's Applicant name is prefilled from the exact
+   branch-verified Reception Inquiry. In production, the server rejects
+   an Applicant name that differs from the registered person, even if
+   the candidate reference is copied correctly. An Applicant or Student
+   cannot later be silently renamed to another person through native
+   Education forms; use an independently reviewed identity correction,
+   which is still a separate acceptance requirement.
+6. When Ready for Placement, mark Awaiting Placement; the desk assigns
    **Placement Publisher** as the next role and displays the Inquiry ID.
    The Publisher links the exact inquiry and Branch and generates an internal
    non-authenticating Candidate ID. Once a case consumes the referral,
    Reception cannot downgrade it to Contacted, though notes and closure
    remain permitted.
-5. The desk displays source-verified stage transitions for a live inquiry:
+6. The desk displays source-verified stage transitions for a live inquiry:
    Awaiting placement allocation; Placement case opened; Placement result
    released; Admission in progress; Student profile created; Program
    enrolled. Student profile creation alone **never** means an approved
    enrollment, paid tuition or assigned class.
-6. The desk checks native `Student Applicant`, `Student`, and submitted
+7. The desk checks native `Student Applicant`, `Student`, and submitted
    `Program Enrollment` through the same Branch scope. It never links by a
    name-only guess, family phone, or a fabricated email. Conflicting
    applicant/Student links are routed to Academic Manager review.
-7. Student converted but NOT rostered must still be visible to the correct
+8. Student converted but NOT rostered must still be visible to the correct
    Branch when their native Applicant/Admission linkage is verified.
    A foreign, mixed or branchless roster disallows disclosure across
    branches. Disabled Students are searchable as **Inactive**, not silently
    skipped or automatically re-enrolled.
-8. Any approved admission-to-enrollment command independently checks
+9. Any approved admission-to-enrollment command independently checks
    the native candidate, original Reception inquiry, matched Branch and
    Student Applicant relationship again immediately before writing
    Program Enrollment.
