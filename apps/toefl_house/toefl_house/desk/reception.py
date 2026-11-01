@@ -214,14 +214,15 @@ def work():
     """Reception desk payload: funnel, people in the funnel, hand-over queue."""
     require_desk_audience(SLUG)
 
+    # Apply expiry before the bounded read: otherwise hundreds of expired
+    # decisions can occupy the first page and hide valid, older results.
+    now = frappe.utils.now_datetime()
     decisions = project_rows("reception", DECISION,
                              ["name", "attempt", "status", "released_at", "expires_at",
                               "course_code", "internal_level"],
-                             filters={"status": "Released"},
+                             filters={"status": "Released", "expires_at": (">", now)},
                              order_by="released_at desc", limit=BOUNCE_WINDOW)
-    # The desk is a queue, not a history viewer. Expired placement results
-    # remain in the audit trail but are NEVER offered as actionable intake.
-    now = frappe.utils.now_datetime()
+    # A missing/malformed value is still refused defensively.
     decisions = [row for row in decisions if _current_release(row, now)]
     admissions = project_rows("reception", ADMISSION, ADMISSION_FIELDS,
                               filters={"status": ("in", list(lifecycle.ADMISSION_OPEN_STATUSES))},
@@ -259,11 +260,12 @@ def work():
             decisions_by_applicant.setdefault(row["student_applicant"], row)
 
     handover = []
+    pending_applicants = {r.get("student_applicant") for r in admissions
+                          if not r.get("native_student")}
     for row in ready:
         subject = subjects[row["name"]]
         applicant = existing_by_email.get(subject)
-        if applicant and applicant["name"] in {r.get("student_applicant") for r in admissions
-                                               if not r.get("native_student")}:
+        if applicant and applicant["name"] in pending_applicants:
             continue
         if applicant:
             action = guided_action("Admission Officer", "toefl_house.admission.create_admission",
