@@ -473,13 +473,27 @@ class CapacityTests(unittest.TestCase):
                    if item["student_group"] == group)
         self.assertEqual((row["capacity"], row["rostered"], row["reserved"],
                           row["available"], row["waiting"]), (3, 2, 0, 1, 1))
+        self.assertEqual(row["walk_in_available"], 0)
+        self.assertTrue(row["queue_has_priority"])
         self.assertFalse(row["full"])
         self.assertIn("capacity minus every roster row", report["definitions"]["available"])
+        self.assertIn("not a walk-in promise", report["definitions"]["available"])
         self.ops.login("finance.officer@example.test")
         self.site.set_roles("finance.officer@example.test", ["Finance Officer"])
         with self.assertRaises(PermissionError_) as ctx:
             self.ops.capacity.class_availability()
         self.assertIn("Reception and Academic staff", str(ctx.exception))
+
+    def test_held_offer_does_not_block_other_free_seats_without_waiting_priority(self):
+        self.ops.seed_class(name="GRP-OPEN", capacity=4, members=["STU-1"])
+        self.ops.seed_waiting("GRP-OPEN", "STU-OFFERED",
+                              status="Offered", expires="2026-09-30")
+        self._log_in_branch_reception()
+        record = self.ops.capacity.class_availability(
+            student_group="GRP-OPEN")["classes"][0]
+        self.assertEqual(record["available"], 2)
+        self.assertEqual(record["walk_in_available"], 2)
+        self.assertFalse(record["queue_has_priority"])
 
     def test_intake_projection_shows_unmet_demand_and_the_next_class_end(self):
         self.ops.seed_class(name="GRP-A", capacity=2, members=["STU-1", "STU-2"],
