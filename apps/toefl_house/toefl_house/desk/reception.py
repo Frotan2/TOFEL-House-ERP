@@ -430,7 +430,7 @@ def lookup(query):
     require_desk_audience(SLUG)
     text = (query or "").strip()
     if len(text) < 2:
-        frappe.throw("Type at least two characters of a name or email.",
+        frappe.throw("Type at least two characters of a name, reference or contact.",
                      frappe.ValidationError)
     if len(text) > 120:
         text = text[:120]
@@ -453,6 +453,14 @@ def lookup(query):
         if row["name"] not in seen:
             matches.append(row)
             seen.add(row["name"])
+    # Candidate references are opaque identifiers, not email addresses.
+    # All reads remain through the branch-aware minimal-field projection.
+    for row in project_rows("reception", APPLICANT, APPLICANT_FIELDS,
+                            filters={"th_candidate_ref": ("like", like)},
+                            order_by="creation desc", limit=LIMIT_LOOKUP):
+        if row["name"] not in seen:
+            matches.append(row)
+            seen.add(row["name"])
     matches = matches[:LIMIT_LOOKUP]
 
     decisions_by_applicant = {}
@@ -468,19 +476,31 @@ def lookup(query):
 
     student_items = []
     student_rows = project_rows("reception", STUDENT,
-                                ["name", "student_name", "student_email_id", "creation"],
+                                ["name", "student_name", "student_email_id",
+                                 "th_candidate_ref", "creation"],
                                 filters={"student_name": ("like", like), "enabled": 1},
                                 order_by="creation desc", limit=LIMIT_LOOKUP)
     seen_students = {row["name"] for row in student_rows}
     # Native Student lookup advertised name OR email. Search both with the
     # same restricted projection and bound; keep one row per student.
     for row in project_rows("reception", STUDENT,
-                            ["name", "student_name", "student_email_id", "creation"],
+                            ["name", "student_name", "student_email_id",
+                             "th_candidate_ref", "creation"],
                             filters={"student_email_id": ("like", like), "enabled": 1},
                             order_by="creation desc", limit=LIMIT_LOOKUP):
         if row["name"] not in seen_students:
             student_rows.append(row)
             seen_students.add(row["name"])
+    for search_field in ("th_candidate_ref", "name"):
+        for row in project_rows(
+                "reception", STUDENT,
+                ["name", "student_name", "student_email_id",
+                 "th_candidate_ref", "creation"],
+                filters={search_field: ("like", like), "enabled": 1},
+                order_by="creation desc", limit=LIMIT_LOOKUP):
+            if row["name"] not in seen_students:
+                student_rows.append(row)
+                seen_students.add(row["name"])
     student_rows = student_rows[:LIMIT_LOOKUP]
     if student_rows:
         enrollments = project_rows("reception", ENROLLMENT,
@@ -506,7 +526,9 @@ def lookup(query):
             student_items.append({
                 "id": row["name"],
                 "person": row.get("student_name") or row["name"],
-                "detail": (enrollment or {}).get("program") or "",
+                "detail": " · ".join(x for x in (
+                    row.get("th_candidate_ref") or row["name"],
+                    (enrollment or {}).get("program") or "") if x),
                 "status": "Student",
                 "stage": stage["label"],
                 "stage_definition": stage["definition"],
@@ -522,6 +544,14 @@ def lookup(query):
     for row in project_rows("reception", INQUIRY, INQUIRY_FIELDS,
                             filters={"phone": ("like", like)},
                             order_by="creation desc", limit=LIMIT_LOOKUP):
+        if row["name"] not in seen_inquiries:
+            inquiries.append(row)
+            seen_inquiries.add(row["name"])
+    # A printed inquiry reference must also be searchable without phone or email.
+    for row in project_rows(
+            "reception", INQUIRY, INQUIRY_FIELDS,
+            filters={"name": ("like", like)},
+            order_by="creation desc", limit=LIMIT_LOOKUP):
         if row["name"] not in seen_inquiries:
             inquiries.append(row)
             seen_inquiries.add(row["name"])
