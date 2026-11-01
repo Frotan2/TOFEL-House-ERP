@@ -357,7 +357,10 @@ def lookup(query):
         admissions = project_rows("reception", ADMISSION, ADMISSION_FIELDS,
                                   filters={"student_applicant": ("in", [r["name"] for r in matches])},
                                   order_by="modified desc", limit=BOUNCE_WINDOW)
-        decisions_by_applicant = {row["student_applicant"]: row for row in admissions}
+        # Newest-first admission rows must retain the most recent journey.
+        for row in admissions:
+            if row.get("student_applicant"):
+                decisions_by_applicant.setdefault(row["student_applicant"], row)
     items = [_person_item(row, decisions_by_applicant, {}) for row in matches]
 
     student_items = []
