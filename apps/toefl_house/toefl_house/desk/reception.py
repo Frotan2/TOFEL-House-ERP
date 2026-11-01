@@ -4,6 +4,7 @@ Read-only. Sections and data sources are specified in docs/ROLE-DESKS.md.
 All reads go through toefl_house.desk.project_rows / project_count, which
 enforce the per-desk field allow-list and bounds.
 """
+import re
 import unicodedata
 
 import frappe
@@ -54,8 +55,8 @@ ADMISSION_FIELDS = ["name", "student_applicant", "program", "academic_year",
 def _subject_index(decisions):
     """placement decision name -> placement subject, via attempt -> case.
 
-    Two bounded in-list reads; the subject is the placement candidate's email,
-    which is also the applicant email recorded at intake.
+    Two bounded in-list reads. A production subject is the opaque THV candidate
+    reference, not an email address or an authentication credential.
     """
     if not decisions:
         return {}
@@ -119,6 +120,39 @@ def _referral_display_names(subjects):
         if visit and visit.get("th_branch") == case.get("th_branch") and visit.get("person_name"):
             result[case["subject"]] = visit["person_name"]
     return result
+
+
+def _verified_released_cases(cases):
+    """Resolve a current release for the exact Branch-verified placement cases.
+
+    A person lookup does not share the dashboard's first page of placement
+    decisions. Search the linked cases' attempts instead; never infer a
+    release from the existence of a case, applicant, phone or Student.
+    The case list comes from the already scoped Inquiry -> Case chain.
+    """
+    names = sorted({row["name"] for row in cases if row.get("name")})
+    if not names or len(names) >= BOUNCE_WINDOW:
+        return set()
+    attempts = project_rows(
+        "reception", ATTEMPT, ["name", "case_name", "status"],
+        filters={"case_name": ("in", names)},
+        order_by="name", limit=BOUNCE_WINDOW)
+    if len(attempts) >= BOUNCE_WINDOW:
+        return set()
+    by_attempt = {row["name"]: row.get("case_name") for row in attempts
+                  if row.get("case_name") in names}
+    if not by_attempt:
+        return set()
+    now = frappe.utils.now_datetime()
+    decisions = project_rows(
+        "reception", DECISION, ["name", "attempt", "status", "expires_at"],
+        filters={"attempt": ("in", sorted(by_attempt)), "status": "Released",
+                 "expires_at": (">", now)},
+        order_by="released_at desc", limit=BOUNCE_WINDOW)
+    if len(decisions) >= BOUNCE_WINDOW:
+        return set()
+    return {by_attempt[row["attempt"]] for row in decisions
+            if row.get("attempt") in by_attempt and _current_release(row, now)}
 
 
 def _walkin_progress(inquiries, released_subjects):
@@ -210,7 +244,12 @@ def _walkin_progress(inquiries, released_subjects):
         return {}
     enrolled = {row.get("student") for row in enrolled_rows
                 if row.get("student") and int(row.get("docstatus") or 0) == 1}
-    released = set(released_subjects)
+    released = set(released_subjects or ())
+    # Dashboard releases are intentionally bounded; a targeted lookup must
+    # still recognize an older (but valid) release linked to its exact case.
+    unresolved_cases = [case for case in case_by_inquiry.values()
+                        if case.get("subject") not in released]
+    released_cases = _verified_released_cases(unresolved_cases)
     result = {}
     for inquiry_id, case in case_by_inquiry.items():
         applicant = applicant_by_inquiry.get(inquiry_id)
@@ -243,7 +282,7 @@ def _walkin_progress(inquiries, released_subjects):
                 "Admission in progress",
                 "Applicant exists; Admission Officer must complete the independent decision and Student conversion.",
                 "Admission Officer")
-        elif case.get("subject") in released:
+        elif case.get("subject") in released or case["name"] in released_cases:
             result[inquiry_id] = (
                 "Placement result released",
                 "Ask Admission Officer to record the Applicant from this reviewed result.",
@@ -626,7 +665,9 @@ def lookup(query):
     the caller and results are capped.
     """
     require_desk_audience(SLUG)
-    text = (query or "").strip()
+    if not isinstance(query, str):
+        frappe.throw("Enter a name, contact or printed reference.", frappe.ValidationError)
+    text = query.strip()
     if len(text) < 2:
         frappe.throw("Type at least two characters of a name, reference or contact.",
                      frappe.ValidationError)
@@ -640,6 +681,15 @@ def lookup(query):
     # Treat percent and underscore from staff input as literal search text.
     escaped = text.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
     like = f"%{escaped}%"
+    # Printed Afghan telephone numbers often include spaces or dashes,
+    # while intake stores a single canonical contact. Only apply this
+    # normalization to a phone-shaped query, never to a person's name.
+    phone_query = text
+    if re.fullmatch(r"\\+?[0-9 ()-]{5,32}", text) and 5 <= sum(
+            char.isdigit() for char in text) <= 15:
+        phone_query = re.sub(r"[ ()-]", "", text)
+    phone_escaped = phone_query.replace("\\\\", "\\\\\\\\").replace("%", r"\\%").replace("_", r"\\_")
+    phone_like = f"%{phone_escaped}%"
 
     matches = project_rows("reception", APPLICANT, APPLICANT_FIELDS,
                            filters={"title": ("like", like)},
@@ -750,7 +800,7 @@ def lookup(query):
                              order_by="creation desc", limit=LIMIT_LOOKUP)
     seen_inquiries = {row["name"] for row in inquiries}
     for row in project_rows("reception", INQUIRY, INQUIRY_FIELDS,
-                            filters={"phone": ("like", like)},
+                            filters={"phone": ("like", phone_like)},
                             order_by="creation desc", limit=LIMIT_LOOKUP):
         if row["name"] not in seen_inquiries:
             inquiries.append(row)
