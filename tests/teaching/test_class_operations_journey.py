@@ -151,6 +151,31 @@ class ReceptionBranchAvailabilityTests(unittest.TestCase):
             self.ops.capacity.class_availability(student_group="GRP-A")
         self.assertIn("Waiting-list totals exceed", str(ctx.exception))
 
+    def test_terminal_or_archived_class_does_not_advertise_free_seats(self):
+        self.site.add("User Permission", name="BR-TERMINAL-A",
+                      user=RECEPTION, allow="Branch", for_value="BR-A")
+        self.ops.seed_class(name="GRP-COMPLETED", branch="BR-A",
+                            status="Completed", capacity=20)
+        self.ops.seed_class(name="GRP-CANCELLED", branch="BR-A",
+                            status="Cancelled", capacity=20)
+        self.ops.seed_class(name="GRP-ARCHIVED", branch="BR-A",
+                            status="Active", capacity=20)
+        self.site.get("Student Group", "GRP-ARCHIVED")["disabled"] = 1
+        self.site.add("TH Class Waiting List", name="WAIT-CLOSED",
+                      student="STU-PRIVATE", student_group="GRP-COMPLETED",
+                      status="Waiting", priority=0, requested_on="2026-09-22")
+        report = self.ops.capacity.class_availability()
+        self.assertEqual([row["student_group"] for row in report["classes"]],
+                         ["GRP-A"])
+        self.assertEqual(self.ops.capacity.waiting_list_board(
+            student_group="GRP-COMPLETED")["entries"], [])
+        self.ops.login(APPROVER)
+        self.site.set_roles(APPROVER, ["Academic Manager"])
+        board = self.ops.capacity.waiting_list_board(student_group="GRP-COMPLETED")
+        self.assertEqual(len(board["entries"]), 1)
+        self.assertEqual(board["entries"][0]["next_command"], "")
+        self.assertEqual(board["entries"][0]["next_role"], "Academic Manager")
+
     def test_branch_rule_restricts_academic_manager_but_hq_without_one_can_read(self):
         self.ops.login(APPROVER)
         self.site.set_roles(APPROVER, ["Academic Manager"])
