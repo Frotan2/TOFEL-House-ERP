@@ -114,7 +114,12 @@ class ContainmentHookWiringTests(unittest.TestCase):
                             "TH Timetable Template",
                             # 2026-10-18: unconditional validate-only integrity hook (Office 365 link
                             # uniqueness, toefl_house/identity_links.py). Not a command guard.
-                            "User"}
+                            "User",
+                            # Student Applicant is a pinned non-submittable
+                            # native record. Its validate-only hook blocks
+                            # direct production creation and immutable
+                            # candidate/referral provenance edits.
+                            "Student Applicant"}
         self.assertEqual(extra, allowed_extras,
                          "doc_events changed; update this guard deliberately — the "
                          "only sanctioned extras are the governance configuration "
