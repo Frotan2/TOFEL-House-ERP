@@ -54,6 +54,26 @@ def _content(value):
         raise frappe.ValidationError(str(exc)) from exc
 
 
+def _web_integer(value, field, *, minimum=1, maximum=1000000000):
+    """Canonical bounded integer at the Frappe form transport boundary.
+
+    Frappe browser POSTs may carry Int form values as decimal strings.
+    Reject booleans, signs, decimals, Unicode numerals and ambiguous leading
+    zeros rather than handing the domain command an unvalidated string.
+    Normalization happens before idempotency input hashing.
+    """
+    if type(value) is int:
+        parsed = value
+    elif isinstance(value, str) and value.isascii() and value.isdecimal() \
+            and value == str(int(value)) and len(value) <= 10:
+        parsed = int(value)
+    else:
+        raise frappe.ValidationError(f"{field} must be a canonical whole number")
+    if not minimum <= parsed <= maximum:
+        raise frappe.ValidationError(f"{field} is outside the valid range")
+    return parsed
+
+
 def _execute(kind, request_key, payload, work):
     return run_with_retry(lambda: _execute_once(kind, request_key, payload, work))
 
@@ -431,6 +451,8 @@ def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE, branch=""):
 
 @frappe.whitelist(methods=["POST"])
 def allocate_attempt(request_key, case, blueprint, blueprint_version, policy, policy_version):
+    blueprint_version = _web_integer(blueprint_version, "blueprint_version")
+    policy_version = _web_integer(policy_version, "policy_version")
     def work(actor):
         # Canonical lock order (spec 8): case -> allocation guard -> family
         # exposure -> result rows. The per-key operation receipt inserted by
@@ -694,6 +716,7 @@ def supervised_attempt_view(attempt):
 
 @frappe.whitelist(methods=["POST"])
 def verify_attempt(request_key, attempt, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         _require_session_operator(actor, doc)
@@ -711,6 +734,7 @@ def verify_attempt(request_key, attempt, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def deliver_attempt(request_key, attempt, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         _require_session_operator(actor, doc)
@@ -758,6 +782,10 @@ def deliver_attempt(request_key, attempt, expected_version):
 @frappe.whitelist(methods=["POST"])
 def save_response(request_key, attempt, expected_version, occurrence, expected_revision,
                   option_id="", missing=0):
+    expected_version = _web_integer(expected_version, "expected_version")
+    occurrence = _web_integer(occurrence, "occurrence")
+    expected_revision = _web_integer(expected_revision, "expected_revision", minimum=0)
+    missing = _web_integer(missing, "missing", minimum=0, maximum=1)
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         _require_session_operator(actor, doc)
@@ -800,6 +828,7 @@ def save_response(request_key, attempt, expected_version, occurrence, expected_r
 
 @frappe.whitelist(methods=["POST"])
 def seal_attempt(request_key, attempt, expected_version, reason):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         _require_session_operator(actor, doc)
@@ -857,6 +886,7 @@ def _key_catalog(form):
 
 @frappe.whitelist(methods=["POST"])
 def score_attempt(request_key, attempt, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         if doc.mode != "Digital":
@@ -895,6 +925,7 @@ def score_attempt(request_key, attempt, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def review_attempt(request_key, attempt, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         if doc.mode != "Digital":
@@ -918,6 +949,7 @@ def review_attempt(request_key, attempt, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def finalize_attempt(request_key, attempt, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         if doc.mode != "Digital":
@@ -979,6 +1011,7 @@ def _pinned_attempt_policy(attempt):
 
 @frappe.whitelist(methods=["POST"])
 def release_decision(request_key, attempt, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_session(attempt, expected_version)
         if doc.mode != "Digital":
