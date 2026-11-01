@@ -1,4 +1,5 @@
 """Real preliminary intake implementation against a guarded Frappe test double."""
+import hashlib
 import importlib.util
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -151,7 +152,7 @@ class ReceptionWalkinTests(unittest.TestCase):
         sys.modules["toefl_house.command_scope"] = scope
 
         policy = ModuleType("toefl_house.policy")
-        policy.digest = lambda value: "digest-" + str(len(repr(value)))
+        policy.digest = lambda value: hashlib.sha256(repr(value).encode("utf-8")).hexdigest()
         sys.modules["toefl_house.policy"] = policy
 
         security = ModuleType("toefl_house.security")
