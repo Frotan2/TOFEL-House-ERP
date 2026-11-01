@@ -89,7 +89,7 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertEqual(item["action"]["args"]["placement_course_code"], "GE-P1")
         self.assertEqual(item["next_role"], "Admission Officer")
         self.assertIn((desk.STUDENT, {
-            "student_applicant": ("in", ["APP-1"]), "enabled": 1}), calls)
+            "student_applicant": ("in", ["APP-1"]), "enabled": ("in", [0, 1])}), calls)
 
     def test_admitted_applicant_with_no_visible_native_student_has_no_dead_button(self):
         desk, _ = self.desk(applicant_status="Admitted")
@@ -135,7 +135,7 @@ class RegistrationDeskTests(unittest.TestCase):
         ref = "THV-" + "a" * 32
         desk.lookup(ref)
         self.assertIn((desk.STUDENT, {
-            "th_candidate_ref": ("like", "%" + ref + "%"), "enabled": 1
+            "th_candidate_ref": ("like", "%" + ref + "%"), "enabled": ("in", [0, 1])
         }), calls)
         self.assertIn((desk.APPLICANT, {
             "th_candidate_ref": ("like", "%" + ref + "%")
@@ -145,7 +145,7 @@ class RegistrationDeskTests(unittest.TestCase):
         desk, calls = self.desk(placement=False, applicant=False)
         desk.lookup("STU-001")
         self.assertIn((desk.STUDENT, {
-            "name": ("like", "%STU-001%"), "enabled": 1
+            "name": ("like", "%STU-001%"), "enabled": ("in", [0, 1])
         }), calls)
         desk.lookup("INQ-001")
         self.assertIn((desk.INQUIRY, {
@@ -204,7 +204,7 @@ class RegistrationDeskTests(unittest.TestCase):
         # project_rows path. The same user-entered substring must reach both
         # Student email and inquiry phone filters, not unrestricted SQL.
         desk.lookup("700")
-        self.assertIn((desk.STUDENT, {"student_email_id": ("like", "%700%"), "enabled": 1}), calls)
+        self.assertIn((desk.STUDENT, {"student_email_id": ("like", "%700%"), "enabled": ("in", [0, 1])}), calls)
         self.assertIn((desk.INQUIRY, {"phone": ("like", "%700%")}), calls)
 
     def test_afghan_digit_contact_lookup_matches_ascii_phone(self):
@@ -216,7 +216,7 @@ class RegistrationDeskTests(unittest.TestCase):
         desk, calls = self.desk(placement=False, applicant=False)
         desk.lookup("A_%")
         self.assertIn((desk.INQUIRY, {"person_name": ("like", r"%A\_\%%")}), calls)
-        self.assertIn((desk.STUDENT, {"student_name": ("like", r"%A\_\%%"), "enabled": 1}), calls)
+        self.assertIn((desk.STUDENT, {"student_name": ("like", r"%A\_\%%"), "enabled": ("in", [0, 1])}), calls)
 
     def test_visitors_are_not_misclassified_as_native_applicants(self):
         desk, _ = self.desk(placement=False, applicant=False)

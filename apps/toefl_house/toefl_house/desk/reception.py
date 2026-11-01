@@ -516,16 +516,16 @@ def lookup(query):
     student_items = []
     student_rows = project_rows("reception", STUDENT,
                                 ["name", "student_name", "student_email_id",
-                                 "th_candidate_ref", "creation"],
-                                filters={"student_name": ("like", like), "enabled": 1},
+                                 "th_candidate_ref", "enabled", "creation"],
+                                filters={"student_name": ("like", like), "enabled": ("in", [0, 1])},
                                 order_by="creation desc", limit=LIMIT_LOOKUP)
     seen_students = {row["name"] for row in student_rows}
     # Native Student lookup advertised name OR email. Search both with the
     # same restricted projection and bound; keep one row per student.
     for row in project_rows("reception", STUDENT,
                             ["name", "student_name", "student_email_id",
-                             "th_candidate_ref", "creation"],
-                            filters={"student_email_id": ("like", like), "enabled": 1},
+                             "th_candidate_ref", "enabled", "creation"],
+                            filters={"student_email_id": ("like", like), "enabled": ("in", [0, 1])},
                             order_by="creation desc", limit=LIMIT_LOOKUP):
         if row["name"] not in seen_students:
             student_rows.append(row)
@@ -534,8 +534,8 @@ def lookup(query):
         for row in project_rows(
                 "reception", STUDENT,
                 ["name", "student_name", "student_email_id",
-                 "th_candidate_ref", "creation"],
-                filters={search_field: ("like", like), "enabled": 1},
+                 "th_candidate_ref", "enabled", "creation"],
+                filters={search_field: ("like", like), "enabled": ("in", [0, 1])},
                 order_by="creation desc", limit=LIMIT_LOOKUP):
             if row["name"] not in seen_students:
                 student_rows.append(row)
@@ -561,14 +561,23 @@ def lookup(query):
             has_cohort = bool(enrollment) and (
                 enrollment.get("program"), enrollment.get("academic_year")
             ) in open_cohorts
-            stage = lifecycle.enrollment_stage(bool(enrollment), has_cohort)
+            inactive = not bool(int(row.get("enabled", 1) or 0))
+            if inactive:
+                stage = {
+                    "label": "Inactive student",
+                    "definition": "This Student record is disabled; enrollment and reactivation are not authorized.",
+                    "next": "Ask Academic Manager to verify this person's status and approved reactivation policy.",
+                    "role": "Academic Manager",
+                }
+            else:
+                stage = lifecycle.enrollment_stage(bool(enrollment), has_cohort)
             student_items.append({
                 "id": row["name"],
                 "person": row.get("student_name") or row["name"],
                 "detail": " · ".join(x for x in (
                     row.get("th_candidate_ref") or row["name"],
                     (enrollment or {}).get("program") or "") if x),
-                "status": "Student",
+                "status": "Inactive" if inactive else "Student",
                 "stage": stage["label"],
                 "stage_definition": stage["definition"],
                 "next": stage["next"],
