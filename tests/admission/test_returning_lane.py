@@ -59,6 +59,10 @@ class ReturningConvertTests(unittest.TestCase):
         self.student_enabled = 1
         self.student_missing = False
         self.student_customer = "CUST-OLD"
+        self.production_mode = False
+        self.candidate_ref = "THV-" + "a" * 32
+        self.applicant_candidate_ref = self.candidate_ref
+        self.student_candidate_ref = self.candidate_ref
         self.applicant_owned = False
         self.applicant_status = "Admitted"
         self.already_enrolled = []
@@ -75,16 +79,20 @@ class ReturningConvertTests(unittest.TestCase):
                                        released_at="2026-09-01 00:00:00",
                                        expires_at="2026-12-31 00:00:00",
                                        course_code="TH-A1", internal_level="A1")
+            if doctype == "TH Placement Attempt" and fieldname == "subject":
+                return fake.candidate_ref
             if doctype == "Student Applicant" and as_dict:
                 return SimpleNamespace(name="APP-NEW", first_name="SYNTHETIC Return",
                                        last_name="Applicant", student_email_id=SUBJECT,
-                                       application_status=fake.applicant_status)
+                                       th_candidate_ref=fake.applicant_candidate_ref,
+                                        application_status=fake.applicant_status)
             if doctype == "Student Applicant" and fieldname == "application_status":
                 return fake.applicant_status
             if doctype == "Student" and as_dict and not fake.student_missing:
                 return SimpleNamespace(name=fake.existing_student,
                                        student_email_id=fake.student_email,
                                        student_applicant=fake.student_applicant,
+                                        th_candidate_ref=fake.student_candidate_ref,
                                        enabled=fake.student_enabled,
                                        customer=fake.student_customer)
             if doctype == "Student" and as_dict and fake.student_missing:
@@ -137,7 +145,7 @@ class ReturningConvertTests(unittest.TestCase):
         sys.modules["toefl_house"] = package
         _load_real("toefl_house.policy", APP / "policy.py")
         security = types.ModuleType("toefl_house.security")
-        security.is_production = lambda: False
+        security.is_production = lambda: fake.production_mode
         security.record_synthetic_flag = lambda: 1
         sys.modules["toefl_house.security"] = security
         api = types.ModuleType("toefl_house.api")
@@ -168,6 +176,20 @@ class ReturningConvertTests(unittest.TestCase):
         with self.assertRaises(_ValidationError) as ctx:
             self._convert()
         self.assertIn("does not belong to this applicant", str(ctx.exception))
+
+    def test_returning_without_email_uses_exact_candidate_reference(self):
+        self.production_mode = True
+        result = self._convert()
+        self.assertEqual(result["native_student"], self.existing_student)
+        self.student_candidate_ref = "THV-" + "b" * 32
+        with self.assertRaises(_PermissionError):
+            self._convert()
+
+    def test_candidate_reference_changed_after_approval_is_refused(self):
+        self.production_mode = True
+        self.applicant_candidate_ref = "THV-" + "b" * 32
+        with self.assertRaises(_PermissionError):
+            self._convert()
 
     def test_native_applicant_link_changed_before_conversion_is_refused(self):
         self.student_applicant = "APP-OTHER"
