@@ -184,6 +184,19 @@ def _walkin_progress(inquiries, released_subjects):
             student_by_applicant[applicant_id] = student
     for applicant_id in ambiguous_students:
         student_by_applicant.pop(applicant_id, None)
+    student_names = sorted({
+        student["name"] for student in student_by_applicant.values()
+        if student.get("name")})
+    enrolled_rows = project_rows(
+        "reception", ENROLLMENT,
+        ["name", "student", "program", "academic_year",
+         "enrollment_date", "docstatus"],
+        filters={"student": ("in", student_names), "docstatus": 1},
+        order_by="enrollment_date desc", limit=BOUNCE_WINDOW) if student_names else []
+    if len(enrolled_rows) >= BOUNCE_WINDOW:
+        return {}
+    enrolled = {row.get("student") for row in enrolled_rows
+                if row.get("student") and int(row.get("docstatus") or 0) == 1}
     released = set(released_subjects)
     result = {}
     for inquiry_id, case in case_by_inquiry.items():
@@ -202,10 +215,15 @@ def _walkin_progress(inquiries, released_subjects):
                     "Inactive student",
                     "Ask Academic Manager to verify inactive status; do not enroll or reactivate here.",
                     "Academic Manager")
+            elif student["name"] in enrolled:
+                result[inquiry_id] = (
+                    "Program enrolled",
+                    "Program Enrollment is submitted. Ask Academic Manager to verify the assigned class and first session.",
+                    "Academic Manager")
             else:
                 result[inquiry_id] = (
                     "Student profile created",
-                    "Student record exists. Verify Program Enrollment separately before confirming a class.",
+                    "Student record exists. Ask Enrollment Officer to complete Program Enrollment.",
                     "Enrollment Officer")
         elif applicant:
             result[inquiry_id] = (

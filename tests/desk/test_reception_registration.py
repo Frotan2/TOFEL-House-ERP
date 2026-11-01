@@ -229,9 +229,28 @@ class RegistrationDeskTests(unittest.TestCase):
         item = desk._walkin_item(intake, stage)
         self.assertEqual(item["stage"], "Student profile created")
         self.assertEqual(item["next_role"], "Enrollment Officer")
-        self.assertIn("Verify Program Enrollment separately", item["next"])
+        self.assertIn("complete Program Enrollment", item["next"])
         # An active Student does not imply any Program Enrollment or Fees.
         self.assertNotIn("Enrolled", item["stage"])
+
+    def test_submitted_enrollment_is_distinct_from_student_profile(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        ref = "THV-" + "a" * 32
+        facts = {
+            desk.CASE: [{"name": "CASE-1", "subject": ref,
+                         "th_branch": "Branch Alpha", "reception_inquiry": "INQ-1"}],
+            desk.APPLICANT: [{"name": "APP-1", "th_candidate_ref": ref,
+                              "th_branch": "Branch Alpha", "th_reception_inquiry": "INQ-1"}],
+            desk.STUDENT: [{"name": "STU-1", "student_applicant": "APP-1",
+                            "th_candidate_ref": ref, "enabled": 1}],
+            desk.ENROLLMENT: [{"name": "PE-1", "student": "STU-1",
+                               "docstatus": 1, "program": "GE"}],
+        }
+        desk.project_rows = lambda _surface, dt, _fields, **kwargs: list(facts.get(dt, []))
+        progress = desk._walkin_progress([{"name": "INQ-1", "th_branch": "Branch Alpha"}], [ref])
+        self.assertEqual(progress["INQ-1"][0], "Program enrolled")
+        self.assertEqual(progress["INQ-1"][2], "Academic Manager")
+        self.assertIn("assigned class", progress["INQ-1"][1])
 
     def test_reception_progress_does_not_join_wrong_branch_or_reused_phone(self):
         desk, _ = self.desk(placement=False, applicant=False)
