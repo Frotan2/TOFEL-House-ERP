@@ -654,6 +654,28 @@ def _require_availability_reader():
     return user
 
 
+def _availability_branch_scope():
+    """Constrain both availability and waiting-list reads at the server.
+
+    A Reception login always needs an explicit Branch User Permission. Other
+    permitted academic roles can be HQ-wide only when they have no Branch
+    restrictions. A supplied browser Branch or Student Group is never
+    authority to escape the actual viewer's allowed branches.
+    """
+    user = _require_availability_reader()
+    rows = frappe.get_all(
+        "User Permission", filters={"user": user, "allow": "Branch"},
+        fields=["for_value"], limit_page_length=101)
+    if len(rows) >= 101:
+        raise frappe.ValidationError(
+            "Branch permissions exceed the complete read; ask an administrator")
+    branches = sorted({row.get("for_value") for row in rows if row.get("for_value")})
+    if "Reception" in set(frappe.get_roles(user)) and not branches:
+        raise frappe.PermissionError(
+            "Reception seat and waiting-list reads require an explicitly assigned Branch")
+    return branches or None
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def class_availability(student_group="", program="", academic_year="",
                        branch=""):
@@ -665,7 +687,9 @@ def class_availability(student_group="", program="", academic_year="",
     waiting and when the current classes end, so the next cohort can be
     planned — without inventing a date or a seat.
     """
-    _require_availability_reader()
+    branches = _availability_branch_scope()
+    if branch and branches is not None and branch not in branches:
+        raise frappe.PermissionError("The selected branch is not assigned to this login")
     filters = {"disabled": 0}
     if student_group:
         filters["name"] = student_group
@@ -674,8 +698,10 @@ def class_availability(student_group="", program="", academic_year="",
             filters["program"] = program
         if academic_year:
             filters["academic_year"] = academic_year
-        if branch:
-            filters["th_branch"] = branch
+    if branches is not None:
+        filters["th_branch"] = branch if branch else ("in", branches)
+    elif branch:
+        filters["th_branch"] = branch
     rows = frappe.get_all(
         GROUP, filters=filters,
         fields=["name", "student_group_name", "program", "academic_year",
@@ -750,9 +776,28 @@ def waiting_list_board(student_group=""):
     rather than merely reading it. Offers past their expiry are surfaced as
     an explicit action instead of silently holding a seat.
     """
-    _require_availability_reader()
+    branches = _availability_branch_scope()
     filters = {"status": ("in", list(OPEN_WAITING_STATUSES))}
-    if student_group:
+    if branches is not None:
+        # Restrict the waiting queue BEFORE reading any student identifiers.
+        # For a direct class query, both name and branch must match; for the
+        # board, collect only classes the viewer is authorized to see.
+        group_filters = {"th_branch": ("in", branches)}
+        if student_group:
+            group_filters["name"] = student_group
+        group_rows = frappe.get_all(
+            GROUP, filters=group_filters, fields=["name"],
+            order_by="name asc", limit_page_length=MAX_CLASSES + 1)
+        if len(group_rows) > MAX_CLASSES:
+            raise frappe.ValidationError(
+                "Class branch scope exceeds the complete board read; narrow the search")
+        permitted = sorted({row["name"] for row in group_rows})
+        if student_group and student_group not in permitted:
+            raise frappe.PermissionError("The selected class is outside assigned Branch scope")
+        if not permitted:
+            return {"as_of": _today(), "entries": [], "count": 0}
+        filters["student_group"] = ("in", permitted)
+    elif student_group:
         filters["student_group"] = student_group
     rows = frappe.get_all(
         WAITING, filters=filters,
