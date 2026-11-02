@@ -943,9 +943,9 @@ def _cash_close_sections(day):
         {"label": "Cash close today",
          "definition": ("All in-scope companies must have a submitted close to show Closed. "
                         "Partial company closes and posting drift are never reported as Closed."),
-         "value": ("No drawers" if not drawers else
-                   "Cash account review" if currency_blocked else
+         "value": ("Cash account review" if currency_blocked else
                    "Integrity review" if integrity_companies else
+                   "No drawers" if not drawers else
                    "Drift" if drifted else
                    "Closed with variance" if (len(closed) == len(position)
                                               and variance_companies) else
@@ -965,7 +965,10 @@ def _cash_close_sections(day):
                         "Foreign-currency cash requires separate reconciliation."),
          "value": ("; ".join(f"{name}: {reason}"
                             for name, reason in sorted(currency_blocked.items()))
-                   if currency_blocked else "Eligible for base-currency count"),
+                   if currency_blocked else
+                   "No active Cash drawer; existing close needs Finance Auditor review"
+                   if integrity_companies and not drawers
+                   else "Eligible for base-currency count"),
          "owner": "Finance Officer"},
         {"label": "Variance recorded",
          "definition": ("Counted minus expected on the submitted close, exactly "
@@ -1033,6 +1036,30 @@ def _cash_close_sections(day):
             "currency": "",
         }
         items.append(item)
+
+    # If the only cash drawer was disabled after a saved close, there is no
+    # current drawer row to carry its exception. Surface the saved close as a
+    # distinct Finance Auditor item rather than an empty "No drawers" queue.
+    for row in position:
+        company = row["company"]
+        if row.get("close") and not row.get("drawers"):
+            items.append({
+                "id": f"{company}:missing-active-cash-drawer",
+                "person": company,
+                "detail": (f"{company} · submitted cash close exists, "
+                           "but no active physical Cash drawer remains"),
+                "status": "Integrity review",
+                "stage": "Cash drawer",
+                "stage_definition": ("The saved close remains auditable even "
+                                     "when its physical Cash account is disabled."),
+                "next": ("Finance Auditor must review the stored close, "
+                         "the disabled cash accounts and the original ledger. "
+                         "Do not treat this day as balanced or create a new close."),
+                "next_role": "Finance Auditor",
+                "waiting_since": day,
+                "amount": None,
+                "currency": "",
+            })
 
     # Offer ONE guarded company/day close, never independent row closes:
     # the accounting command requires a real count of ALL enabled drawers
