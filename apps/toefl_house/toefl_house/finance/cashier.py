@@ -597,11 +597,24 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
         snapshot = by_parent[row["name"]]
         seen = [child.get("account") for child in snapshot]
         permitted_cash = cash_by_company[company]
-        row["integrity_review"] = (
+        integrity_issue = (
             truncated or not snapshot or len(snapshot) > MAX_DRAWERS
             or len(seen) != len(set(seen))
             or set(seen) != permitted_cash
         )
+        # Compare the immutable parent net to the original per-drawer rows.
+        # A falsified zero aggregate must not manufacture a Balanced status.
+        try:
+            recorded_net = _stored_money(
+                row.get("total_variance"), "Historical cash close net variance")
+            child_net = round(sum(
+                _stored_money(child.get("variance"), "Cash drawer variance")
+                for child in snapshot), 2)
+            integrity_issue = (integrity_issue or
+                               abs(recorded_net - child_net) > TOLERANCE)
+        except frappe.ValidationError:
+            integrity_issue = True
+        row["integrity_review"] = integrity_issue
         row["drawer_variance"] = drawer_variance_recorded(snapshot)
     return history
 
