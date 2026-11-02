@@ -558,9 +558,15 @@ def cash_close_identity_issue(parent, day):
     try:
         business_day = _date.fromisoformat(str(day))
         reconciled = _datetime.fromisoformat(str(parent.get("reconciled_on")))
+        observed_now = _datetime.fromisoformat(str(frappe.utils.now_datetime()))
     except (TypeError, ValueError, OverflowError):
         return True
-    return reconciled.date() < business_day
+    # Native Frappe/MariaDB Datetime values are site-local and offset-naive.
+    # An injected offset must not raise TypeError on comparisons or permit a
+    # fabricated future close-time to hide GL entries created after closure.
+    if reconciled.tzinfo is not None or observed_now.tzinfo is not None:
+        return True
+    return reconciled.date() < business_day or reconciled > observed_now
 
 
 def historical_cash_drift(company, day, reconciled_on, snapshot):
