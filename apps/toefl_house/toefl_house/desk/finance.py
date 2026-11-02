@@ -449,7 +449,7 @@ def _billing_documents_by_enrollment(rows):
     return issued, drafts
 
 
-def _billing_blocker(enrollment, drafts, read_complete):
+def _billing_blocker(enrollment, drafts, read_complete, has_issued=False):
     """Return a truthful finance exception rather than a non-working Issue action."""
     if not read_complete:
         return ("Billing status needs review",
@@ -461,8 +461,11 @@ def _billing_blocker(enrollment, drafts, read_complete):
         return ("Draft fee needs review",
                 "An unsubmitted tuition draft already exists ("
                 + ", ".join(existing[:3])
-                + "). This is NOT a collectible bill. A new bill would "
-                  "be rejected by duplicate protection; Finance Manager "
+                + "). This draft is NOT a collectible bill."
+                + (" A separate submitted tuition bill also exists; do not "
+                   "charge again." if has_issued else
+                   " A new bill would be rejected by duplicate protection.")
+                + " Finance Manager "
                   "must resolve the draft through an authorized workflow "
                   "before any payment or re-issuance.",
                 "Finance Manager")
@@ -523,7 +526,8 @@ def work():
                             order_by="effective_from asc", limit=LIMIT_QUEUES)
     policy_facts, version_items = _policy_sections(policies, day)
 
-    # Awaiting billing: submitted enrollments with no Fees row referencing them.
+    # Awaiting billing: submitted enrollments with no posted Fees and any
+    # unresolved native draft conflict, including a draft beside a posted bill.
     enrollments = project_rows("finance", ENROLLMENT,
                                ["name", "student", "student_name", "program", "academic_year",
                                 "enrollment_date", "docstatus"],
@@ -540,7 +544,8 @@ def work():
     # A truncated native Fees read cannot prove an enrollment has no bill.
     # Never offer a write under an incomplete financial read.
     billing_read_complete = len(fee_rows) < BOUNCE_WINDOW
-    awaiting_billing = [row for row in enrollments if row["name"] not in billed]
+    awaiting_billing = [row for row in enrollments
+                        if row["name"] not in billed or row["name"] in drafts]
 
     assignments = project_rows("finance", ASSIGNMENT, ASSIGNMENT_FIELDS,
                                order_by="effective_start asc", limit=LIMIT_QUEUES)
@@ -747,7 +752,8 @@ def work():
 
     billing_items = []
     for row in awaiting_billing[:LIMIT_QUEUES]:
-        blocker = _billing_blocker(row["name"], drafts, billing_read_complete)
+        blocker = _billing_blocker(
+            row["name"], drafts, billing_read_complete, row["name"] in billed)
         if blocker:
             billing_status, next_text, next_role = blocker
             action = None
@@ -763,8 +769,8 @@ def work():
             "stage_definition": (
                 "The scoped tuition register is incomplete; do not infer an unbilled state."
                 if not billing_read_complete else
-                "Submitted enrollment has no issued tuition bill. "
-                "An existing draft is not an issued receivable."),
+                "An unsubmitted Fees draft is not a collectible receivable. "
+                "Review existing submitted bills separately before any payment."),
             "next": next_text,
             "next_role": next_role,
             "waiting_since": row.get("enrollment_date"),
