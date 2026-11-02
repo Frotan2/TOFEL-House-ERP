@@ -188,6 +188,12 @@ def _open_entries(group_name, statuses=OPEN_WAITING_STATUSES):
     return rows
 
 
+def waiting_count(group_name):
+    """Exact count for direct roster admission; never use a clipped queue page."""
+    return int(frappe.db.count(
+        WAITING, {"student_group": group_name, "status": "Waiting"}))
+
+
 def reserved_offers(group_name, on_date=None, exclude_entry=None):
     """Unexpired offers on a class; the seats they hold are not free.
 
