@@ -854,6 +854,55 @@ const hostileItem = {
 }
 
 {
+	// Frappe Dialog may return null for a cleared optional Data field.
+	// Registration must still work without a phone or country, while
+	// clearing the time zone during follow-up must really clear it.
+	const registration = {
+		role: "Reception", endpoint: "toefl_house.reception_intake.create_walkin_inquiry",
+		label: "Register a new visitor",
+		args: { person_name: "", phone: "", program_interest: "", branch: "", notes: "",
+			study_mode: "Undecided", contact_country: "", time_zone: "" },
+	};
+	const payload = payloadWith([], "0");
+	payload.primary_action = registration;
+	const scenario = runScenario({ workPayload: payload });
+	findAll(scenario.body, "th-register-visitor")[0].click();
+	const form = scenario.dialogs[0];
+	form.submit({ person_name: "Online Visitor", phone: null, program_interest: null,
+		study_mode: "Online", contact_country: null, time_zone: null,
+		branch: null, notes: null });
+	const registrationCall = scenario.calls.find((call) =>
+		call.method === "toefl_house.reception_intake.create_walkin_inquiry");
+	for (const field of ["phone", "program_interest", "contact_country",
+		"time_zone", "branch", "notes"]) {
+		assert.strictEqual(registrationCall.args[field], "",
+			"cleared optional " + field + " must be a truly blank value");
+	}
+	const followup = {
+		role: "Reception", endpoint: "toefl_house.reception_intake.update_walkin_inquiry",
+		label: "Update follow-up",
+		args: { inquiry: "INQ-TEST", expected_version: 1, status: "New",
+			study_mode: "Online", contact_country: "United Kingdom",
+			time_zone: "Europe/London", notes: "Earlier note" },
+	};
+	// Directly expose a guarded action in a fresh queue snapshot.
+	const visitor = payloadWith([{
+		id: "INQ-TEST", person: "Online Visitor", status: "New",
+		stage: "Pre-registration", next: "Contact visitor", action: followup,
+	}], "1");
+	const scenario2 = runScenario({ workPayload: visitor });
+	findAll(scenario2.body, "th-queue-action")[0].click();
+	scenario2.dialogs[0].submit({ inquiry: "INQ-TEST", expected_version: 1,
+		status: "New", notes: null, study_mode: "Online",
+		contact_country: null, time_zone: null });
+	const followupCall = scenario2.calls.find((call) =>
+		call.method === "toefl_house.reception_intake.update_walkin_inquiry");
+	assert.strictEqual(followupCall.args.time_zone, "");
+	assert.strictEqual(followupCall.args.contact_country, "");
+	assert.strictEqual(followupCall.args.notes, "");
+}
+
+{
 	// The newest query must own the results, even if the first HTTP response
 	// comes back after the second one or after an invalid short query.
 	const scenario = runScenario({ workPayload: payloadWith([], "0"), deferLookup: true });
