@@ -1062,7 +1062,8 @@ def _cash_close_sections(day):
         "person": row.get("cashier") or "",
         "detail": f"{row.get('date')} · expected {float(row.get('total_expected') or 0):.2f}, "
                   f"counted {float(row.get('total_counted') or 0):.2f}",
-        "status": ("Variance" if (row.get("drawer_variance")
+        "status": ("Integrity review" if row.get("integrity_review") else
+                   "Variance" if (row.get("drawer_variance")
                                   or abs(float(row.get("total_variance") or 0)) > 0.005)
                    else "Balanced"),
         "stage": "Cash close",
