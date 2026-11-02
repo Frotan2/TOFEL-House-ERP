@@ -84,6 +84,35 @@ class RosterControlTests(unittest.TestCase):
                 "remove-member-0004", "GRP-A", "STU-2", "")
         self.assertIn("removal reason is required", str(ctx.exception))
 
+    def test_direct_move_cannot_consume_a_reserved_target_seat(self):
+        self.ops.seed_policy(direct_moves_allowed=1)
+        # One existing member plus one valid offer holds every native
+        # seat. Without the reservation check, _require_capacity alone
+        # would incorrectly allow a second roster row.
+        self.site.add("Student Group Student", parent="GRP-B",
+                      student="STU-3", active=1, idx=1)
+        self.ops.seed_waiting("GRP-B", "STU-4", status="Offered",
+                              expires="2026-09-30")
+        source_before = self.ops.roster("GRP-A")
+        target_before = self.ops.roster("GRP-B")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.teaching.move_class_member(
+                "move-reserved-target-0001", "GRP-A", "STU-1", "GRP-B")
+        self.assertIn("is full", str(ctx.exception))
+        self.assertEqual(self.ops.roster("GRP-A"), source_before)
+        self.assertEqual(self.ops.roster("GRP-B"), target_before)
+
+    def test_direct_move_cannot_jump_target_waiting_queue(self):
+        self.ops.seed_policy(direct_moves_allowed=1)
+        self.ops.seed_waiting("GRP-B", "STU-3", status="Waiting")
+        source_before = self.ops.roster("GRP-A")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.teaching.move_class_member(
+                "move-skip-queue-0001", "GRP-A", "STU-1", "GRP-B")
+        self.assertIn("pending waiting-list entries", str(ctx.exception))
+        self.assertEqual(self.ops.roster("GRP-A"), source_before)
+        self.assertEqual(self.ops.roster("GRP-B"), [])
+
     def test_direct_moves_follow_the_policy_switch(self):
         self.ops.seed_policy()  # direct_moves_allowed = 0
         with self.assertRaises(ValidationError) as ctx:
