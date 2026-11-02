@@ -265,6 +265,27 @@ class DrawerTruthTests(unittest.TestCase):
     def test_no_drawers_means_nothing_to_reconcile(self):
         self.assertEqual(load_cashier().cash_drawers("TOEFL House"), [])
 
+    def test_foreign_currency_count_is_rejected_before_creating_a_close(self):
+        module = load_cashier([{"name": "USD Cash - TH", "account_type": "Cash",
+                                "account_currency": "USD"}])
+        module.frappe.db.get_value = lambda *args, **kwargs: "AFN"
+        with self.assertRaisesRegex(_ValidationError, "reconciled separately"):
+            module.reconcile_cashier_day(
+                "foreign_cash_count_001", "TOEFL House", "2026-10-24",
+                [{"account": "USD Cash - TH", "counted_amount": "100.00"}])
+
+    def test_same_currency_cash_drawer_is_eligible_for_count(self):
+        module = load_cashier(DRAWERS[:1])
+        module.frappe.db.get_value = lambda *args, **kwargs: "AFN"
+        self.assertEqual(module.cash_currency_issue(
+            "TOEFL House", [{**DRAWERS[0], "account_currency": "AFN"}]), "")
+        self.assertIn("reconciled separately",
+                      module.cash_currency_issue(
+                          "TOEFL House",
+                          [{**DRAWERS[0], "account_currency": "USD"}]))
+        self.assertIn("not configured", load_cashier().cash_currency_issue(
+            "TOEFL House", [DRAWERS[0]]))
+
     def test_bank_account_is_not_returned_as_a_cash_drawer(self):
         module = load_cashier([DRAWERS[0], BANK])
         self.assertEqual(module.cash_drawers("TOEFL House"), [DRAWERS[0]])
@@ -345,6 +366,12 @@ class CloseDriftTests(unittest.TestCase):
     def test_new_backdated_gl_keeps_existing_audit_signal(self):
         # A balance-neutral new posting still matters to a closed ledger.
         self.after = True
+        self.assertTrue(self.position()["drift"])
+
+    def test_a_legacy_bank_row_in_a_submitted_close_is_visible_as_drift(self):
+        # Old cash-day records that mixed bank/cash must not silently pass
+        # after correcting the definition of a physical Cash close.
+        self.saved.append({"account": "Bank - TH", "expected_amount": 50.0})
         self.assertTrue(self.position()["drift"])
 
     def test_a_bank_only_post_close_entry_is_not_cash_drift(self):
@@ -465,6 +492,8 @@ class CommandContractTests(unittest.TestCase):
         self.assertIn("args.counts = JSON.stringify(counts);", gui)
         self.assertIn("never an assumed ledger amount.", gui)
         self.assertIn('No payment or cash movement is created.', gui)
+        self.assertIn('or company in currency_blocked', desk)
+        self.assertIn('Cash currency safety', desk)
 
     def test_package_date_class_is_not_shadowed_inside_the_command(self):
         import ast
