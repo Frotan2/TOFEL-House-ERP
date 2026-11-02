@@ -343,6 +343,7 @@ class CloseDriftTests(unittest.TestCase):
             if doctype == self.module.DAY:
                 return ([{"name": "TH-CASH-2026-01",
                           "reconciled_on": "2026-10-24 18:00:00",
+                          "cashier": "cashier@example.com",
                           "total_expected": 150.0,
                           "total_counted": 150.0,
                           "total_variance": 0.0}] if self.closed else [])
@@ -401,6 +402,25 @@ class CloseDriftTests(unittest.TestCase):
         self.assertFalse(position["drift"])
         self.assertFalse(position["drawer_variance"])
         self.assertTrue(position["integrity_review"])
+
+    def test_missing_cashier_or_bad_timestamp_requires_daily_integrity_review(self):
+        original = self.module.frappe.db.get_all
+        for field, value in (
+            ("cashier", ""),
+            ("cashier", None),
+            ("reconciled_on", None),
+            ("reconciled_on", "bad timestamp"),
+            ("reconciled_on", "2026-10-23 23:59:59"),
+        ):
+            def corrupted(doctype, **kwargs):
+                rows = original(doctype, **kwargs)
+                if doctype == self.module.DAY:
+                    return [{**row, field: value} for row in rows]
+                return rows
+            self.module.frappe.db.get_all = corrupted
+            with self.subTest(field=field, value=value):
+                self.assertTrue(self.position()["integrity_review"])
+            self.module.frappe.db.get_all = original
 
     def test_cancelled_historical_entry_changed_balance_without_new_gl(self):
         # No GL creation after close: native cancellation invalidated an
@@ -508,7 +528,8 @@ class CashHistoryVarianceTests(unittest.TestCase):
         self.module.frappe.db.get_value = lambda *args, **kwargs: "AFN"
         self.header = {
             "name": "TH-CASH-1", "company": "TOEFL House",
-            "date": "2026-10-24",
+            "date": "2026-10-24", "cashier": "cashier@example.com",
+            "reconciled_on": "2026-10-24 18:00:00",
             "total_expected": 100.0, "total_counted": 100.0,
             "total_variance": 0.0,
         }
@@ -553,6 +574,20 @@ class CashHistoryVarianceTests(unittest.TestCase):
         self.assertEqual([name for name, _ in self.calls],
                          [self.module.DAY, self.module.COUNT,
                           self.module.ACCOUNT])
+
+    def test_missing_cashier_or_timestamp_is_historical_integrity_review(self):
+        for field, value in (
+            ("cashier", ""),
+            ("cashier", None),
+            ("reconciled_on", None),
+            ("reconciled_on", "not a time"),
+            ("reconciled_on", "2026-10-23 23:59:59"),
+        ):
+            original = self.header[field]
+            self.header[field] = value
+            with self.subTest(field=field, value=value):
+                self.assertTrue(self.history()[0]["integrity_review"])
+            self.header[field] = original
 
     def test_historical_duplicate_close_is_flagged_even_when_off_page(self):
         # Only this close appears on the limited history page. The duplicate
