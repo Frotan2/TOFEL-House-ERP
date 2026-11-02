@@ -47,8 +47,8 @@
       "fieldtype": "Select",
       "options": "Undecided\nOn-campus\nOnline",
       "default": "Undecided",
-      "reqd": 1,
-      "description": "An online student may join from any country; this is a preference, not a class assignment."
+      "reqd": 0,
+      "description": "Defaults to Undecided. Optional in native schema for older inquiries; guarded command always supplies a valid mode. Online is a preference, never a class assignment."
     },
     {
       "fieldname": "contact_country",
