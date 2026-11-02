@@ -124,9 +124,14 @@ class ReceptionWalkinTests(unittest.TestCase):
             assert doctype == "TH Reception Inquiry"
             assert set(filters) == {"th_branch", "phone", "person_name", "status"}
             statuses = set(filters["status"][1])
+            phones = filters["phone"]
+            if isinstance(phones, tuple) and phones[0] == "in":
+                phones = set(phones[1])
+            else:
+                phones = {phones}
             return [{"name": name} for name, value in f.saved.items()
                     if value.get("th_branch") == filters["th_branch"]
-                    and value.get("phone") == filters["phone"]
+                    and value.get("phone") in phones
                     and value.get("person_name") == filters["person_name"]
                     and value.get("status") in statuses][:limit_page_length]
         frappe.get_all = get_all
@@ -203,6 +208,39 @@ class ReceptionWalkinTests(unittest.TestCase):
             self.module.create_walkin_inquiry(
                 "repeated", "Visitor", phone="0794357509")
         self.assertEqual(len(self.saved), 1)
+
+    def test_afghan_local_and_plus93_format_share_an_open_contact_key(self):
+        self.module.create_walkin_inquiry(
+            "first", "Visitor", phone="۰۷۹۴۳۵۷۵۰۹")
+        local = self.saved["INQ-001"]
+        self.assertEqual(local["phone"], "0794357509")
+        self.assertEqual(
+            self.module.afghan_phone_variants("+93794357509"),
+            ("0794357509", "+93794357509"))
+        with self.assertRaisesRegex(ValidationError, "open inquiry already exists"):
+            self.module.create_walkin_inquiry(
+                "second", "Visitor", phone="+93 79 435 7509")
+        self.assertEqual(len(self.saved), 1)
+
+    def test_plus93_and_local_formats_share_database_uniqueness_race_guard(self):
+        # Parallel POSTs may both miss an initial read. The stored
+        # uniqueness key must still serialize local/international variants.
+        self.module.frappe.get_all = lambda *_args, **_kwargs: []
+        self.module.create_walkin_inquiry(
+            "first", "Visitor", phone="+93794357509")
+        with self.assertRaisesRegex(ValidationError, "open inquiry already exists"):
+            self.module.create_walkin_inquiry(
+                "second", "Visitor", phone="0794357509")
+        self.assertEqual(len(self.saved), 1)
+
+    def test_afghan_phone_equivalence_never_merges_shared_household_people(self):
+        self.module.create_walkin_inquiry(
+            "first", "Visitor A", phone="+93794357509")
+        self.module.create_walkin_inquiry(
+            "second", "Visitor B", phone="0794357509")
+        self.assertEqual(len(self.saved), 2)
+        self.assertNotEqual(self.saved["INQ-001"]["open_identity_key"],
+                            self.saved["INQ-002"]["open_identity_key"])
 
     def test_shared_household_phone_does_not_merge_different_people(self):
         self.module.create_walkin_inquiry("one", "Visitor A", phone="0794357509")
