@@ -622,7 +622,7 @@ class CommandContractTests(unittest.TestCase):
         self.assertIn("never an assumed ledger amount.", gui)
         self.assertIn('No payment or cash movement is created.', gui)
         self.assertIn('or company in currency_blocked', desk)
-        self.assertIn('Cash currency safety', desk)
+        self.assertIn('Cash account safety', desk)
 
     def test_package_date_class_is_not_shadowed_inside_the_command(self):
         import ast
