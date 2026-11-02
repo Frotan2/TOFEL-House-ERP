@@ -315,6 +315,15 @@ def _eligibility(student, from_group, to_group, effective_day, terms):
     target_start = str(target.th_class_start_date or "")
     if not target_start:
         raise frappe.ValidationError("The target class has no start date")
+    target_end = str(target.th_class_end_date or "")
+    if not target_end:
+        raise frappe.ValidationError(
+            "The target class has no verified end date; request an academic "
+            "period review before transferring a student")
+    if effective_day > target_end:
+        raise frappe.ValidationError(
+            "The transfer effective date " + effective_day
+            + " is after the target class ends on " + target_end)
     window_end = (date.fromisoformat(target_start)
                   + timedelta(days=terms["transfer_window_days"])).isoformat()
     if effective_day > window_end:
