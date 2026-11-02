@@ -7,7 +7,7 @@
 2. Under **New visitors and follow-ups**, choose **Register a new visitor**.
 3. Enter the person's **real full name**. Add an optional contact phone, interested program and brief operational note. Every inquiry needs a valid Branch. With one assigned branch the backend selects it; with multiple assigned branches the staff member must choose one. An unassigned branch is rejected.
 4. Save once. The system provides a unique internal inquiry reference and keeps an auditable operation receipt. The visitor appears in the follow-up queue.
-5. Search by name or phone before registering another contact; same-family phone numbers alone are not proof of the same identity.
+5. Search by name, exact Inquiry ID or phone before registering another contact. Afghan mobile numbers written as `079xxxxxxx` and `+9379xxxxxxx` are treated as equivalent for duplicate detection and search, including Dari digits. The number is kept in its submitted presentation; **the phone alone never proves identity**, and different family members sharing a phone stay separate visitor records. An already-open record for the exact same visitor/contact/Branch should be updated, not re-created.
 6. Use **Update follow-up** to mark **Contacted**, **Awaiting Placement**, or **Closed**, adding the real next-step note. The queue displays only a short preview of the latest note. Closing a visit requires explicit confirmation; its record remains in the audit trail and is no longer editable from this queue.
 
 **This is not student registration.** No actual Student, User, placement case, academic enrollment, receipt, invoice or tuition charge is created merely because a visitor walks in. Do not enter invented or third-party email addresses.
@@ -41,6 +41,7 @@
 - A Reception account without at least one explicit Branch User Permission is denied access to the desk. The Owner must assign the permitted branch before that account views customer records. Placement cases without branch provenance remain hidden from Reception.
 - Save your contact records only in Reception Desk. Do not write sensitive medical or family information in free-text notes; use a short operational follow-up description.
 - An interrupted or repeated request should be retried from the **same dialog** so its idempotency key is preserved; opening a separate form starts a new request.
+- If the desk or search responds slowly after a Save, only the newest requested snapshot should replace the screen. The active search is refreshed after a successful write; do not trust an earlier response that arrives late. Exact printed Applicant, Student and Inquiry IDs are prioritized over crowded fuzzy-name matches. Enter a complete ID or a short real name rather than a search longer than 120 characters.
 - No final production readiness is implied by successful static tests. Test full Windows on a restored, synthetic-only site first, including role boundaries, same-key replay, branching, candidate verification, admission and ledger reconciliation.
 
 ## Acceptance checklist for an independent reviewer
