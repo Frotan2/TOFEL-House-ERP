@@ -6644,7 +6644,10 @@ def main():
                     if student_branch in owns:
                         assert student_id in matched,(viewer,student_branch,matched)
                         assert matched[student_id]['stage'] in (
-                            'Enrolled','Class planned','Class active'),matched[student_id]
+                            'Class planned',
+                            'Class assigned, schedule pending',
+                            'Class assigned, sessions scheduled',
+                            'Class assigned, timetable needs review'),matched[student_id]
                     else:
                         assert student_id not in matched,(
                             'Cross-Branch Reception lookup leaked student',
