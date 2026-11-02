@@ -1144,11 +1144,21 @@ def lookup(query):
         for entry in enrollments:
             if entry.get("student"):
                 enrolled.setdefault(entry["student"], entry)
+        periods_by_student = (_submitted_enrollment_periods(enrollments)
+                              if enrollment_complete else {})
         classes = (_student_class_information(student_rows, enrollments)
                    if enrollment_complete else {})
         for row in student_rows:
             enrollment = enrolled.get(row["name"])
             class_info = classes.get(row["name"])
+            distinct_periods = sorted(periods_by_student.get(row["name"], ()))
+            multi_program_label = ""
+            if len(distinct_periods) > 1:
+                first_periods = [" ".join(value for value in period if value)
+                                 for period in distinct_periods[:3]]
+                multi_program_label = ("Enrolled periods: " + "; ".join(first_periods)
+                                       + (f" (+{len(distinct_periods) - 3} more; "
+                                          "ask Academic Manager)" if len(distinct_periods) > 3 else ""))
             inactive = not bool(int(row.get("enabled", 1) or 0))
             if inactive:
                 stage = {
@@ -1178,9 +1188,9 @@ def lookup(query):
                 "person": row.get("student_name") or row["name"],
                 "detail": " · ".join(x for x in (
                     row.get("th_candidate_ref") or row["name"],
-                    (enrollment or {}).get("program") or "",
-                    (enrollment or {}).get("academic_year") or "",
-                    (enrollment or {}).get("academic_term") or "",
+                    multi_program_label or (enrollment or {}).get("program") or "",
+                    "" if multi_program_label else (enrollment or {}).get("academic_year") or "",
+                    "" if multi_program_label else (enrollment or {}).get("academic_term") or "",
                     (class_info or {}).get("detail") or "") if x),
                 "status": "Inactive" if inactive else "Student",
                 "stage": stage["label"],
