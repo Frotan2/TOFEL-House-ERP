@@ -802,7 +802,8 @@ const hostileItem = {
 	assert.strictEqual(scenario.dialogs.length, 1, "register opens a single guided dialog");
 	const fields = Array.from(scenario.dialogs[0].opts.fields, (row) => row.fieldname);
 	assert.deepStrictEqual(fields,
-		["request_key", "person_name", "phone", "program_interest", "branch", "notes"],
+		["request_key", "person_name", "phone", "program_interest",
+         "study_mode", "contact_country", "time_zone", "branch", "notes"],
 		"front counter should ask for real basic contact, not email or technical placement IDs");
 	assert(!scenario.calls.some((call) => call.method === register.endpoint),
 		"opening the form never creates a record");
