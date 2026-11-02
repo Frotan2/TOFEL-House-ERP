@@ -1589,8 +1589,10 @@ class FinanceBillingGuidanceWorldTests(unittest.TestCase):
         self.assertIn("NOT a collectible bill", item["next"])
         self.assertIn("EDU-DRAFT-001", item["next"])
         self.assertNotIn("action", item)
+        self.assertIn("draft is not a collectible", item["stage_definition"])
         other = self._item(payload, "ENR-DRAFT")
         self.assertEqual(other["status"], "Unbilled")
+        self.assertIn("no issued or draft tuition bill", other["stage_definition"])
         self.assertIn("action", other)
 
     def test_posted_fee_is_not_a_duplicate_unbilled_queue_entry(self):
@@ -1620,6 +1622,8 @@ class FinanceBillingGuidanceWorldTests(unittest.TestCase):
         self.assertEqual(billing["items"][0]["id"], "BILLING-REGISTER-REVIEW")
         self.assertIn("tuition bill records exceed", billing["items"][0]["next"])
         self.assertTrue(all("action" not in item for item in billing["items"]))
+        self.assertIn("incomplete", next(
+            item["stage_definition"] for item in billing["items"] if item["id"] == "ENR-DRAFT"))
 
     def test_full_enrollment_page_is_explicit_incomplete_read(self):
         enrollments = [
