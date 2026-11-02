@@ -8060,11 +8060,11 @@ def main():
             # boundary, not merely by a missing local cash counter.
             from toefl_house.command_scope import authorize_command_scope
             assert actor_branches(users['branch_b_staff'])=={'SYN-BR-B'}
-            wrong_branch=denied_because(
+            assert denied_because(
                 lambda:as_user('branch_b_staff',lambda:authorize_command_scope(
                     'record_reception_collection',{'fees':fee,'amount':'100.00'},
                     users['branch_b_staff'])),
-                "outside this login's permitted branches")
+                "outside this login's permitted branches")['denied']=='PermissionError'
             frappe.set_user('Administrator')
             # This fixture's accepted receipt must belong to this exact
             # enrolled Branch-A student, never any earlier legacy Fee.
