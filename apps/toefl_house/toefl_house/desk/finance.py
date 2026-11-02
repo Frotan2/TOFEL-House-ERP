@@ -429,6 +429,26 @@ def _compensation_items(contracts, instructors):
 
 
 @frappe.whitelist(methods=["GET", "POST"])
+def _billing_documents_by_enrollment(rows):
+    """Distinguish posted receivables from drafts blocking a new issue.
+
+    A draft Fees record is not an issued invoice or a collectible debt.
+    Yet the guarded issuance command refuses a duplicate while any live
+    draft exists, so Finance must surface it as an explicit blocker.
+    """
+    issued = set()
+    drafts = {}
+    for row in rows:
+        enrollment = row.get("program_enrollment")
+        if not enrollment:
+            continue
+        if int(row.get("docstatus") or 0) == 1:
+            issued.add(enrollment)
+        elif int(row.get("docstatus") or 0) == 0:
+            drafts.setdefault(enrollment, []).append(row.get("name") or "unnamed draft")
+    return issued, drafts
+
+
 def work():
     """Finance desk payload: today, outstanding, awaiting billing, corrections."""
     require_desk_audience(SLUG)
@@ -489,14 +509,17 @@ def work():
                                 "enrollment_date", "docstatus"],
                                filters={"docstatus": 1},
                                order_by="enrollment_date asc", limit=BOUNCE_WINDOW)
-    billed = set()
+    fee_rows = []
     if enrollments:
-        billed_names = [row["name"] for row in enrollments]
-        for row in project_rows("finance", FEES, ["name", "program_enrollment"],
-                                filters={"program_enrollment": ("in", billed_names), "docstatus": ("!=", 2)},
-                                order_by="name asc", limit=BOUNCE_WINDOW):
-            if row.get("program_enrollment"):
-                billed.add(row["program_enrollment"])
+        fee_rows = project_rows(
+            "finance", FEES, ["name", "program_enrollment", "docstatus"],
+            filters={"program_enrollment": ("in", [row["name"] for row in enrollments]),
+                     "docstatus": ("!=", 2)},
+            order_by="name asc", limit=BOUNCE_WINDOW)
+    billed, drafts = _billing_documents_by_enrollment(fee_rows)
+    # A truncated native Fees read cannot prove an enrollment has no bill.
+    # Never offer a write under an incomplete financial read.
+    billing_read_complete = len(fee_rows) < BOUNCE_WINDOW
     awaiting_billing = [row for row in enrollments if row["name"] not in billed]
 
     assignments = project_rows("finance", ASSIGNMENT, ASSIGNMENT_FIELDS,
@@ -704,14 +727,30 @@ def work():
 
     billing_items = []
     for row in awaiting_billing[:LIMIT_QUEUES]:
-        next_text, next_role, action = billing_guidance(row)
+        draft_bills = drafts.get(row["name"], [])
+        if not billing_read_complete:
+            next_text = ("The native tuition bill read is incomplete. Finance Manager "
+                         "must verify the enrollment's complete Fees history before issuing.")
+            next_role, action, billing_status = "Finance Manager", None, "Billing status needs review"
+        elif draft_bills:
+            next_text = ("An unsubmitted tuition draft already exists ("
+                         + ", ".join(draft_bills[:3])
+                         + "). This is NOT a collectible bill. A new bill would "
+                           "be rejected by duplicate protection; Finance Manager "
+                           "must resolve the draft through an authorized workflow "
+                           "before any payment or re-issuance.")
+            next_role, action, billing_status = "Finance Manager", None, "Draft fee needs review"
+        else:
+            next_text, next_role, action = billing_guidance(row)
+            billing_status = "Unbilled"
         item = {
             "id": row["name"],
             "person": row.get("student_name") or row.get("student") or "",
             "detail": " · ".join(part for part in (row.get("program"), row.get("academic_year")) if part),
-            "status": "Unbilled",
+            "status": billing_status,
             "stage": "Awaiting billing",
-            "stage_definition": "A confirmed enrollment that no issued bill covers yet.",
+            "stage_definition": ("Submitted enrollment has no issued tuition bill. "
+                                 "An existing draft is not an issued receivable."),
             "next": next_text,
             "next_role": next_role,
             "waiting_since": row.get("enrollment_date"),
