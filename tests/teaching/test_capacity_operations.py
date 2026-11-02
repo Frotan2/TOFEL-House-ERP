@@ -313,6 +313,24 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(by_id[lower]["next_command"], "")
         self.assertIn("earlier waiting entries", by_id[lower]["next"])
 
+    def test_offer_expiry_cannot_outlive_the_class(self):
+        self.ops.seed_class(name="GRP-SOON", capacity=3,
+                            members=["STU-1"], end="2026-09-24")
+        self.ops.seed_student("STU-2")
+        self.ops.seed_enrollment("STU-2")
+        self.ops.seed_policy()
+        entry = self.ops.seed_waiting("GRP-SOON", "STU-2")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.offer_waiting_list_seat(
+                "offer-beyond-class-0001", entry, "2026-09-29")
+        self.assertIn("cannot extend beyond the class end date", str(ctx.exception))
+        self.assertEqual(self.site.get("TH Class Waiting List", entry)["status"],
+                         "Waiting")
+        result = self.ops.capacity.offer_waiting_list_seat(
+            "offer-clipped-class-0001", entry)
+        self.assertEqual(result["status"], "Offered")
+        self.assertEqual(result["offer_expires_on"], "2026-09-24")
+
     def test_offer_refuses_a_full_class_and_a_non_waiting_entry(self):
         group = self._full_class()
         self.ops.seed_policy()
