@@ -233,6 +233,17 @@ class CloseShapeTests(unittest.TestCase):
         with self.assertRaisesRegex(_ValidationError, "future"):
             self.module.validate_close(close(date="2026-10-25"))
 
+    def test_close_document_requires_canonical_iso_calendar_day(self):
+        self.assertEqual(self.module._strict_business_day("2026-10-24"),
+                         "2026-10-24")
+        # datetime.date.fromisoformat accepts both encodings as the SAME
+        # day; allowing their unnormalized strings into MariaDB GL/DATE
+        # checks would risk incorrect balances and duplicate-day identity.
+        for bad in ("20261024", "2026-W43-6"):
+            with self.subTest(date=bad), self.assertRaisesRegex(
+                    _ValidationError, "YYYY-MM-DD"):
+                self.module.validate_close(close(date=bad))
+
     def test_empty_close_is_refused(self):
         with self.assertRaisesRegex(_ValidationError, "at least one drawer"):
             self.module.validate_close(
@@ -723,6 +734,15 @@ class CommandContractTests(unittest.TestCase):
                 "fin_cashier_bad_date_01", "TOEFL House", "not-a-date",
                 [{"account": "Cash - TH", "counted_amount": 1}])
         self.assertIn("A valid business date is required", str(caught.exception))
+
+    def test_cash_close_post_rejects_noncanonical_dates_before_ledger_reads(self):
+        module = load_cashier(DRAWERS)
+        for bad in ("20261024", "2026-W43-6"):
+            with self.subTest(date=bad), self.assertRaisesRegex(
+                    _ValidationError, "YYYY-MM-DD"):
+                module.reconcile_cashier_day(
+                    "fin_cashier_noncanonical_01", "TOEFL House", bad,
+                    [{"account": "Cash - TH", "counted_amount": 1}])
 
     def test_http_form_encoded_drawer_counts_are_bounded_and_parsed(self):
         module = load_cashier(DRAWERS)
