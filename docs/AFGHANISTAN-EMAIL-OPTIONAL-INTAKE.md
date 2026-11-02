@@ -10,8 +10,14 @@ Owner release authorization and must not be used to open real candidate data.
    intended course and **optional** mobile. Do not require an email, telephone,
    national ID, date of birth, document photo, device or online account.
    Write only necessary follow-up details. Shared household phones are not
-   unique identities. Give the visitor their inquiry reference and set status
-   to **Awaiting Placement** when referred for a test.
+   unique identities. Afghan mobiles use national `07xxxxxxxx` or
+   international `+937xxxxxxxx`; global online learners use the appropriate
+   `+country-code` mobile and do not need an Afghan phone. Reception may
+   optionally record Online/On-campus preference, learner country and IANA
+   time zone, without inferring location from the dialling code. Recording
+   these preferences must never auto-mark a new visitor as Contacted. Give
+   the visitor their inquiry reference and set status to
+   **Awaiting Placement** only when actually referred for a test.
 2. **Placement Publisher:** Confirm the inquiry exists, is at the same Branch
    and is ready. On Create placement case, leave **Candidate reference** empty
    for a real visitor, select the Branch and enter a real purpose and inquiry
