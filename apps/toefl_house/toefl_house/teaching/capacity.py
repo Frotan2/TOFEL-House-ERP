@@ -521,6 +521,15 @@ def offer_waiting_list_seat(request_key, entry, expires_on=""):
                 f"({seats['rostered']}/{seats['capacity']} seats, "
                 f"{seats['reserved']} reserved)")
         expiry = _offer_expiry(terms, expires_on)
+        # A seat cannot be promised past the last day of its class. Clip
+        # the default policy-window offer to the actual class end date;
+        # reject an explicit request extending beyond the period.
+        class_end = str(facts.th_class_end_date or "")
+        if expiry > class_end:
+            if expires_on:
+                raise frappe.ValidationError(
+                    "Seat-offer expiry cannot extend beyond the class end date")
+            expiry = class_end
         doc = frappe.get_doc(WAITING, row["name"])
         doc.flags.ignore_permissions = True
         doc.status = "Offered"
