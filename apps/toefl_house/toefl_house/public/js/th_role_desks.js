@@ -984,7 +984,8 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "inquiry", label: "Inquiry reference", fieldtype: "Data", reqd: 1, read_only: 1 },
 			{ fieldname: "expected_version", label: "Recorded version", fieldtype: "Int", reqd: 1, read_only: 1 },
 			{ fieldname: "status", label: "Follow-up status", fieldtype: "Select",
-				options: "Contacted\nAwaiting Placement\nClosed", reqd: 1 },
+				options: "New\nContacted\nAwaiting Placement\nClosed", reqd: 1,
+				description: "Keep New if no contact has occurred. Change to Contacted only after real contact; this update is audited." },
 			{ fieldname: "notes", label: "Follow-up notes", fieldtype: "Small Text" },
 			{ fieldname: "study_mode", label: "Preferred learning mode", fieldtype: "Select",
 				options: "Undecided\nOn-campus\nOnline", reqd: 1 },
@@ -1418,6 +1419,14 @@ frappe.provide("toefl_house.role_desks");
 				options: "\nPresent\nAbsent\nLeave",
 				reqd: 1,
 			}))];
+		}
+		if (fields && action.endpoint === "toefl_house.reception_intake.update_walkin_inquiry" &&
+				action.args && action.args.status !== "New") {
+			// A progressing visitor may not be downgraded to a first contact
+			// record. Keep the dropdown aligned with the guarded server rule.
+			fields = fields.map((field) => field.fieldname === "status"
+				? { ...field, options: "Contacted\nAwaiting Placement\nClosed" }
+				: field);
 		}
 		if (!fields) {
 			// Never expose a clickable no-op. The server remains the only
