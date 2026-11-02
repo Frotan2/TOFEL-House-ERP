@@ -15,7 +15,7 @@
 ## International and online inquiries — front-counter safeguards
 1. Online learners may be anywhere in the world. Choose **Online** for their preferred learning mode, ask their stated country (optional) and confirm their real IANA time zone if known; the phone may be a valid international `+country-code` number or blank.
 2. **Do not promise Kabul-time class sessions in the learner's local time.** If the learner's time zone is missing, the Reception Desk explicitly flags it for follow-up. Even with a valid zone, a verified individual class assignment and published dated session are still required; Teaching Scheduler confirms any actual time conversion and delivery logistics.
-3. On a subsequent contact, **Update follow-up** may change mode/country/time zone with optimistic version checking and audit, without silently editing name, phone, Branch or placement identity. **Correct visitor details** remains a separately reasoned action before the Placement team consumes the Inquiry.
+3. **Update follow-up** may change mode/country/time zone with optimistic version checking and audit, without silently editing name, phone, Branch or placement identity. If the learner has not actually been contacted, keep the status **New** while recording these corrections; never claim Contacted merely because an online timezone was added. Once truly Contacted, do not downgrade back to New. **Correct visitor details** remains a separately reasoned action before the Placement team consumes the Inquiry.
 4. An online preference never overrides course eligibility, reserved seats, academic approvals, time restrictions, Branch permissions, tuition or the student's identity requirements.
 
 ## After verified placement
