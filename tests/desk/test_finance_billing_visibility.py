@@ -12,6 +12,13 @@ class BillingVisibilityTests(unittest.TestCase):
     def setUp(self):
         self.finance = _import_desk("finance", roles={"Finance Manager"})
 
+    def test_finance_desk_api_gate_is_preserved_and_helpers_are_not_exposed(self):
+        self.assertTrue(getattr(self.finance.work, "__frappe_whitelisted__", False))
+        self.assertFalse(getattr(self.finance._billing_documents_by_enrollment,
+                                 "__frappe_whitelisted__", False))
+        self.assertFalse(getattr(self.finance._billing_blocker,
+                                 "__frappe_whitelisted__", False))
+
     def test_posted_fee_hides_only_its_issued_enrollment(self):
         issued, drafts = self.finance._billing_documents_by_enrollment([
             {"name": "FEE-POSTED", "program_enrollment": "ENR-1", "docstatus": 1},
