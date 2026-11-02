@@ -65,6 +65,14 @@ aware code projections; no real learner information was entered.
 | Test | Expected result |
 | --- | --- |
 | Visitor without email or phone | Receives Inquiry ID; no User, Applicant or Student yet |
+| Afghan mobile entered with Dari digits or local `07xxxxxxxx` | Canonical 10-digit national format accepted; `+937xxxxxxxx` finds the same contact |
+| Malformed Afghan mobile or wrong `+93` length | Rejected with a clear correction message; no inquiry is saved |
+| Worldwide Special Speaking learner with a `+44`, `+1` or other valid international number | Phone is accepted as entered in international form; no Afghan phone or email required |
+| Worldwide online learner with no phone/email | Can create an Inquiry by real name and Branch; country and time zone remain optional |
+| Online learner with unknown time zone | Desk flags missing time zone and does not claim Kabul time is the learner's local time |
+| Follow-up changes online mode, country or IANA time zone | Only an authorized optimistic-version update succeeds; name, phone and branch remain unchanged |
+| Invalid time zone, duplicate online contact or stale follow-up version | Save refused; previous record stays intact |
+| Global learner without a foreign Branch | Reception uses its assigned real ERP Branch; learner country is separate from internal Branch permissions |
 | Two different people share household number | Two separate referrals; no auto-merge |
 | Two Reception counters submit same name/phone/Branch simultaneously | Exactly one open inquiry; other counter sees a clear duplicate warning |
 | Open inquiry changed to Awaiting Placement | Placement Publisher is next role |
