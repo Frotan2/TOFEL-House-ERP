@@ -38,6 +38,19 @@ class BillingVisibilityTests(unittest.TestCase):
         self.assertIsNone(self.finance._billing_blocker("ENR-A", {}, True),
                           "only an entirely read, unbilled enrollment can offer issuance")
 
+    def test_a_draft_alongside_an_issued_bill_must_still_be_visible(self):
+        issued, drafts = self.finance._billing_documents_by_enrollment([
+            {"name": "FEE-ISSUED", "program_enrollment": "ENR-A", "docstatus": 1},
+            {"name": "FEE-ORPHAN-DRAFT", "program_enrollment": "ENR-A", "docstatus": 0},
+        ])
+        self.assertEqual(issued, {"ENR-A"})
+        stage, message, role = self.finance._billing_blocker(
+            "ENR-A", drafts, True, has_issued=True)
+        self.assertEqual(stage, "Draft fee needs review")
+        self.assertIn("separate submitted tuition bill", message)
+        self.assertIn("do not charge again", message)
+        self.assertEqual(role, "Finance Manager")
+
     def test_truncated_fee_register_never_offers_issue_even_without_a_match(self):
         stage, message, role = self.finance._billing_blocker(
             "ENR-A", {}, False)
