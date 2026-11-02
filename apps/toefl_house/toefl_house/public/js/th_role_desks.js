@@ -1900,7 +1900,10 @@ frappe.provide("toefl_house.role_desks");
 		let sections = body.find(".th-desk-sections");
 		if (!sections.length) sections = $("<div class='th-desk-sections'></div>").appendTo(body);
 		currentReload = () => loadDesk(page, surface, slug);
-		const loadingWrap = $("<div class='th-section'></div>").appendTo(sections);
+		// The older fetch may still be pending. Remove its orphaned spinner
+		// before mounting the current request's one loading placeholder.
+		sections.find(".th-desk-pending-load").remove();
+		const loadingWrap = $("<div class='th-section th-desk-pending-load'></div>").appendTo(sections);
 		loadingState(loadingWrap, "Loading your work…");
 		skeletonGrid(loadingWrap, 4);
 		frappe.call({
