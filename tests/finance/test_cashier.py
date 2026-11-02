@@ -368,6 +368,23 @@ class CloseDriftTests(unittest.TestCase):
     def test_exact_match_is_not_drift(self):
         self.assertFalse(self.position()["drift"])
 
+    def test_two_submitted_closes_same_company_day_require_integrity_review(self):
+        # Unexpected duplicate submitted control documents can exist after a
+        # faulty migration or an unaudited direct DB write. The one-row query
+        # used to conceal the second close and display "Closed".
+        original = self.module.frappe.db.get_all
+        def duplicate(doctype, **kwargs):
+            rows = original(doctype, **kwargs)
+            if doctype == self.module.DAY:
+                self.assertEqual(kwargs["limit_page_length"], 2)
+                return rows + [{**rows[0], "name": "TH-CASH-2026-DUP"}]
+            return rows
+        self.module.frappe.db.get_all = duplicate
+        position = self.position()
+        self.assertFalse(position["drift"])
+        self.assertFalse(position["drawer_variance"])
+        self.assertTrue(position["integrity_review"])
+
     def test_cancelled_historical_entry_changed_balance_without_new_gl(self):
         # No GL creation after close: native cancellation invalidated an
         # earlier debit by marking its original GL Entry cancelled.
