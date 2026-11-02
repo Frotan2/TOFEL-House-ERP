@@ -815,6 +815,9 @@ def class_availability(student_group="", program="", academic_year="",
             "reserved": seats["reserved"], "available": seats["available"],
             "waiting": waiting,
             "waiting_to_offer": unoffered_waiting,
+            # Another class's free seats cannot automatically satisfy a
+            # waiting learner's existing class-specific queue.
+            "projected_unmet_demand": max(0, unoffered_waiting - seats["available"]),
             # Queue members must be processed before a newly-arrived walk-in.
             # A physical free seat is not an immediately usable walk-in seat
             # while any prior Waiting entries remain in this class.
@@ -827,20 +830,22 @@ def class_availability(student_group="", program="", academic_year="",
         bucket = intake.setdefault(key, {
             "program": key[0], "academic_year": key[1], "seats_available": 0,
             "waiting": 0, "waiting_to_offer": 0,
+            "projected_unmet_demand": 0,
+            "walk_in_seats_available": 0,
             "classes": 0, "next_class_end": ""})
         bucket["seats_available"] += item["available"]
         bucket["waiting"] += waiting
         bucket["waiting_to_offer"] += unoffered_waiting
+        bucket["projected_unmet_demand"] += item["projected_unmet_demand"]
+        bucket["walk_in_seats_available"] += item["walk_in_available"]
         bucket["classes"] += 1
         if item["class_end_date"] and (
                 not bucket["next_class_end"]
                 or item["class_end_date"] < bucket["next_class_end"]):
             bucket["next_class_end"] = item["class_end_date"]
-    for bucket in intake.values():
-        # An Offered learner already holds a seat; counting that person
-        # again as unmet demand would double-charge the same reservation.
-        bucket["projected_unmet_demand"] = max(
-            0, bucket["waiting_to_offer"] - bucket["seats_available"])
+    # The intake bucket is only a summary. Seat decisions and unmet queue
+    # counts are always evaluated per class, never offset by spare seats in
+    # a different timetable/cohort/branch.
     return {
         "as_of": _today(), "classes": classes,
         "intake": sorted(intake.values(),
@@ -856,9 +861,12 @@ def class_availability(student_group="", program="", academic_year="",
             "waiting": "open waiting-list entries (Waiting or Offered)",
             "waiting_to_offer": "Waiting entries still awaiting an initial "
                                 "seat offer; excludes the already reserved Offered",
-            "projected_unmet_demand": "unoffered Waiting entries minus "
-                                      "remaining unreserved seats, never "
-                                      "double-counts existing Offered holds",
+            "projected_unmet_demand": "sum over each class of max(0, its "
+                                      "unoffered Waiting entries minus its "
+                                      "unreserved seats); spare seats in "
+                                      "other classes cannot erase this queue",
+            "walk_in_seats_available": "sum of each class's walk-in seats "
+                                       "after its own Waiting priority",
         },
     }
 
