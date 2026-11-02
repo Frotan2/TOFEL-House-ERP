@@ -225,6 +225,20 @@ class ReceptionWalkinTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
                 self.module._phone(invalid)
 
+    def test_old_inquiry_without_new_global_fields_remains_editable(self):
+        self.module.create_walkin_inquiry("legacy-new", "Legacy Visitor", phone="0701234567")
+        for field in ("study_mode", "contact_country", "time_zone"):
+            self.saved["INQ-001"].pop(field, None)
+        updated = self.module.update_walkin_inquiry(
+            "legacy-followup", "INQ-001", 1, "Contacted",
+            notes="Existing visitor called")
+        self.assertEqual(updated["status"], "Contacted")
+        self.assertEqual(updated["study_mode"], "Undecided")
+        self.assertEqual(self.saved["INQ-001"]["phone"], "0701234567")
+        self.assertEqual(self.saved["INQ-001"]["contact_country"], "")
+        self.assertEqual(self.saved["INQ-001"]["time_zone"], "")
+        self.assertEqual(self.saved["INQ-001"]["version"], 2)
+
     def test_recording_online_timezone_does_not_falsely_mark_first_contact(self):
         self.module.create_walkin_inquiry(
             "first-online", "Online Visitor", phone="+4915123456789",
