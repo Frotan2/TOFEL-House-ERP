@@ -1582,7 +1582,7 @@ frappe.provide("toefl_house.role_desks");
 				fields.forEach((field) => {
 					if (field.fieldname) args[field.fieldname] = values[field.fieldname];
 				});
-				if (/^toefl_house\\.reception_intake\\./.test(action.endpoint)) {
+				if (action.endpoint.startsWith("toefl_house.reception_intake.")) {
 					// Native Frappe Data/Small Text inputs may return null or
 					// undefined when cleared. An explicitly blank optional field
 					// means "clear", never "preserve the old value".
