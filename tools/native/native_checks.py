@@ -4216,6 +4216,15 @@ def main():
             assert position['close'] and position['close']['name']==result['cashier_day'],position
             assert position['drift'] is False,position
             assert position['drawer_variance'] is False,position
+            # Exercise historical read on real Frappe/MariaDB after submission.
+            # A legitimate base-currency Cash-only snapshot must be Balanced,
+            # with parent totals equal to the saved per-drawer figures.
+            historic=[row for row in fin_cash.cashier_history(companies=[company])
+                      if row['name']==result['cashier_day']]
+            assert len(historic)==1,historic
+            assert historic[0]['integrity_review'] is False,historic[0]
+            assert historic[0]['drawer_variance'] is False,historic[0]
+            assert abs(float(historic[0]['total_expected'])-expected_total)<0.01,historic[0]
             return {'cashier_day':result['cashier_day'],'drawer':account,
                     'drawers_counted':len(counts),'ledger_closing':round(expected,2),
                     'counted':result['total_counted'],
