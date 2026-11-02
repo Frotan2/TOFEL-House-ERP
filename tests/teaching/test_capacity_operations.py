@@ -530,7 +530,14 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(intake["seats_available"], 3, "0 in GRP-A, 3 in GRP-B")
         self.assertEqual(intake["waiting"], 2)
         self.assertEqual(intake["next_class_end"], "2026-11-15")
-        self.assertEqual(intake["projected_unmet_demand"], 0)
+        self.assertEqual(intake["waiting_to_offer"], 2)
+        self.assertEqual(intake["walk_in_seats_available"], 3)
+        self.assertEqual(intake["projected_unmet_demand"], 2,
+                         "three spare GRP-B seats cannot satisfy GRP-A's "
+                         "two waiting learners without a separate approved move")
+        by_class = {row["student_group"]: row for row in report["classes"]}
+        self.assertEqual(by_class["GRP-A"]["projected_unmet_demand"], 2)
+        self.assertEqual(by_class["GRP-B"]["projected_unmet_demand"], 0)
 
     def test_reserved_offered_seat_is_not_double_counted_as_unmet_demand(self):
         self.ops.seed_class(name="GRP-INTAKE", capacity=3,
@@ -550,6 +557,7 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(intake["waiting"], 1)
         self.assertEqual(intake["waiting_to_offer"], 0)
         self.assertEqual(intake["projected_unmet_demand"], 0)
+        self.assertEqual(intake["walk_in_seats_available"], 0)
 
         self.ops.seed_waiting("GRP-INTAKE", "STU-UNMET", status="Waiting")
         report = self.ops.capacity.class_availability(
