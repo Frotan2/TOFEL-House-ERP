@@ -33,7 +33,8 @@ from toefl_house.reception_phone import afghan_phone_variants
 SLUG = "th-reception-desk"
 
 INQUIRY = "TH Reception Inquiry"
-INQUIRY_FIELDS = ["name", "person_name", "phone", "program_interest", "th_branch",
+INQUIRY_FIELDS = ["name", "person_name", "phone", "program_interest",
+                  "study_mode", "contact_country", "time_zone", "th_branch",
                   "status", "notes", "recorded_by", "version", "creation"]
 
 APPLICANT = "Student Applicant"
@@ -317,7 +318,10 @@ def _walkin_item(row, progress=None):
                              "expected_version": row["version"],
                              "status": ("Contacted" if row.get("status") == "New"
                                         else row.get("status")),
-                             "notes": row.get("notes") or ""})
+                             "notes": row.get("notes") or "",
+                             "study_mode": row.get("study_mode") or "Undecided",
+                             "contact_country": row.get("contact_country") or "",
+                             "time_zone": row.get("time_zone") or ""})
     # A short note preview allows staff to see the latest contact instruction
     # without repeatedly opening the editor. Full notes remain on the
     # protected inquiry projection and are escaped by the queue renderer.
@@ -346,7 +350,14 @@ def _walkin_item(row, progress=None):
         "person": row.get("person_name") or "",
         "detail": " · ".join(part for part in
                              ("Inquiry reference: " + row["name"], row.get("phone") or "",
-                              row.get("program_interest") or "", preview) if part),
+                              row.get("program_interest") or "",
+                              ("Study: " + row.get("study_mode") if row.get("study_mode")
+                               and row.get("study_mode") != "Undecided" else ""),
+                              ("Country: " + row.get("contact_country")
+                               if row.get("contact_country") else ""),
+                              ("Learner time zone: " + row.get("time_zone")
+                               if row.get("time_zone") else ""),
+                              preview) if part),
         "status": row.get("status") or "New",
         "stage": stage if progress else ("Closed inquiry" if closed else stage),
         "stage_definition": (
@@ -640,7 +651,8 @@ def work():
     register = guided_action("Reception", "toefl_house.reception_intake.create_walkin_inquiry",
                              "Register a new visitor",
                              {"person_name": "", "phone": "", "program_interest": "",
-                              "branch": "", "notes": ""})
+                              "branch": "", "notes": "", "study_mode": "Undecided",
+                              "contact_country": "", "time_zone": ""})
 
     return {
         "desk": SLUG,
