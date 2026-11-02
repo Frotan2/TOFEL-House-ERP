@@ -4191,8 +4191,13 @@ def main():
                 lambda:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
                     'fin_cashier_var_000001',company,day,unexplained_counts)),
                 'Explain the')
+            gl_count_before=frappe.db.count('GL Entry',{'company':company})
             result=as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
                 'fin_cashier_close_0001',company,day,counts))
+            gl_count_after=frappe.db.count('GL Entry',{'company':company})
+            assert gl_count_before==gl_count_after,(
+                'Cash close is a control snapshot and must never post GL',
+                gl_count_before,gl_count_after)
             assert abs(result['total_expected']-expected_total)<0.01,result
             assert abs(result['total_variance'])<0.01,result
             stored=frappe.db.get_value('TH Cashier Day',result['cashier_day'],
