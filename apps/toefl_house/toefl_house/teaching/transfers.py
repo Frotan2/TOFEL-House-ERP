@@ -516,6 +516,14 @@ def approve_class_transfer(request_key, transfer, override=""):
             raise frappe.ValidationError(
                 "The transfer effective date has passed; cancel and re-request "
                 "under the current approval and roster policies")
+        # An independently approved transfer does not take a waiting
+        # learner's unoffered seat. Re-check the exact live queue after the
+        # class rows are locked and before any override/roster mutation.
+        if capacity.waiting_count(target):
+            raise frappe.ValidationError(
+                "The target class has pending waiting-list entries. Resolve "
+                "the class queue through its authorized admission workflow "
+                "before executing this transfer")
         seat = capacity.assert_seat_available(target, student, override)
         # Executing the transfer IS a roster change, so it obeys the same owner
         # window as add/move/remove. Without this, an approved transfer would
