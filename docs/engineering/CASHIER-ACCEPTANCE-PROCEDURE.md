@@ -186,6 +186,7 @@ message; a silent success is a **FAIL**.
 | C30 | Cashier | Close the same company/day again | Refused with `This business day is already closed for this company; a submitted close is never overwritten` |
 | C31 | Cashier (second day or second company) | Record a close with counted ≠ expected and **no** note | Refused with `Explain the … variance for … before closing` |
 | C32 | Cashier | Record the same close with the variance and a plain-language note | Submitted; variance stored exactly as counted − expected; desk **Variance recorded** shows it; history shows **Variance** |
+| C32a | Cashier (another invented company/day with two Cash accounts) | Count the first drawer 100 AFN short and the second 100 AFN over; give a written explanation on **both** | Even though total net variance is 0, **Closed with variance** is shown and history says **Variance**, not **Balanced**; the two drawer discrepancies remain independently recorded |
 | C33 | Cashier | Record a close for a **future** business date | Refused with `A cashier close cannot cover a future business day` |
 | C34 | Cashier | Record a close older than the billing policy's window | Refused with `The business day is older than the billing policy's closing window` |
 | C35 | Auditor | Finance desk → **Cash close history** | Submitted closes listed newest first with expected, counted, variance; entries cannot be edited |
