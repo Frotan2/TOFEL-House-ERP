@@ -838,6 +838,42 @@ class RegistrationDeskTests(unittest.TestCase):
             "phone": ("like", "%Ali-Teacher%")
         }), calls)
 
+    def test_exact_references_survive_a_full_fuzzy_result_page(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        query = "IDENTITY-2026"
+        common = [{"name": f"OTHER-{i}", "person_name": f"{query} similar {i}",
+                   "student_name": f"{query} similar {i}", "title": f"{query} similar {i}",
+                   "status": "New", "version": 1, "enabled": 1,
+                   "creation": "2026-09-22"} for i in range(desk.LIMIT_LOOKUP)]
+        exact = {"name": query, "person_name": "Exact Inquiry",
+                 "student_name": "Exact Student", "title": "Exact Applicant",
+                 "enabled": 1, "status": "New", "version": 1,
+                 "creation": "2026-09-01"}
+        def read(_surface, doctype, _fields, filters=None, **kwargs):
+            filters = filters or {}
+            limit = kwargs.get("limit", desk.LIMIT_LOOKUP)
+            if doctype in (desk.APPLICANT, desk.STUDENT, desk.INQUIRY):
+                if filters.get("name") == query:
+                    return [dict(exact)]
+                if any(field in filters for field in ("title", "student_name",
+                        "person_name")):
+                    return [dict(row) for row in common[:limit]]
+            return []
+        desk.project_rows = read
+        view = desk.lookup(query)
+        self.assertEqual(view["items"][0]["id"], query)
+        self.assertEqual(view["students"][0]["id"], query)
+        self.assertEqual(view["inquiries"][0]["id"], query)
+        self.assertLessEqual(len(view["items"]), desk.LIMIT_LOOKUP)
+        self.assertLessEqual(len(view["students"]), desk.LIMIT_LOOKUP)
+        self.assertLessEqual(len(view["inquiries"]), desk.LIMIT_LOOKUP)
+
+    def test_overlong_search_does_not_silently_change_an_exact_reference(self):
+        desk, calls = self.desk(placement=False, applicant=False)
+        with self.assertRaises(desk.frappe.ValidationError):
+            desk.lookup("A" * 121)
+        self.assertEqual(calls, [], "oversized search must not query a shorter identity")
+
     def test_search_rejects_nontext_input_before_any_data_read(self):
         desk, calls = self.desk(placement=False, applicant=False)
         with self.assertRaises(desk.frappe.ValidationError):
