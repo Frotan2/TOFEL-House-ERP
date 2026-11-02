@@ -26,12 +26,12 @@ class Transfer:
         self.submit = Mock(side_effect=self.post)
 
     def post(self):
-        # A submit call returning is not evidence that a transfer posted.
-        # The test deliberately models corrupt/non-posted outcomes.
+        # Default to a valid posted native transfer, then selectively
+        # corrupt a field. Overriding paid_amount must not accidentally
+        # make docstatus absent from the test model.
+        self.docstatus = 1
         if self.test.transfer_override:
             self.__dict__.update(self.test.transfer_override)
-        else:
-            self.docstatus = 1
 
 
 class Receipt:
