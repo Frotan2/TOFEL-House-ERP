@@ -342,6 +342,8 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertIn("Test Instructor", info["STU-1"]["next"])
         self.assertIn("Room 2", info["STU-1"]["next"])
         self.assertIn("not a recurring weekly timetable", info["STU-1"]["next"])
+        self.assertIn("configured time zone", info["STU-1"]["next"])
+        self.assertIn("learner-local time", info["STU-1"]["next"])
         self.assertIn((desk.SCHEDULE, {
             "student_group": ("in", ["CLASS-A"]),
             "schedule_date": (">=", desk.frappe.utils.today()),
