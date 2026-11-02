@@ -942,7 +942,7 @@ def _cash_close_sections(day):
          "definition": ("All in-scope companies must have a submitted close to show Closed. "
                         "Partial company closes and posting drift are never reported as Closed."),
          "value": ("No drawers" if not drawers else
-                   "Currency review" if currency_blocked else
+                   "Cash account review" if currency_blocked else
                    "Drift" if drifted else
                    "Closed with variance" if (len(closed) == len(position)
                                               and variance_companies) else
@@ -953,12 +953,12 @@ def _cash_close_sections(day):
          "definition": ("Native GL expected balance for eligible Cash drawers. "
                         "Submitted closes retain the expected balance at closure; "
                         "open positions show the current ledger balance."),
-         "value": ("Currency review required" if currency_blocked
+         "value": ("Cash-account review required" if currency_blocked
                    else f"{expected_total:.2f}"), "owner": None},
-        {"label": "Cash currency safety",
-         "definition": ("Native Cash GL amounts use the company base currency. "
-                        "A foreign-currency Cash account cannot be physically "
-                        "compared against that amount without a separate process."),
+        {"label": "Cash account safety",
+         "definition": ("Physical Cash accounts must be Assets and use the "
+                        "company base currency (or inherit it if unset). "
+                        "Foreign-currency cash requires separate reconciliation."),
          "value": ("; ".join(f"{name}: {reason}"
                             for name, reason in sorted(currency_blocked.items()))
                    if currency_blocked else "Eligible for base-currency count"),
@@ -966,7 +966,7 @@ def _cash_close_sections(day):
         {"label": "Variance recorded",
          "definition": ("Counted minus expected on the submitted close, exactly "
                         "as the control record states it."),
-         "value": ("Currency review required" if currency_blocked else
+         "value": ("Cash-account review required" if currency_blocked else
                    f"{variance_total:.2f} net; drawer discrepancies in "
                    + ", ".join(variance_companies) if variance_companies else
                    f"{variance_total:.2f}" if closed else "Not closed"),
@@ -984,7 +984,7 @@ def _cash_close_sections(day):
     for company, drawer in drawers:
         close = closes.get(company)
         if company in currency_blocked:
-            state, next_text = "Currency review", currency_blocked[company]
+            state, next_text = "Cash account review", currency_blocked[company]
         elif close and drifted and company in drifted:
             state, next_text = "Drift", ("Re-check the drawer against the ledger; "
                                          "the day was posted to after the close. "
