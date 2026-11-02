@@ -805,6 +805,7 @@ def class_availability(student_group="", program="", academic_year="",
             "capacity": seats["capacity"], "rostered": seats["rostered"],
             "reserved": seats["reserved"], "available": seats["available"],
             "waiting": waiting,
+            "waiting_to_offer": unoffered_waiting,
             # Queue members must be processed before a newly-arrived walk-in.
             # A physical free seat is not an immediately usable walk-in seat
             # while any prior Waiting entries remain in this class.
@@ -816,17 +817,21 @@ def class_availability(student_group="", program="", academic_year="",
         key = (item["program"], item["academic_year"])
         bucket = intake.setdefault(key, {
             "program": key[0], "academic_year": key[1], "seats_available": 0,
-            "waiting": 0, "classes": 0, "next_class_end": ""})
+            "waiting": 0, "waiting_to_offer": 0,
+            "classes": 0, "next_class_end": ""})
         bucket["seats_available"] += item["available"]
         bucket["waiting"] += waiting
+        bucket["waiting_to_offer"] += unoffered_waiting
         bucket["classes"] += 1
         if item["class_end_date"] and (
                 not bucket["next_class_end"]
                 or item["class_end_date"] < bucket["next_class_end"]):
             bucket["next_class_end"] = item["class_end_date"]
     for bucket in intake.values():
+        # An Offered learner already holds a seat; counting that person
+        # again as unmet demand would double-charge the same reservation.
         bucket["projected_unmet_demand"] = max(
-            0, bucket["waiting"] - bucket["seats_available"])
+            0, bucket["waiting_to_offer"] - bucket["seats_available"])
     return {
         "as_of": _today(), "classes": classes,
         "intake": sorted(intake.values(),
@@ -840,6 +845,11 @@ def class_availability(student_group="", program="", academic_year="",
                                  "otherwise equals unreserved available seats",
             "reserved": "unexpired waiting-list offers holding a seat",
             "waiting": "open waiting-list entries (Waiting or Offered)",
+            "waiting_to_offer": "Waiting entries still awaiting an initial "
+                                "seat offer; excludes the already reserved Offered",
+            "projected_unmet_demand": "unoffered Waiting entries minus "
+                                      "remaining unreserved seats, never "
+                                      "double-counts existing Offered holds",
         },
     }
 
