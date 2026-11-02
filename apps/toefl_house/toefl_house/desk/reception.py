@@ -28,6 +28,7 @@ except Exception:
     analytics = None
 from toefl_house.desk import lifecycle
 from toefl_house.desk.collections import reception_sections
+from toefl_house.reception_phone import afghan_phone_variants
 
 SLUG = "th-reception-desk"
 
@@ -1246,6 +1247,21 @@ def lookup(query):
         if row["name"] not in seen_inquiries:
             inquiries.append(row)
             seen_inquiries.add(row["name"])
+    # The desk must find a local 079... number even if a colleague stored
+    # its equivalent +9379... presentation (and vice versa). This is
+    # contact search only, not automatic merging of family identities.
+    for alternate in afghan_phone_variants(phone_query):
+        if alternate == phone_query:
+            continue
+        alternate_escaped = (alternate.replace("\\", "\\\\")
+                             .replace("%", r"\%").replace("_", r"\_"))
+        for row in project_rows(
+                "reception", INQUIRY, INQUIRY_FIELDS,
+                filters={"phone": ("like", f"%{alternate_escaped}%")},
+                order_by="creation desc", limit=LIMIT_LOOKUP):
+            if row["name"] not in seen_inquiries:
+                inquiries.append(row)
+                seen_inquiries.add(row["name"])
     # Preliminary visitors are NOT yet applicants. Keep them in their own
     # results category so Reception never mistakes a contact for enrollment.
     visible_inquiries = inquiries[:LIMIT_LOOKUP]
