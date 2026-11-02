@@ -312,8 +312,10 @@ class CloseDriftTests(unittest.TestCase):
     def setUp(self):
         self.module = load_cashier(DRAWERS)
         self.saved = [
-            {"account": "Cash - TH", "expected_amount": 100.0, "variance": 0.0},
-            {"account": "Petty Cash - TH", "expected_amount": 50.0, "variance": 0.0},
+            {"account": "Cash - TH", "expected_amount": 100.0,
+             "counted_amount": 100.0, "variance": 0.0},
+            {"account": "Petty Cash - TH", "expected_amount": 50.0,
+             "counted_amount": 50.0, "variance": 0.0},
         ]
         self.live = [
             {"account": "Cash - TH", "opening": 100.0,
@@ -330,7 +332,9 @@ class CloseDriftTests(unittest.TestCase):
             if doctype == self.module.DAY:
                 return ([{"name": "TH-CASH-2026-01",
                           "reconciled_on": "2026-10-24 18:00:00",
-                          "total_expected": 150.0}] if self.closed else [])
+                          "total_expected": 150.0,
+                          "total_counted": 150.0,
+                          "total_variance": 0.0}] if self.closed else [])
             if doctype == self.module.COUNT:
                 self.assertEqual(kwargs["filters"]["parent"], "TH-CASH-2026-01")
                 self.assertEqual(kwargs["filters"]["parenttype"], self.module.DAY)
@@ -372,14 +376,37 @@ class CloseDriftTests(unittest.TestCase):
 
     def test_opposing_cash_drawer_variances_do_not_disappear_at_net_zero(self):
         self.saved[0]["variance"] = -100.0
+        self.saved[0]["counted_amount"] = 0.0
         self.saved[1]["variance"] = 100.0
+        self.saved[1]["counted_amount"] = 150.0
         position = self.position()
         self.assertFalse(position["drift"])
+        self.assertFalse(position["integrity_review"])
         self.assertTrue(position["drawer_variance"])
 
     def test_malformed_drawer_variance_is_review_not_balanced(self):
         self.saved[0]["variance"] = "NaN"
-        self.assertTrue(self.position()["drawer_variance"])
+        position = self.position()
+        self.assertTrue(position["drawer_variance"])
+        self.assertTrue(position["integrity_review"])
+
+    def test_forged_saved_parent_count_never_shows_balanced(self):
+        original = self.module.frappe.db.get_all
+        def changed(doctype, **kwargs):
+            data = original(doctype, **kwargs)
+            if doctype == self.module.DAY:
+                data[0]["total_counted"] = 999.0
+            return data
+        self.module.frappe.db.get_all = changed
+        position = self.position()
+        self.assertTrue(position["integrity_review"])
+        self.assertFalse(position["drift"])
+
+    def test_saved_variance_mismatch_is_integrity_review(self):
+        self.saved[0]["variance"] = 5.0
+        position = self.position()
+        self.assertTrue(position["integrity_review"])
+        self.assertTrue(position["drawer_variance"])
 
     def test_new_backdated_gl_keeps_existing_audit_signal(self):
         # A balance-neutral new posting still matters to a closed ledger.
@@ -475,6 +502,11 @@ class CashHistoryVarianceTests(unittest.TestCase):
         record = self.history()[0]
         self.assertTrue(record["integrity_review"])
         self.assertTrue(record["drawer_variance"])
+
+    def test_individual_drawer_variance_must_equal_counted_minus_expected(self):
+        self.rows[0]["variance"] = -90.0
+        self.header["total_variance"] = 10.0
+        self.assertTrue(self.history()[0]["integrity_review"])
 
     def test_expected_and_counted_header_totals_must_match_child_rows(self):
         for field in ("total_expected", "total_counted"):
