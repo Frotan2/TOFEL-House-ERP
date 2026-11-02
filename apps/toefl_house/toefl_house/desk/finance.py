@@ -919,6 +919,8 @@ def _cash_close_sections(day):
                for drawer in row.get("drawers", [])]
     closed = [row for row in position if row.get("close")]
     drifted = [row["company"] for row in position if row.get("drift")]
+    currency_blocked = {row["company"]: row["currency_issue"]
+                        for row in position if row.get("currency_issue")}
     # In multi-company mode, a close in ONE company is never a global close.
     # Add each closed company's recorded expectation and each still-open
     # company's current native ledger position, without dropping either.
@@ -938,6 +940,7 @@ def _cash_close_sections(day):
          "definition": ("All in-scope companies must have a submitted close to show Closed. "
                         "Partial company closes and posting drift are never reported as Closed."),
          "value": ("No drawers" if not drawers else
+                   "Currency review" if currency_blocked else
                    "Drift" if drifted else
                    "Closed" if len(closed) == len(position) else
                    "Partially closed" if closed else "Open"),
@@ -945,7 +948,16 @@ def _cash_close_sections(day):
         {"label": "Expected at close",
          "definition": ("Ledger closing balance of the drawers: the counted "
                         "figure when a close exists, otherwise the live position."),
-         "value": f"{expected_total:.2f}", "owner": None},
+         "value": ("Currency review required" if currency_blocked
+                   else f"{expected_total:.2f}"), "owner": None},
+        {"label": "Cash currency safety",
+         "definition": ("Native Cash GL amounts use the company base currency. "
+                        "A foreign-currency Cash account cannot be physically "
+                        "compared against that amount without a separate process."),
+         "value": ("; ".join(f"{name}: {reason}"
+                            for name, reason in sorted(currency_blocked.items()))
+                   if currency_blocked else "Eligible for base-currency count"),
+         "owner": "Finance Officer"},
         {"label": "Variance recorded",
          "definition": ("Counted minus expected on the submitted close, exactly "
                         "as the control record states it."),
@@ -963,7 +975,9 @@ def _cash_close_sections(day):
     closes = {row["company"]: row.get("close") for row in position}
     for company, drawer in drawers:
         close = closes.get(company)
-        if close and drifted and company in drifted:
+        if company in currency_blocked:
+            state, next_text = "Currency review", currency_blocked[company]
+        elif close and drifted and company in drifted:
             state, next_text = "Drift", ("Re-check the drawer against the ledger; "
                                          "the day was posted to after the close. "
                                          "The Finance Auditor reviews the difference.")
@@ -978,8 +992,9 @@ def _cash_close_sections(day):
         item = {
             "id": f"{company}:{drawer['account']}",
             "person": drawer["account"],
-            "detail": f"{company} · opening {drawer['opening']:.2f}, "
-                      f"today {drawer['movement']:.2f}",
+            "detail": (currency_blocked[company] if company in currency_blocked
+                       else f"{company} · opening {drawer['opening']:.2f}, "
+                            f"today {drawer['movement']:.2f}"),
             "status": state,
             "stage": "Cash drawer",
             "stage_definition": ("Expected money is the native ledger closing "
@@ -988,7 +1003,8 @@ def _cash_close_sections(day):
             "next": next_text,
             "next_role": "Finance Officer",
             "waiting_since": day,
-            "amount": drawer["closing"],
+            "amount": (None if company in currency_blocked
+                       else drawer["closing"]),
             "currency": "",
         }
         items.append(item)
@@ -1000,7 +1016,8 @@ def _cash_close_sections(day):
     for row in position:
         company = row["company"]
         company_drawers = row.get("drawers", [])
-        if (row.get("close") or company in drifted or not closing_window
+        if (row.get("close") or company in drifted
+                or company in currency_blocked or not closing_window
                 or not company_drawers
                 or len(company_drawers) > cashier_money.MAX_DRAWERS):
             continue
