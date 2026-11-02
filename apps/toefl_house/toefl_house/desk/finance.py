@@ -791,7 +791,7 @@ def work():
             (" and " if not enrollment_read_complete and not fee_read_complete else "") +
             ("tuition bill" if not fee_read_complete else "")
         )
-        billing_items.insert(0, {
+        billing_items = [{
             "id": "BILLING-REGISTER-REVIEW",
             "person": "Finance register",
             "status": "Billing status needs review",
@@ -804,7 +804,7 @@ def work():
                      "Finance Manager must verify the complete native register "
                      "before issuing tuition from this desk."),
             "next_role": "Finance Manager",
-        })
+        }] + billing_items
         billing_items = billing_items[:LIMIT_QUEUES]
     assignment_items = [{
         "id": row["name"],
