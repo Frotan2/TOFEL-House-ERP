@@ -546,6 +546,43 @@ def drawer_variance_recorded(rows):
     return False
 
 
+def cash_snapshot_amount_issue(snapshot, parent):
+    """Verify each stored drawer's variance and its signed parent totals.
+
+    Never display a submitted control record as reconciled merely because
+    the stored parent says zero. Missing, nonfinite or conflicting data
+    requires an auditor to inspect the immutable source document.
+    """
+    if not snapshot or len(snapshot) > MAX_DRAWERS:
+        return True
+    seen = set()
+    totals = {"total_expected": 0.0, "total_counted": 0.0,
+              "total_variance": 0.0}
+    try:
+        for row in snapshot:
+            account = row.get("account")
+            if not isinstance(account, str) or not account or account in seen:
+                return True
+            seen.add(account)
+            expected = _stored_money(row.get("expected_amount"),
+                                     f"Stored expected for {account}")
+            counted = _counted(row.get("counted_amount"),
+                               f"Stored counted for {account}")
+            variance = _stored_money(row.get("variance"),
+                                     f"Stored variance for {account}")
+            if abs(round(counted - expected, 2) - variance) > TOLERANCE:
+                return True
+            totals["total_expected"] += expected
+            totals["total_counted"] += counted
+            totals["total_variance"] += variance
+        return any(
+            abs(_stored_money(parent.get(key), f"Stored {key}")
+                - round(value, 2)) > TOLERANCE
+            for key, value in totals.items())
+    except (frappe.ValidationError, ValueError, TypeError):
+        return True
+
+
 def cashier_position(day=None, companies=None):
     """Read-only drawer position and close state, for the finance desk.
 
@@ -573,6 +610,7 @@ def cashier_position(day=None, companies=None):
         close = dict(closes[0]) if closes else None
         drift = False
         has_drawer_variance = False
+        integrity_review = False
         if close:
             # Re-check every drawer against the immutable close snapshot.
             # Cancelled historical postings may change balances without a
@@ -580,10 +618,11 @@ def cashier_position(day=None, companies=None):
             saved_rows = frappe.db.get_all(
                 COUNT,
                 filters={"parent": close["name"], "parenttype": DAY},
-                fields=["account", "expected_amount", "variance"],
+                fields=["account", "expected_amount", "counted_amount", "variance"],
                 limit_page_length=MAX_DRAWERS + 1,
             )
             has_drawer_variance = drawer_variance_recorded(saved_rows or [])
+            integrity_review = cash_snapshot_amount_issue(saved_rows or [], close)
             drift = _balance_drift_after_close(saved_rows or [], balances)
             # A bank-only posting is not physical cash drift. Scope even the
             # balance-neutral post-close audit signal to this company's Cash
@@ -606,6 +645,7 @@ def cashier_position(day=None, companies=None):
             "close": close,
             "drift": drift,
             "drawer_variance": has_drawer_variance,
+            "integrity_review": integrity_review,
         })
     return out
 
@@ -679,19 +719,10 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
                     or detail.get("root_type") != "Asset"
                     or (detail.get("account_currency") or base) != base):
                 integrity_issue = True
-        for total, field in (("total_expected", "expected_amount"),
-                             ("total_counted", "counted_amount"),
-                             ("total_variance", "variance")):
-            try:
-                actual_total = _stored_money(
-                    row.get(total), f"Historical cash close {total}")
-                saved_total = round(sum(
-                    _stored_money(child.get(field), f"Historical drawer {field}")
-                    for child in snapshot), 2)
-                if abs(actual_total - saved_total) > TOLERANCE:
-                    integrity_issue = True
-            except frappe.ValidationError:
-                integrity_issue = True
+        # Parent-child net and individual per-drawer arithmetic must both
+        # agree. Separate account-identity checks remain above.
+        integrity_issue = integrity_issue or cash_snapshot_amount_issue(
+            snapshot, row)
         row["integrity_review"] = integrity_issue
         row["drawer_variance"] = drawer_variance_recorded(snapshot)
     return history
