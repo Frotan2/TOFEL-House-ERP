@@ -8055,6 +8055,17 @@ def main():
                     and float(actual.outstanding_amount)>100),(billed,actual)
             assert _effective_student_branches(actual.student)=={'SYN-BR-A'}
             assert _effective_student_branches(actual.student)<=allowed
+            # The opposite Branch's Reception role is not financial authority
+            # for this student's Fee. Prove denial at the guarded command
+            # boundary, not merely by a missing local cash counter.
+            from toefl_house.command_scope import authorize_command_scope
+            assert actor_branches(users['branch_b_staff'])=={'SYN-BR-B'}
+            wrong_branch=denied_because(
+                lambda:as_user('branch_b_staff',lambda:authorize_command_scope(
+                    'record_reception_collection',{'fees':fee,'amount':'100.00'},
+                    users['branch_b_staff'])),
+                "outside this login's permitted branches")
+            frappe.set_user('Administrator')
             # This fixture's accepted receipt must belong to this exact
             # enrolled Branch-A student, never any earlier legacy Fee.
             prefix='toefl_house.finance.collections.'
