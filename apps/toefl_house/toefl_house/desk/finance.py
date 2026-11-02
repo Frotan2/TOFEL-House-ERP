@@ -946,8 +946,9 @@ def _cash_close_sections(day):
                    "Partially closed" if closed else "Open"),
          "owner": "Finance Officer"},
         {"label": "Expected at close",
-         "definition": ("Ledger closing balance of the drawers: the counted "
-                        "figure when a close exists, otherwise the live position."),
+         "definition": ("Native GL expected balance for eligible Cash drawers. "
+                        "Submitted closes retain the expected balance at closure; "
+                        "open positions show the current ledger balance."),
          "value": ("Currency review required" if currency_blocked
                    else f"{expected_total:.2f}"), "owner": None},
         {"label": "Cash currency safety",
@@ -961,7 +962,8 @@ def _cash_close_sections(day):
         {"label": "Variance recorded",
          "definition": ("Counted minus expected on the submitted close, exactly "
                         "as the control record states it."),
-         "value": f"{variance_total:.2f}" if closed else "Not closed",
+         "value": ("Currency review required" if currency_blocked else
+                   f"{variance_total:.2f}" if closed else "Not closed"),
          "owner": "Finance Officer"},
         {"label": "Ledger drift",
          "definition": ("A posting dated on or before a closed day was created "
