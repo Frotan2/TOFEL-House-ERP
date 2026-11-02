@@ -491,6 +491,7 @@ class CashHistoryVarianceTests(unittest.TestCase):
         self.module.frappe.db.get_value = lambda *args, **kwargs: "AFN"
         self.header = {
             "name": "TH-CASH-1", "company": "TOEFL House",
+            "date": "2026-10-24",
             "total_expected": 100.0, "total_counted": 100.0,
             "total_variance": 0.0,
         }
@@ -535,6 +536,22 @@ class CashHistoryVarianceTests(unittest.TestCase):
         self.assertEqual([name for name, _ in self.calls],
                          [self.module.DAY, self.module.COUNT,
                           self.module.ACCOUNT])
+
+    def test_historical_duplicate_close_is_flagged_even_when_off_page(self):
+        # Only this close appears on the limited history page. The duplicate
+        # submitted close is older and invisible in that page, but the
+        # bounded native grouping query must still detect it.
+        queries = []
+        def sql(query, params=None, as_dict=False):
+            queries.append((query, params, as_dict))
+            return [{"company": "TOEFL House", "date": "2026-10-24"}]
+        self.module.frappe.db.sql = sql
+        record = self.history()[0]
+        self.assertTrue(record["integrity_review"])
+        self.assertTrue(record["drawer_variance"])
+        self.assertIn("having count(*) > 1", queries[0][0])
+        self.assertEqual(queries[0][1], ("TOEFL House", "2026-10-24"))
+        self.assertTrue(queries[0][2])
 
     def test_missing_variance_explanation_is_historical_integrity_review(self):
         self.rows[0]["note"] = ""
