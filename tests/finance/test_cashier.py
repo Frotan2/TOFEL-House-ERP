@@ -368,6 +368,23 @@ class CloseDriftTests(unittest.TestCase):
     def test_exact_match_is_not_drift(self):
         self.assertFalse(self.position()["drift"])
 
+    def test_closed_day_with_no_current_cash_accounts_remains_visible(self):
+        # Disabling the last physical Cash account after a submitted close
+        # must not make the saved company/day vanish from daily reporting.
+        self.module.cash_drawers = lambda company: []
+        state = self.position()
+        self.assertEqual(state["drawers"], [])
+        self.assertIsNotNone(state["close"])
+        self.assertTrue(state["integrity_review"])
+        # With no enabled drawer, there is no valid cash-GL IN () SQL query.
+        self.assertTrue(state["drift"])
+
+    def test_open_day_with_no_cash_account_has_no_drawer_position(self):
+        self.closed = False
+        self.module.cash_drawers = lambda company: []
+        self.assertEqual(self.module.cashier_position(
+            day="2026-10-24", companies=["TOEFL House"]), [])
+
     def test_two_submitted_closes_same_company_day_require_integrity_review(self):
         # Unexpected duplicate submitted control documents can exist after a
         # faulty migration or an unaudited direct DB write. The one-row query
