@@ -572,6 +572,13 @@ def cash_snapshot_amount_issue(snapshot, parent):
                                      f"Stored variance for {account}")
             if abs(round(counted - expected, 2) - variance) > TOLERANCE:
                 return True
+            # A nonzero physical shortage or overage without its recorded
+            # explanation is not a valid audit trail, even if arithmetic and
+            # signed parent totals still agree. Do not rewrite the close.
+            note = row.get("note")
+            if abs(variance) > TOLERANCE and (
+                    not isinstance(note, str) or not note.strip()):
+                return True
             totals["total_expected"] += expected
             totals["total_counted"] += counted
             totals["total_variance"] += variance
@@ -618,7 +625,8 @@ def cashier_position(day=None, companies=None):
             saved_rows = frappe.db.get_all(
                 COUNT,
                 filters={"parent": close["name"], "parenttype": DAY},
-                fields=["account", "expected_amount", "counted_amount", "variance"],
+                fields=["account", "expected_amount", "counted_amount",
+                        "variance", "note"],
                 limit_page_length=MAX_DRAWERS + 1,
             )
             has_drawer_variance = drawer_variance_recorded(saved_rows or [])
@@ -677,7 +685,7 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
         COUNT,
         filters={"parenttype": DAY, "parent": ["in", names]},
         fields=["parent", "account", "expected_amount", "counted_amount",
-                "variance"],
+                "variance", "note"],
         limit_page_length=MAX_HISTORY * MAX_DRAWERS + 1,
     )
     by_parent = {name: [] for name in names}
