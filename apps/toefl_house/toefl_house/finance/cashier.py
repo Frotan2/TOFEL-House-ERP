@@ -284,6 +284,58 @@ def _closing_window(day):
     return terms
 
 
+def verify_submitted_cash_close(name, company, day, actor, prepared):
+    """Re-read the committed-intent header and child snapshot from MariaDB.
+
+    Never mark this close successful based only on the in-memory Frappe Doc.
+    A forged, missing, duplicated, or truncated drawer snapshot is a failure.
+    No GL movement is posted by this control document.
+    """
+    stored = frappe.db.get_value(
+        DAY, name,
+        ["docstatus", "company", "date", "cashier",
+         "total_expected", "total_counted", "total_variance"],
+        as_dict=True)
+    if (not stored or int(stored.get("docstatus") or 0) != 1
+            or stored.get("company") != company
+            or str(stored.get("date")) != day
+            or stored.get("cashier") != actor):
+        raise frappe.ValidationError(
+            "The stored cash close is not submitted for the expected company, day and actor")
+    actual = frappe.db.get_all(
+        COUNT,
+        filters={"parent": name, "parenttype": DAY},
+        fields=["account", "expected_amount", "counted_amount", "variance", "note"],
+        limit_page_length=MAX_DRAWERS + 1,
+    )
+    wanted = {row["account"]: row for row in prepared}
+    if (len(actual or []) != len(prepared)
+            or len(wanted) != len(prepared)
+            or {row.get("account") for row in (actual or [])} != set(wanted)):
+        raise frappe.ValidationError(
+            "Stored cash close drawers differ from the submitted count")
+    for row in actual:
+        expected = wanted[row["account"]]
+        for key in ("expected_amount", "counted_amount", "variance"):
+            saved_value = _stored_money(row.get(key), f"Stored {key}")
+            if abs(saved_value - expected[key]) > TOLERANCE:
+                raise frappe.ValidationError(
+                    f"Stored cash close amount differs for {row['account']}")
+        if (row.get("note") or "").strip() != expected["note"]:
+            raise frappe.ValidationError(
+                f"Stored cash close explanation differs for {row['account']}")
+    for field, wanted_total in (
+        ("total_expected", round(sum(row["expected_amount"] for row in prepared), 2)),
+        ("total_counted", round(sum(row["counted_amount"] for row in prepared), 2)),
+        ("total_variance", round(sum(row["variance"] for row in prepared), 2)),
+    ):
+        actual_total = _stored_money(stored.get(field), f"Stored {field}")
+        if abs(actual_total - wanted_total) > TOLERANCE:
+            raise frappe.ValidationError(
+                f"Stored cash close {field} does not match its drawers")
+    return stored
+
+
 @frappe.whitelist(methods=["POST"])
 def reconcile_cashier_day(request_key, company, date, counts):
     """Record one cashier day close against the native ledger.
@@ -410,12 +462,7 @@ def reconcile_cashier_day(request_key, company, date, counts):
         doc.insert(ignore_permissions=True)
         doc.flags.ignore_permissions = True
         doc.submit()
-        stored = frappe.db.get_value(
-            DAY, doc.name,
-            ["docstatus", "total_expected", "total_counted", "total_variance"],
-            as_dict=True)
-        if int(stored.docstatus or 0) != 1:
-            raise frappe.ValidationError("The cashier close must be submitted")
+        stored = verify_submitted_cash_close(doc.name, company, day, actor, rows)
         result = {
             "cashier_day": doc.name, "company": company, "date": day,
             "cashier": actor,
