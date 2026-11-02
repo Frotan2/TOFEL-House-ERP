@@ -104,7 +104,8 @@ Configure in native screens, with invented numbers; these are *test data*, not a
 proposal for the Owner's real prices or tax policy.
 
 1. Company `SYN Test Company`, country Afghanistan, currency `AFN`, with a
-   postable **Cash** account in the chart and a default receivable account.
+   postable **Cash** account in the chart, a separate **Bank** account for
+   negative testing, and a default receivable account.
 2. Selling Price List `SYN Test Prices` in `AFN` (must match the company
    currency; do not invent an exchange rate).
 3. `Fee Category` `SYN Tuition`, `Fee Structure` for the test program/year with
@@ -179,7 +180,7 @@ message; a silent success is a **FAIL**.
 
 | # | Actor | Action | Expected observable |
 | --- | --- | --- | --- |
-| C27 | Cashier | Finance desk → **Cash close** | Drawers in scope, today's **Opening**/**today movement**, state **Open**, expected = native ledger closing balance |
+| C27 | Cashier | Finance desk → **Cash close** | Only physical **Cash** accounts appear, not the Bank account; opening, movement and expected equal the native Cash GL closing balance |
 | C28 | Cashier | Desk **Tax configuration** fact | Shows `No native tax configured` for the company (owner supplied no tax policy). No rate, exemption or jurisdiction is displayed or implied |
 | C29 | Cashier | Record today's close: counted amount **equal** to the expected figure, submit | `TH Cashier Day` submitted; variance 0.00; state becomes **Closed**; **no** GL/stock entry is posted by the close (compare GL count before/after) |
 | C30 | Cashier | Close the same company/day again | Refused with `This business day is already closed for this company; a submitted close is never overwritten` |
@@ -190,6 +191,8 @@ message; a silent success is a **FAIL**.
 | C35 | Auditor | Finance desk → **Cash close history** | Submitted closes listed newest first with expected, counted, variance; entries cannot be edited |
 | C36 | Cashier | Post a small native `Payment Entry` dated **today** after the close | Desk shows **Drift** for that company; nothing is silently restated |
 | C37 | Staff no finance | Attempt a close | Refused (role). Record the message |
+| C37a | Cashier | Try to include a **Bank** account and its balance in physical Cash close | Refused: Bank is not a physical Cash account; no cash close or bank accounting entry created |
+| C37b | Cashier | After closing the cash drawer, post a new dated **Bank-only** journal movement without touching any Cash account | Cash close remains **Closed**, not Drift. Bank statement reconciliation is a separate task |
 
 ### F. Permissions, branch and audit integrity
 
