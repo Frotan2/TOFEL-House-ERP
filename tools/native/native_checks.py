@@ -8002,10 +8002,31 @@ def main():
             # Run after the existing native financial fixtures, preserving
             # their independently qualified cash-close/outstanding baselines.
             frappe.set_user('Administrator')
-            fee=frappe.db.get_value('Fees',{'company':fin['company'],'docstatus':1,
-                'outstanding_amount':('>',100)},'name',order_by='name asc')
-            assert fee,'A submitted synthetic tuition balance is required'
-            company=frappe.db.get_value('Fees',fee,'company')
+            # A scoped Reception collector may only receipt a tuition Fee
+            # whose Student has a resolved roster/intake Branch in that
+            # collector's own explicit permissions. The old fixture selected
+            # the alphabetically first Fee, often for a branchless legacy
+            # Student; its 403 was correct and cannot be bypassed.
+            from toefl_house.command_scope import (
+                actor_branches, _effective_student_branches)
+            allowed=actor_branches(users['receptionist'])
+            assert allowed=={'SYN-BR-A','SYN-BR-B'},allowed
+            candidates=frappe.get_all('Fees',filters={
+                'company':fin['company'],'docstatus':1,
+                'outstanding_amount':('>',100)},
+                fields=['name','student','company'],order_by='name asc',
+                limit_page_length=500)
+            valid=[row for row in candidates
+                   if row.get('student') and
+                   0<len(_effective_student_branches(row['student'])) and
+                   None not in _effective_student_branches(row['student']) and
+                   _effective_student_branches(row['student'])<=allowed]
+            assert valid,(
+                'No submitted synthetic tuition Fee belongs to a verified '
+                'Branch-scoped Reception student; do not receipt an unrelated '
+                'legacy student')
+            fee=valid[0]['name']
+            company=valid[0]['company']
             prefix='toefl_house.finance.collections.'
             actors={key:login(key) for key in ('course_owner','receptionist','book_seller','outsider')}
 
@@ -8013,7 +8034,9 @@ def main():
                 url=base+'/api/method/'+prefix+method
                 response=(actors[role].get(url,params=payload,timeout=60) if get else
                           actors[role].post(url,json=payload,timeout=60))
-                assert response.status_code==expected,(method,response.status_code,response.json().get('exc_type'))
+                assert response.status_code==expected,(
+                    method,response.status_code,response.json().get('exc_type'),
+                    response.json().get('exception','')[:350])
                 assert not response.json().get('_server_messages'),(method,'unexpected blocking message')
                 return response.json().get('message')
 
