@@ -108,6 +108,23 @@ def _stored_money(value, what):
         raise frappe.ValidationError(str(exc)) from exc
 
 
+def _strict_business_day(value):
+    """Canonical DATE identity for GL reads and the company/day close lock.
+
+    Python also parses compact and ISO-week notation, but passing those raw
+    spellings to MariaDB DATE comparisons or duplicate-day checks would make
+    the accounting day ambiguous. Only the native YYYY-MM-DD identity is safe.
+    """
+    day = str(value or "").strip()
+    try:
+        parsed = _date.fromisoformat(day)
+    except ValueError as exc:
+        raise frappe.ValidationError("A valid business date is required") from exc
+    if day != parsed.isoformat():
+        raise frappe.ValidationError("Business date must use YYYY-MM-DD")
+    return day
+
+
 def _company_permitted(company, user=None):
     """Whether the native Company User Permission scope reaches a company.
 
@@ -214,7 +231,8 @@ def validate_close(doc):
     company = doc.get("company")
     if not day or not company:
         raise frappe.ValidationError("A cashier close needs a business date and a company")
-    if _date.fromisoformat(str(day)) > _date.fromisoformat(str(frappe.utils.today())):
+    day = _strict_business_day(day)
+    if _date.fromisoformat(day) > _date.fromisoformat(str(frappe.utils.today())):
         raise frappe.ValidationError("A cashier close cannot cover a future business day")
     rows = list(doc.get("accounts") or [])
     if not rows:
@@ -359,11 +377,7 @@ def reconcile_cashier_day(request_key, company, date, counts):
     if len(counts) > MAX_DRAWERS:
         raise frappe.ValidationError("Too many cash drawers in this close")
     def work(actor):
-        day = str(date or "").strip()
-        try:
-            _date.fromisoformat(day)
-        except ValueError as exc:
-            raise frappe.ValidationError("A valid business date is required") from exc
+        day = _strict_business_day(date)
         if not isinstance(company, str) or not company or len(company) > 140:
             raise frappe.ValidationError("A company is required")
         if not frappe.db.exists(COMPANY, company):
