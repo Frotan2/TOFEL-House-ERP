@@ -7,19 +7,19 @@ All writes use operation receipts, native Branch scope, version locks and
 the guarded document controller.
 """
 import re
-import unicodedata
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import frappe
 
 from toefl_house.api import _execute
 from toefl_house.command_scope import resolve_creation_branch
 from toefl_house.policy import digest
-from toefl_house.reception_phone import afghan_phone_variants
+from toefl_house.reception_phone import afghan_phone_variants, normalize_contact_phone
 from toefl_house.security import record_synthetic_flag, require_command
 
 DOCTYPE = "TH Reception Inquiry"
 STATUSES = ("New", "Contacted", "Awaiting Placement", "Closed")
-PHONE_PATTERN = re.compile(r"^\+?[0-9 ()-]{5,32}$")
+MODES = ("Undecided", "On-campus", "Online")
 
 
 def _text(value, label, *, required=False, length=140):
@@ -33,25 +33,32 @@ def _text(value, label, *, required=False, length=140):
 
 
 def _phone(value):
-    clean = _text(value, "Phone", length=32)
-    if not clean:
+    try:
+        return normalize_contact_phone(value)
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
+
+
+def _study_mode(value):
+    if value not in MODES:
+        raise frappe.ValidationError("Choose Online, On-campus or Undecided study mode")
+    return value
+
+
+def _time_zone(value):
+    name = _text(value, "Learner time zone", length=64)
+    if not name:
         return ""
-    # Afghan Dari and Arabic keyboards produce different Unicode decimal
-    # glyphs; store normalized ASCII digits so contact lookup and duplicate
-    # detection do not depend on the keyboard language.
-    normalized = "".join(
-        str(unicodedata.decimal(char)) if char.isdecimal() else char
-        for char in clean
-    )
-    digits = sum(char.isdigit() for char in normalized)
-    if not PHONE_PATTERN.fullmatch(normalized) or not 5 <= digits <= 15:
+    # For global classes never silently treat a local learner's schedule as
+    # Kabul time. Store an IANA timezone only when it actually resolves.
+    if name.startswith(("/", ".")) or ".." in name:
+        raise frappe.ValidationError("Choose a valid time zone, e.g. Asia/Kabul")
+    try:
+        ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError, KeyError):
         raise frappe.ValidationError(
-            "Phone must have 5–15 digits and contain only spaces, +, - or parentheses")
-    # Spaces, dashes and parentheses are input presentation, not identity.
-    # Strip them before storing so a second employee typing 079-435-7509
-    # sees the same exact-contact duplicate warning as 0794357509.
-    # The contact is never used as proof that two people are the same.
-    return re.sub(r"[ ()-]", "", normalized)
+            "Choose a valid time zone such as Asia/Kabul or Europe/London") from None
+    return name
 
 
 def _open_identity_key(branch, person_name, contact):
@@ -73,6 +80,7 @@ def _result(doc):
     return {
         "name": doc.name, "person_name": doc.person_name,
         "status": doc.status, "th_branch": doc.th_branch or "",
+        "study_mode": doc.get("study_mode") or "Undecided",
         "version": int(doc.version),
     }
 
@@ -95,6 +103,9 @@ def protect_inquiry(doc, method=None):
     if (_text(doc.person_name, "Visitor name", required=True) != doc.person_name
             or _phone(doc.phone or "") != (doc.phone or "")
             or _text(doc.program_interest or "", "Program interest") != (doc.program_interest or "")
+            or _study_mode(doc.get("study_mode") or "Undecided") != (doc.get("study_mode") or "Undecided")
+            or _text(doc.get("contact_country") or "", "Country", length=80) != (doc.get("contact_country") or "")
+            or _time_zone(doc.get("time_zone") or "") != (doc.get("time_zone") or "")
             or _text(doc.notes or "", "Notes", length=1000) != (doc.notes or "")):
         raise frappe.ValidationError("Inquiry fields are not normalized")
     if doc.is_new():
@@ -106,8 +117,8 @@ def protect_inquiry(doc, method=None):
     if kind not in {"update_walkin_inquiry", "correct_walkin_inquiry"}:
         raise frappe.PermissionError("An existing inquiry cannot be created twice")
     original = frappe.db.get_value(DOCTYPE, doc.name,
-        ["person_name", "phone", "program_interest", "th_branch",
-         "recorded_by", "synthetic", "status", "version", "notes",
+        ["person_name", "phone", "program_interest", "study_mode", "contact_country",
+         "time_zone", "th_branch", "recorded_by", "synthetic", "status", "version", "notes",
          "last_correction_reason", "last_corrected_by"], as_dict=True)
     if not original or original.status == "Closed" or int(doc.version) != int(original.version) + 1:
         raise frappe.ValidationError("Inquiry was changed or closed; refresh before updating")
@@ -115,8 +126,8 @@ def protect_inquiry(doc, method=None):
         if frappe.db.exists("TH Placement Case", {"reception_inquiry": doc.name}):
             raise frappe.PermissionError(
                 "Placement already consumed this Inquiry; identity corrections need Academic Manager review")
-        for key in ("program_interest", "th_branch", "recorded_by", "synthetic",
-                    "status", "notes"):
+        for key in ("program_interest", "study_mode", "contact_country", "time_zone",
+                    "th_branch", "recorded_by", "synthetic", "status", "notes"):
             if (doc.get(key) or "") != (original.get(key) or ""):
                 raise frappe.PermissionError(
                     "Identity correction cannot alter Branch, status, notes or original owner")
@@ -128,7 +139,8 @@ def protect_inquiry(doc, method=None):
             raise frappe.ValidationError(
                 "Provide changed visitor details and a recorded correction reason")
         return
-    for key in ("person_name", "phone", "program_interest", "th_branch", "recorded_by",
+    for key in ("person_name", "phone", "program_interest", "study_mode",
+                "contact_country", "time_zone", "th_branch", "recorded_by",
                 "synthetic", "last_correction_reason", "last_corrected_by"):
         if (doc.get(key) or "") != (original.get(key) or ""):
             raise frappe.PermissionError(
@@ -143,12 +155,16 @@ def protect_inquiry(doc, method=None):
 
 
 @frappe.whitelist(methods=["POST"])
-def create_walkin_inquiry(request_key, person_name, phone="", program_interest="", branch="", notes=""):
+def create_walkin_inquiry(request_key, person_name, phone="", program_interest="", branch="", notes="",
+                          study_mode="Undecided", contact_country="", time_zone=""):
     """Record the person immediately; does NOT issue a fee or mark enrollment."""
     def work(actor):
         person = _text(person_name, "Visitor name", required=True)
         contact = _phone(phone)
         interest = _text(program_interest, "Program interest")
+        mode = _study_mode(study_mode)
+        country = _text(contact_country, "Country", length=80)
+        zone = _time_zone(time_zone)
         remark = _text(notes, "Notes", length=1000)
         chosen = resolve_creation_branch(branch, actor)
         if not chosen:
@@ -172,8 +188,9 @@ def create_walkin_inquiry(request_key, person_name, phone="", program_interest="
                 "search the visitor and update the existing follow-up")
         doc = frappe.get_doc(dict(
             doctype=DOCTYPE, person_name=person, phone=contact,
-            program_interest=interest, th_branch=chosen or None,
-            notes=remark, status="New", recorded_by=actor,
+            program_interest=interest, study_mode=mode,
+            contact_country=country, time_zone=zone,
+            th_branch=chosen or None, notes=remark, status="New", recorded_by=actor,
             open_identity_key=_open_identity_key(chosen, person, contact),
             version=1, synthetic=record_synthetic_flag()))
         try:
@@ -186,6 +203,8 @@ def create_walkin_inquiry(request_key, person_name, phone="", program_interest="
     return _execute("create_walkin_inquiry", request_key, {
         "person_name": person_name, "phone": phone, "program_interest": program_interest,
         "branch": branch, "notes": notes,
+        "study_mode": study_mode, "contact_country": contact_country,
+        "time_zone": time_zone,
     }, work)
 
 
