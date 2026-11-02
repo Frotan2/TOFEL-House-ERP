@@ -145,7 +145,9 @@ class ReceptionBranchAvailabilityTests(unittest.TestCase):
         for i in range(self.ops.capacity.MAX_CLASSES):
             self.site.add("Student Group", name=f"MORE-A-{i}",
                           th_branch="BR-A", disabled=0,
-                          th_class_status="Active", student_group_name=f"Many {i}")
+                          th_class_status="Active",
+                          th_class_end_date="2026-12-20",
+                          student_group_name=f"Many {i}")
         with self.assertRaises(ValidationError) as ctx:
             self.ops.capacity.class_availability()
         self.assertIn("Too many classes", str(ctx.exception))
