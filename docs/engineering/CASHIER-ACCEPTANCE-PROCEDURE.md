@@ -200,6 +200,7 @@ message; a silent success is a **FAIL**.
 | C37f | Auditor | Inspect a synthetic legacy close recording a Bank account, a wrong-company account, or parent expected/count totals that differ from its saved drawer rows | **Integrity review** for that historical document; no mutation, deletion or invented cash correction |
 | C37g | Finance Officer | On an isolated valid native Cash account where account currency is unset, use company default AFN; then separately try a Cash-typed non-Asset account | Inherited AFN is eligible; non-Asset account is blocked with a Cash account configuration explanation |
 | C37h | Auditor | For a successful physical Cash close, compare all native `GL Entry` counts before/after and reread the submitted parent and each `TH Cashier Count` row | No GL posting from the close, one submitted parent, exact drawer names/amounts/explanations in the database |
+| C37i | Auditor | On that same synthetic company, reload the closed day via `cashier_history` against MariaDB, with both physical Cash drawers counted | The saved history shows **Balanced** with no integrity review, per-drawer variance or drift; no present-day chart changes are projected backward |
 
 ### F. Permissions, branch and audit integrity
 
