@@ -3,7 +3,7 @@
 The cashier workflow this module supports, end to end:
 
 1. the drawer's **expected** amount is the native general-ledger closing
-   balance of the company's Cash/Bank accounts at the end of the business day
+   balance of the company's physical Cash accounts at the end of the business day
    — never a number a cashier types and never an owned running total;
 2. the cashier **counts** the physical money and records it;
 3. the difference is the variance, and any non-zero variance requires the
@@ -47,7 +47,7 @@ COUNT = "TH Cashier Count"
 GL = "GL Entry"
 ACCOUNT = "Account"
 COMPANY = "Company"
-CASH_TYPES = ("Cash", "Bank")
+CASH_TYPES = ("Cash",)
 MAX_DRAWERS = 25
 TOLERANCE = 0.005
 MAX_HISTORY = 25
@@ -132,7 +132,7 @@ def _company_permitted(company, user=None):
 
 
 def cash_drawers(company):
-    """The company's postable native Cash and Bank accounts."""
+    """Only postable physical Cash accounts, never bank balances."""
     rows = frappe.db.get_all(
         ACCOUNT,
         filters={"company": company, "is_group": 0, "disabled": 0,
@@ -141,7 +141,7 @@ def cash_drawers(company):
         order_by="name asc",
         limit_page_length=200,
     )
-    return [dict(row) for row in (rows or [])]
+    return [dict(row) for row in (rows or []) if row.get("account_type") == "Cash"]
 
 
 def drawer_balances(company, accounts, day):
@@ -197,7 +197,8 @@ def validate_close(doc):
             f"A cashier close covers at most {MAX_DRAWERS} drawers")
     drawers = {row["name"]: row.get("account_type") for row in cash_drawers(company)}
     seen = set()
-    # A signed close is for the *whole* company's postable Cash/Bank
+    # A signed close is for every postable Cash account; banks require
+    # separate statement reconciliation, not a physical money count.
     # position, never just the drawers a caller chose to count.
     if len(drawers) > MAX_DRAWERS:
         raise frappe.ValidationError("Too many enabled cash drawers for this supported close")
@@ -207,7 +208,7 @@ def validate_close(doc):
         account = row.get("account")
         if not account or account not in drawers:
             raise frappe.ValidationError(
-                f"{account or 'A drawer'} is not a Cash or Bank account of {company}")
+                f"{account or 'A drawer'} is not a Cash account of {company}")
         if account in seen:
             raise frappe.ValidationError(f"{account} is counted twice in one close")
         seen.add(account)
@@ -224,7 +225,7 @@ def validate_close(doc):
         total_expected += expected
         total_counted += counted
     if seen != set(drawers):
-        raise frappe.ValidationError("Cashier close must include every enabled Cash/Bank drawer")
+        raise frappe.ValidationError("Cashier close must include every enabled Cash drawer")
     if abs(_stored_money(doc.get("total_expected"), "Close total expected") - round(total_expected, 2)) > TOLERANCE:
         raise frappe.ValidationError("The close total expected does not match its drawers")
     if abs(_stored_money(doc.get("total_counted"), "Close total counted") - round(total_counted, 2)) > TOLERANCE:
@@ -310,7 +311,7 @@ def reconcile_cashier_day(request_key, company, date, counts):
         drawers = {row["name"]: row.get("account_type") for row in cash_drawers(company)}
         if not drawers:
             raise frappe.ValidationError(
-                f"{company} has no Cash or Bank account to reconcile")
+                f"{company} has no Cash account to reconcile")
         if len(drawers) > MAX_DRAWERS:
             raise frappe.ValidationError("More enabled drawers exist than this close supports")
         prepared = {}
@@ -320,7 +321,7 @@ def reconcile_cashier_day(request_key, company, date, counts):
             account = entry.get("account")
             if not isinstance(account, str) or account not in drawers:
                 raise frappe.ValidationError(
-                    f"{account or 'A drawer'} is not a Cash or Bank account of {company}")
+                    f"{account or 'A drawer'} is not a Cash account of {company}")
             if account in prepared:
                 raise frappe.ValidationError(f"{account} is counted twice in one close")
             counted = _counted(entry.get("counted_amount"), f"Counted amount for {account}")
@@ -330,7 +331,7 @@ def reconcile_cashier_day(request_key, company, date, counts):
             prepared[account] = {"counted": counted, "note": note.strip()}
         if set(prepared) != set(drawers):
             raise frappe.ValidationError(
-                "The close must count every enabled Cash/Bank drawer for this company")
+                "The close must count every enabled Cash drawer for this company")
 
         # Serialize closes for the same company/day, then refuse a duplicate.
         existing = frappe.db.sql(
@@ -453,7 +454,7 @@ def _balance_drift_after_close(snapshot, current):
 def cashier_position(day=None, companies=None):
     """Read-only drawer position and close state, for the finance desk.
 
-    Returns one row per native Cash/Bank account with opening/movement/closing
+    Returns one row per native physical Cash account with opening/movement/closing
     and the day's close (if any), plus a drift flag when a close no longer
     matches the ledger. No writes, no owned arithmetic beyond addition.
     """
@@ -486,14 +487,18 @@ def cashier_position(day=None, companies=None):
                 limit_page_length=MAX_DRAWERS + 1,
             )
             drift = _balance_drift_after_close(saved_rows or [], balances)
-            # Preserve the separate audit signal for subsequent backdated GL
-            # postings, including balance-neutral postings.
+            # A bank-only posting is not physical cash drift. Scope even the
+            # balance-neutral post-close audit signal to this company's Cash
+            # drawers; the saved snapshot check above handles cancellations.
+            placeholders = ", ".join(["%s"] * len(drawers))
             drift = drift or bool(frappe.db.sql(
-                """select 1 from `tabGL Entry`
-                   where company = %s and posting_date <= %s
-                     and is_cancelled = 0 and creation > %s
-                   limit 1""",
-                (name, day, close["reconciled_on"]),
+                f"""select 1 from `tabGL Entry`
+                    where company = %s and posting_date <= %s
+                      and is_cancelled = 0 and creation > %s
+                      and account in ({placeholders})
+                    limit 1""",
+                (name, day, close["reconciled_on"],
+                 *(row["name"] for row in drawers)),
             ))
         out.append({
             "company": name,
