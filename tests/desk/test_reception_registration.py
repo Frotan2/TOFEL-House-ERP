@@ -234,6 +234,34 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertNotIn(desk.SCHEDULE, queried)
         self.assertNotIn(desk.INSTRUCTOR, queried)
 
+    def test_blank_class_term_uses_native_program_year_enrollment_rule(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        group = {"name": "CLASS-UNT", "student_group_name": "Open Term GE",
+                 "program": "GE", "academic_year": "2026",
+                 "academic_term": "", "th_branch": "BR-A",
+                 "th_class_status": "Planned", "disabled": 0}
+        def read(_surface, doctype, _fields, **_kwargs):
+            if doctype == desk.ROSTER:
+                return [{"name": "MEM", "parent": "CLASS-UNT",
+                         "student": "S", "active": 1}]
+            if doctype == desk.GROUP:
+                return [group]
+            return []
+        desk.project_rows = read
+        enrollments = [
+            {"student": "S", "program": "GE", "academic_year": "2026",
+             "academic_term": "Spring", "docstatus": 1}]
+        def state():
+            return desk._student_class_information(
+                [{"name": "S", "enabled": 1}], enrollments)["S"]
+        self.assertEqual(state()["stage"], "Class planned")
+        group["academic_term"] = "Fall"
+        self.assertEqual(state()["stage"], "Enrolled, class not confirmed")
+        group["academic_term"] = "Spring"
+        self.assertEqual(state()["stage"], "Class planned")
+        group["program"] = "Another Program"
+        self.assertEqual(state()["stage"], "Enrolled, class not confirmed")
+
     def test_upcoming_meeting_does_not_include_already_finished_today(self):
         desk, _ = self.desk(placement=False, applicant=False)
         now = datetime(2026, 11, 11, 10, 0, 0)
