@@ -191,6 +191,76 @@ class ReceptionWalkinTests(unittest.TestCase):
         self.assertNotIn("student_email_id", self.saved["INQ-001"])
         self.assertEqual([kind for kind, _ in self.audit], ["create_walkin_inquiry"])
 
+    def test_online_learner_from_abroad_needs_no_afghan_number_or_email(self):
+        saved = self.module.create_walkin_inquiry(
+            "foreign-online", "Online Learner", phone="+44 7700 900123",
+            program_interest="Special Speaking", study_mode="Online",
+            contact_country="United Kingdom", time_zone="Europe/London")
+        self.assertEqual(saved["status"], "New")
+        self.assertEqual(saved["study_mode"], "Online")
+        self.assertEqual(self.saved["INQ-001"]["phone"], "+447700900123")
+        self.assertEqual(self.saved["INQ-001"]["contact_country"], "United Kingdom")
+        self.assertEqual(self.saved["INQ-001"]["time_zone"], "Europe/London")
+        self.assertNotIn("student_email_id", self.saved["INQ-001"])
+        with self.assertRaisesRegex(ValidationError, "open inquiry already exists"):
+            self.module.create_walkin_inquiry(
+                "foreign-repeat", "Online Learner", phone="+447700900123")
+        self.assertEqual(len(self.saved), 1)
+
+    def test_worldwide_phones_are_not_assumed_to_be_afghan(self):
+        examples = [
+            ("+1 (202) 555-0199", "+12025550199"),
+            ("+49 151 23456789", "+4915123456789"),
+            ("+971 50 123 4567", "+971501234567"),
+            ("+91 98765 43210", "+919876543210"),
+        ]
+        for entered, expected in examples:
+            with self.subTest(entered=entered):
+                self.assertEqual(self.module._phone(entered), expected)
+        self.assertEqual(self.module.afghan_phone_variants("+447700900123"),
+                         ("+447700900123",))
+        for invalid in ("0712345", "07943575090", "+9379435750",
+                        "+93 7943575090", "0774357509x", "447700900123",
+                        "+0123456789", "+1", "07 943 575"):
+            with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
+                self.module._phone(invalid)
+
+    def test_online_timezone_can_be_corrected_in_followup_not_by_identity_edit(self):
+        self.module.create_walkin_inquiry(
+            "foreign-new", "Online Learner", phone="+12025550199",
+            study_mode="Online", contact_country="USA")
+        updated = self.module.update_walkin_inquiry(
+            "country-zone", "INQ-001", 1, "Contacted",
+            study_mode="Online", contact_country="United States",
+            time_zone="America/New_York", notes="Ask for placement time")
+        self.assertEqual(updated["version"], 2)
+        self.assertEqual(self.saved["INQ-001"]["time_zone"], "America/New_York")
+        self.assertEqual(self.saved["INQ-001"]["contact_country"], "United States")
+        with self.assertRaises(ValidationError):
+            self.module.update_walkin_inquiry(
+                "bad-zone", "INQ-001", 2, "Contacted",
+                study_mode="Online", time_zone="Invalid/Unknown")
+        self.assertEqual(self.saved["INQ-001"]["version"], 2)
+        with self.assertRaises(ValidationError):
+            self.module.update_walkin_inquiry(
+                "stale-zone", "INQ-001", 1, "Contacted",
+                time_zone="Asia/Kabul")
+        with self.assertRaises(ValidationError):
+            self.module.update_walkin_inquiry(
+                "unchanged-zone", "INQ-001", 2, "Contacted",
+                notes="Ask for placement time", study_mode="Online",
+                contact_country="United States", time_zone="America/New_York")
+        self.assertEqual(self.saved["INQ-001"]["version"], 2)
+
+    def test_learner_can_request_online_classes_without_phone_or_timezone(self):
+        result = self.module.create_walkin_inquiry(
+            "online-no-phone", "No Phone Learner",
+            study_mode="Online", program_interest="TOEFL Preparation")
+        self.assertEqual(result["status"], "New")
+        self.assertEqual(self.saved["INQ-001"]["phone"], "")
+        self.assertEqual(self.saved["INQ-001"]["time_zone"], "")
+        self.assertIsNone(self.saved["INQ-001"]["open_identity_key"])
+
     def test_same_open_visitor_and_phone_is_not_accidentally_registered_twice(self):
         self.module.create_walkin_inquiry("one", "Visitor",
                                           phone="۰۷۹۴۳۵۷۵۰۹")
