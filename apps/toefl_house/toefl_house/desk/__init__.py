@@ -94,8 +94,9 @@ PROJECTION_FIELDS = {
     # Preliminary walk-in records are visible ONLY through this bounded,
     # role-gated, branch-filtered desk (no native DocType read grants).
     ("reception", "TH Reception Inquiry"): [
-        "name", "person_name", "phone", "program_interest", "th_branch",
-        "status", "notes", "recorded_by", "version", "creation",
+        "name", "person_name", "phone", "program_interest", "study_mode",
+        "contact_country", "time_zone", "th_branch", "status", "notes",
+        "recorded_by", "version", "creation",
     ],
     ("reception", "TH Placement Decision"): [
         "name", "attempt", "status", "released_at", "expires_at",
