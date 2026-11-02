@@ -62,7 +62,7 @@ def afghan_phone_variants(contact):
     """
     if re.fullmatch(r"07[0-9]{8}", contact or ""):
         return (contact, "+93" + contact[1:])
-    if re.fullmatch(r"\\+937[0-9]{8}", contact or ""):
+    if re.fullmatch(r"\+937[0-9]{8}", contact or ""):
         return ("0" + contact[3:], contact)
     return (contact,)
 
