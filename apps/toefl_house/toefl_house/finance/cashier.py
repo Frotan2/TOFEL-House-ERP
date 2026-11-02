@@ -616,10 +616,9 @@ def cashier_position(day=None, companies=None):
     out = []
     for name in companies:
         drawers = cash_drawers(name)
-        if not drawers:
-            continue
-        currency_issue = cash_currency_issue(name, drawers)
-        balances = drawer_balances(name, [row["name"] for row in drawers], day)
+        # Even if the last active Cash account is later disabled, a submitted
+        # close for this day remains an auditable financial control. Read the
+        # close BEFORE deciding whether to omit an empty, open company.
         closes = frappe.db.get_all(
             DAY,
             filters={"company": name, "date": day, "docstatus": 1},
@@ -631,10 +630,16 @@ def cashier_position(day=None, companies=None):
             limit_page_length=2,
         )
         close = dict(closes[0]) if closes else None
+        if not drawers and not close:
+            continue
+        currency_issue = cash_currency_issue(name, drawers) if drawers else ""
+        balances = drawer_balances(name, [row["name"] for row in drawers], day)
         multiple_submitted_closes = len(closes or []) > 1
         drift = False
         has_drawer_variance = False
-        integrity_review = multiple_submitted_closes
+        # There is no current physical Cash account to reconcile against this
+        # saved close. Keep it visible, but never present it as validated Closed.
+        integrity_review = multiple_submitted_closes or bool(close and not drawers)
         if close:
             # Re-check every drawer against the immutable close snapshot.
             # Cancelled historical postings may change balances without a
@@ -650,19 +655,20 @@ def cashier_position(day=None, companies=None):
             integrity_review = (integrity_review
                                 or cash_snapshot_amount_issue(saved_rows or [], close))
             drift = _balance_drift_after_close(saved_rows or [], balances)
-            # A bank-only posting is not physical cash drift. Scope even the
-            # balance-neutral post-close audit signal to this company's Cash
-            # drawers; the saved snapshot check above handles cancellations.
-            placeholders = ", ".join(["%s"] * len(drawers))
-            drift = drift or bool(frappe.db.sql(
-                f"""select 1 from `tabGL Entry`
-                    where company = %s and posting_date <= %s
-                      and is_cancelled = 0 and creation > %s
-                      and account in ({placeholders})
-                    limit 1""",
-                (name, day, close["reconciled_on"],
-                 *(row["name"] for row in drawers)),
-            ))
+            # A bank-only posting is not physical cash drift. Check only
+            # configured Cash drawers: with none active, an empty SQL IN ()
+            # would be invalid, and the saved close is already Integrity review.
+            if drawers:
+                placeholders = ", ".join(["%s"] * len(drawers))
+                drift = drift or bool(frappe.db.sql(
+                    f"""select 1 from `tabGL Entry`
+                        where company = %s and posting_date <= %s
+                          and is_cancelled = 0 and creation > %s
+                          and account in ({placeholders})
+                        limit 1""",
+                    (name, day, close["reconciled_on"],
+                     *(row["name"] for row in drawers)),
+                ))
         out.append({
             "company": name,
             "date": day,
