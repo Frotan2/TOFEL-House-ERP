@@ -337,7 +337,11 @@ class CloseDriftTests(unittest.TestCase):
         self.after = False
         self.closed = True
         self.module.cash_drawers = lambda company: DRAWERS
-        self.module.drawer_balances = lambda company, accounts, day: self.live
+        # Mirror the real drawer_balances contract: never return positions
+        # for accounts the caller did not request, particularly [] when the
+        # final physical Cash account was disabled after a submitted close.
+        self.module.drawer_balances = lambda company, accounts, day: [
+            row for row in self.live if row["account"] in accounts]
 
         def get_all(doctype, **kwargs):
             if doctype == self.module.DAY:
