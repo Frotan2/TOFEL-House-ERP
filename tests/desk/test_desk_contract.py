@@ -763,6 +763,40 @@ class FinanceVocabularyTests(unittest.TestCase):
         self.assertNotIn("action", item)
         self.assertIn("no active physical Cash drawer", item["detail"])
 
+    def test_backdated_cash_ledger_drift_is_visible_to_finance_auditor(self):
+        from unittest.mock import patch
+        finance = self.finance
+        history = [
+            {"name": "CASH-OLD", "date": "2026-09-16",
+             "cashier": "officer@example.com",
+             "total_expected": 100.0, "total_counted": 100.0,
+             "total_variance": 0.0, "drawer_variance": False,
+             "drift": True, "integrity_review": False},
+            {"name": "CASH-STABLE", "date": "2026-09-15",
+             "cashier": "officer@example.com",
+             "total_expected": 50.0, "total_counted": 50.0,
+             "total_variance": 0.0, "drawer_variance": False,
+             "drift": False, "integrity_review": False},
+        ]
+        with (patch.object(finance, "_scope_companies", return_value=[]),
+              patch.object(finance.cashier_money, "cashier_position",
+                           return_value=[]),
+              patch.object(finance.cashier_money, "cashier_history",
+                           return_value=history),
+              patch.object(finance.cashier_money, "day_window_hint",
+                           return_value="7 days"),
+              patch.object(finance.tax_configuration,
+                           "describe_tax_configuration",
+                           return_value={"companies": []})):
+            _, _, card = finance._cash_close_sections("2026-09-17")
+        entries = {item["id"]: item for item in card["items"]}
+        drift = entries["CASH-OLD"]
+        self.assertEqual(drift["status"], "Drift")
+        self.assertEqual(drift["next_role"], "Finance Auditor")
+        self.assertIn("backdated or cancelled", drift["next"])
+        self.assertNotIn("action", drift)
+        self.assertEqual(entries["CASH-STABLE"]["status"], "Balanced")
+
     def test_integrity_review_history_masks_unverified_cash_totals(self):
         # A submitted historic document may contain a forged parent total.
         # Its source remains visible to the auditor, but desk summaries may
