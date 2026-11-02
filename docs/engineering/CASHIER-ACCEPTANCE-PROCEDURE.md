@@ -192,7 +192,8 @@ message; a silent success is a **FAIL**.
 | C36 | Cashier | Post a small native `Payment Entry` dated **today** after the close | Desk shows **Drift** for that company; nothing is silently restated |
 | C37 | Staff no finance | Attempt a close | Refused (role). Record the message |
 | C37a | Cashier | Try to include a **Bank** account and its balance in physical Cash close | Refused: Bank is not a physical Cash account; no cash close or bank accounting entry created |
-| C37b | Cashier | After closing the cash drawer, post a new dated **Bank-only** journal movement without touching any Cash account | Cash close remains **Closed**, not Drift. Bank statement reconciliation is a separate task |
+| C37b | Cashier | After closing the cash drawer, post an authorized dated **Bank-only** movement without touching any Cash account | Cash close remains **Closed**, not Drift. Bank statement reconciliation is a separate task |
+| C37c | Cashier | On a separate invented test company with an AFN base currency and a USD-denominated Cash account, attempt physical cash close | Refused with a currency-review explanation; no arbitrary exchange rate, cash-count variance or submitted close is created |
 
 ### F. Permissions, branch and audit integrity
 
