@@ -874,8 +874,7 @@ def add_class_member(request_key, student_group, student, override=None):
         # existing Waiting learners. This direct roster entry point must
         # route an existing queue through the auditable admit-from-waiting
         # command; otherwise the first-offer priority rule is bypassed.
-        waiting = class_capacity._open_entries(group_name, ("Waiting",))
-        if waiting:
+        if class_capacity.waiting_count(group_name):
             raise frappe.ValidationError(
                 f"Class {group_name} has pending waiting-list entries. "
                 "Use the authorized offer/admit-from-waiting workflow or "
