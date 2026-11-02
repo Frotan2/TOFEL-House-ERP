@@ -422,8 +422,12 @@ class CashHistoryVarianceTests(unittest.TestCase):
                                  ["in", ["TH-CASH-1"]])
                 self.assertLessEqual(kwargs["limit_page_length"],
                                      module.MAX_DRAWERS * module.MAX_HISTORY + 1)
-                return [{"parent": "TH-CASH-1", "variance": "-100.00"},
-                        {"parent": "TH-CASH-1", "variance": "100.00"}]
+                return [{"parent": "TH-CASH-1", "account": "Cash - TH",
+                         "variance": "-100.00"},
+                        {"parent": "TH-CASH-1", "account": "Petty Cash - TH",
+                         "variance": "100.00"}]
+            if doctype == module.ACCOUNT:
+                return DRAWERS
             self.fail("Unexpected read: " + doctype)
 
         module.frappe.db.get_all = get_all
@@ -431,15 +435,41 @@ class CashHistoryVarianceTests(unittest.TestCase):
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0]["total_variance"], 0.0)
         self.assertTrue(history[0]["drawer_variance"])
-        self.assertEqual([name for name, _ in calls], [module.DAY, module.COUNT])
+        self.assertFalse(history[0]["integrity_review"])
+        self.assertEqual([name for name, _ in calls],
+                         [module.DAY, module.COUNT, module.ACCOUNT])
 
     def test_missing_count_rows_never_mean_balanced(self):
         module = load_cashier(DRAWERS)
         module.frappe.db.get_all = lambda doctype, **kwargs: (
-            [{"name": "TH-CASH-1", "total_variance": 0.0}]
-            if doctype == module.DAY else [])
+            [{"name": "TH-CASH-1", "company": "TOEFL House",
+              "total_variance": 0.0}]
+            if doctype == module.DAY else
+            DRAWERS if doctype == module.ACCOUNT else [])
         history = module.cashier_history(companies=["TOEFL House"])
         self.assertTrue(history[0]["drawer_variance"])
+        self.assertTrue(history[0]["integrity_review"])
+
+    def test_old_history_that_counted_bank_is_flagged_for_integrity_review(self):
+        module = load_cashier(DRAWERS)
+        def get_all(doctype, **kwargs):
+            if doctype == module.DAY:
+                return [{"name": "TH-CASH-OLD", "company": "TOEFL House",
+                         "total_variance": 0.0}]
+            if doctype == module.ACCOUNT:
+                return DRAWERS
+            if doctype == module.COUNT:
+                return [{"parent": "TH-CASH-OLD", "account": "Cash - TH",
+                         "variance": 0.0},
+                        {"parent": "TH-CASH-OLD", "account": "Petty Cash - TH",
+                         "variance": 0.0},
+                        {"parent": "TH-CASH-OLD", "account": "Bank - TH",
+                         "variance": 0.0}]
+            self.fail("Unexpected history read " + doctype)
+        module.frappe.db.get_all = get_all
+        result = module.cashier_history(companies=["TOEFL House"])
+        self.assertTrue(result[0]["integrity_review"])
+        self.assertFalse(result[0]["drawer_variance"])
 
 
 class CommandContractTests(unittest.TestCase):
