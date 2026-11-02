@@ -1105,6 +1105,7 @@ def _cash_close_sections(day):
                    f"{row.get('date')} · expected {float(row.get('total_expected') or 0):.2f}, "
                    f"counted {float(row.get('total_counted') or 0):.2f}"),
         "status": ("Integrity review" if row.get("integrity_review") else
+                   "Drift" if row.get("drift") else
                    "Variance" if (row.get("drawer_variance")
                                   or abs(float(row.get("total_variance") or 0)) > 0.005)
                    else "Balanced"),
@@ -1114,11 +1115,16 @@ def _cash_close_sections(day):
         "next": ("Finance Auditor must review the original counted drawers, "
                  "account identity, and cash ledger. Do not rewrite this close."
                  if row.get("integrity_review") else
+                 "Finance Auditor must review backdated or cancelled native "
+                 "cash ledger entries against the original close; saved "
+                 "amounts may now be stale. Do not rewrite the close."
+                 if row.get("drift") else
                  "Finance Auditor must review each drawer's shortage or overage "
                  "and its written explanation; do not net them away."
                  if row.get("drawer_variance") else
                  "No action; this submitted close is not overwritten."),
         "next_role": ("Finance Auditor" if (row.get("integrity_review")
+                                           or row.get("drift")
                                            or row.get("drawer_variance"))
                       else None),
         "waiting_since": row.get("date"),
