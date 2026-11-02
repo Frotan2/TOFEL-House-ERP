@@ -809,6 +809,36 @@ const hostileItem = {
 }
 
 {
+	// A Reception follow-up can be submitted from the queue while a search
+	// result is open. Successful POST must refresh that search's version too;
+	// otherwise staff see stale information and may retry a saved change.
+	const payload = payloadWith([], "0");
+	payload.primary_action = {
+		role: "Reception",
+		endpoint: "toefl_house.reception_intake.create_walkin_inquiry",
+		label: "Register a new visitor",
+		args: { person_name: "", phone: "", program_interest: "", branch: "", notes: "" },
+	};
+	const scenario = runScenario({ workPayload: payload });
+	const search = findAll(scenario.body, "th-search-bar")[0];
+	const input = findAll(scenario.body, "th-search-input")[0];
+	input.attrs.value = "0794357509";
+	search.children.find((node) => node.tag === "button").click();
+	assert.strictEqual(scenario.calls.filter((call) =>
+		call.method === "toefl_house.desk.reception.lookup").length, 1);
+	findAll(scenario.body, "th-register-visitor")[0].click();
+	const dialog = scenario.dialogs[0];
+	dialog.submit({ person_name: "Real Visitor", phone: "0794357509",
+		program_interest: "GE", branch: "", notes: "" });
+	const lookups = scenario.calls.filter((call) =>
+		call.method === "toefl_house.desk.reception.lookup");
+	assert.strictEqual(lookups.length, 2,
+		"successful Reception write must re-query the searched contact");
+	assert.strictEqual(lookups[1].args.query, "0794357509");
+	assert.strictEqual(scenario.workCalls, 2, "the Reception overview also refreshes");
+}
+
+{
 	// The newest query must own the results, even if the first HTTP response
 	// comes back after the second one or after an invalid short query.
 	const scenario = runScenario({ workPayload: payloadWith([], "0"), deferLookup: true });
