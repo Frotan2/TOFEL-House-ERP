@@ -1011,8 +1011,11 @@ def _student_class_information(students, enrollments):
                 previews.append(" / ".join(part for part in parts if part))
             result[name] = {
                 "stage": "Class assigned, sessions scheduled",
-                "next": "Next dated session(s): " + "; ".join(previews)
-                        + ". This is not a recurring weekly timetable.",
+                "next": "Next dated session(s), in the ERP site's configured time zone: "
+                        + "; ".join(previews)
+                        + ". This is not a recurring weekly timetable. "
+                          "For online learners abroad, Teaching Scheduler must "
+                          "verify the learner-local time before promising a session.",
                 "next_role": None, "detail": detail,
             }
     for name in active:
