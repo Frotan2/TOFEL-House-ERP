@@ -449,6 +449,26 @@ def _billing_documents_by_enrollment(rows):
     return issued, drafts
 
 
+def _billing_blocker(enrollment, drafts, read_complete):
+    """Return a truthful finance exception rather than a non-working Issue action."""
+    if not read_complete:
+        return ("Billing status needs review",
+                "The native tuition bill read is incomplete. Finance Manager "
+                "must verify the enrollment's complete Fees history before issuing.",
+                "Finance Manager")
+    existing = drafts.get(enrollment, [])
+    if existing:
+        return ("Draft fee needs review",
+                "An unsubmitted tuition draft already exists ("
+                + ", ".join(existing[:3])
+                + "). This is NOT a collectible bill. A new bill would "
+                  "be rejected by duplicate protection; Finance Manager "
+                  "must resolve the draft through an authorized workflow "
+                  "before any payment or re-issuance.",
+                "Finance Manager")
+    return None
+
+
 def work():
     """Finance desk payload: today, outstanding, awaiting billing, corrections."""
     require_desk_audience(SLUG)
@@ -727,19 +747,10 @@ def work():
 
     billing_items = []
     for row in awaiting_billing[:LIMIT_QUEUES]:
-        draft_bills = drafts.get(row["name"], [])
-        if not billing_read_complete:
-            next_text = ("The native tuition bill read is incomplete. Finance Manager "
-                         "must verify the enrollment's complete Fees history before issuing.")
-            next_role, action, billing_status = "Finance Manager", None, "Billing status needs review"
-        elif draft_bills:
-            next_text = ("An unsubmitted tuition draft already exists ("
-                         + ", ".join(draft_bills[:3])
-                         + "). This is NOT a collectible bill. A new bill would "
-                           "be rejected by duplicate protection; Finance Manager "
-                           "must resolve the draft through an authorized workflow "
-                           "before any payment or re-issuance.")
-            next_role, action, billing_status = "Finance Manager", None, "Draft fee needs review"
+        blocker = _billing_blocker(row["name"], drafts, billing_read_complete)
+        if blocker:
+            billing_status, next_text, next_role = blocker
+            action = None
         else:
             next_text, next_role, action = billing_guidance(row)
             billing_status = "Unbilled"
@@ -749,8 +760,11 @@ def work():
             "detail": " · ".join(part for part in (row.get("program"), row.get("academic_year")) if part),
             "status": billing_status,
             "stage": "Awaiting billing",
-            "stage_definition": ("Submitted enrollment has no issued tuition bill. "
-                                 "An existing draft is not an issued receivable."),
+            "stage_definition": (
+                "The scoped tuition register is incomplete; do not infer an unbilled state."
+                if not billing_read_complete else
+                "Submitted enrollment has no issued tuition bill. "
+                "An existing draft is not an issued receivable."),
             "next": next_text,
             "next_role": next_role,
             "waiting_since": row.get("enrollment_date"),
