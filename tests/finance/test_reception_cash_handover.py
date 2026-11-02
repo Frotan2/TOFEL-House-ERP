@@ -69,6 +69,7 @@ class NativeCashHandoverTests(unittest.TestCase):
         }
         self.transfer = None
         self.transfer_override = None
+        self.stored_transfer_override = None
         self.ledger_closing = Decimal("150.00")
         self.actor = FINANCE
         self.locked_receipts = []
@@ -91,9 +92,16 @@ class NativeCashHandoverTests(unittest.TestCase):
                 return self.receipts[name]
             raise AssertionError(("unexpected native read", doctype, name))
         frappe.get_doc = get_doc
-        def get_value(dt, name, field):
+        def get_value(dt, name, field, as_dict=False):
             if dt == "Fees" and field == "student":
                 return "STU-1"
+            if dt == "Payment Entry" and name == "ACC-HANDOVER-TEST":
+                assert as_dict and isinstance(field, list)
+                if self.transfer is None:
+                    return None
+                stored = {key: getattr(self.transfer, key) for key in field}
+                stored.update(self.stored_transfer_override or {})
+                return types.SimpleNamespace(**stored)
             raise AssertionError((dt, name, field))
         def sql(stmt, params):
             self.account_locks.append(tuple(params))
@@ -200,6 +208,19 @@ class NativeCashHandoverTests(unittest.TestCase):
                 with self.assertRaises(self.frappe.ValidationError):
                     self.handler("another-key", names, amount)
                 self.assertIsNone(self.transfer)
+
+    def test_memory_submitted_but_database_not_submitted_cannot_handover(self):
+        # Simulate an unexpected controller-hook/database posting gap:
+        # in-memory transfer says Submitted but the persisted record does not.
+        self.stored_transfer_override = {"docstatus": 0}
+        with self.assertRaisesRegex(self.frappe.ValidationError,
+                                    "native cash transfer did not reconcile"):
+            self.handover()
+        self.transfer.submit.assert_called_once()
+        self.assertEqual(self.transfer.docstatus, 1)
+        self.assertTrue(all(r.th_collection_handover is None for r in self.receipts.values()))
+        for receipt in self.receipts.values():
+            receipt.save.assert_not_called()
 
     def test_transfer_must_be_posted_and_reconciled_before_any_receipt_is_marked(self):
         for override in ({"docstatus": 0}, {"paid_amount": 149},
