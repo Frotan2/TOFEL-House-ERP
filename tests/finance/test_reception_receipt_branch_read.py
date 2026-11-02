@@ -50,7 +50,8 @@ class ReceiptReadBranchTests(unittest.TestCase):
         audit = module("toefl_house.configuration.audit")
         module("toefl_house.configuration", audit=audit)
         module("toefl_house.finance")
-        module("toefl_house.finance.collection_rules")
+        module("toefl_house.finance.collection_rules",
+               bounded_text=lambda value, label, maximum=140: value)
         module("toefl_house.finance.collection_reads", native_reference_reads=lambda *a: None)
         module("toefl_house.finance.company_scope", require_finance_company=lambda *a: None)
         module("toefl_house.policy", digest=lambda *a: "digest")
