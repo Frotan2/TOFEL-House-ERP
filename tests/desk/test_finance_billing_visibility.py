@@ -28,6 +28,23 @@ class BillingVisibilityTests(unittest.TestCase):
         self.assertEqual(issued, set())
         self.assertEqual(drafts, {"ENR-1": ["FEE-DRAFT", "FEE-DRAFT-B"]})
 
+    def test_draft_blocks_issue_button_and_avoids_false_collectible_debt(self):
+        stage, message, role = self.finance._billing_blocker(
+            "ENR-A", {"ENR-A": ["FEE-DRAFT-A"]}, True)
+        self.assertEqual(stage, "Draft fee needs review")
+        self.assertIn("NOT a collectible bill", message)
+        self.assertIn("FEE-DRAFT-A", message)
+        self.assertEqual(role, "Finance Manager")
+        self.assertIsNone(self.finance._billing_blocker("ENR-A", {}, True),
+                          "only an entirely read, unbilled enrollment can offer issuance")
+
+    def test_truncated_fee_register_never_offers_issue_even_without_a_match(self):
+        stage, message, role = self.finance._billing_blocker(
+            "ENR-A", {}, False)
+        self.assertEqual(stage, "Billing status needs review")
+        self.assertIn("incomplete", message)
+        self.assertEqual(role, "Finance Manager")
+
     def test_mixed_draft_and_issued_preserves_posted_authority(self):
         issued, drafts = self.finance._billing_documents_by_enrollment([
             {"name": "FEE-1", "program_enrollment": "ENR-A", "docstatus": 1},
