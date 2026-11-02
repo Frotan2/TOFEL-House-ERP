@@ -625,7 +625,23 @@ def main():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
                         enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
                         roles=[{'role':r} for r in roles])).insert()
-                return {'site':site,'users':len(users),'apps':frappe.get_installed_apps()}
+                # The Reception desk refuses an unassigned Branch. Seed two
+                # explicit synthetic Branch permissions for the cross-branch
+                # reception supervisor; this tests the authorized multi-Branch
+                # case, NEVER an unscoped receptionist / security bypass.
+                # Branch A/B operators below remain individually restricted.
+                for branch_name in ('SYN-BR-A', 'SYN-BR-B'):
+                    if not frappe.db.exists('Branch',branch_name):
+                        frappe.get_doc(dict(doctype='Branch',branch=branch_name)).insert()
+                    frappe.get_doc(dict(
+                        doctype='User Permission',user=users['receptionist'],
+                        allow='Branch',for_value=branch_name)).insert()
+                assigned=set(frappe.get_all('User Permission',filters={
+                    'user':users['receptionist'],'allow':'Branch'},
+                    pluck='for_value'))
+                assert assigned=={'SYN-BR-A','SYN-BR-B'},assigned
+                return {'site':site,'users':len(users),'apps':frappe.get_installed_apps(),
+                        'reception_branches':sorted(assigned)}
             check('native-fixtures-'+site,setup);frappe.destroy()
         connect('placement-test.localhost')
         # Placement-fee invoices are stamped by ERPNext with the posting date of the day they are created
@@ -6521,9 +6537,9 @@ def main():
             frappe.db.commit(); frappe.clear_cache()
             # 0) Funnel surface over HTTP — while the applicants are still
             #    'Applied' (conversion sets 'Admitted' and leaves the
-            #    funnel, which filters on 'Applied'): the scoped
+            #    funnel, which filters on 'Applied'): each one-Branch
             #    receptionist sees only their branch's people; the
-            #    unscoped control sees both.
+            #    explicitly *two*-Branch receptionist sees both.
             sessA=login('branch_a_staff');sessB=login('branch_b_staff');sessHQ=login('receptionist')
             # BRISO DIAG: capture the exact state so a failure is self-
             # explaining (rows, in-process reads as the scoped user, and the
