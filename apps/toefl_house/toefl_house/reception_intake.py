@@ -31,9 +31,14 @@ def _text(value, label, *, required=False, length=140):
     return clean
 
 
+def _optional_input(value):
+    """Blank Frappe Data/Small Text controls may serialize as JSON null."""
+    return "" if value is None else value
+
+
 def _phone(value):
     try:
-        return normalize_contact_phone(value)
+        return normalize_contact_phone(_optional_input(value))
     except ValueError as exc:
         raise frappe.ValidationError(str(exc)) from exc
 
@@ -45,7 +50,7 @@ def _study_mode(value):
 
 
 def _time_zone(value):
-    name = _text(value, "Learner time zone", length=64)
+    name = _text(_optional_input(value), "Learner time zone", length=64)
     if not name:
         return ""
     # For global classes never silently treat a local learner's schedule as
@@ -162,11 +167,11 @@ def create_walkin_inquiry(request_key, person_name, phone="", program_interest="
     def work(actor):
         person = _text(person_name, "Visitor name", required=True)
         contact = _phone(phone)
-        interest = _text(program_interest, "Program interest")
+        interest = _text(_optional_input(program_interest), "Program interest")
         mode = _study_mode(study_mode)
-        country = _text(contact_country, "Country", length=80)
+        country = _text(_optional_input(contact_country), "Country", length=80)
         zone = _time_zone(time_zone)
-        remark = _text(notes, "Notes", length=1000)
+        remark = _text(_optional_input(notes), "Notes", length=1000)
         chosen = resolve_creation_branch(branch, actor)
         if not chosen:
             raise frappe.ValidationError("Choose a reception branch before saving the visitor")
@@ -237,7 +242,7 @@ def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes=
         if status == "New" and doc.status != "New":
             raise frappe.ValidationError(
                 "A contacted or referred inquiry cannot be returned to New")
-        new_notes = _text(notes, "Notes", length=1000)
+        new_notes = _text(_optional_input(notes), "Notes", length=1000)
         new_mode = _study_mode(study_mode) if study_mode is not None else (
             doc.get("study_mode") or "Undecided")
         new_country = (_text(contact_country, "Country", length=80)
