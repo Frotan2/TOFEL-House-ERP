@@ -514,6 +514,33 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(intake["next_class_end"], "2026-11-15")
         self.assertEqual(intake["projected_unmet_demand"], 0)
 
+    def test_reserved_offered_seat_is_not_double_counted_as_unmet_demand(self):
+        self.ops.seed_class(name="GRP-INTAKE", capacity=3,
+                            members=["STU-1", "STU-2"])
+        self.ops.seed_waiting("GRP-INTAKE", "STU-OFFER",
+                              status="Offered", expires="2026-09-30")
+        self._log_in_branch_reception()
+        report = self.ops.capacity.class_availability(
+            student_group="GRP-INTAKE")
+        row = report["classes"][0]
+        self.assertEqual(row["waiting"], 1)
+        self.assertEqual(row["waiting_to_offer"], 0)
+        self.assertEqual(row["reserved"], 1)
+        self.assertEqual(row["available"], 0)
+        self.assertEqual(row["walk_in_available"], 0)
+        intake = report["intake"][0]
+        self.assertEqual(intake["waiting"], 1)
+        self.assertEqual(intake["waiting_to_offer"], 0)
+        self.assertEqual(intake["projected_unmet_demand"], 0)
+
+        self.ops.seed_waiting("GRP-INTAKE", "STU-UNMET", status="Waiting")
+        report = self.ops.capacity.class_availability(
+            student_group="GRP-INTAKE")
+        row = report["classes"][0]
+        self.assertEqual(row["waiting"], 2)
+        self.assertEqual(row["waiting_to_offer"], 1)
+        self.assertEqual(report["intake"][0]["projected_unmet_demand"], 1)
+
     def test_waiting_board_names_the_next_action_for_each_entry(self):
         self.ops.seed_class(name="GRP-OPEN", capacity=3, members=["STU-1"])
         self.ops.seed_student("STU-2")
