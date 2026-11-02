@@ -8045,7 +8045,7 @@ def main():
                 posting,frappe.utils.add_days(posting,14)))
             fee=billed['fees']
             frappe.set_user('Administrator')
-            actual=frappe.db.get_value('Fees',fee,fields=[
+            actual=frappe.db.get_value('Fees',fee,fieldname=[
                 'docstatus','student','program_enrollment','company',
                 'outstanding_amount'],as_dict=True)
             assert (actual and actual.docstatus==1
