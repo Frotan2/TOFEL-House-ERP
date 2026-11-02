@@ -137,7 +137,7 @@ def cash_drawers(company):
         ACCOUNT,
         filters={"company": company, "is_group": 0, "disabled": 0,
                  "account_type": ["in", list(CASH_TYPES)]},
-        fields=["name", "account_type", "account_currency"],
+        fields=["name", "account_type", "account_currency", "root_type"],
         order_by="name asc",
         limit_page_length=200,
     )
@@ -154,8 +154,16 @@ def cash_currency_issue(company, drawers):
     base = frappe.db.get_value(COMPANY, company, "default_currency")
     if not isinstance(base, str) or not base.strip():
         return "Company base currency is not configured; cash close is blocked"
+    # Match guarded collection account semantics: a missing account_currency
+    # inherits the Company's base currency; an explicit foreign value does not.
+    # Cash is an Asset, never a Liability or Income account mislabeled Cash.
+    invalid_assets = [row["name"] for row in drawers
+                      if row.get("root_type") != "Asset"]
+    if invalid_assets:
+        return ("Cash accounts must be Asset accounts before a physical close: "
+                + ", ".join(invalid_assets[:5]))
     foreign = [row["name"] for row in drawers
-               if row.get("account_currency") != base]
+               if (row.get("account_currency") or base) != base]
     if foreign:
         return ("Cash accounts with currency different from company base "
                 f"{base} must be reconciled separately: "
