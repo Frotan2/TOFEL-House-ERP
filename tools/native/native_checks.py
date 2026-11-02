@@ -6625,6 +6625,30 @@ def main():
                 assert g['name']=='SYN-BR-CLASS-'+tail and g['students']==1,g
                 grp[tail]=g['name']; stu[tail]=conv['native_student']; dec[tail]=d0[tail]['name']
             frappe.db.commit()
+            # The positive Reception contract must use a genuinely branched
+            # Student, not the legacy branchless intake excluded above.
+            # Verify actual HTTP lookup with the one-Branch staff identities
+            # and the explicitly two-Branch receptionist, without bypasses.
+            lookup_sessions={'A':sessA,'B':sessB,'AB':sessHQ}
+            for viewer,owns in (('A',('A',)),('B',('B',)),('AB',('A','B'))):
+                for student_branch in ('A','B'):
+                    student_name=frappe.db.get_value(
+                        'Student',stu[student_branch],'student_name')
+                    reply=lookup_sessions[viewer].get(
+                        base+'/api/method/toefl_house.desk.reception.lookup',
+                        params={'query':student_name},timeout=30)
+                    assert reply.status_code==200,(viewer,reply.status_code,reply.text[:300])
+                    message=reply.json()['message']
+                    matched={item['id']:item for item in message['students']}
+                    student_id=stu[student_branch]
+                    if student_branch in owns:
+                        assert student_id in matched,(viewer,student_branch,matched)
+                        assert matched[student_id]['stage'] in (
+                            'Enrolled','Class planned','Class active'),matched[student_id]
+                    else:
+                        assert student_id not in matched,(
+                            'Cross-Branch Reception lookup leaked student',
+                            viewer,student_branch,matched)
             # 1) Document gate on the real rows (controller hook semantics,
             #    including the roster join). Scoped staff see their own
             #    branch only; the unscoped control sees both.
