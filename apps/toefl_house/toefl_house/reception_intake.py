@@ -224,12 +224,18 @@ def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes=
             raise frappe.ValidationError("An integer inquiry version is required")
         if version < 1 or version > 999999999:
             raise frappe.ValidationError("An integer inquiry version is required")
-        if status not in STATUSES or status == "New":
+        if status not in STATUSES:
             raise frappe.ValidationError("Choose a valid follow-up status")
         name = _text(inquiry, "Inquiry", required=True)
         doc = frappe.get_doc(DOCTYPE, name, for_update=True)
         if doc.status == "Closed" or int(doc.version) != version:
             raise frappe.ValidationError("Inquiry changed or is closed; refresh first")
+        # Recording/clarifying a time zone is NOT proof that the visitor was
+        # contacted. New may remain New for a genuine note/preference update,
+        # but no later stage can be silently rolled back to New.
+        if status == "New" and doc.status != "New":
+            raise frappe.ValidationError(
+                "A contacted or referred inquiry cannot be returned to New")
         new_notes = _text(notes, "Notes", length=1000)
         new_mode = _study_mode(study_mode) if study_mode is not None else (
             doc.get("study_mode") or "Undecided")
