@@ -488,10 +488,11 @@ function payloadWith(queueItems, factValue) {
 	};
 }
 
-function runScenario({ workPayload, failFirstWork = false, failLookup = false, deferLookup = false, deferRegister = false, lookupReply = null, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null, readableSources = [] }) {
+function runScenario({ workPayload, failFirstWork = false, failLookup = false, deferLookup = false, deferRegister = false, deferWorkAfterFirst = false, lookupReply = null, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null, readableSources = [] }) {
 	const calls = [];
 	const dialogs = [];
 	const pendingLookups = [];
+	const pendingWorks = [];
 	const pendingRegistrations = [];
 	const routed = [];
 	const printed = [];
@@ -543,6 +544,10 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, d
 			if (opts.method === "toefl_house.desk.reception.work") {
 				workCalls += 1;
 				if (failFirstWork && workCalls === 1) { opts.error(); return; }
+				if (deferWorkAfterFirst && workCalls > 1) {
+					pendingWorks.push(opts);
+					return;
+				}
 				opts.callback({ message: workPayload });
 				return;
 			}
@@ -577,7 +582,7 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, d
 	frappe.provide = (dotted) => { let target = sandbox; for (const part of dotted.split(".")) target = target[part] ||= {}; };
 	vm.runInNewContext(fs.readFileSync(SCRIPT, "utf8"), sandbox, { filename: SCRIPT });
 	frappe.pages["th-reception-desk"].on_page_load(body);
-	return { calls, dialogs, pendingLookups, pendingRegistrations, confirmations, routed, printed, body, frappe, get workCalls() { return workCalls; } };
+	return { calls, dialogs, pendingLookups, pendingWorks, pendingRegistrations, confirmations, routed, printed, body, frappe, get workCalls() { return workCalls; } };
 }
 
 const hostileItem = {
@@ -724,6 +729,40 @@ const hostileItem = {
 	assert.strictEqual(scenario.workCalls, 2, "retry re-requests the desk");
 	const renderedAfter = serialize(scenario.body);
 	assert(renderedAfter.includes("Applicant funnel"), "the retry renders the desk");
+}
+
+{
+	// Two successful Reception commands may refresh concurrently. The
+	// earliest GET can finish after the latest GET, but must never replace
+	// the newest queue or leave an orphaned loading placeholder behind.
+	const scenario = runScenario({
+		workPayload: payloadWith([hostileItem], "1"), deferWorkAfterFirst: true,
+	});
+	const firstAction = findAll(scenario.body, "th-queue-action")[0];
+	for (let i = 0; i < 2; i += 1) {
+		firstAction.click();
+		const dialog = scenario.dialogs[scenario.dialogs.length - 1];
+		dialog.submit({ request_key: dialog.opts.fields[0].default,
+			name: "ADM-0001", expected_version: 2 });
+	}
+	assert.strictEqual(scenario.pendingWorks.length, 2,
+		"two completed writes may race to refresh the Reception desk");
+	assert.strictEqual(findAll(scenario.body, "th-desk-pending-load").length, 1,
+		"only the latest refresh may own a loading placeholder");
+	const newer = payloadWith([{ ...hostileItem, person: "Latest queue snapshot" }], "1");
+	const older = payloadWith([{ ...hostileItem, person: "Stale queue snapshot" }], "1");
+	scenario.pendingWorks[1].callback({ message: newer });
+	scenario.pendingWorks[0].callback({ message: older });
+	let html = serialize(scenario.body);
+	assert(html.includes("Latest queue snapshot"), "latest completed desk GET renders");
+	assert(!html.includes("Stale queue snapshot"), "older GET cannot roll back current desk");
+	assert.strictEqual(findAll(scenario.body, "th-desk-pending-load").length, 0);
+	// Equally, an old network failure must not clear the Register button or
+	// append a stale error panel after the current GET has succeeded.
+	scenario.pendingWorks[0].error();
+	html = serialize(scenario.body);
+	assert(html.includes("Latest queue snapshot"));
+	assert(!html.includes("could not be loaded"));
 }
 
 {
