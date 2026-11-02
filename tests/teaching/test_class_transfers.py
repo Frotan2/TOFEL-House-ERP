@@ -363,6 +363,36 @@ class ApprovalTests(TransferTestBase):
                                        override)["status"], "Used")
         self.assertEqual(self.ops.roster("GRP-B"), [("STU-2", 1), ("STU-1", 1)])
 
+    def test_approval_cannot_bypass_target_waiting_queue(self):
+        # Request could have been valid yesterday. A newly queued learner
+        # now has first claim on target seats: approval must re-check
+        # live waiting priority before changing either class or consuming
+        # any separately authorized capacity override.
+        transfer = self.request(key="transfer-request-queue-0001")["name"]
+        first = self.ops.seed_waiting("GRP-B", "STU-3", status="Waiting")
+        self.ops.login(APPROVER)
+        self.site.set_roles(APPROVER, ["Academic Manager"])
+        before = (self.ops.roster("GRP-A"), self.ops.roster("GRP-B"))
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.transfers.approve_class_transfer(
+                "transfer-queue-approve-0001", transfer)
+        self.assertIn("pending waiting-list entries", str(ctx.exception))
+        self.assertEqual((self.ops.roster("GRP-A"), self.ops.roster("GRP-B")),
+                         before)
+        self.assertEqual(self.site.get("TH Class Transfer", transfer)["status"],
+                         "Requested")
+        self.assertEqual(self.site.get("TH Class Waiting List", first)["status"],
+                         "Waiting")
+        self.ops.capacity.leave_waiting_list(
+            "transfer-queue-withdraw-0001", first,
+            "Student withdrew original seating request")
+        accepted = self.ops.transfers.approve_class_transfer(
+            "transfer-queue-approve-0002", transfer)
+        self.assertEqual(accepted["status"], "Executed")
+        self.assertEqual(self.ops.roster("GRP-A"),
+                         [("STU-1", 0), ("STU-2", 1)])
+        self.assertEqual(self.ops.roster("GRP-B"), [("STU-1", 1)])
+
     def test_approval_re_proves_eligibility_under_lock(self):
         transfer = self.request()["name"]
         # The world moves between request and decision.
