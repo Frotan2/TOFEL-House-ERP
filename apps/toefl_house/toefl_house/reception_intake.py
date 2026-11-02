@@ -53,6 +53,20 @@ def _phone(value):
     return re.sub(r"[ ()-]", "", normalized)
 
 
+def afghan_phone_variants(contact):
+    """Equivalent national/E.164 text for an Afghan mobile, otherwise exact.
+
+    This is for contact matching only, NEVER for merging identities. Preserve
+    the submitted number on its record for display and legacy audit reads.
+    Only unambiguous 07xxxxxxxx / +937xxxxxxxx formats are converted.
+    """
+    if re.fullmatch(r"07[0-9]{8}", contact or ""):
+        return (contact, "+93" + contact[1:])
+    if re.fullmatch(r"\\+937[0-9]{8}", contact or ""):
+        return ("0" + contact[3:], contact)
+    return (contact,)
+
+
 def _open_identity_key(branch, person_name, contact):
     """One open record for an exact name+phone+Branch, protected by a DB index.
 
@@ -63,7 +77,9 @@ def _open_identity_key(branch, person_name, contact):
     if not contact:
         return None
     normalized_name = " ".join(person_name.split()).casefold()
-    return "RI-" + digest(["reception-open-v1", branch, normalized_name, contact])[:32]
+    canonical_contact = afghan_phone_variants(contact)[0]
+    return "RI-" + digest(["reception-open-v1", branch, normalized_name,
+                           canonical_contact])[:32]
 
 
 def _result(doc):
@@ -159,7 +175,8 @@ def create_walkin_inquiry(request_key, person_name, phone="", program_interest="
         # may be followed by a new record.
         if contact and frappe.get_all(
                 DOCTYPE,
-                filters={"th_branch": chosen, "phone": contact,
+                filters={"th_branch": chosen,
+                         "phone": ("in", list(afghan_phone_variants(contact))),
                          "person_name": person,
                          "status": ("in", ["New", "Contacted", "Awaiting Placement"])},
                 fields=["name"], limit_page_length=1):
