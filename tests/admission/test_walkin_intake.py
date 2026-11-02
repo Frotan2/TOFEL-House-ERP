@@ -209,6 +209,25 @@ class ReceptionWalkinTests(unittest.TestCase):
         self.assertEqual(updated["version"], 2)
         self.assertEqual(self.saved["INQ-001"]["time_zone"], "Europe/London")
 
+    def test_omitted_note_preserves_evidence_but_explicit_blank_clears_it(self):
+        self.module.create_walkin_inquiry(
+            "note-source", "Visitor", phone="0794357509",
+            notes="Spoke about placement next week")
+        closed = self.module.update_walkin_inquiry(
+            "close-without-notes", "INQ-001", 1, "Closed")
+        self.assertEqual(closed["status"], "Closed")
+        self.assertEqual(self.saved["INQ-001"]["notes"],
+                         "Spoke about placement next week",
+                         "omitted field must not destroy previous contact notes")
+
+        self.module.create_walkin_inquiry(
+            "another-visitor", "Another Visitor", phone="+447700900123",
+            notes="Old text to clear")
+        cleared = self.module.update_walkin_inquiry(
+            "explicit-clear", "INQ-002", 1, "Contacted", notes="")
+        self.assertEqual(cleared["status"], "Contacted")
+        self.assertEqual(self.saved["INQ-002"]["notes"], "")
+
     def test_omitted_followup_metadata_keeps_existing_global_contact_facts(self):
         self.module.create_walkin_inquiry(
             "global-001", "Global Student", phone="+447700900123",
