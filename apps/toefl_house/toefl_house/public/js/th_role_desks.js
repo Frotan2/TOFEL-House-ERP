@@ -190,6 +190,7 @@ frappe.provide("toefl_house.role_desks");
 	let stylesheetLoaded = false;
 	/* Set while a desk is mounted so a guided action can refresh it. */
 	let currentReload = null;
+	let currentSearchRefresh = null;
 
 	function ensureStyleSheet() {
 		if (stylesheetLoaded) return;
@@ -1761,6 +1762,10 @@ frappe.provide("toefl_house.role_desks");
 						resultMessage(action.label, response.message);
 						if (typeof action.refresh === "function") action.refresh();
 						else if (typeof currentReload === "function") currentReload();
+						// The searched row often carries an optimistic version.
+						// After any successful write, update both the queue and the
+						// currently open search so Reception does not act on stale data.
+						if (typeof currentSearchRefresh === "function") currentSearchRefresh();
 					},
 					error(response) {
 						commandPending = false;
@@ -1966,7 +1971,10 @@ frappe.provide("toefl_house.role_desks");
 		)).appendTo(body);
 		$("<div class='th-reception-quick-actions'></div>").appendTo(body);
 		// Search replies can arrive out of order; only the latest search owns the results.
-		const searchState = { revision: 0 };
+		const searchState = { revision: 0, lastQuery: "" };
+		currentSearchRefresh = () => {
+			if (searchState.lastQuery) runSearch(surface, body, searchState.lastQuery, searchState);
+		};
 		const bar = $("<div class='th-search-bar'></div>").appendTo(body);
 		$("<div class='th-search-results' aria-live='polite'></div>").appendTo(body);
 		const input = $("<input type='search' class='form-control th-search-input' />")
@@ -1991,9 +1999,11 @@ frappe.provide("toefl_house.role_desks");
 		const results = body.find(".th-search-results").empty();
 		const text_ = String(query || "").trim();
 		if (text_.length < 2) {
+			searchState.lastQuery = "";
 			results.append(`<div class='th-alert th-alert--info'><div><p class='th-alert-title'>${escapeText(text("Type more of the name"))}</p><p class='th-alert-body'>${escapeText(text("Enter at least two characters of a name, phone or internal reference."))}</p></div></div>`);
 			return;
 		}
+		searchState.lastQuery = text_;
 		const loading = loadingState(results, "Searching…");
 		frappe.call({
 			method: surface.search.endpoint,
@@ -2239,6 +2249,7 @@ frappe.provide("toefl_house.role_desks");
 		// any truthy entry as already constructed and would show a blank page.
 		if (!frappe.pages[slug] || !frappe.pages[slug].tagName) return;
 		frappe.pages[slug].on_page_load = (wrapper) => {
+			currentSearchRefresh = null;
 			const page = frappe.ui.make_app_page({ parent: wrapper, title: text(surface.title), single_column: true });
 			ensureStyleSheet();
 			if (page.main && page.main.addClass) page.main.addClass("th-page");
