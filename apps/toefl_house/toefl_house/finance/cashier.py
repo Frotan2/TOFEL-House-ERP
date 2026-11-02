@@ -588,12 +588,15 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
     # reconciled if it counted a Bank account or omitted a physical Cash drawer.
     # Scope is inherited from the authorized parent Company history read.
     cash_by_company = {}
+    currency_issues = {}
     for row in history:
         company = row.get("company")
         if company not in cash_by_company:
+            account_rows = cash_drawers(company)
             cash_by_company[company] = {
-                account["name"] for account in cash_drawers(company)
+                account["name"] for account in account_rows
             }
+            currency_issues[company] = cash_currency_issue(company, account_rows)
         snapshot = by_parent[row["name"]]
         seen = [child.get("account") for child in snapshot]
         permitted_cash = cash_by_company[company]
@@ -601,6 +604,7 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
             truncated or not snapshot or len(snapshot) > MAX_DRAWERS
             or len(seen) != len(set(seen))
             or set(seen) != permitted_cash
+            or bool(currency_issues[company])
         )
         # Compare the immutable parent net to the original per-drawer rows.
         # A falsified zero aggregate must not manufacture a Balanced status.
