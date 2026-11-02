@@ -4156,52 +4156,65 @@ def main():
             from toefl_house.finance import cashier as fin_cash
             company=fin['company']; day=frappe.utils.today()
             drawers=fin_cash.cash_drawers(company)
-            assert drawers,('synthetic company has no native Cash/Bank account',company)
-            names=tuple(row['name'] for row in drawers)
+            assert drawers,('synthetic company has no native physical Cash account',company)
+            assert all(row['account_type']=='Cash' for row in drawers),drawers
+            names=tuple(sorted(row['name'] for row in drawers))
+            assert not fin_cash.cash_currency_issue(company,drawers),(
+                'synthetic cash accounts need matching company-base currency',drawers)
             balances={row['account']:row for row in fin_cash.drawer_balances(company,names,day)}
-            account=sorted(balances)[0]
+            assert set(balances)==set(names),(balances,names)
+            account=names[0]
             expected=balances[account]['closing']
+            expected_total=round(sum(balances[name]['closing'] for name in names),2)
+            # A close covers every cash drawer, even if a synthetic chart
+            # carries more than one account. The caller never supplies GL expected.
+            counts=[dict(account=name,counted_amount=balances[name]['closing'],note='')
+                    for name in names]
+            assert all(row['counted_amount']>=0 for row in counts),counts
             for index,invalid in enumerate(('NaN','Infinity','-Infinity','1e9999')):
+                invalid_counts=[dict(row) for row in counts]
+                invalid_counts[0]['counted_amount']=invalid
                 assert unavailable(
-                    lambda value=invalid, idx=index:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
-                        f'fin_cashier_nonfinite_{idx:04d}',company,day,
-                        [dict(account=account,counted_amount=value,note='SYN invalid count')])),
+                    lambda value=invalid_counts, idx=index:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
+                        f'fin_cashier_nonfinite_{idx:04d}',company,day,value)),
                     'finite amount')
-            # Independent ledger read: the close must equal the native GL sum
-            # with cancelled entries excluded.
-            gl=frappe.db.sql("""select coalesce(sum(debit-credit),0) from `tabGL Entry`
-                                where account=%s and company=%s and is_cancelled=0
-                                  and posting_date<=%s""",(account,company,day))[0][0]
-            assert abs(float(gl)-expected)<0.01,(gl,expected)
+            # Independent ledger read, per physical Cash account, excludes
+            # canceled entries and never includes Bank accounts.
+            for name in names:
+                gl=frappe.db.sql("""select coalesce(sum(debit-credit),0) from `tabGL Entry`
+                                    where account=%s and company=%s and is_cancelled=0
+                                      and posting_date<=%s""",(name,company,day))[0][0]
+                assert abs(float(gl)-balances[name]['closing'])<0.01,(name,gl,balances[name])
+            unexplained_counts=[dict(row) for row in counts]
+            unexplained_counts[0]['counted_amount']=expected+5
             unexplained=denied_because(
                 lambda:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
-                    'fin_cashier_var_000001',company,day,
-                    [dict(account=account,counted_amount=expected+5,note='')])),
+                    'fin_cashier_var_000001',company,day,unexplained_counts)),
                 'Explain the')
             result=as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
-                'fin_cashier_close_0001',company,day,
-                [dict(account=account,counted_amount=expected,note='')]))
-            assert abs(result['total_expected']-round(expected,2))<0.01,result
+                'fin_cashier_close_0001',company,day,counts))
+            assert abs(result['total_expected']-expected_total)<0.01,result
             assert abs(result['total_variance'])<0.01,result
             stored=frappe.db.get_value('TH Cashier Day',result['cashier_day'],
                 ['docstatus','company','date','total_counted','total_variance','cashier'],
                 as_dict=True)
             assert int(stored.docstatus)==1,stored
             assert stored.company==company and str(stored.date)==day,stored
-            assert abs(float(stored.total_counted)-round(expected,2))<0.01,stored
+            assert abs(float(stored.total_counted)-expected_total)<0.01,stored
             assert abs(float(stored.total_variance))<0.01,stored
             duplicate=denied_because(
                 lambda:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
-                    'fin_cashier_dup_000001',company,day,
-                    [dict(account=account,counted_amount=expected,note='')])),
+                    'fin_cashier_dup_000001',company,day,counts)),
                 'already closed')
             position=[row for row in fin_cash.cashier_position(day=day,companies=[company])
                       if row['company']==company][0]
             assert position['close'] and position['close']['name']==result['cashier_day'],position
             assert position['drift'] is False,position
+            assert position['drawer_variance'] is False,position
             return {'cashier_day':result['cashier_day'],'drawer':account,
-                    'ledger_closing':round(expected,2),
+                    'drawers_counted':len(counts),'ledger_closing':round(expected,2),
                     'counted':result['total_counted'],
+                    'total_expected':expected_total,
                     'variance':result['total_variance'],'cashier':stored.cashier,
                     'unexplained_variance_refused':unexplained['denied'],
                     'duplicate_refused':duplicate['denied'],'drift':position['drift']}
