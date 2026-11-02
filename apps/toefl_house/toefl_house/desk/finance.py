@@ -1073,8 +1073,10 @@ def _cash_close_sections(day):
     history_items = [{
         "id": row["name"],
         "person": row.get("cashier") or "",
-        "detail": f"{row.get('date')} · expected {float(row.get('total_expected') or 0):.2f}, "
-                  f"counted {float(row.get('total_counted') or 0):.2f}",
+        "detail": (f"{row.get('date')} · Stored cash totals require integrity review"
+                   if row.get("integrity_review") else
+                   f"{row.get('date')} · expected {float(row.get('total_expected') or 0):.2f}, "
+                   f"counted {float(row.get('total_counted') or 0):.2f}"),
         "status": ("Integrity review" if row.get("integrity_review") else
                    "Variance" if (row.get("drawer_variance")
                                   or abs(float(row.get("total_variance") or 0)) > 0.005)
@@ -1093,7 +1095,11 @@ def _cash_close_sections(day):
                                            or row.get("drawer_variance"))
                       else None),
         "waiting_since": row.get("date"),
-        "amount": row.get("total_variance") or 0,
+        # A corrupt historical parent total is evidence for the auditor, not
+        # a trusted amount for operational dashboards. Keep its original
+        # submitted record available; never alter financial history here.
+        "amount": (None if row.get("integrity_review")
+                   else (row.get("total_variance") or 0)),
         "currency": "",
     } for row in history]
     history_section = section(
