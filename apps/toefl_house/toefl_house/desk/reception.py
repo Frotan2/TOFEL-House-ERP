@@ -697,22 +697,38 @@ def _upcoming_session_state(row, now):
         return "invalid"
 
 
+def _submitted_enrollment_periods(enrollments):
+    """Distinct submitted program/year/term facts, keyed by native Student.
+
+    A learner may legitimately attend GE and Special Speaking concurrently.
+    Taking only the newest enrollment would falsely erase the older program
+    from the individual's active class-roster verification.
+    """
+    periods = {}
+    for entry in enrollments:
+        if int(entry.get("docstatus") or 0) != 1 or not entry.get("student"):
+            continue
+        periods.setdefault(entry["student"], set()).add((
+            entry.get("program") or "",
+            entry.get("academic_year") or "",
+            entry.get("academic_term") or ""))
+    return periods
+
+
 def _student_class_information(students, enrollments):
     """Verified individual roster + dated session facts for Reception.
 
-    A Program Enrollment proves admission to the PROGRAM, never membership
-    in a particular class. Class membership requires that exact Student's
-    active native Student Group Student row, a scoped native Student Group,
-    and the same program/year/term as their latest submitted enrollment.
-    A Course Schedule is a dated session, NOT a recurring weekly timetable.
+    A Program Enrollment proves admission to a PROGRAM, never membership
+    in a particular class. Membership requires the exact Student's active
+    native Student Group Student row, a scoped native Student Group, and
+    a matching submitted program/year/term enrollment. Multiple programs
+    must not silently collapse into whichever enrollment is newest.
+    A Course Schedule is dated, NOT a recurring weekly timetable.
     """
-    latest = {}
-    for entry in enrollments:
-        if int(entry.get("docstatus") or 0) == 1 and entry.get("student"):
-            latest.setdefault(entry["student"], entry)
+    periods = _submitted_enrollment_periods(enrollments)
     active = sorted({
         row["name"] for row in students
-        if int(row.get("enabled") or 0) == 1 and row.get("name") in latest
+        if int(row.get("enabled") or 0) == 1 and row.get("name") in periods
     })
     if not active:
         return {}
@@ -739,15 +755,13 @@ def _student_class_information(students, enrollments):
     for member in roster:
         student = member.get("student")
         group = by_name.get(member.get("parent"))
-        entry = latest.get(student)
-        if not entry or not group or not group.get("th_branch") or int(group.get("disabled") or 0):
+        if (not periods.get(student) or not group or not group.get("th_branch")
+                or int(group.get("disabled") or 0)):
             continue
         if cohort_state(group) not in ("Planned", "Active"):
             continue
-        if (group.get("program"), group.get("academic_year"),
-                group.get("academic_term") or "") != (
-                entry.get("program"), entry.get("academic_year"),
-                entry.get("academic_term") or ""):
+        if (group.get("program") or "", group.get("academic_year") or "",
+                group.get("academic_term") or "") not in periods[student]:
             continue
         matches[student][group["name"]] = group
 
