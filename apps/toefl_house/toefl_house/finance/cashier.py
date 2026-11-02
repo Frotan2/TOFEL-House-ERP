@@ -563,6 +563,48 @@ def cash_close_identity_issue(parent, day):
     return reconciled.date() < business_day
 
 
+def historical_cash_drift(company, day, reconciled_on, snapshot):
+    """Detect stale saved cash balances without relying on today's drawers.
+
+    A historical close can become stale after a backdated native GL posting
+    or a cancellation, even when its stored parent/child sums still agree.
+    Perform ONE bounded, account-grouped GL read per historic close. Include
+    creation-after-close evidence: offsetting new entries can leave balances
+    unchanged but still require an auditor.
+    """
+    accounts = sorted({row.get("account") for row in snapshot})
+    if not accounts or len(accounts) != len(snapshot) or len(accounts) > MAX_DRAWERS:
+        return True
+    placeholders = ", ".join(["%s"] * len(accounts))
+    try:
+        entries = frappe.db.sql(
+            f"""select account,
+                       coalesce(sum(debit - credit), 0) as closing,
+                       coalesce(sum(case when creation > %s then 1 else 0 end), 0)
+                           as late_postings
+                from `tabGL Entry`
+                where company = %s and posting_date <= %s
+                  and is_cancelled = 0
+                  and account in ({placeholders})
+                group by account""",
+            (reconciled_on, company, day, *accounts),
+            as_dict=True,
+        )
+        ledger = {item["account"]: item for item in entries or []}
+        if len(ledger) != len(entries or []):
+            return True
+        return any(
+            abs(_stored_money(row.get("expected_amount"), "Stored expected cash")
+                - _stored_money(ledger.get(row["account"], {}).get("closing", 0),
+                                "Current historical cash ledger")) > TOLERANCE
+            or bool(int(ledger.get(row["account"], {}).get("late_postings") or 0))
+            for row in snapshot
+        )
+    except (frappe.ValidationError, ValueError, TypeError, KeyError, OverflowError):
+        # A failed/malformed audit read must never qualify the close as Balanced.
+        return True
+
+
 def drawer_variance_recorded(rows):
     """A zero net difference never hides opposing short/over cash drawers.
 
@@ -804,6 +846,11 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
             snapshot, row)
         row["integrity_review"] = integrity_issue
         row["drawer_variance"] = drawer_variance_recorded(snapshot)
+        row["drift"] = (
+            historical_cash_drift(company, str(row["date"]),
+                                  row.get("reconciled_on"), snapshot)
+            if not integrity_issue else False
+        )
     return history
 
 
