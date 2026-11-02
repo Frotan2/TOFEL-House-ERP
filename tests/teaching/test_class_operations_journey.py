@@ -320,7 +320,9 @@ class ClassOperationsJourneyTests(unittest.TestCase):
         report = self.ops.capacity.class_availability(program="TH-PROG")
         intake = report["intake"][0]
         self.assertEqual((intake["seats_available"], intake["waiting"],
-                          intake["projected_unmet_demand"]), (2, 1, 0))
+                          intake["projected_unmet_demand"]), (2, 1, 1),
+                         "a free seat in GRP-B does not automatically clear "
+                         "a queued request for the full GRP-A")
 
         # 5. An authorized override admits the queued learner, once.
         self.ops.login(APPROVER)
