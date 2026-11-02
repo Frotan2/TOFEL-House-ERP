@@ -760,8 +760,18 @@ def _student_class_information(students, enrollments):
             continue
         if cohort_state(group) not in ("Planned", "Active"):
             continue
-        if (group.get("program") or "", group.get("academic_year") or "",
-                group.get("academic_term") or "") not in periods[student]:
+        # Match the actual native admission rule: the group always names
+        # program/year; only an explicitly named class term constrains the
+        # submitted enrollment term. A blank class term is intentionally
+        # program/year-wide, not a fabricated empty-term enrollment.
+        group_program = group.get("program") or ""
+        group_year = group.get("academic_year") or ""
+        group_term = group.get("academic_term") or ""
+        if not any(
+            program == group_program and year == group_year
+            and (not group_term or term == group_term)
+            for program, year, term in periods[student]
+        ):
             continue
         matches[student][group["name"]] = group
 
@@ -891,7 +901,7 @@ def _student_class_information(students, enrollments):
         if len(choices) != 1:
             result[name] = {
                 "stage": "Multiple class memberships",
-                "next": "Multiple matching class rosters are active for this academic period. Academic Manager must verify the correct class and timetable.",
+                "next": "More than one individually verified class roster exists across the learner's submitted programs or academic periods. Confirm the requested class with Academic Manager before quoting its timetable.",
                 "next_role": "Academic Manager", "detail": "",
             }
             continue
