@@ -589,6 +589,66 @@ class CashHistoryVarianceTests(unittest.TestCase):
                 self.assertTrue(self.history()[0]["integrity_review"])
             self.header[field] = original
 
+    def test_historical_close_matches_its_native_gl_without_drift(self):
+        calls = []
+        def sql(query, params=None, as_dict=False):
+            calls.append((query, params, as_dict))
+            if "tabTH Cashier Day" in query:
+                return []
+            return [
+                {"account": "Cash - TH", "closing": 100.0,
+                 "late_postings": 0},
+                {"account": "Petty Cash - TH", "closing": 0.0,
+                 "late_postings": 0},
+            ]
+        self.module.frappe.db.sql = sql
+        record = self.history()[0]
+        self.assertFalse(record["integrity_review"])
+        self.assertFalse(record["drift"])
+        self.assertEqual(len(calls), 2,
+                         "One duplicate check and one grouped ledger read")
+        query, params, as_dict = calls[1]
+        self.assertIn("from `tabGL Entry`", query)
+        self.assertIn("is_cancelled = 0", query)
+        self.assertIn("creation > %s", query)
+        self.assertIn("group by account", query)
+        self.assertEqual(params, (
+            "2026-10-24 18:00:00", "TOEFL House", "2026-10-24",
+            "Cash - TH", "Petty Cash - TH"))
+        self.assertTrue(as_dict)
+
+    def test_historical_cancelled_entry_changes_balance_and_flags_drift(self):
+        def sql(query, params=None, as_dict=False):
+            if "tabTH Cashier Day" in query:
+                return []
+            return [
+                {"account": "Cash - TH", "closing": 80.0, "late_postings": 0},
+                {"account": "Petty Cash - TH", "closing": 20.0,
+                 "late_postings": 0},
+            ]
+        self.module.frappe.db.sql = sql
+        record = self.history()[0]
+        self.assertEqual(record["total_expected"], 100.0)
+        self.assertFalse(record["integrity_review"])
+        self.assertTrue(record["drift"],
+                        "Offsetting balance changes must not mask ledger drift")
+
+    def test_balanced_historical_amounts_with_late_gl_still_flag_drift(self):
+        def sql(query, params=None, as_dict=False):
+            if "tabTH Cashier Day" in query:
+                return []
+            return [
+                {"account": "Cash - TH", "closing": 100.0,
+                 "late_postings": 2},
+                {"account": "Petty Cash - TH", "closing": 0.0,
+                 "late_postings": 0},
+            ]
+        self.module.frappe.db.sql = sql
+        record = self.history()[0]
+        self.assertFalse(record["integrity_review"])
+        self.assertTrue(record["drift"],
+                        "Balance-neutral entries created after close require review")
+
     def test_historical_duplicate_close_is_flagged_even_when_off_page(self):
         # Only this close appears on the limited history page. The duplicate
         # submitted close is older and invisible in that page, but the
