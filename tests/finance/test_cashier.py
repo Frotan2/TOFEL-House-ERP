@@ -98,8 +98,8 @@ def load_cashier(drawers=()):
     return module
 
 
-DRAWERS = [{"name": "Cash - TH", "account_type": "Cash"},
-           {"name": "Petty Cash - TH", "account_type": "Cash"}]
+DRAWERS = [{"name": "Cash - TH", "account_type": "Cash", "root_type": "Asset"},
+           {"name": "Petty Cash - TH", "account_type": "Cash", "root_type": "Asset"}]
 BANK = {"name": "Bank - TH", "account_type": "Bank"}
 
 
@@ -267,7 +267,7 @@ class DrawerTruthTests(unittest.TestCase):
 
     def test_foreign_currency_count_is_rejected_before_creating_a_close(self):
         module = load_cashier([{"name": "USD Cash - TH", "account_type": "Cash",
-                                "account_currency": "USD"}])
+                                "root_type": "Asset", "account_currency": "USD"}])
         module.frappe.db.get_value = lambda *args, **kwargs: "AFN"
         with self.assertRaisesRegex(_ValidationError, "reconciled separately"):
             module.reconcile_cashier_day(
@@ -283,6 +283,12 @@ class DrawerTruthTests(unittest.TestCase):
                       module.cash_currency_issue(
                           "TOEFL House",
                           [{**DRAWERS[0], "account_currency": "USD"}]))
+        self.assertEqual(module.cash_currency_issue(
+            "TOEFL House", [{**DRAWERS[0], "account_currency": ""}]), "")
+        self.assertEqual(module.cash_currency_issue(
+            "TOEFL House", [{**DRAWERS[0], "account_currency": None}]), "")
+        self.assertIn("must be Asset", module.cash_currency_issue(
+            "TOEFL House", [{**DRAWERS[0], "root_type": "Liability"}]))
         self.assertIn("not configured", load_cashier().cash_currency_issue(
             "TOEFL House", [DRAWERS[0]]))
 
@@ -297,6 +303,7 @@ class DrawerTruthTests(unittest.TestCase):
         self.assertEqual(module.cash_drawers("TOEFL House"), [DRAWERS[0]])
         self.assertEqual(calls[0][1]["filters"]["account_type"],
                          ["in", ["Cash"]])
+        self.assertIn("root_type", calls[0][1]["fields"])
 
 
 class CloseDriftTests(unittest.TestCase):
