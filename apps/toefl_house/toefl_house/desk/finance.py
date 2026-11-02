@@ -428,7 +428,6 @@ def _compensation_items(contracts, instructors):
     return items
 
 
-@frappe.whitelist(methods=["GET", "POST"])
 def _billing_documents_by_enrollment(rows):
     """Distinguish posted receivables from drafts blocking a new issue.
 
@@ -472,6 +471,7 @@ def _billing_blocker(enrollment, drafts, read_complete, has_issued=False):
     return None
 
 
+@frappe.whitelist(methods=["GET", "POST"])
 def work():
     """Finance desk payload: today, outstanding, awaiting billing, corrections."""
     require_desk_audience(SLUG)
