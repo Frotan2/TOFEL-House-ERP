@@ -8002,34 +8002,61 @@ def main():
             # Run after the existing native financial fixtures, preserving
             # their independently qualified cash-close/outstanding baselines.
             frappe.set_user('Administrator')
-            # A scoped Reception collector may only receipt a tuition Fee
-            # whose Student has a resolved roster/intake Branch in that
-            # collector's own explicit permissions. The old fixture selected
-            # the alphabetically first Fee, often for a branchless legacy
-            # Student; its 403 was correct and cannot be bypassed.
+            # Qualify a *real* branch-scoped Reception collection. Previous
+            # synthetic finance invoices were for legacy branchless students;
+            # searching them could never create a valid permission grant.
+            # Build the missing bill for the existing, fully converted
+            # Branch-A learner through the normal audited Finance command.
+            # Never weaken the Branch gate or use an unrelated student's Fee.
             from toefl_house.command_scope import (
                 actor_branches, _effective_student_branches)
             allowed=actor_branches(users['receptionist'])
             assert allowed=={'SYN-BR-A','SYN-BR-B'},allowed
-            candidates=frappe.get_all('Fees',filters={
-                'company':fin['company'],'docstatus':1,
-                'outstanding_amount':('>',100)},
-                fields=['name','student','company'],order_by='name asc',
-                limit_page_length=500)
-            valid=[]
-            for row in candidates:
-                if not row.get('student'):
-                    continue
-                branches=_effective_student_branches(row['student'])
-                if branches and None not in branches and branches<=allowed:
-                    valid.append(row)
-                    break
-            assert valid,(
-                'No submitted synthetic tuition Fee belongs to a verified '
-                'Branch-scoped Reception student; do not receipt an unrelated '
-                'legacy student')
-            fee=valid[0]['name']
-            company=valid[0]['company']
+            student=branch_fixture['fixture_students']['A']
+            assert _effective_student_branches(student)=={'SYN-BR-A'},(
+                student,_effective_student_branches(student))
+            assert student not in (None,'')
+            year=branch_fixture['fixture_years']['A']
+            enrollment=frappe.db.get_value('Program Enrollment',filters={
+                'student':student,'program':cat['program'],
+                'academic_year':year,'docstatus':1},fieldname='name')
+            assert enrollment,('Branch-A learner has no submitted enrollment',student,year)
+            company=fin['company']
+            fee_structure=frappe.db.get_value('Fee Structure',filters={
+                'program':cat['program'],'academic_year':year,
+                'company':company},fieldname='name')
+            if not fee_structure:
+                original=frappe.get_doc('Fee Structure',fin['fee_structure'])
+                structure=frappe.get_doc(dict(
+                    doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
+                    program=cat['program'],academic_year=year,
+                    receivable_account=original.receivable_account,
+                    income_account=original.income_account,
+                    cost_center=original.cost_center,company=company))
+                for component in original.components:
+                    structure.append('components',{
+                        'fees_category':component.fees_category,
+                        'amount':component.amount})
+                structure.insert()
+                fee_structure=structure.name
+            posting=frappe.utils.today()
+            billed=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
+                'native_reception_br_a_fee_0001',enrollment,fee_structure,
+                posting,frappe.utils.add_days(posting,14)))
+            fee=billed['fees']
+            frappe.set_user('Administrator')
+            actual=frappe.db.get_value('Fees',fee,fields=[
+                'docstatus','student','program_enrollment','company',
+                'outstanding_amount'],as_dict=True)
+            assert (actual and actual.docstatus==1
+                    and actual.student==student
+                    and actual.program_enrollment==enrollment
+                    and actual.company==company
+                    and float(actual.outstanding_amount)>100),(billed,actual)
+            assert _effective_student_branches(actual.student)=={'SYN-BR-A'}
+            assert _effective_student_branches(actual.student)<=allowed
+            # This fixture's accepted receipt must belong to this exact
+            # enrolled Branch-A student, never any earlier legacy Fee.
             prefix='toefl_house.finance.collections.'
             actors={key:login(key) for key in ('course_owner','receptionist','book_seller','outsider')}
 
