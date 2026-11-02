@@ -164,6 +164,19 @@ class RequestTests(TransferTestBase):
             self.request(key="transfer-request-0002")
         self.assertIn("no transfer can land there", str(ctx.exception))
 
+    def test_transfer_request_refuses_target_class_ending_before_effective_day(self):
+        self.site.get("Student Group", "GRP-B")["th_class_end_date"] = "2026-09-24"
+        before = len(self.site.all("TH Class Transfer"))
+        with self.assertRaises(ValidationError) as ctx:
+            self.request(key="target-ended-before-effective-0001")
+        self.assertIn("after the target class ends", str(ctx.exception))
+        self.assertEqual(len(self.site.all("TH Class Transfer")), before)
+        self.site.get("Student Group", "GRP-B")["th_class_end_date"] = None
+        with self.assertRaises(ValidationError) as ctx:
+            self.request(key="target-missing-end-0001")
+        self.assertIn("no verified end date", str(ctx.exception))
+        self.assertEqual(len(self.site.all("TH Class Transfer")), before)
+
     def test_the_transfer_window_is_bounded_from_the_target_start(self):
         self.site.get("Student Group", "GRP-B")["th_class_start_date"] = \
             "2026-07-01"
