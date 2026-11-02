@@ -795,6 +795,31 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertEqual(item["actions"][0]["args"]["reason"], "")
         self.assertEqual(desk._walkin_item(row, ("Placement case opened", "", "Placement Publisher"))["actions"], [])
 
+    def test_online_global_visitor_has_timezone_warning_and_audited_edit(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        visitor = {
+            "name": "INQ-WORLD", "person_name": "Online Learner",
+            "phone": "+447700900123", "status": "New", "version": 1,
+            "study_mode": "Online", "contact_country": "United Kingdom",
+            "time_zone": "", "program_interest": "Special Speaking",
+        }
+        row = desk._walkin_item(visitor)
+        self.assertIn("Study: Online", row["detail"])
+        self.assertIn("Country: United Kingdom", row["detail"])
+        self.assertIn("+447700900123", row["detail"])
+        self.assertIn("time zone is not confirmed", row["next"])
+        self.assertEqual(row["action"]["args"]["study_mode"], "Online")
+        self.assertEqual(row["action"]["args"]["contact_country"], "United Kingdom")
+        self.assertEqual(row["action"]["args"]["time_zone"], "")
+        visitor["time_zone"] = "Europe/London"
+        updated = desk._walkin_item(visitor)
+        self.assertIn("Learner time zone: Europe/London", updated["detail"])
+        self.assertNotIn("time zone is not confirmed", updated["next"])
+        visitor["study_mode"] = "On-campus"
+        visitor["time_zone"] = ""
+        local = desk._walkin_item(visitor)
+        self.assertNotIn("time zone is not confirmed", local["next"])
+
     def test_awaiting_placement_inquiry_points_to_publisher_not_reception(self):
         desk, _ = self.desk(placement=False, applicant=False)
         row = {"name": "INQ-1", "person_name": "Visitor",
