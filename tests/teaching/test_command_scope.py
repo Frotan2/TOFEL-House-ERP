@@ -124,6 +124,7 @@ class CommandScopeTests(unittest.TestCase):
             ("create_walkin_inquiry", {"branch": "A"}),
             ("update_walkin_inquiry", {"inquiry": "INQ-ALPHA"}),
             ("correct_walkin_inquiry", {"inquiry": "INQ-ALPHA"}),
+            ("record_reception_collection", {"fees": "EDU-FEE-A", "amount": "100.00"}),
         ):
             with self.subTest(kind=kind), self.assertRaises(PermissionError):
                 self.scope.authorize_command_scope(kind, payload, "actor")
@@ -147,6 +148,29 @@ class CommandScopeTests(unittest.TestCase):
         ):
             with self.subTest(kind=kind), self.assertRaises(PermissionError):
                 self.scope.authorize_command_scope(kind, payload, "actor", result=saved)
+
+    def test_reception_tuition_receipt_rechecks_branch_at_command_boundary(self):
+        # An already configured cash counter is not a Branch permission.
+        # The guarded POST and a replay must deny immediately after revocation
+        # and must not read the previously authorized student's document.
+        self.documents[("Student", "STU-A")] = {"branches": {"A"}}
+        self.values[("Fees", "EDU-FEE-A", "student")] = "STU-A"
+        self.student_branches["STU-A"] = {"A"}
+        payload = {"fees": "EDU-FEE-A", "amount": "100.00"}
+        self.scope.authorize_command_scope(
+            "record_reception_collection", payload, "actor")
+        self.branches = ["B"]
+        with self.assertRaisesRegex(PermissionError, "outside this login"):
+            self.scope.authorize_command_scope(
+                "record_reception_collection", payload, "actor")
+        self.branches = []
+        self.frappe.get_doc.reset_mock()
+        for result in (None, {"fees": "EDU-FEE-A", "student": "STU-A"}):
+            with self.subTest(cached=bool(result)), self.assertRaisesRegex(
+                    PermissionError, "explicitly assigned Branch"):
+                self.scope.authorize_command_scope(
+                    "record_reception_collection", payload, "actor", result=result)
+        self.frappe.get_doc.assert_not_called()
 
     def test_sole_branch_defaults_and_foreign_branch_denied(self):
         self.assertEqual(self.scope.resolve_creation_branch(None, "actor"), "A")
