@@ -957,9 +957,12 @@ frappe.provide("toefl_house.role_desks");
 			],
 		"toefl_house.reception_intake.create_walkin_inquiry": [
 			{ fieldname: "person_name", label: "Visitor's full name", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "phone", label: "Contact phone (optional)", fieldtype: "Data" },
-			{ fieldname: "program_interest", label: "Program of interest", fieldtype: "Data" },
-			{ fieldname: "branch", label: "Reception branch", fieldtype: "Link", options: "Branch" },
+			{ fieldname: "phone", label: "Contact phone (optional)", fieldtype: "Data",
+				description: "Use the real contact only. 0794357509 and +93794357509 are equivalent for searching, not identity proof." },
+			{ fieldname: "program_interest", label: "Program of interest", fieldtype: "Data",
+				description: "For example: General English, Academic English, Speaking, TOEFL Preparation or Teacher Training." },
+			{ fieldname: "branch", label: "Reception branch", fieldtype: "Link", options: "Branch",
+				description: "Leave blank if you work at only one assigned branch. Otherwise select your actual permitted branch." },
 			{ fieldname: "notes", label: "Reception note (optional)", fieldtype: "Small Text" },
 		],
 		"toefl_house.reception_intake.correct_walkin_inquiry": [
@@ -1980,6 +1983,7 @@ frappe.provide("toefl_house.role_desks");
 		const input = $("<input type='search' class='form-control th-search-input' />")
 			.attr("placeholder", text(surface.search.placeholder))
 			.attr("aria-label", text("Name, phone, Candidate reference, Student ID or inquiry reference"))
+			.attr("maxlength", "120")
 			.appendTo(bar);
 		$("<button type='button' class='btn btn-primary btn-sm'></button>")
 			.text(text("Search"))
