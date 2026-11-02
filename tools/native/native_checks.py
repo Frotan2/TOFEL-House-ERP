@@ -8066,6 +8066,18 @@ def main():
                     users['branch_b_staff'])),
                 "outside this login's permitted branches")['denied']=='PermissionError'
             frappe.set_user('Administrator')
+            # HTTP API requests use a different DB connection. Commit the
+            # newly billed native Fees and matching structure BEFORE the
+            # subsequent local rollback used to refresh HTTP reads; otherwise
+            # the fixture silently erases its own legitimate tuition bill.
+            frappe.db.commit()
+            persisted=frappe.db.get_value('Fees',fee,[
+                'docstatus','student','program_enrollment','outstanding_amount'],
+                as_dict=True)
+            assert (persisted and persisted.docstatus==1
+                    and persisted.student==student
+                    and persisted.program_enrollment==enrollment
+                    and float(persisted.outstanding_amount)>100),persisted
             # This fixture's accepted receipt must belong to this exact
             # enrolled Branch-A student, never any earlier legacy Fee.
             prefix='toefl_house.finance.collections.'
