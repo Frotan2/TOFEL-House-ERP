@@ -123,6 +123,20 @@ assert.deepStrictEqual(Object.keys(client.frappe.pages), [], "shared script must
 const uiSource = fs.readFileSync(SCRIPT, "utf8");
 assert(uiSource.includes("This command has no supported form yet. Nothing was submitted."),
 	"unsupported commands must show actionable, fail-closed feedback");
+const receptionFields = client.toefl_house.role_desks.actionFields;
+const registrationFields = receptionFields["toefl_house.reception_intake.create_walkin_inquiry"];
+const followupFields = receptionFields["toefl_house.reception_intake.update_walkin_inquiry"];
+for (const name of ["study_mode", "contact_country", "time_zone"]) {
+	assert(registrationFields.some(field => field.fieldname === name),
+		"Reception registration must capture international learner " + name);
+	assert(followupFields.some(field => field.fieldname === name),
+		"Reception must amend international learner " + name + " with audit");
+}
+assert(!registrationFields.some(field => field.fieldname === "email"),
+	"Overseas online students still do not need email or a fabricated login");
+assert(registrationFields.some(field => field.fieldname === "phone" && !field.reqd),
+	"International contact phone remains optional");
+
 const teacherFormFields = client.toefl_house.role_desks.actionFields["toefl_house.teaching.record_instructor_attendance"];
 assert(teacherFormFields && teacherFormFields.some(field => field.fieldname === "course_schedule"),
     "Instructor form must target a native scheduled session");
