@@ -162,6 +162,78 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertEqual(item["next_role"], "Teaching Scheduler")
         self.assertTrue(any(doctype == desk.ROSTER for doctype, _ in calls))
 
+    def test_two_submitted_programs_do_not_hide_verified_first_class(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        student = {"name": "STU-1", "student_name": "Dual Program Learner",
+                   "enabled": 1, "th_candidate_ref": "THV-DUAL",
+                   "creation": "2026-09-01"}
+        enrollments = [
+            {"name": "PE-NEW", "student": "STU-1",
+             "program": "Special Speaking", "academic_year": "2026",
+             "academic_term": "Term 1", "docstatus": 1,
+             "enrollment_date": "2026-09-20"},
+            {"name": "PE-OLD", "student": "STU-1",
+             "program": "GE", "academic_year": "2026",
+             "academic_term": "Term 1", "docstatus": 1,
+             "enrollment_date": "2026-09-10"},
+        ]
+        def read(_surface, doctype, _fields, **_kwargs):
+            if doctype == desk.STUDENT:
+                return [student]
+            if doctype == desk.ENROLLMENT:
+                return enrollments
+            if doctype == desk.ROSTER:
+                return [{"name": "MEM-1", "parent": "CLASS-GE",
+                         "student": "STU-1", "active": 1}]
+            if doctype == desk.GROUP:
+                return [{"name": "CLASS-GE", "student_group_name": "GE Morning",
+                         "program": "GE", "academic_year": "2026",
+                         "academic_term": "Term 1", "th_branch": "BR-A",
+                         "th_class_status": "Planned", "disabled": 0}]
+            if doctype == desk.SCHEDULE:
+                raise AssertionError("Planned class must not advertise sessions")
+            return []
+        desk.project_rows = read
+        result = desk.lookup("STU-1")["students"][0]
+        self.assertEqual(result["stage"], "Class planned")
+        self.assertIn("GE Morning", result["detail"])
+        self.assertIn("Enrolled periods:", result["detail"])
+        self.assertIn("GE 2026 Term 1", result["detail"])
+        self.assertIn("Special Speaking 2026 Term 1", result["detail"])
+        self.assertNotIn("Instructor assignment", result["next"])
+
+    def test_two_verified_program_class_rosters_do_not_select_one_teacher(self):
+        desk, _ = self.desk(placement=False, applicant=False)
+        enrollments = [
+            {"student": "S", "program": "Special Speaking", "academic_year": "2026",
+             "academic_term": "Term 1", "docstatus": 1},
+            {"student": "S", "program": "GE", "academic_year": "2026",
+             "academic_term": "Term 1", "docstatus": 1},
+        ]
+        queried = []
+        def read(_surface, doctype, _fields, **_kwargs):
+            queried.append(doctype)
+            if doctype == desk.ROSTER:
+                return [{"name": "MEM-GE", "parent": "GRP-GE", "student": "S", "active": 1},
+                        {"name": "MEM-SP", "parent": "GRP-SP", "student": "S", "active": 1}]
+            if doctype == desk.GROUP:
+                return [
+                    {"name": "GRP-GE", "program": "GE", "academic_year": "2026",
+                     "academic_term": "Term 1", "th_class_status": "Active",
+                     "th_branch": "BR-A", "disabled": 0},
+                    {"name": "GRP-SP", "program": "Special Speaking",
+                     "academic_year": "2026", "academic_term": "Term 1",
+                     "th_class_status": "Active", "th_branch": "BR-A",
+                     "disabled": 0},
+                ]
+            return []
+        desk.project_rows = read
+        info = desk._student_class_information([{"name": "S", "enabled": 1}], enrollments)
+        self.assertEqual(info["S"]["stage"], "Multiple class memberships")
+        self.assertEqual(info["S"]["next_role"], "Academic Manager")
+        self.assertNotIn(desk.SCHEDULE, queried)
+        self.assertNotIn(desk.INSTRUCTOR, queried)
+
     def test_upcoming_meeting_does_not_include_already_finished_today(self):
         desk, _ = self.desk(placement=False, applicant=False)
         now = datetime(2026, 11, 11, 10, 0, 0)
