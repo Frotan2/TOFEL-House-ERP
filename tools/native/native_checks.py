@@ -6374,6 +6374,20 @@ def main():
                 'note':'OD-RD-1 evidence only: ratification waits for the owner'}
             frappe.db.commit()
             return observed
+        # Negative control for the Reception audience: merely holding the
+        # Reception role must never bypass mandatory Branch assignment.
+        # This synthetic operator receives its Branch only in the later
+        # branch-isolation fixture and is intentionally unassigned here.
+        def reception_missing_branch_denied():
+            from toefl_house.desk import reception as reception_desk
+            frappe.set_user('Administrator')
+            assert not frappe.db.exists('User Permission',{
+                'user':users['branch_a_staff'],'allow':'Branch'})
+            return denied_because(
+                lambda:as_user('branch_a_staff',lambda:reception_desk.work()),
+                'needs an assigned Branch')
+        check('reception-unassigned-branch-fails-closed',
+              traced(reception_missing_branch_denied))
         check('role-desk-hosted-qualification',traced(desk_qualification))
         # Separate receipts preserve the projection checks above while proving
         # the browser-facing getpage HTTP wrapper for every native role Page.
