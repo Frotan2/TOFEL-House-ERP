@@ -6503,7 +6503,7 @@ def main():
             for b in (BR_A,BR_B):
                 if not frappe.db.exists('Branch',b):
                     frappe.get_doc(dict(doctype='Branch',branch=b)).insert()
-            grp,stu,app,dec,d0={}, {}, {}, {}, {}
+            grp,stu,app,dec,d0,enroll={}, {}, {}, {}, {}, {}
             # One full native journey per branch — every write through its
             # sanctioned command: released result -> branch-recorded
             # applicant -> approved, accepted, converted admission ->
@@ -6617,8 +6617,8 @@ def main():
                 conv=as_user('approver',lambda:adm.convert_applicant(
                     'br_conv_'+t+'_0000000001',d0[tail]['name'],4))
                 assert conv['native_student'],conv
-                as_user('enrollment_officer',lambda:enr.enroll_in_program(
-                    'br_enr_'+t+'_0000000001',d0[tail]['name']))
+                enroll[tail]=as_user('enrollment_officer',lambda:enr.enroll_in_program(
+                    'br_enr_'+t+'_0000000001',d0[tail]['name']))['program_enrollment']
                 g=as_user('teaching_scheduler',lambda:tea.create_student_group(
                     'br_grp_'+t+'_0000000001','SYN-BR-CLASS-'+tail,
                     cat['program'],year,'',1,sd,ed,'On-site',b))
@@ -6680,7 +6680,8 @@ def main():
             names=[r[0] for r in frappe.db.sql("select name from `tabTH Admission Decision` where "+qd,as_list=True)]
             assert dec['A'] in names and dec['B'] not in names,(names)
             return {'branches':2,'scoped_staff':2,'hq_controls':2,'surfaces_proved':3,
-                    'fixture_students':stu,'fixture_years':{'A':'SYN-AY-2031','B':'SYN-AY-2032'}}
+                    'fixture_students':stu,'fixture_enrollments':enroll,
+                    'fixture_years':{'A':'SYN-AY-2031','B':'SYN-AY-2032'}}
         branch_fixture=check('branch-isolation-multi-branch-operating-rule',traced(branch_isolation))
         # --- S6 obs-engineering-layer: the health surface, in process ---
         # The GM desk and owner cockpit project native scheduler facts. This
@@ -8024,10 +8025,44 @@ def main():
                 if branches and None not in branches and branches<=allowed:
                     valid.append(row)
                     break
+            if not valid:
+                # Older tuition qualification intentionally bills a legacy,
+                # branchless enrollee. Do not give that Student a made-up
+                # branch or disable receipt scope. Issue a real native Fees
+                # document for the *branch-A* student from the already
+                # qualified Branch admission -> enrollment -> class journey.
+                # This runs only on the disposable synthetic qualification
+                # site, and requires actual Finance Officer authority.
+                branch_student=branch_fixture['fixture_students']['A']
+                enrollment=branch_fixture['fixture_enrollments']['A']
+                year=branch_fixture['fixture_years']['A']
+                assert _effective_student_branches(branch_student)=={'SYN-BR-A'}
+                source=frappe.get_doc('Fee Structure',fin['fee_structure'])
+                plan=frappe.get_doc(dict(
+                    doctype='Fee Structure',
+                    naming_series='EDU-FST-.YYYY.-',
+                    program=cat['program'],academic_year=year,
+                    company=fin['company'],
+                    receivable_account=source.receivable_account,
+                    income_account=source.income_account,
+                    cost_center=source.cost_center))
+                for component in source.components:
+                    plan.append('components',{
+                        'fees_category':component.fees_category,
+                        'amount':component.amount})
+                plan.insert()
+                assert float(plan.total_amount)>100,plan.name
+                billed=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
+                    'native_branch_reception_tuition_a_0001',
+                    enrollment,plan.name,tf_post,tf_due))
+                assert billed['student']==branch_student,billed
+                assert billed['outstanding_amount']>100,billed
+                frappe.db.commit()
+                valid=[{'name':billed['fees'],'student':branch_student,
+                        'company':fin['company']}]
             assert valid,(
-                'No submitted synthetic tuition Fee belongs to a verified '
-                'Branch-scoped Reception student; do not receipt an unrelated '
-                'legacy student')
+                'No submitted tuition Fee belongs to a verified '
+                'Branch-scoped Reception student')
             fee=valid[0]['name']
             company=valid[0]['company']
             prefix='toefl_house.finance.collections.'
