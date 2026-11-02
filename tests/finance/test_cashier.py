@@ -415,6 +415,8 @@ class CloseDriftTests(unittest.TestCase):
             ("reconciled_on", None),
             ("reconciled_on", "bad timestamp"),
             ("reconciled_on", "2026-10-23 23:59:59"),
+            ("reconciled_on", "2026-10-24 18:00:01"),
+            ("reconciled_on", "2026-10-24T18:00:00+00:00"),
         ):
             def corrupted(doctype, **kwargs):
                 rows = original(doctype, **kwargs)
@@ -586,6 +588,8 @@ class CashHistoryVarianceTests(unittest.TestCase):
             ("reconciled_on", None),
             ("reconciled_on", "not a time"),
             ("reconciled_on", "2026-10-23 23:59:59"),
+            ("reconciled_on", "2026-10-24 18:00:01"),
+            ("reconciled_on", "2026-10-24T18:00:00+00:00"),
         ):
             original = self.header[field]
             self.header[field] = value
@@ -788,7 +792,9 @@ class SubmittedClosePersistenceTests(unittest.TestCase):
             self.verify()
 
     def test_saved_receipt_refuses_missing_or_invalid_reconciliation_time(self):
-        for invalid in (None, "", "invalid", "2026-10-23 23:59:59"):
+        for invalid in (
+                None, "", "invalid", "2026-10-23 23:59:59",
+                "2026-10-24 18:00:01", "2026-10-24T18:00:00+00:00"):
             self.header["reconciled_on"] = invalid
             with self.subTest(value=invalid), self.assertRaisesRegex(
                     _ValidationError, "reconciliation time"):
