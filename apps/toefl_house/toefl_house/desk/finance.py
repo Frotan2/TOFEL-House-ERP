@@ -1069,8 +1069,16 @@ def _cash_close_sections(day):
         "stage": "Cash close",
         "stage_definition": ("A submitted cashier day close: the counted drawer "
                              "against the native ledger for that business day."),
-        "next": "No action; a submitted close is never overwritten.",
-        "next_role": None,
+        "next": ("Finance Auditor must review the original counted drawers, "
+                 "account identity, and cash ledger. Do not rewrite this close."
+                 if row.get("integrity_review") else
+                 "Finance Auditor must review each drawer's shortage or overage "
+                 "and its written explanation; do not net them away."
+                 if row.get("drawer_variance") else
+                 "No action; this submitted close is not overwritten."),
+        "next_role": ("Finance Auditor" if (row.get("integrity_review")
+                                           or row.get("drawer_variance"))
+                      else None),
         "waiting_since": row.get("date"),
         "amount": row.get("total_variance") or 0,
         "currency": "",
