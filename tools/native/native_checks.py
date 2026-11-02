@@ -4179,6 +4179,45 @@ def main():
                 extra.insert()
                 secondary=extra.name
             assert secondary!=primary,(primary,secondary)
+            # Qualify *nonzero* Cash closing arithmetic through a genuine
+            # submitted native Journal Entry. The positive debit in each
+            # physical drawer is offset by the synthetic company's configured
+            # Income account, not another Cash drawer (which would go negative).
+            # This fixture is never run on an Owner or production site.
+            source='SYN Cash Day Two Drawer Ledger Qualification'
+            existing=frappe.db.get_value('Journal Entry',
+                {'company':company,'user_remark':source},'name')
+            if not existing:
+                income=frappe.db.get_value(
+                    'Company',company,'default_income_account')
+                cost_center=frappe.db.get_value(
+                    'Company',company,'cost_center')
+                assert income and cost_center,(income,cost_center)
+                journal=frappe.get_doc(dict(
+                    doctype='Journal Entry',voucher_type='Journal Entry',
+                    company=company,posting_date=day,user_remark=source,
+                    accounts=[
+                        dict(account=primary,debit_in_account_currency=245,
+                             cost_center=cost_center),
+                        dict(account=secondary,debit_in_account_currency=85,
+                             cost_center=cost_center),
+                        dict(account=income,credit_in_account_currency=330,
+                             cost_center=cost_center),
+                    ]))
+                journal.insert()
+                journal.submit()
+                existing=journal.name
+            assert frappe.db.get_value(
+                'Journal Entry',existing,'docstatus')==1,existing
+            native_gl=frappe.db.get_all('GL Entry',
+                filters={'voucher_type':'Journal Entry',
+                         'voucher_no':existing,'is_cancelled':0},
+                fields=['account','debit','credit'],limit_page_length=10)
+            assert len(native_gl)>=3,native_gl
+            for cash_name,minimum in ((primary,245),(secondary,85)):
+                movement=sum(float(row['debit'])-float(row['credit'])
+                             for row in native_gl if row['account']==cash_name)
+                assert abs(movement-minimum)<0.01,(cash_name,movement,native_gl)
             drawers=fin_cash.cash_drawers(company)
             assert len(drawers)>=2,('native cash fixture must count at least two physical drawers',drawers)
             assert drawers,('synthetic company has no native physical Cash account',company)
@@ -4192,6 +4231,9 @@ def main():
             account=names[0]
             expected=balances[account]['closing']
             expected_total=round(sum(balances[name]['closing'] for name in names),2)
+            assert balances[primary]['closing']>=245,(primary,balances[primary])
+            assert balances[secondary]['closing']>=85,(secondary,balances[secondary])
+            assert expected_total>0,(names,balances)
             # A close covers every cash drawer, even if a synthetic chart
             # carries more than one account. The caller never supplies GL expected.
             counts=[dict(account=name,counted_amount=balances[name]['closing'],note='')
@@ -4258,6 +4300,8 @@ def main():
             assert abs(float(historic[0]['total_expected'])-expected_total)<0.01,historic[0]
             return {'cashier_day':result['cashier_day'],'drawer':account,
                     'drawers_counted':len(counts),
+                    'native_cash_gl_journal':existing,
+                    'nonzero_ledger_expected':expected_total,
                     'partial_close_refused':partial['denied'],
                     'ledger_closing':round(expected,2),
                     'counted':result['total_counted'],
