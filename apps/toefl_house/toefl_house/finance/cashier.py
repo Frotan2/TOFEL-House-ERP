@@ -698,6 +698,28 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
     history = [dict(row) for row in (rows or [])]
     if not history:
         return history
+    # A second submitted close for the same Company/day invalidates BOTH
+    # historical records, not only the active daily desk projection. Query
+    # beyond the displayed history page so an older duplicate is still seen.
+    # All values are bound; the scopes and date sets are bounded by MAX_HISTORY.
+    company_names = sorted({row["company"] for row in history})
+    business_dates = sorted({str(row["date"]) for row in history})
+    company_marks = ", ".join(["%s"] * len(company_names))
+    date_marks = ", ".join(["%s"] * len(business_dates))
+    duplicate_rows = frappe.db.sql(
+        f"""select company, `date`
+               from `tabTH Cashier Day`
+               where docstatus = 1
+                 and company in ({company_marks})
+                 and `date` in ({date_marks})
+               group by company, `date`
+               having count(*) > 1""",
+        tuple(company_names + business_dates),
+        as_dict=True,
+    )
+    duplicate_days = {
+        (entry["company"], str(entry["date"])) for entry in duplicate_rows or []
+    }
     names = [row["name"] for row in history]
     child_rows = frappe.db.get_all(
         COUNT,
@@ -735,7 +757,8 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
         snapshot = by_parent[row["name"]]
         seen = [child.get("account") for child in snapshot]
         integrity_issue = (
-            truncated or not snapshot or len(snapshot) > MAX_DRAWERS
+            (company, str(row["date"])) in duplicate_days
+            or truncated or not snapshot or len(snapshot) > MAX_DRAWERS
             or len(seen) != len(set(seen)) or not base
         )
         for account in seen:
