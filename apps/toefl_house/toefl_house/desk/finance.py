@@ -772,8 +772,11 @@ def work():
             "stage_definition": (
                 "The scoped tuition register is incomplete; do not infer an unbilled state."
                 if not billing_read_complete else
-                "An unsubmitted Fees draft is not a collectible receivable. "
-                "Review existing submitted bills separately before any payment."),
+                "An unsubmitted tuition draft is not a collectible receivable. "
+                "Review any separate submitted bills before accepting payment."
+                if billing_status == "Draft fee needs review" else
+                "Confirmed enrollment with no issued or draft tuition bill in "
+                "the complete scoped register."),
             "next": next_text,
             "next_role": next_role,
             "waiting_since": row.get("enrollment_date"),
