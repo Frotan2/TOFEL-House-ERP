@@ -30,7 +30,7 @@ rather than a second invented limit. No active policy means no closes.
 # class is imported under an alias: inside ``reconcile_cashier_day`` the
 # name ``date`` is the argument, and ``date.fromisoformat`` would be an
 # AttributeError on the string (caught only by the native run, 2026-10-24).
-from datetime import date as _date
+from datetime import date as _date, datetime as _datetime
 from decimal import Decimal, InvalidOperation
 from math import isfinite
 import frappe
@@ -542,6 +542,24 @@ def _balance_drift_after_close(snapshot, current):
         return True
 
 
+def cash_close_identity_issue(parent, day):
+    """A submitted cash-control snapshot needs its attributed actor and time.
+
+    Saved money can add up while the signed control's cashier identity or
+    reconciliation timestamp is missing/corrupted. Treat such a record as an
+    audit exception, not an ordinary balanced close. No historical rewrites.
+    """
+    actor = parent.get("cashier")
+    if not isinstance(actor, str) or not actor.strip() or len(actor) > 140:
+        return True
+    try:
+        business_day = _date.fromisoformat(str(day))
+        reconciled = _datetime.fromisoformat(str(parent.get("reconciled_on")))
+    except (TypeError, ValueError, OverflowError):
+        return True
+    return reconciled.date() < business_day
+
+
 def drawer_variance_recorded(rows):
     """A zero net difference never hides opposing short/over cash drawers.
 
@@ -639,7 +657,9 @@ def cashier_position(day=None, companies=None):
         has_drawer_variance = False
         # There is no current physical Cash account to reconcile against this
         # saved close. Keep it visible, but never present it as validated Closed.
-        integrity_review = multiple_submitted_closes or bool(close and not drawers)
+        integrity_review = (multiple_submitted_closes
+                            or bool(close and not drawers)
+                            or bool(close and cash_close_identity_issue(close, day)))
         if close:
             # Re-check every drawer against the immutable close snapshot.
             # Cancelled historical postings may change balances without a
@@ -764,6 +784,7 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
         seen = [child.get("account") for child in snapshot]
         integrity_issue = (
             (company, str(row["date"])) in duplicate_days
+            or cash_close_identity_issue(row, row.get("date"))
             or truncated or not snapshot or len(snapshot) > MAX_DRAWERS
             or len(seen) != len(set(seen)) or not base
         )
