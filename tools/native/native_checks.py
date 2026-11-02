@@ -8016,11 +8016,14 @@ def main():
                 'outstanding_amount':('>',100)},
                 fields=['name','student','company'],order_by='name asc',
                 limit_page_length=500)
-            valid=[row for row in candidates
-                   if row.get('student') and
-                   0<len(_effective_student_branches(row['student'])) and
-                   None not in _effective_student_branches(row['student']) and
-                   _effective_student_branches(row['student'])<=allowed]
+            valid=[]
+            for row in candidates:
+                if not row.get('student'):
+                    continue
+                branches=_effective_student_branches(row['student'])
+                if branches and None not in branches and branches<=allowed:
+                    valid.append(row)
+                    break
             assert valid,(
                 'No submitted synthetic tuition Fee belongs to a verified '
                 'Branch-scoped Reception student; do not receipt an unrelated '
