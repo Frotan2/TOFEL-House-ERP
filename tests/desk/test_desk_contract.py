@@ -774,7 +774,7 @@ class ReceptionLookupTests(unittest.TestCase):
             reception.lookup("a")
         self.assertIn("two characters", str(ctx.exception))
 
-    def test_long_query_is_truncated(self):
+    def test_long_query_is_refused_without_changing_its_meaning(self):
         reception = _import_desk("reception", roles={"Reception"})
         calls = []
 
@@ -785,13 +785,13 @@ class ReceptionLookupTests(unittest.TestCase):
         original = reception.project_rows
         reception.project_rows = fake_project_rows
         try:
-            reception.lookup("x" * 300)
+            with self.assertRaises(reception.frappe.ValidationError) as ctx:
+                reception.lookup("x" * 300)
+            self.assertIn("at most 120 characters", str(ctx.exception))
         finally:
             reception.project_rows = original
-        self.assertTrue(calls, "a truncated query must still search")
-        for _desk, _doctype, filters in calls:
-            self.assertNotIn("x" * 121, str(filters),
-                             "the lookup searched with untruncated text")
+        self.assertEqual(calls, [],
+                         "silently truncating a precise lookup can return the wrong person")
 
 
 class DeskPlainLanguageTests(unittest.TestCase):
