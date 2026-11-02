@@ -244,18 +244,22 @@ def accept_reception_handover(request_key, payment_entries, counted_amount):
         transfer.insert(ignore_permissions=True)
         transfer.flags.ignore_permissions = True
         transfer.submit()
-        # Receipt custody must never advance based merely on a submit()
-        # call returning. The posted native transfer must carry exactly the
-        # counted amount in both legs and retain the authorized cash accounts
-        # before any source receipt is marked as handed over.
-        if (int(transfer.docstatus or 0) != 1
-                or transfer.payment_type != "Internal Transfer"
-                or transfer.company != first.company
-                or transfer.paid_from != counter.name or transfer.paid_to != main
-                or transfer.paid_from_account_currency != currency
-                or transfer.paid_to_account_currency != currency
-                or Decimal(str(transfer.paid_amount)) != total
-                or Decimal(str(transfer.received_amount)) != total):
+        # A native submit() returning is not enough to transfer custody.
+        # Read the persisted Payment Entry inside this same database transaction
+        # and verify the approved company, both cash legs, currency, exact
+        # counted amount and Submitted status before marking any source paid in.
+        posted = frappe.db.get_value(PAYMENT, transfer.name, [
+            "docstatus", "payment_type", "company", "paid_from", "paid_to",
+            "paid_from_account_currency", "paid_to_account_currency",
+            "paid_amount", "received_amount"], as_dict=True)
+        if (not posted or int(posted.docstatus or 0) != 1
+                or posted.payment_type != "Internal Transfer"
+                or posted.company != first.company
+                or posted.paid_from != counter.name or posted.paid_to != main
+                or posted.paid_from_account_currency != currency
+                or posted.paid_to_account_currency != currency
+                or Decimal(str(posted.paid_amount)) != total
+                or Decimal(str(posted.received_amount)) != total):
             raise frappe.ValidationError(
                 "The native cash transfer did not reconcile; no receipts may be marked handed over")
         for doc in docs:
