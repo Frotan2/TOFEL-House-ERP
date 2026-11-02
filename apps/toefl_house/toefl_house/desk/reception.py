@@ -333,6 +333,8 @@ def _walkin_item(row, progress=None):
          "phone": row.get("phone") or "", "reason": ""})
     note = (row.get("notes") or "").strip()
     preview = ("Latest note: " + note[:117] + ("…" if len(note) > 117 else "")) if note else ""
+    online_timezone_pending = (row.get("study_mode") == "Online"
+                               and not row.get("time_zone"))
     if progress:
         stage, next_step, next_role = progress
     elif row.get("status") == "Awaiting Placement":
@@ -364,7 +366,10 @@ def _walkin_item(row, progress=None):
             "Verified stage from branch-scoped Candidate and native Student links."
             if progress else "Reception inquiry closed." if closed
             else "Reception inquiry only; no placement, Applicant or Student exists."),
-        "next": (next_step if progress
+        "next": ((next_step + " Online learner time zone is not confirmed; "
+                  "ask the learner before interpreting an advertised class time.")
+                 if online_timezone_pending and not closed
+                 else next_step if progress
                  else "This inquiry is closed; register a new visit if needed."
                  if closed else next_step),
         "next_role": next_role if progress else (None if closed else next_role),
