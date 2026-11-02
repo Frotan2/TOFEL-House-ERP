@@ -305,8 +305,8 @@ class CloseDriftTests(unittest.TestCase):
     def setUp(self):
         self.module = load_cashier(DRAWERS)
         self.saved = [
-            {"account": "Cash - TH", "expected_amount": 100.0},
-            {"account": "Petty Cash - TH", "expected_amount": 50.0},
+            {"account": "Cash - TH", "expected_amount": 100.0, "variance": 0.0},
+            {"account": "Petty Cash - TH", "expected_amount": 50.0, "variance": 0.0},
         ]
         self.live = [
             {"account": "Cash - TH", "opening": 100.0,
@@ -363,6 +363,17 @@ class CloseDriftTests(unittest.TestCase):
         self.saved.append({"account": "Cash - TH", "expected_amount": 100.0})
         self.assertTrue(self.position()["drift"])
 
+    def test_opposing_cash_drawer_variances_do_not_disappear_at_net_zero(self):
+        self.saved[0]["variance"] = -100.0
+        self.saved[1]["variance"] = 100.0
+        position = self.position()
+        self.assertFalse(position["drift"])
+        self.assertTrue(position["drawer_variance"])
+
+    def test_malformed_drawer_variance_is_review_not_balanced(self):
+        self.saved[0]["variance"] = "NaN"
+        self.assertTrue(self.position()["drawer_variance"])
+
     def test_new_backdated_gl_keeps_existing_audit_signal(self):
         # A balance-neutral new posting still matters to a closed ledger.
         self.after = True
@@ -394,6 +405,41 @@ class CloseDriftTests(unittest.TestCase):
     def test_malformed_snapshot_never_looks_reconciled(self):
         self.saved[0]["expected_amount"] = "Infinity"
         self.assertTrue(self.position()["drift"])
+
+
+class CashHistoryVarianceTests(unittest.TestCase):
+    def test_history_preserves_offsetting_variances_in_bounded_child_read(self):
+        module = load_cashier(DRAWERS)
+        calls = []
+
+        def get_all(doctype, **kwargs):
+            calls.append((doctype, kwargs))
+            if doctype == module.DAY:
+                return [{"name": "TH-CASH-1", "date": "2026-10-24",
+                         "total_variance": 0.0, "company": "TOEFL House"}]
+            if doctype == module.COUNT:
+                self.assertEqual(kwargs["filters"]["parent"],
+                                 ["in", ["TH-CASH-1"]])
+                self.assertLessEqual(kwargs["limit_page_length"],
+                                     module.MAX_DRAWERS * module.MAX_HISTORY + 1)
+                return [{"parent": "TH-CASH-1", "variance": "-100.00"},
+                        {"parent": "TH-CASH-1", "variance": "100.00"}]
+            self.fail("Unexpected read: " + doctype)
+
+        module.frappe.db.get_all = get_all
+        history = module.cashier_history(companies=["TOEFL House"])
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["total_variance"], 0.0)
+        self.assertTrue(history[0]["drawer_variance"])
+        self.assertEqual([name for name, _ in calls], [module.DAY, module.COUNT])
+
+    def test_missing_count_rows_never_mean_balanced(self):
+        module = load_cashier(DRAWERS)
+        module.frappe.db.get_all = lambda doctype, **kwargs: (
+            [{"name": "TH-CASH-1", "total_variance": 0.0}]
+            if doctype == module.DAY else [])
+        history = module.cashier_history(companies=["TOEFL House"])
+        self.assertTrue(history[0]["drawer_variance"])
 
 
 class CommandContractTests(unittest.TestCase):
