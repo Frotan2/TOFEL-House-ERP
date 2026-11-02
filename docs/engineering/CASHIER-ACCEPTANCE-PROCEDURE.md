@@ -195,6 +195,11 @@ message; a silent success is a **FAIL**.
 | C37a | Cashier | Try to include a **Bank** account and its balance in physical Cash close | Refused: Bank is not a physical Cash account; no cash close or bank accounting entry created |
 | C37b | Cashier | After closing the cash drawer, post an authorized dated **Bank-only** movement without touching any Cash account | Cash close remains **Closed**, not Drift. Bank statement reconciliation is a separate task |
 | C37c | Cashier | On a separate invented test company with an AFN base currency and a USD-denominated Cash account, attempt physical cash close | Refused with a currency-review explanation; no arbitrary exchange rate, cash-count variance or submitted close is created |
+| C37d | Auditor | Close one synthetic AFN company-day correctly, then create an **additional Cash account** for the same company on a later business day | The historical day stays **Balanced** if its original drawers matched; do not falsely claim missing count for the new drawer |
+| C37e | Auditor | Disable a historically counted Cash account after an otherwise valid close | Earlier valid close remains **Balanced**; a disabled drawer cannot become part of a new daily count |
+| C37f | Auditor | Inspect a synthetic legacy close recording a Bank account, a wrong-company account, or parent expected/count totals that differ from its saved drawer rows | **Integrity review** for that historical document; no mutation, deletion or invented cash correction |
+| C37g | Finance Officer | On an isolated valid native Cash account where account currency is unset, use company default AFN; then separately try a Cash-typed non-Asset account | Inherited AFN is eligible; non-Asset account is blocked with a Cash account configuration explanation |
+| C37h | Auditor | For a successful physical Cash close, compare all native `GL Entry` counts before/after and reread the submitted parent and each `TH Cashier Count` row | No GL posting from the close, one submitted parent, exact drawer names/amounts/explanations in the database |
 
 ### F. Permissions, branch and audit integrity
 
