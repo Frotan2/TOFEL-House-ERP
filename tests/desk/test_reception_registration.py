@@ -810,6 +810,8 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertIn("Country: United Kingdom", row["detail"])
         self.assertIn("+447700900123", row["detail"])
         self.assertIn("time zone is not confirmed", row["next"])
+        self.assertEqual(row["action"]["args"]["status"], "New",
+                         "editing a new visitor must not falsely record contact")
         self.assertEqual(row["action"]["args"]["study_mode"], "Online")
         self.assertEqual(row["action"]["args"]["contact_country"], "United Kingdom")
         self.assertEqual(row["action"]["args"]["time_zone"], "")
