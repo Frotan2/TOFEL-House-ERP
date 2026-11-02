@@ -311,7 +311,7 @@ def verify_submitted_cash_close(name, company, day, actor, prepared):
     """
     stored = frappe.db.get_value(
         DAY, name,
-        ["docstatus", "company", "date", "cashier",
+        ["docstatus", "company", "date", "cashier", "reconciled_on",
          "total_expected", "total_counted", "total_variance"],
         as_dict=True)
     if (not stored or int(stored.get("docstatus") or 0) != 1
@@ -320,6 +320,9 @@ def verify_submitted_cash_close(name, company, day, actor, prepared):
             or stored.get("cashier") != actor):
         raise frappe.ValidationError(
             "The stored cash close is not submitted for the expected company, day and actor")
+    if cash_close_identity_issue(stored, day):
+        raise frappe.ValidationError(
+            "The stored cash close has an invalid cashier or reconciliation time")
     actual = frappe.db.get_all(
         COUNT,
         filters={"parent": name, "parenttype": DAY},
