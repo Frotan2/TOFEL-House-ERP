@@ -931,7 +931,7 @@ def _cash_close_sections(day):
 
     facts = [
         {"label": "Drawers in scope",
-         "definition": ("Native Cash and Bank accounts of the companies in your "
+         "definition": ("Native physical Cash accounts of the companies in your "
                         "scope. Expected money is their ledger closing balance."),
          "value": len(drawers), "owner": None},
         {"label": "Cash close today",
@@ -1026,7 +1026,7 @@ def _cash_close_sections(day):
     cash = section("cash-close", "Cash close", "queue", items=items,
                    facts=facts,
                    empty_title="No cash drawer in scope",
-                   empty_body="This company has no native Cash or Bank account yet; nothing can be counted until Finance configures one.")
+                   empty_body="This company has no native physical Cash account yet. Bank balances require a separate bank-statement reconciliation.")
 
     history_items = [{
         "id": row["name"],
