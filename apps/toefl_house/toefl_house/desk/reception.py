@@ -1059,7 +1059,8 @@ def lookup(query):
         frappe.throw("Type at least two characters of a name, reference or contact.",
                      frappe.ValidationError)
     if len(text) > 120:
-        text = text[:120]
+        frappe.throw("Search text is too long; enter at most 120 characters.",
+                     frappe.ValidationError)
     # Match a phone number regardless of whether Reception types Afghan
     # Dari/Persian or Latin decimal digits in the search box.
     text = "".join(
@@ -1078,10 +1079,18 @@ def lookup(query):
     phone_escaped = phone_query.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
     phone_like = f"%{phone_escaped}%"
 
+    # A printed native reference is authoritative lookup intent. Never
+    # let a full first page of fuzzy names hide an exact Applicant ID.
     matches = project_rows("reception", APPLICANT, APPLICANT_FIELDS,
-                           filters={"title": ("like", like)},
-                           order_by="creation desc", limit=LIMIT_LOOKUP)
+                           filters={"name": text},
+                           order_by="creation desc", limit=1)
     seen = {row["name"] for row in matches}
+    for row in project_rows("reception", APPLICANT, APPLICANT_FIELDS,
+                            filters={"title": ("like", like)},
+                            order_by="creation desc", limit=LIMIT_LOOKUP):
+        if row["name"] not in seen:
+            matches.append(row)
+            seen.add(row["name"])
     for row in project_rows("reception", APPLICANT, APPLICANT_FIELDS,
                             filters={"student_email_id": ("like", like)},
                             order_by="creation desc", limit=LIMIT_LOOKUP):
@@ -1110,12 +1119,21 @@ def lookup(query):
     items = [_person_item(row, decisions_by_applicant, {}) for row in matches]
 
     student_items = []
+    # Exact Student IDs take precedence over fuzzy name/email matches.
     student_rows = project_rows("reception", STUDENT,
                                 ["name", "student_name", "student_email_id",
                                  "th_candidate_ref", "enabled", "creation"],
-                                filters={"student_name": ("like", like), "enabled": ("in", [0, 1])},
-                                order_by="creation desc", limit=LIMIT_LOOKUP)
+                                filters={"name": text, "enabled": ("in", [0, 1])},
+                                order_by="creation desc", limit=1)
     seen_students = {row["name"] for row in student_rows}
+    for row in project_rows("reception", STUDENT,
+                            ["name", "student_name", "student_email_id",
+                             "th_candidate_ref", "enabled", "creation"],
+                            filters={"student_name": ("like", like), "enabled": ("in", [0, 1])},
+                            order_by="creation desc", limit=LIMIT_LOOKUP):
+        if row["name"] not in seen_students:
+            student_rows.append(row)
+            seen_students.add(row["name"])
     # Native Student lookup advertised name OR email. Search both with the
     # same restricted projection and bound; keep one row per student.
     for row in project_rows("reception", STUDENT,
@@ -1126,7 +1144,7 @@ def lookup(query):
         if row["name"] not in seen_students:
             student_rows.append(row)
             seen_students.add(row["name"])
-    for search_field in ("th_candidate_ref", "name"):
+    for search_field in ("th_candidate_ref",):
         for row in project_rows(
                 "reception", STUDENT,
                 ["name", "student_name", "student_email_id",
@@ -1210,21 +1228,21 @@ def lookup(query):
                 "waiting_since": (enrollment or row).get("enrollment_date") or row.get("creation"),
             })
 
+    # Exact printed inquiry ID first: the front counter must not lose
+    # that case behind a long list of similar names/phone numbers.
     inquiries = project_rows("reception", INQUIRY, INQUIRY_FIELDS,
-                             filters={"person_name": ("like", like)},
-                             order_by="creation desc", limit=LIMIT_LOOKUP)
+                             filters={"name": text},
+                             order_by="creation desc", limit=1)
     seen_inquiries = {row["name"] for row in inquiries}
     for row in project_rows("reception", INQUIRY, INQUIRY_FIELDS,
-                            filters={"phone": ("like", phone_like)},
+                            filters={"person_name": ("like", like)},
                             order_by="creation desc", limit=LIMIT_LOOKUP):
         if row["name"] not in seen_inquiries:
             inquiries.append(row)
             seen_inquiries.add(row["name"])
-    # A printed inquiry reference must also be searchable without phone or email.
-    for row in project_rows(
-            "reception", INQUIRY, INQUIRY_FIELDS,
-            filters={"name": text},
-            order_by="creation desc", limit=LIMIT_LOOKUP):
+    for row in project_rows("reception", INQUIRY, INQUIRY_FIELDS,
+                            filters={"phone": ("like", phone_like)},
+                            order_by="creation desc", limit=LIMIT_LOOKUP):
         if row["name"] not in seen_inquiries:
             inquiries.append(row)
             seen_inquiries.add(row["name"])
