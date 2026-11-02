@@ -141,7 +141,7 @@ def cash_drawers(company):
         order_by="name asc",
         limit_page_length=200,
     )
-    return [dict(row) for row in (rows or []) if row.get("account_type") == "Cash"]
+    return [row for row in (rows or []) if row.get("account_type") == "Cash"]
 
 
 def cash_currency_issue(company, drawers):
