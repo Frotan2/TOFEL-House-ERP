@@ -14,6 +14,7 @@ import frappe
 from toefl_house.api import _execute
 from toefl_house.command_scope import resolve_creation_branch
 from toefl_house.policy import digest
+from toefl_house.reception_phone import afghan_phone_variants
 from toefl_house.security import record_synthetic_flag, require_command
 
 DOCTYPE = "TH Reception Inquiry"
@@ -51,20 +52,6 @@ def _phone(value):
     # sees the same exact-contact duplicate warning as 0794357509.
     # The contact is never used as proof that two people are the same.
     return re.sub(r"[ ()-]", "", normalized)
-
-
-def afghan_phone_variants(contact):
-    """Equivalent national/E.164 text for an Afghan mobile, otherwise exact.
-
-    This is for contact matching only, NEVER for merging identities. Preserve
-    the submitted number on its record for display and legacy audit reads.
-    Only unambiguous 07xxxxxxxx / +937xxxxxxxx formats are converted.
-    """
-    if re.fullmatch(r"07[0-9]{8}", contact or ""):
-        return (contact, "+93" + contact[1:])
-    if re.fullmatch(r"\+937[0-9]{8}", contact or ""):
-        return ("0" + contact[3:], contact)
-    return (contact,)
 
 
 def _open_identity_key(branch, person_name, contact):
