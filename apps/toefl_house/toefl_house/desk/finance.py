@@ -541,9 +541,12 @@ def work():
                      "docstatus": ("!=", 2)},
             order_by="name asc", limit=BOUNCE_WINDOW)
     billed, drafts = _billing_documents_by_enrollment(fee_rows)
-    # A truncated native Fees read cannot prove an enrollment has no bill.
-    # Never offer a write under an incomplete financial read.
-    billing_read_complete = len(fee_rows) < BOUNCE_WINDOW
+    # Neither a capped enrollment list nor a capped fee list is proof that
+    # every native receivable was included. Stop issuing and show a visible
+    # exception rather than silently omitting the unexamined second page.
+    enrollment_read_complete = len(enrollments) < BOUNCE_WINDOW
+    fee_read_complete = len(fee_rows) < BOUNCE_WINDOW
+    billing_read_complete = enrollment_read_complete and fee_read_complete
     awaiting_billing = [row for row in enrollments
                         if row["name"] not in billed or row["name"] in drafts]
 
@@ -779,6 +782,27 @@ def work():
             item["action"] = action
         billing_items.append(item)
 
+    if not billing_read_complete:
+        missing = (
+            ("Enrollment" if not enrollment_read_complete else "") +
+            (" and " if not enrollment_read_complete and not fee_read_complete else "") +
+            ("tuition bill" if not fee_read_complete else "")
+        )
+        billing_items.insert(0, {
+            "id": "BILLING-REGISTER-REVIEW",
+            "person": "Finance register",
+            "status": "Billing status needs review",
+            "stage": "Incomplete billing register",
+            "stage_definition": (
+                "The authorized read reached its safety limit; some native "
+                "records have not been examined. A missing row is not proof "
+                "that an enrollment has been billed."),
+            "next": (missing + " records exceed the bounded desk preview. "
+                     "Finance Manager must verify the complete native register "
+                     "before issuing tuition from this desk."),
+            "next_role": "Finance Manager",
+        })
+        billing_items = billing_items[:LIMIT_QUEUES]
     assignment_items = [{
         "id": row["name"],
         "person": row.get("instructor") or "",
@@ -844,8 +868,8 @@ def work():
                     empty_title="Nothing is outstanding",
                     empty_body="No submitted invoice or fee carries an outstanding amount for your scope."),
             section("billing", "Awaiting billing", "queue", items=billing_items,
-                    empty_title="Everything submitted is billed",
-                    empty_body="Every confirmed enrollment has an issued bill, or no enrollment has been confirmed yet."),
+                    empty_title="No billing action in this preview",
+                    empty_body="No currently visible submitted enrollment requires billing. This bounded desk preview is not a complete audit of all records."),
             section("policy", "Correction policy", "facts", facts=policy_facts,
                     empty_title="No correction policy yet",
                     empty_body="No correction policy version is recorded; new correction requests fail closed until a Finance Officer records the first version."),
