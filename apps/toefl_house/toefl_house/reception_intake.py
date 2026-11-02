@@ -139,8 +139,8 @@ def protect_inquiry(doc, method=None):
             raise frappe.ValidationError(
                 "Provide changed visitor details and a recorded correction reason")
         return
-    for key in ("person_name", "phone", "program_interest", "study_mode",
-                "contact_country", "time_zone", "th_branch", "recorded_by",
+    for key in ("person_name", "phone", "program_interest",
+                "th_branch", "recorded_by",
                 "synthetic", "last_correction_reason", "last_corrected_by"):
         if (doc.get(key) or "") != (original.get(key) or ""):
             raise frappe.PermissionError(
@@ -209,7 +209,8 @@ def create_walkin_inquiry(request_key, person_name, phone="", program_interest="
 
 
 @frappe.whitelist(methods=["POST"])
-def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes=""):
+def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes="",
+                          study_mode=None, contact_country=None, time_zone=None):
     """Follow up a preliminary visitor with an audited optimistic revision."""
     def work(actor):
         # Frappe browser form and URL-encoded POST may transmit Int values
@@ -230,8 +231,20 @@ def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes=
         if doc.status == "Closed" or int(doc.version) != version:
             raise frappe.ValidationError("Inquiry changed or is closed; refresh first")
         new_notes = _text(notes, "Notes", length=1000)
-        if doc.status == status and (doc.notes or "") == new_notes:
-            raise frappe.ValidationError("Nothing changed; update the status or follow-up note")
+        new_mode = _study_mode(study_mode) if study_mode is not None else (
+            doc.get("study_mode") or "Undecided")
+        new_country = (_text(contact_country, "Country", length=80)
+                       if contact_country is not None else (doc.get("contact_country") or ""))
+        new_zone = (_time_zone(time_zone) if time_zone is not None
+                    else (doc.get("time_zone") or ""))
+        if (doc.status == status and (doc.notes or "") == new_notes
+                and (doc.get("study_mode") or "Undecided") == new_mode
+                and (doc.get("contact_country") or "") == new_country
+                and (doc.get("time_zone") or "") == new_zone):
+            raise frappe.ValidationError("Nothing changed; update the status, contact preference or follow-up note")
+        doc.study_mode = new_mode
+        doc.contact_country = new_country
+        doc.time_zone = new_zone
         doc.status = status
         doc.open_identity_key = (
             _open_identity_key(doc.th_branch, doc.person_name, doc.phone or "")
@@ -243,6 +256,8 @@ def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes=
     return _execute("update_walkin_inquiry", request_key, {
         "inquiry": inquiry, "expected_version": expected_version,
         "status": status, "notes": notes,
+        "study_mode": study_mode, "contact_country": contact_country,
+        "time_zone": time_zone,
     }, work)
 
 
