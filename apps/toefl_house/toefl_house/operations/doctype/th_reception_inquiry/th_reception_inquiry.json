@@ -10,6 +10,9 @@
     "person_name",
     "phone",
     "program_interest",
+    "study_mode",
+    "contact_country",
+    "time_zone",
     "th_branch",
     "status",
     "notes",
@@ -37,6 +40,27 @@
       "fieldname": "program_interest",
       "label": "Interested program",
       "fieldtype": "Data"
+    },
+    {
+      "fieldname": "study_mode",
+      "label": "Preferred study mode",
+      "fieldtype": "Select",
+      "options": "Undecided\nOn-campus\nOnline",
+      "default": "Undecided",
+      "reqd": 1,
+      "description": "An online student may join from any country; this is a preference, not a class assignment."
+    },
+    {
+      "fieldname": "contact_country",
+      "label": "Learner country (optional)",
+      "fieldtype": "Data",
+      "description": "Optional country stated by the learner, not inferred from the phone code."
+    },
+    {
+      "fieldname": "time_zone",
+      "label": "Learner time zone (optional)",
+      "fieldtype": "Data",
+      "description": "IANA time zone, e.g. Asia/Kabul or Europe/London. A class time must be confirmed before promising a session."
     },
     {
       "fieldname": "th_branch",
