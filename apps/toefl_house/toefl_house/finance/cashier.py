@@ -626,12 +626,15 @@ def cashier_position(day=None, companies=None):
             fields=["name", "total_expected", "total_counted", "total_variance",
                     "cashier", "reconciled_on"],
             order_by="creation desc",
-            limit_page_length=1,
+            # Read one extra close: a duplicate submitted company/day must
+            # never be silently hidden by a one-row status projection.
+            limit_page_length=2,
         )
         close = dict(closes[0]) if closes else None
+        multiple_submitted_closes = len(closes or []) > 1
         drift = False
         has_drawer_variance = False
-        integrity_review = False
+        integrity_review = multiple_submitted_closes
         if close:
             # Re-check every drawer against the immutable close snapshot.
             # Cancelled historical postings may change balances without a
@@ -644,7 +647,8 @@ def cashier_position(day=None, companies=None):
                 limit_page_length=MAX_DRAWERS + 1,
             )
             has_drawer_variance = drawer_variance_recorded(saved_rows or [])
-            integrity_review = cash_snapshot_amount_issue(saved_rows or [], close)
+            integrity_review = (integrity_review
+                                or cash_snapshot_amount_issue(saved_rows or [], close))
             drift = _balance_drift_after_close(saved_rows or [], balances)
             # A bank-only posting is not physical cash drift. Scope even the
             # balance-neutral post-close audit signal to this company's Cash
