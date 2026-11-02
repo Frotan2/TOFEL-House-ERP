@@ -727,6 +727,44 @@ class FinanceVocabularyTests(unittest.TestCase):
         self.assertEqual(items[0]["action"]["endpoint"],
                          "toefl_house.finance.corrections.approve_invoice_correction")
 
+    def test_integrity_review_history_masks_unverified_cash_totals(self):
+        # A submitted historic document may contain a forged parent total.
+        # Its source remains visible to the auditor, but desk summaries may
+        # not present that disputed amount as verified money.
+        from unittest.mock import patch
+        finance = self.finance
+        rows = [
+            {"name": "TH-CASH-BAD", "date": "2026-09-17",
+             "cashier": "Finance Officer", "total_expected":900.0,
+             "total_counted":100.0, "total_variance":-800.0,
+             "integrity_review": True, "drawer_variance": True},
+            {"name": "TH-CASH-GOOD", "date": "2026-09-17",
+             "cashier": "Finance Officer", "total_expected":100.0,
+             "total_counted":100.0, "total_variance":0.0,
+             "integrity_review": False, "drawer_variance": False},
+        ]
+        with (patch.object(finance, "_scope_companies", return_value=[]),
+              patch.object(finance.cashier_money, "cashier_position",
+                           return_value=[]),
+              patch.object(finance.cashier_money, "cashier_history",
+                           return_value=rows),
+              patch.object(finance.cashier_money, "day_window_hint",
+                           return_value=""),
+              patch.object(finance.tax_configuration,
+                           "describe_tax_configuration",
+                           return_value={"companies": []})):
+            _, _, history = finance._cash_close_sections("2026-09-17")
+        by_name = {row["id"]: row for row in history["items"]}
+        invalid = by_name["TH-CASH-BAD"]
+        self.assertEqual(invalid["status"], "Integrity review")
+        self.assertIsNone(invalid["amount"])
+        self.assertIn("integrity review", invalid["detail"])
+        self.assertNotIn("900.00", invalid["detail"])
+        valid = by_name["TH-CASH-GOOD"]
+        self.assertEqual(valid["status"], "Balanced")
+        self.assertEqual(valid["amount"], 0.0)
+        self.assertIn("expected 100.00", valid["detail"])
+
     def test_money_totals_summarize_per_currency(self):
         rows = [
             {"currency": "USD", "paid_amount": 100},
