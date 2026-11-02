@@ -956,7 +956,8 @@ def _cash_close_sections(day):
          "definition": ("Native GL expected balance for eligible Cash drawers. "
                         "Submitted closes retain the expected balance at closure; "
                         "open positions show the current ledger balance."),
-         "value": ("Cash-account review required" if currency_blocked
+         "value": ("Cash-account review required" if currency_blocked else
+                   "Integrity review required" if integrity_companies
                    else f"{expected_total:.2f}"), "owner": None},
         {"label": "Cash account safety",
          "definition": ("Physical Cash accounts must be Assets and use the "
@@ -970,6 +971,7 @@ def _cash_close_sections(day):
          "definition": ("Counted minus expected on the submitted close, exactly "
                         "as the control record states it."),
          "value": ("Cash-account review required" if currency_blocked else
+                   "Integrity review required" if integrity_companies else
                    f"{variance_total:.2f} net; drawer discrepancies in "
                    + ", ".join(variance_companies) if variance_companies else
                    f"{variance_total:.2f}" if closed else "Not closed"),
