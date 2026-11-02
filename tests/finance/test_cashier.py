@@ -1,7 +1,7 @@
 """Cashier day close: the counted drawer against the native ledger.
 
 The close is a control record, not a ledger entry. These tests pin the shape
-rules that make it trustworthy: only company Cash/Bank drawers, one row per
+rules that make it trustworthy: only company Cash drawers, one row per
 drawer, expected money computed from the ledger (never typed), variance equal
 to counted minus expected, and a written explanation whenever they differ.
 """
@@ -99,7 +99,8 @@ def load_cashier(drawers=()):
 
 
 DRAWERS = [{"name": "Cash - TH", "account_type": "Cash"},
-           {"name": "Bank - TH", "account_type": "Bank"}]
+           {"name": "Petty Cash - TH", "account_type": "Cash"}]
+BANK = {"name": "Bank - TH", "account_type": "Bank"}
 
 
 def close(**overrides):
@@ -126,7 +127,7 @@ class CloseShapeTests(unittest.TestCase):
 
     def test_partial_company_drawer_close_is_refused(self):
         module = load_cashier(DRAWERS)
-        with self.assertRaisesRegex(_ValidationError, "every enabled Cash/Bank drawer"):
+        with self.assertRaisesRegex(_ValidationError, "every enabled Cash drawer"):
             module.validate_close(close())
 
     def test_balanced_close_is_accepted(self):
@@ -195,10 +196,20 @@ class CloseShapeTests(unittest.TestCase):
     def test_non_cash_account_is_refused(self):
         row = _Row(account="Debtors - TH", account_type="Receivable",
                    expected_amount=0.0, counted_amount=0.0, variance=0.0, note="")
-        with self.assertRaisesRegex(_ValidationError, "not a Cash or Bank account"):
+        with self.assertRaisesRegex(_ValidationError, "not a Cash account"):
             self.module.validate_close(
                 close(accounts=[row], total_expected=0.0, total_counted=0.0,
                       total_variance=0.0))
+
+    def test_bank_balance_cannot_be_submitted_as_a_physical_count(self):
+        module = load_cashier([DRAWERS[0], BANK])
+        # Bank is reconciled against a statement, not by counting notes.
+        self.assertIsNone(module.validate_close(close()))
+        bank_row = _Row(account="Bank - TH", account_type="Bank",
+                        expected_amount=50.0, counted_amount=50.0,
+                        variance=0.0, note="")
+        with self.assertRaisesRegex(_ValidationError, "not a Cash account"):
+            module.validate_close(close(accounts=[bank_row]))
 
     def test_the_same_drawer_twice_is_refused(self):
         rows = [_Row(account="Cash - TH", account_type="Cash", expected_amount=10.0,
@@ -254,6 +265,18 @@ class DrawerTruthTests(unittest.TestCase):
     def test_no_drawers_means_nothing_to_reconcile(self):
         self.assertEqual(load_cashier().cash_drawers("TOEFL House"), [])
 
+    def test_bank_account_is_not_returned_as_a_cash_drawer(self):
+        module = load_cashier([DRAWERS[0], BANK])
+        self.assertEqual(module.cash_drawers("TOEFL House"), [DRAWERS[0]])
+        calls = []
+        def get_all(doctype, **kwargs):
+            calls.append((doctype, kwargs))
+            return [DRAWERS[0], BANK]
+        module.frappe.db.get_all = get_all
+        self.assertEqual(module.cash_drawers("TOEFL House"), [DRAWERS[0]])
+        self.assertEqual(calls[0][1]["filters"]["account_type"],
+                         ["in", ["Cash"]])
+
 
 class CloseDriftTests(unittest.TestCase):
     """Never hide a cancelled old GL row or offsetting post-close movement."""
@@ -262,12 +285,12 @@ class CloseDriftTests(unittest.TestCase):
         self.module = load_cashier(DRAWERS)
         self.saved = [
             {"account": "Cash - TH", "expected_amount": 100.0},
-            {"account": "Bank - TH", "expected_amount": 50.0},
+            {"account": "Petty Cash - TH", "expected_amount": 50.0},
         ]
         self.live = [
             {"account": "Cash - TH", "opening": 100.0,
              "movement": 0.0, "closing": 100.0},
-            {"account": "Bank - TH", "opening": 50.0,
+            {"account": "Petty Cash - TH", "opening": 50.0,
              "movement": 0.0, "closing": 50.0},
         ]
         self.after = False
@@ -323,6 +346,19 @@ class CloseDriftTests(unittest.TestCase):
         # A balance-neutral new posting still matters to a closed ledger.
         self.after = True
         self.assertTrue(self.position()["drift"])
+
+    def test_a_bank_only_post_close_entry_is_not_cash_drift(self):
+        # A bank posting must not mark a physically counted cash drawer stale.
+        seen = []
+        def sql(statement, params=None, **kwargs):
+            seen.append((statement, params))
+            return [{"name": "bank posting"}] if "account in (" not in statement else []
+        self.module.frappe.db.sql = sql
+        self.assertFalse(self.position()["drift"])
+        self.assertIn("account in (%s, %s)", seen[0][0])
+        self.assertIn("Cash - TH", seen[0][1])
+        self.assertIn("Petty Cash - TH", seen[0][1])
+        self.assertNotIn("Bank - TH", seen[0][1])
 
     def test_no_close_is_not_misreported_as_drift(self):
         self.closed = False
