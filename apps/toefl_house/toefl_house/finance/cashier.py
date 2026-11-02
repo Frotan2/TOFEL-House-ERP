@@ -137,11 +137,30 @@ def cash_drawers(company):
         ACCOUNT,
         filters={"company": company, "is_group": 0, "disabled": 0,
                  "account_type": ["in", list(CASH_TYPES)]},
-        fields=["name", "account_type"],
+        fields=["name", "account_type", "account_currency"],
         order_by="name asc",
         limit_page_length=200,
     )
     return [dict(row) for row in (rows or []) if row.get("account_type") == "Cash"]
+
+
+def cash_currency_issue(company, drawers):
+    """Refuse comparing a foreign-denominated physical count to base-currency GL.
+
+    Native GL Entry debit/credit is in the company's base currency. A Cash
+    account held in another currency must use a separately validated foreign
+    cash reconciliation; quietly comparing physical notes would be wrong.
+    """
+    base = frappe.db.get_value(COMPANY, company, "default_currency")
+    if not isinstance(base, str) or not base.strip():
+        return "Company base currency is not configured; cash close is blocked"
+    foreign = [row["name"] for row in drawers
+               if row.get("account_currency") != base]
+    if foreign:
+        return ("Cash accounts with currency different from company base "
+                f"{base} must be reconciled separately: "
+                + ", ".join(foreign[:5]))
+    return ""
 
 
 def drawer_balances(company, accounts, day):
@@ -197,9 +216,8 @@ def validate_close(doc):
             f"A cashier close covers at most {MAX_DRAWERS} drawers")
     drawers = {row["name"]: row.get("account_type") for row in cash_drawers(company)}
     seen = set()
-    # A signed close is for every postable Cash account; banks require
-    # separate statement reconciliation, not a physical money count.
-    # position, never just the drawers a caller chose to count.
+    # A signed close covers every postable physical Cash account, never just
+    # selected drawers; bank balances need statement reconciliation.
     if len(drawers) > MAX_DRAWERS:
         raise frappe.ValidationError("Too many enabled cash drawers for this supported close")
     total_expected = 0.0
@@ -308,10 +326,14 @@ def reconcile_cashier_day(request_key, company, date, counts):
                 f"A cashier close covers at most {MAX_DRAWERS} drawers")
         _closing_window(day)
 
-        drawers = {row["name"]: row.get("account_type") for row in cash_drawers(company)}
+        account_rows = cash_drawers(company)
+        drawers = {row["name"]: row.get("account_type") for row in account_rows}
         if not drawers:
             raise frappe.ValidationError(
                 f"{company} has no Cash account to reconcile")
+        currency_issue = cash_currency_issue(company, account_rows)
+        if currency_issue:
+            raise frappe.ValidationError(currency_issue)
         if len(drawers) > MAX_DRAWERS:
             raise frappe.ValidationError("More enabled drawers exist than this close supports")
         prepared = {}
@@ -465,6 +487,7 @@ def cashier_position(day=None, companies=None):
         drawers = cash_drawers(name)
         if not drawers:
             continue
+        currency_issue = cash_currency_issue(name, drawers)
         balances = drawer_balances(name, [row["name"] for row in drawers], day)
         closes = frappe.db.get_all(
             DAY,
@@ -503,6 +526,7 @@ def cashier_position(day=None, companies=None):
         out.append({
             "company": name,
             "date": day,
+            "currency_issue": currency_issue,
             "drawers": balances,
             "close": close,
             "drift": drift,
