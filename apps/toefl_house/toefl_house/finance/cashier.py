@@ -575,7 +575,7 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
     child_rows = frappe.db.get_all(
         COUNT,
         filters={"parenttype": DAY, "parent": ["in", names]},
-        fields=["parent", "variance"],
+        fields=["parent", "account", "variance"],
         limit_page_length=MAX_HISTORY * MAX_DRAWERS + 1,
     )
     by_parent = {name: [] for name in names}
@@ -584,10 +584,25 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
         if parent in by_parent:
             by_parent[parent].append(child)
     truncated = len(child_rows or []) > MAX_HISTORY * MAX_DRAWERS
+    # The historical record is immutable, but it must not be advertised as
+    # reconciled if it counted a Bank account or omitted a physical Cash drawer.
+    # Scope is inherited from the authorized parent Company history read.
+    cash_by_company = {}
     for row in history:
+        company = row.get("company")
+        if company not in cash_by_company:
+            cash_by_company[company] = {
+                account["name"] for account in cash_drawers(company)
+            }
         snapshot = by_parent[row["name"]]
-        row["drawer_variance"] = (truncated or
-                                  drawer_variance_recorded(snapshot))
+        seen = [child.get("account") for child in snapshot]
+        permitted_cash = cash_by_company[company]
+        row["integrity_review"] = (
+            truncated or not snapshot or len(snapshot) > MAX_DRAWERS
+            or len(seen) != len(set(seen))
+            or set(seen) != permitted_cash
+        )
+        row["drawer_variance"] = drawer_variance_recorded(snapshot)
     return history
 
 
