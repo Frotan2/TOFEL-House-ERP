@@ -1,6 +1,6 @@
 # TOEFL House — Reception daily registration (staff procedure)
 
-**Scope:** front-counter intake only. This page is for an authorized Reception login. No developer tools, JSON editing, or manual database changes are part of daily registration. Changes in PR #124 remain **TEST PACKAGE — NO REAL DATA** until release acceptance.
+**Scope:** front-counter intake only. This page is for an authorized Reception login. No developer tools, JSON editing, or manual database changes are part of daily registration. For collection, tuition billing, numbered receipts, Finance handovers, corrections and worldwide-online payment limitations, see [Reception ↔ Finance controlled daily handoff](RECEPTION-FINANCE-HANDOFF.md). Changes in PR #124 remain **TEST PACKAGE — NO REAL DATA** until release acceptance.
 
 ## Walk-in: no email or placement result
 1. Sign in with your own Reception account and open **TOEFL House Reception Desk**.
