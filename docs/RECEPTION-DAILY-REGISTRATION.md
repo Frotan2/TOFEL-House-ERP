@@ -2,6 +2,14 @@
 
 **Scope:** front-counter intake only. This page is for an authorized Reception login. No developer tools, JSON editing, or manual database changes are part of daily registration. For collection, tuition billing, numbered receipts, Finance handovers, corrections and worldwide-online payment limitations, see [Reception ↔ Finance controlled daily handoff](RECEPTION-FINANCE-HANDOFF.md). Changes in PR #124 remain **TEST PACKAGE — NO REAL DATA** until release acceptance.
 
+## Before the first Reception login — Branch permission (Course Owner)
+
+1. The Course Owner or an authorized administrator first creates or confirms the actual **Branch** record. Do **not** create a fictional Branch for an online student; online inquiries still belong to an authorized TOEFL House operating Branch.
+2. In ERPNext's **User Permission** form, create a permission for the actual Reception **User** with **Allow = Branch** and **For Value = the real Branch name**. Each additional authorized Branch requires its own explicit permission. Do not give Reception the Administrator, System Manager or Owner roles.
+3. The Reception employee signs in with that enabled account and opens **TOEFL House Reception Desk**. A missing Branch assignment must produce an access-denied message, **not** an empty unrestricted customer list. The Course Owner corrects the User Permission; the receptionist does not bypass the restriction.
+4. Verify one-Branch staff see only their Branch's people and that two-Branch staff see only their two authorized Branches. The Reception Desk and person lookup are read-only projections; admission, payment and student-conversion commands retain their independent role and record permissions.
+5. If the User Permission has been changed, sign out and back in before retesting. Never repair this by changing application source code, SQL data, fabricated emails, or weakening the branch-security checks.
+
 ## Walk-in: no email or placement result
 1. Sign in with your own Reception account and open **TOEFL House Reception Desk**.
 2. Under **New visitors and follow-ups**, choose **Register a new visitor**.
