@@ -225,6 +225,32 @@ class ReceptionWalkinTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
                 self.module._phone(invalid)
 
+    def test_recording_online_timezone_does_not_falsely_mark_first_contact(self):
+        self.module.create_walkin_inquiry(
+            "first-online", "Online Visitor", phone="+4915123456789",
+            study_mode="Online", contact_country="Germany")
+        result = self.module.update_walkin_inquiry(
+            "confirm-zone", "INQ-001", 1, "New",
+            study_mode="Online", contact_country="Germany",
+            time_zone="Europe/Berlin")
+        self.assertEqual(result["status"], "New")
+        self.assertEqual(self.saved["INQ-001"]["time_zone"], "Europe/Berlin")
+        self.assertEqual(result["version"], 2)
+        with self.assertRaisesRegex(ValidationError, "Nothing changed"):
+            self.module.update_walkin_inquiry(
+                "no-change", "INQ-001", 2, "New",
+                study_mode="Online", contact_country="Germany",
+                time_zone="Europe/Berlin")
+        self.module.update_walkin_inquiry(
+            "real-contact", "INQ-001", 2, "Contacted",
+            notes="Actual call completed")
+        with self.assertRaisesRegex(ValidationError, "cannot be returned to New"):
+            self.module.update_walkin_inquiry(
+                "false-downgrade", "INQ-001", 3, "New",
+                notes="Actual call completed")
+        self.assertEqual(self.saved["INQ-001"]["status"], "Contacted")
+        self.assertEqual(self.saved["INQ-001"]["version"], 3)
+
     def test_online_timezone_can_be_corrected_in_followup_not_by_identity_edit(self):
         self.module.create_walkin_inquiry(
             "foreign-new", "Online Learner", phone="+12025550199",
