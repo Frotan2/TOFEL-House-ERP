@@ -4197,6 +4197,11 @@ def main():
             counts=[dict(account=name,counted_amount=balances[name]['closing'],note='')
                     for name in names]
             assert all(row['counted_amount']>=0 for row in counts),counts
+            partial=denied_because(
+                lambda:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
+                    'fin_cashier_partial_0001',company,day,counts[:1])),
+                'count every enabled Cash drawer')
+            assert partial['denied'],partial
             for index,invalid in enumerate(('NaN','Infinity','-Infinity','1e9999')):
                 invalid_counts=[dict(row) for row in counts]
                 invalid_counts[0]['counted_amount']=invalid
@@ -4252,7 +4257,9 @@ def main():
             assert historic[0]['drawer_variance'] is False,historic[0]
             assert abs(float(historic[0]['total_expected'])-expected_total)<0.01,historic[0]
             return {'cashier_day':result['cashier_day'],'drawer':account,
-                    'drawers_counted':len(counts),'ledger_closing':round(expected,2),
+                    'drawers_counted':len(counts),
+                    'partial_close_refused':partial['denied'],
+                    'ledger_closing':round(expected,2),
                     'counted':result['total_counted'],
                     'total_expected':expected_total,
                     'variance':result['total_variance'],'cashier':stored.cashier,
