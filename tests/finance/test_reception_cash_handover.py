@@ -19,6 +19,7 @@ COLLECTOR = "reception@example.test"
 class Transfer:
     def __init__(self, facts, test):
         self.__dict__.update(facts)
+        self.name = "ACC-HANDOVER-TEST"
         self.flags = types.SimpleNamespace(ignore_permissions=False)
         self.test = test
         self.insert = Mock(return_value=self)
@@ -154,8 +155,7 @@ class NativeCashHandoverTests(unittest.TestCase):
         self.assertEqual(self.transfer.docstatus, 1)
         self.transfer.submit.assert_called_once_with()
         for receipt in self.receipts.values():
-            self.assertEqual(receipt.th_collection_handover, result["payment_entry"]
-                             if result["payment_entry"] is not None else None)
+            self.assertEqual(receipt.th_collection_handover, "ACC-HANDOVER-TEST")
             receipt.save.assert_called_once_with(ignore_permissions=True)
 
     def test_second_handover_of_same_source_receipts_fails(self):
