@@ -50,7 +50,9 @@
 - [ ] Double-clicking Save while one registration POST is pending cannot send two requests; a failed request can be retried with the same operation key.
 - [ ] Visitor wildcard characters are treated literally, and updating a visit without any changed data does not create an audit revision.
 - [ ] New, phone-free walk-in records without any email or candidate account.
-- [ ] Afghan and Latin phone numerals normalize and search consistently.
+- [ ] Afghan and Latin phone numerals normalize and search consistently. Full Afghan local `079...` and international `+9379...` versions return the same open contact, including when two registration requests race; shared family phones never merge different names.
+- [ ] An exact printed Inquiry/Applicant/Student ID remains at the top when fuzzy matches fill the permitted first page. An overlong search is rejected before any read, not silently cut to a different identity.
+- [ ] A successful visitor or follow-up POST refreshes both the main queue and an already-open search. Late older GET responses, errors and loading indicators cannot replace the newest screen.
 - [ ] Same-key replay yields exactly one inquiry; different-key multi-submit is explicitly monitored.
 - [ ] Other-branch Reception is unable to read, query or update the inquiry, including cached receipts.
 - [ ] Invalid or expired placement cannot create admission from the queue.
