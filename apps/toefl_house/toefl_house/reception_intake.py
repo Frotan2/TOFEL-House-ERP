@@ -215,7 +215,7 @@ def create_walkin_inquiry(request_key, person_name, phone="", program_interest="
 
 
 @frappe.whitelist(methods=["POST"])
-def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes="",
+def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes=None,
                           study_mode=None, contact_country=None, time_zone=None):
     """Follow up a preliminary visitor with an audited optimistic revision."""
     def work(actor):
@@ -242,7 +242,11 @@ def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes=
         if status == "New" and doc.status != "New":
             raise frappe.ValidationError(
                 "A contacted or referred inquiry cannot be returned to New")
-        new_notes = _text(_optional_input(notes), "Notes", length=1000)
+        # A non-UI caller omitting notes is not authorizing loss of
+        # the visitor's previous follow-up evidence. The guided UI sends
+        # "" deliberately when staff clear the note field.
+        new_notes = ((doc.notes or "") if notes is None
+                     else _text(notes, "Notes", length=1000))
         new_mode = _study_mode(study_mode) if study_mode is not None else (
             doc.get("study_mode") or "Undecided")
         new_country = (_text(contact_country, "Country", length=80)
