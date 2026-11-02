@@ -1582,6 +1582,15 @@ frappe.provide("toefl_house.role_desks");
 				fields.forEach((field) => {
 					if (field.fieldname) args[field.fieldname] = values[field.fieldname];
 				});
+				if (/^toefl_house\\.reception_intake\\./.test(action.endpoint)) {
+					// Native Frappe Data/Small Text inputs may return null or
+					// undefined when cleared. An explicitly blank optional field
+					// means "clear", never "preserve the old value".
+					["phone", "program_interest", "contact_country", "time_zone",
+						"branch", "notes"].forEach((key) => {
+						if (key in args && args[key] == null) args[key] = "";
+					});
+				}
 				if (cashClose) {
 					const counts = [];
 					for (const [index, drawer] of action.args.drawers.entries()) {
