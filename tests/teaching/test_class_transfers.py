@@ -383,13 +383,16 @@ class ApprovalTests(TransferTestBase):
         # any separately authorized capacity override.
         transfer = self.request(key="transfer-request-queue-0001")["name"]
         first = self.ops.seed_waiting("GRP-B", "STU-3", status="Waiting")
+        override = self.ops.seed_override("GRP-B", "STU-1")
         self.ops.login(APPROVER)
         self.site.set_roles(APPROVER, ["Academic Manager"])
         before = (self.ops.roster("GRP-A"), self.ops.roster("GRP-B"))
         with self.assertRaises(ValidationError) as ctx:
             self.ops.transfers.approve_class_transfer(
-                "transfer-queue-approve-0001", transfer)
+                "transfer-queue-approve-0001", transfer, override=override)
         self.assertIn("pending waiting-list entries", str(ctx.exception))
+        self.assertEqual(self.site.get("TH Capacity Approval", override)["status"],
+                         "Approved", "a refused queue bypass must not burn an override")
         self.assertEqual((self.ops.roster("GRP-A"), self.ops.roster("GRP-B")),
                          before)
         self.assertEqual(self.site.get("TH Class Transfer", transfer)["status"],
