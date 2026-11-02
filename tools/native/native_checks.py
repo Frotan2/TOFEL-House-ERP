@@ -6862,11 +6862,35 @@ def main():
                     sections=payload.get('sections') or []
                     target=next((x for x in sections if x.get('id')==section_id),None)
                     assert target,(label,'business section not rendered',section_id)
-                    # Realistic synthetic native rows must be visible on the
-                    # operational Reception, Finance and Instructor desks,
-                    # not merely a successful login with empty placeholders.
-                    if label in ('receptionist','finance_manager','teacher_one'):
-                        assert target.get('items'),(label,section_id,'empty despite native fixture data')
+                    # A branch-scoped Reception funnel is legitimately
+                    # EMPTY after its own applicants have been admitted:
+                    # do not demand visibility of older branchless intake.
+                    # Prove real business data through the live scoped Student
+                    # lookup instead. Finance and Teacher queues still require
+                    # populated items for their own separate qualifications.
+                    reception_verified=[]
+                    if label=='receptionist':
+                        for tail,student_id in branch_fixture['fixture_students'].items():
+                            student_name=frappe.db.get_value(
+                                'Student',student_id,'student_name')
+                            lookup=session.get(
+                                base+'/api/method/toefl_house.desk.reception.lookup',
+                                params={'query':student_name},timeout=40)
+                            assert lookup.status_code==200,(
+                                'reception populated student lookup',tail,
+                                lookup.status_code,lookup.text[:250])
+                            data=lookup.json().get('message')
+                            students=(data or {}).get('students') or []
+                            selected=next((row for row in students
+                                           if row.get('id')==student_id),None)
+                            assert selected,(
+                                'authorized Branch student missing from Reception',
+                                tail,student_id,students)
+                            reception_verified.append(student_id)
+                        assert len(reception_verified)==2,reception_verified
+                    elif label in ('finance_manager','teacher_one'):
+                        assert target.get('items'),(
+                            label,section_id,'empty despite native fixture data')
                     stranger=session.get(base+'/api/method/'+foreign_api,
                         headers={'Accept':'application/json'},timeout=40,
                         allow_redirects=False)
@@ -6876,6 +6900,7 @@ def main():
                     report[label]={'own_page':page,'role_http':200,
                         'business_section':section_id,
                         'native_rows':len(target.get('items') or []),
+                        'authorized_branch_students_verified':len(reception_verified),
                         'cross_role_denied':True}
             frappe.set_user('Administrator')
             assert frappe.db.count('Fees',{'docstatus':1})>=1,'populated native Finance ledger missing'
