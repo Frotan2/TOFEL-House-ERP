@@ -7,8 +7,8 @@ All writes use operation receipts, native Branch scope, version locks and
 the guarded document controller.
 """
 import re
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import frappe
-import pytz
 
 from toefl_house.api import _execute
 from toefl_house.command_scope import resolve_creation_branch
@@ -57,11 +57,18 @@ def _time_zone(value):
     # Kabul time. Store an IANA timezone only when it actually resolves.
     if name.startswith(("/", ".")) or ".." in name:
         raise frappe.ValidationError("Choose a valid time zone, e.g. Asia/Kabul")
-    # pytz is an app dependency with its own IANA database, unlike
-    # zoneinfo which may lack tzdata in a minimal Docker/Windows image.
+    # Runtime Frappe normally has pytz's bundled IANA database; the offline
+    # contract test intentionally does not install Frappe's dependencies.
+    # Use stdlib zoneinfo there. Do not require operating-system tzdata on
+    # production Windows/Docker if Frappe's pytz distribution is present.
     try:
-        pytz.timezone(name)
-    except (pytz.UnknownTimeZoneError, ValueError, KeyError):
+        try:
+            import pytz
+        except ModuleNotFoundError:
+            ZoneInfo(name)
+        else:
+            pytz.timezone(name)
+    except (ZoneInfoNotFoundError, ValueError, KeyError, LookupError):
         raise frappe.ValidationError(
             "Choose a valid time zone such as Asia/Kabul or Europe/London") from None
     return name
