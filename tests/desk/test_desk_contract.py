@@ -1503,7 +1503,7 @@ class FinanceBillingGuidanceWorldTests(unittest.TestCase):
     unconfigured while the command would have billed them).
     """
 
-    def _payload(self):
+    def _payload(self, fees=None, enrollments=None):
         world = {
             "Program Enrollment": [
                 {"name": "ENR-DRAFT", "student": "STU-1", "student_name": "One",
@@ -1560,6 +1560,10 @@ class FinanceBillingGuidanceWorldTests(unittest.TestCase):
             ],
         }
 
+        if fees is not None:
+            world["Fees"] = fees
+        if enrollments is not None:
+            world["Program Enrollment"] = enrollments
         world_get_all = desk_world_get_all("billing world", world)
 
         module = _import_desk("finance", roles={"Finance Manager", "Finance Officer"})
@@ -1574,6 +1578,60 @@ class FinanceBillingGuidanceWorldTests(unittest.TestCase):
     def _item(self, payload, enrollment):
         return next(item for item in self._billing(payload)["items"]
                     if item["id"] == enrollment)
+
+    def test_draft_fee_is_visible_but_never_collectible(self):
+        payload = self._payload(fees=[
+            {"name": "EDU-DRAFT-001", "program_enrollment": "ENR-SUB", "docstatus": 0}
+        ])
+        item = self._item(payload, "ENR-SUB")
+        self.assertEqual(item["status"], "Draft fee needs review")
+        self.assertEqual(item["next_role"], "Finance Manager")
+        self.assertIn("NOT a collectible bill", item["next"])
+        self.assertIn("EDU-DRAFT-001", item["next"])
+        self.assertNotIn("action", item)
+        other = self._item(payload, "ENR-DRAFT")
+        self.assertEqual(other["status"], "Unbilled")
+        self.assertIn("action", other)
+
+    def test_posted_fee_is_not_a_duplicate_unbilled_queue_entry(self):
+        payload = self._payload(fees=[
+            {"name": "EDU-POSTED", "program_enrollment": "ENR-SUB", "docstatus": 1}
+        ])
+        ids = {row["id"] for row in self._billing(payload)["items"]}
+        self.assertNotIn("ENR-SUB", ids)
+        self.assertIn("ENR-DRAFT", ids)
+
+    def test_draft_beside_posted_bill_is_a_review_exception(self):
+        payload = self._payload(fees=[
+            {"name": "EDU-POSTED", "program_enrollment": "ENR-SUB", "docstatus": 1},
+            {"name": "EDU-DRAFT", "program_enrollment": "ENR-SUB", "docstatus": 0},
+        ])
+        item = self._item(payload, "ENR-SUB")
+        self.assertEqual(item["status"], "Draft fee needs review")
+        self.assertIn("separate submitted tuition bill", item["next"])
+        self.assertNotIn("action", item)
+
+    def test_full_fees_page_never_offers_issue_action(self):
+        fees = [
+            {"name": f"EDU-DRAFT-{i:04}", "program_enrollment": "ENR-SUB",
+             "docstatus": 0} for i in range(400)
+        ]
+        billing = self._billing(self._payload(fees=fees))
+        self.assertEqual(billing["items"][0]["id"], "BILLING-REGISTER-REVIEW")
+        self.assertIn("tuition bill records exceed", billing["items"][0]["next"])
+        self.assertTrue(all("action" not in item for item in billing["items"]))
+
+    def test_full_enrollment_page_is_explicit_incomplete_read(self):
+        enrollments = [
+            {"name": f"ENR-{i:04}", "student": f"STU-{i:04}",
+             "student_name": f"Learner {i}", "program": "SYN-P2",
+             "academic_year": "2026", "enrollment_date": "2026-09-01",
+             "docstatus": 1} for i in range(400)
+        ]
+        billing = self._billing(self._payload(fees=[], enrollments=enrollments))
+        self.assertEqual(billing["items"][0]["id"], "BILLING-REGISTER-REVIEW")
+        self.assertIn("Enrollment records exceed", billing["items"][0]["next"])
+        self.assertTrue(all("action" not in item for item in billing["items"]))
 
     def test_submitted_plan_is_billed_not_blamed(self):
         payload = self._payload()
