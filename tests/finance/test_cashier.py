@@ -525,6 +525,77 @@ class CashHistoryVarianceTests(unittest.TestCase):
         self.assertFalse(record["drawer_variance"])
 
 
+class SubmittedClosePersistenceTests(unittest.TestCase):
+    """The submitted header and every counted drawer must survive DB reload."""
+
+    def setUp(self):
+        self.module = load_cashier(DRAWERS)
+        self.header = {
+            "docstatus": 1, "company": "TOEFL House",
+            "date": "2026-10-24", "cashier": "cashier@example.com",
+            "total_expected": 150.0, "total_counted": 150.0,
+            "total_variance": 0.0,
+        }
+        self.saved = [
+            {"account": "Cash - TH", "expected_amount": 100.0,
+             "counted_amount": 100.0, "variance": 0.0, "note": ""},
+            {"account": "Petty Cash - TH", "expected_amount": 50.0,
+             "counted_amount": 50.0, "variance": 0.0, "note": ""},
+        ]
+        self.expected = [dict(row) for row in self.saved]
+        self.module.frappe.db.get_value = (
+            lambda *args, **kwargs: dict(self.header))
+        self.module.frappe.db.get_all = (
+            lambda *args, **kwargs: [dict(row) for row in self.saved])
+
+    def verify(self):
+        return self.module.verify_submitted_cash_close(
+            "TH-CASH-2026-00001", "TOEFL House", "2026-10-24",
+            "cashier@example.com", self.expected)
+
+    def test_saved_header_and_drawers_are_verified(self):
+        self.assertEqual(self.verify(), self.header)
+
+    def test_missing_or_unsubmitted_header_is_rejected(self):
+        self.header["docstatus"] = 0
+        with self.assertRaisesRegex(_ValidationError, "not submitted"):
+            self.verify()
+        self.header["docstatus"] = 1
+        self.header["company"] = "Other Company"
+        with self.assertRaisesRegex(_ValidationError, "expected company"):
+            self.verify()
+
+    def test_missing_extra_and_duplicate_saved_drawers_are_rejected(self):
+        self.saved.pop()
+        with self.assertRaisesRegex(_ValidationError, "drawers differ"):
+            self.verify()
+        self.saved = [dict(row) for row in self.expected]
+        self.saved.append(dict(self.expected[0]))
+        with self.assertRaisesRegex(_ValidationError, "drawers differ"):
+            self.verify()
+
+    def test_tampered_persisted_cash_amount_and_note_are_rejected(self):
+        for field, bad in (
+            ("expected_amount", 110),
+            ("counted_amount", 110),
+            ("variance", 10),
+            ("note", "unapproved edit"),
+        ):
+            self.saved = [dict(row) for row in self.expected]
+            self.saved[0][field] = bad
+            with self.subTest(field=field), self.assertRaisesRegex(
+                _ValidationError, "Stored cash close"):
+                self.verify()
+
+    def test_parent_totals_must_equal_saved_drawers(self):
+        for name in ("total_expected", "total_counted", "total_variance"):
+            self.header[name] = 900.0
+            with self.subTest(name=name), self.assertRaisesRegex(
+                _ValidationError, name):
+                self.verify()
+            self.header[name] = 150.0 if name != "total_variance" else 0.0
+
+
 class CommandContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
