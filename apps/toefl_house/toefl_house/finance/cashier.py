@@ -611,7 +611,13 @@ def cashier_position(day=None, companies=None):
 
 
 def cashier_history(companies=None, limit=MAX_HISTORY):
-    """Read-only close history, newest first (bounded)."""
+    """Read-only, immutable past closes; current drawer membership is NOT history.
+
+    A new Cash account or an old disabled Cash account must not invalidate
+    a valid earlier day. Verify the actual saved account identities and all
+    recorded totals. No historic account membership snapshot exists for
+    arbitrary missing zero-balance drawers, so do not claim to prove one.
+    """
     filters = {"docstatus": 1}
     resolved = _resolve_companies(companies)
     filters["company"] = ["in", resolved] if resolved else ["in", [""]]
@@ -621,7 +627,7 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
         fields=["name", "date", "company", "cashier", "total_expected",
                 "total_counted", "total_variance", "reconciled_on"],
         order_by="date desc, creation desc",
-        limit_page_length=min(int(limit), MAX_HISTORY),
+        limit_page_length=min(max(int(limit), 0), MAX_HISTORY),
     )
     history = [dict(row) for row in (rows or [])]
     if not history:
@@ -630,49 +636,62 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
     child_rows = frappe.db.get_all(
         COUNT,
         filters={"parenttype": DAY, "parent": ["in", names]},
-        fields=["parent", "account", "variance"],
+        fields=["parent", "account", "expected_amount", "counted_amount",
+                "variance"],
         limit_page_length=MAX_HISTORY * MAX_DRAWERS + 1,
     )
     by_parent = {name: [] for name in names}
     for child in child_rows or []:
-        parent = child.get("parent")
-        if parent in by_parent:
-            by_parent[parent].append(child)
+        if child.get("parent") in by_parent:
+            by_parent[child["parent"]].append(child)
     truncated = len(child_rows or []) > MAX_HISTORY * MAX_DRAWERS
-    # The historical record is immutable, but it must not be advertised as
-    # reconciled if it counted a Bank account or omitted a physical Cash drawer.
-    # Scope is inherited from the authorized parent Company history read.
-    cash_by_company = {}
-    currency_issues = {}
+    historical_accounts = {
+        child.get("account") for child in child_rows or []
+        if isinstance(child.get("account"), str) and child.get("account")
+    }
+    # Account records include disabled accounts: they were still legitimate
+    # cash drawers at the time of a historic close.
+    account_rows = (frappe.db.get_all(
+        ACCOUNT,
+        filters={"name": ["in", sorted(historical_accounts)]},
+        fields=["name", "company", "account_type", "root_type",
+                "account_currency"],
+        limit_page_length=MAX_HISTORY * MAX_DRAWERS + 1,
+    ) if historical_accounts else [])
+    accounts = {a["name"]: a for a in account_rows or []}
+    companies_currency = {}
     for row in history:
         company = row.get("company")
-        if company not in cash_by_company:
-            account_rows = cash_drawers(company)
-            cash_by_company[company] = {
-                account["name"] for account in account_rows
-            }
-            currency_issues[company] = cash_currency_issue(company, account_rows)
+        if company not in companies_currency:
+            companies_currency[company] = frappe.db.get_value(
+                COMPANY, company, "default_currency")
+        base = companies_currency[company]
         snapshot = by_parent[row["name"]]
         seen = [child.get("account") for child in snapshot]
-        permitted_cash = cash_by_company[company]
         integrity_issue = (
             truncated or not snapshot or len(snapshot) > MAX_DRAWERS
-            or len(seen) != len(set(seen))
-            or set(seen) != permitted_cash
-            or bool(currency_issues[company])
+            or len(seen) != len(set(seen)) or not base
         )
-        # Compare the immutable parent net to the original per-drawer rows.
-        # A falsified zero aggregate must not manufacture a Balanced status.
-        try:
-            recorded_net = _stored_money(
-                row.get("total_variance"), "Historical cash close net variance")
-            child_net = round(sum(
-                _stored_money(child.get("variance"), "Cash drawer variance")
-                for child in snapshot), 2)
-            integrity_issue = (integrity_issue or
-                               abs(recorded_net - child_net) > TOLERANCE)
-        except frappe.ValidationError:
-            integrity_issue = True
+        for account in seen:
+            detail = accounts.get(account)
+            if (not detail or detail.get("company") != company
+                    or detail.get("account_type") != "Cash"
+                    or detail.get("root_type") != "Asset"
+                    or (detail.get("account_currency") or base) != base):
+                integrity_issue = True
+        for total, field in (("total_expected", "expected_amount"),
+                             ("total_counted", "counted_amount"),
+                             ("total_variance", "variance")):
+            try:
+                actual_total = _stored_money(
+                    row.get(total), f"Historical cash close {total}")
+                saved_total = round(sum(
+                    _stored_money(child.get(field), f"Historical drawer {field}")
+                    for child in snapshot), 2)
+                if abs(actual_total - saved_total) > TOLERANCE:
+                    integrity_issue = True
+            except frappe.ValidationError:
+                integrity_issue = True
         row["integrity_review"] = integrity_issue
         row["drawer_variance"] = drawer_variance_recorded(snapshot)
     return history
