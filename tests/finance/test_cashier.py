@@ -690,6 +690,7 @@ class SubmittedClosePersistenceTests(unittest.TestCase):
         self.header = {
             "docstatus": 1, "company": "TOEFL House",
             "date": "2026-10-24", "cashier": "cashier@example.com",
+            "reconciled_on": "2026-10-24 18:00:00",
             "total_expected": 150.0, "total_counted": 150.0,
             "total_variance": 0.0,
         }
@@ -721,6 +722,14 @@ class SubmittedClosePersistenceTests(unittest.TestCase):
         self.header["company"] = "Other Company"
         with self.assertRaisesRegex(_ValidationError, "expected company"):
             self.verify()
+
+    def test_saved_receipt_refuses_missing_or_invalid_reconciliation_time(self):
+        for invalid in (None, "", "invalid", "2026-10-23 23:59:59"):
+            self.header["reconciled_on"] = invalid
+            with self.subTest(value=invalid), self.assertRaisesRegex(
+                    _ValidationError, "reconciliation time"):
+                self.verify()
+        self.header["reconciled_on"] = "2026-10-24 18:00:00"
 
     def test_missing_extra_and_duplicate_saved_drawers_are_rejected(self):
         self.saved.pop()
