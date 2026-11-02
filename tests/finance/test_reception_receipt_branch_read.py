@@ -24,7 +24,10 @@ class ReceiptReadBranchTests(unittest.TestCase):
         self.scoped = Mock()
         self.document = types.SimpleNamespace(
             name="ACC-PAY-TEST", th_collection_fees="EDU-FEE-TEST",
-            docstatus=1, th_reception_collector=self.collector)
+            docstatus=1, th_reception_collector=self.collector,
+            payment_type="Receive", party_type="Student", party="STU-TEST",
+            references=[types.SimpleNamespace(
+                reference_doctype="Fees", reference_name="EDU-FEE-TEST")])
 
         frappe = types.ModuleType("frappe")
         frappe.PermissionError = type("AccessDenied", (Exception,), {})
@@ -95,6 +98,45 @@ class ReceiptReadBranchTests(unittest.TestCase):
         self.document.th_reception_collector = "other-reception@example.test"
         with self.assertRaisesRegex(self.frappe.PermissionError, "only its own"):
             self.handler("ACC-PAY-TEST")
+
+    def test_unrelated_payment_entry_cannot_be_printed_as_a_reception_receipt(self):
+        invalid_updates = (
+            {"payment_type": "Internal Transfer"},
+            {"party_type": "Customer"},
+            {"party": ""},
+            {"th_reception_collector": None},
+            {"th_collection_fees": None},
+            {"docstatus": 0},
+            {"references": []},
+            {"references": [types.SimpleNamespace(
+                reference_doctype="Sales Invoice", reference_name="EDU-FEE-TEST")]},
+            {"references": [types.SimpleNamespace(
+                reference_doctype="Fees", reference_name="DIFFERENT-FEE")]},
+        )
+        original = dict(vars(self.document))
+        for update in invalid_updates:
+            with self.subTest(update=update):
+                vars(self.document).update(original)
+                vars(self.document).update(update)
+                with self.assertRaisesRegex(
+                        self.frappe.PermissionError, "not an issued Reception receipt"):
+                    self.handler("ACC-PAY-TEST")
+
+    def test_void_receipt_still_has_explicit_auditable_read(self):
+        self.document.docstatus = 2
+        self.assertEqual(self.handler("ACC-PAY-TEST")["number"], "ACC-PAY-TEST")
+
+    def test_disabled_or_unauthorized_actor_is_denied_before_loading_receipt(self):
+        self.roles = set()
+        self.frappe.get_doc.reset_mock()
+        with self.assertRaisesRegex(self.frappe.PermissionError, "permitted staff"):
+            self.handler("ACC-PAY-TEST")
+        self.frappe.get_doc.assert_not_called()
+        self.roles = {"Reception"}
+        self.frappe.db.get_value = lambda *args: 0
+        with self.assertRaisesRegex(self.frappe.PermissionError, "permitted staff"):
+            self.handler("ACC-PAY-TEST")
+        self.frappe.get_doc.assert_not_called()
 
     def test_foreign_branch_is_rechecked_before_loading_receipt(self):
         self.scoped.side_effect = self.frappe.PermissionError("outside Branch")
