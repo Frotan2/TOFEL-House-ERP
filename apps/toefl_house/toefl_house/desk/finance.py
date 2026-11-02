@@ -920,6 +920,8 @@ def _cash_close_sections(day):
     closed = [row for row in position if row.get("close")]
     variance_companies = [row["company"] for row in closed
                           if row.get("drawer_variance")]
+    integrity_companies = [row["company"] for row in closed
+                           if row.get("integrity_review")]
     drifted = [row["company"] for row in position if row.get("drift")]
     currency_blocked = {row["company"]: row["currency_issue"]
                         for row in position if row.get("currency_issue")}
@@ -943,6 +945,7 @@ def _cash_close_sections(day):
                         "Partial company closes and posting drift are never reported as Closed."),
          "value": ("No drawers" if not drawers else
                    "Cash account review" if currency_blocked else
+                   "Integrity review" if integrity_companies else
                    "Drift" if drifted else
                    "Closed with variance" if (len(closed) == len(position)
                                               and variance_companies) else
@@ -985,6 +988,11 @@ def _cash_close_sections(day):
         close = closes.get(company)
         if company in currency_blocked:
             state, next_text = "Cash account review", currency_blocked[company]
+        elif close and company in integrity_companies:
+            state, next_text = "Integrity review", (
+                "Saved counted amounts, drawer variances or close totals do "
+                "not reconcile. Finance Auditor must review the immutable "
+                "cash close; do not treat this day as balanced.")
         elif close and drifted and company in drifted:
             state, next_text = "Drift", ("Re-check the drawer against the ledger; "
                                          "the day was posted to after the close. "
@@ -1013,7 +1021,10 @@ def _cash_close_sections(day):
                                  "balance of this account; counted money is what "
                                  "the cashier records."),
             "next": next_text,
-            "next_role": "Finance Officer",
+            "next_role": ("Finance Auditor"
+                          if state in ("Integrity review", "Drift",
+                                       "Closed with variance")
+                          else "Finance Officer"),
             "waiting_since": day,
             "amount": (None if company in currency_blocked
                        else drawer["closing"]),
