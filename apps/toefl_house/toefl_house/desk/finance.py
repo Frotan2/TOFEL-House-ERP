@@ -918,6 +918,8 @@ def _cash_close_sections(day):
     drawers = [(row["company"], drawer) for row in position
                for drawer in row.get("drawers", [])]
     closed = [row for row in position if row.get("close")]
+    variance_companies = [row["company"] for row in closed
+                          if row.get("drawer_variance")]
     drifted = [row["company"] for row in position if row.get("drift")]
     currency_blocked = {row["company"]: row["currency_issue"]
                         for row in position if row.get("currency_issue")}
@@ -942,6 +944,8 @@ def _cash_close_sections(day):
          "value": ("No drawers" if not drawers else
                    "Currency review" if currency_blocked else
                    "Drift" if drifted else
+                   "Closed with variance" if (len(closed) == len(position)
+                                              and variance_companies) else
                    "Closed" if len(closed) == len(position) else
                    "Partially closed" if closed else "Open"),
          "owner": "Finance Officer"},
@@ -963,6 +967,8 @@ def _cash_close_sections(day):
          "definition": ("Counted minus expected on the submitted close, exactly "
                         "as the control record states it."),
          "value": ("Currency review required" if currency_blocked else
+                   f"{variance_total:.2f} net; drawer discrepancies in "
+                   + ", ".join(variance_companies) if variance_companies else
                    f"{variance_total:.2f}" if closed else "Not closed"),
          "owner": "Finance Officer"},
         {"label": "Ledger drift",
@@ -983,6 +989,10 @@ def _cash_close_sections(day):
             state, next_text = "Drift", ("Re-check the drawer against the ledger; "
                                          "the day was posted to after the close. "
                                          "The Finance Auditor reviews the difference.")
+        elif close and company in variance_companies:
+            state = "Closed with variance"
+            next_text = ("Review every drawer shortage or overage even if the "
+                         "company net is zero. The submitted close cannot be restated.")
         elif close:
             state = "Closed"
             next_text = "No action; the day is closed and cannot be re-stated."
@@ -1052,8 +1062,9 @@ def _cash_close_sections(day):
         "person": row.get("cashier") or "",
         "detail": f"{row.get('date')} · expected {float(row.get('total_expected') or 0):.2f}, "
                   f"counted {float(row.get('total_counted') or 0):.2f}",
-        "status": "Variance" if abs(float(row.get("total_variance") or 0)) > 0.005
-                  else "Balanced",
+        "status": ("Variance" if (row.get("drawer_variance")
+                                  or abs(float(row.get("total_variance") or 0)) > 0.005)
+                   else "Balanced"),
         "stage": "Cash close",
         "stage_definition": ("A submitted cashier day close: the counted drawer "
                              "against the native ledger for that business day."),
