@@ -450,6 +450,25 @@ class CashHistoryVarianceTests(unittest.TestCase):
         self.assertTrue(history[0]["drawer_variance"])
         self.assertTrue(history[0]["integrity_review"])
 
+    def test_history_rejects_a_falsified_zero_parent_variance(self):
+        module = load_cashier(DRAWERS)
+        def get_all(doctype, **kwargs):
+            if doctype == module.DAY:
+                return [{"name": "TH-CASH-BAD-NET", "company": "TOEFL House",
+                         "total_variance": 0.0}]
+            if doctype == module.ACCOUNT:
+                return DRAWERS
+            if doctype == module.COUNT:
+                return [{"parent": "TH-CASH-BAD-NET", "account": "Cash - TH",
+                         "variance": 15.0},
+                        {"parent": "TH-CASH-BAD-NET",
+                         "account": "Petty Cash - TH", "variance": 0.0}]
+            self.fail("Unexpected history read " + doctype)
+        module.frappe.db.get_all = get_all
+        history = module.cashier_history(companies=["TOEFL House"])
+        self.assertTrue(history[0]["integrity_review"])
+        self.assertTrue(history[0]["drawer_variance"])
+
     def test_old_history_that_counted_bank_is_flagged_for_integrity_review(self):
         module = load_cashier(DRAWERS)
         def get_all(doctype, **kwargs):
