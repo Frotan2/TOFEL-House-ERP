@@ -340,6 +340,7 @@ class CloseDriftTests(unittest.TestCase):
                 self.assertEqual(kwargs["filters"]["parenttype"], self.module.DAY)
                 self.assertEqual(kwargs["limit_page_length"],
                                  self.module.MAX_DRAWERS + 1)
+                self.assertIn("note", kwargs["fields"])
                 return self.saved
             self.fail("Unexpected accounting read: " + doctype)
 
@@ -379,10 +380,25 @@ class CloseDriftTests(unittest.TestCase):
         self.saved[0]["counted_amount"] = 0.0
         self.saved[1]["variance"] = 100.0
         self.saved[1]["counted_amount"] = 150.0
+        self.saved[0]["note"] = "Cash shortage explained"
+        self.saved[1]["note"] = "Cash overage explained"
         position = self.position()
         self.assertFalse(position["drift"])
         self.assertFalse(position["integrity_review"])
         self.assertTrue(position["drawer_variance"])
+
+    def test_missing_saved_variance_explanation_requires_integrity_review(self):
+        # The parent stays internally balanced: a missing/whitespace note
+        # must still trigger the auditor, not appear as a valid signed close.
+        self.saved[0].update(
+            {"counted_amount": 90.0, "variance": -10.0, "note": "  "})
+        self.saved[1].update(
+            {"counted_amount": 60.0, "variance": 10.0,
+             "note": "Documented second-drawer overage"})
+        position = self.position()
+        self.assertFalse(position["drift"])
+        self.assertTrue(position["drawer_variance"])
+        self.assertTrue(position["integrity_review"])
 
     def test_malformed_drawer_variance_is_review_not_balanced(self):
         self.saved[0]["variance"] = "NaN"
@@ -453,10 +469,10 @@ class CashHistoryVarianceTests(unittest.TestCase):
         self.rows = [
             {"parent": "TH-CASH-1", "account": "Cash - TH",
              "expected_amount": 100.0, "counted_amount": 0.0,
-             "variance": -100.0},
+             "variance": -100.0, "note": "Documented shortage"},
             {"parent": "TH-CASH-1", "account": "Petty Cash - TH",
              "expected_amount": 0.0, "counted_amount": 100.0,
-             "variance": 100.0},
+             "variance": 100.0, "note": "Documented overage"},
         ]
         self.accounts = [
             {**row, "company": "TOEFL House", "account_currency": "AFN"}
@@ -472,6 +488,7 @@ class CashHistoryVarianceTests(unittest.TestCase):
                                  ["in", ["TH-CASH-1"]])
                 self.assertLessEqual(kwargs["limit_page_length"],
                                      self.module.MAX_DRAWERS * self.module.MAX_HISTORY + 1)
+                self.assertIn("note", kwargs["fields"])
                 return [dict(row) for row in self.rows]
             if doctype == self.module.ACCOUNT:
                 return [dict(row) for row in self.accounts]
@@ -490,6 +507,13 @@ class CashHistoryVarianceTests(unittest.TestCase):
         self.assertEqual([name for name, _ in self.calls],
                          [self.module.DAY, self.module.COUNT,
                           self.module.ACCOUNT])
+
+    def test_missing_variance_explanation_is_historical_integrity_review(self):
+        self.rows[0]["note"] = ""
+        record = self.history()[0]
+        self.assertEqual(record["total_variance"], 0.0)
+        self.assertTrue(record["drawer_variance"])
+        self.assertTrue(record["integrity_review"])
 
     def test_missing_count_rows_never_mean_balanced(self):
         self.rows.clear()
