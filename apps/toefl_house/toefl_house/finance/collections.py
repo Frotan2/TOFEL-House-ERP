@@ -298,7 +298,16 @@ def get_collection_receipt(payment_entry):
             or not roles & {"Reception", "Finance Officer", "Finance Manager", "Course Owner", "Finance Auditor"}):
         raise frappe.PermissionError("A permitted staff account is required")
     require_schema()
-    from toefl_house.command_scope import authorize_command_scope
+    from toefl_house.command_scope import actor_branches, authorize_command_scope
+    # An ex-receptionist whose Branch User Permission was revoked must not
+    # retrieve historical student/cash details merely by keeping a known
+    # receipt number. The normal finance/auditor roles retain their own
+    # separately-scoped, independent read authority.
+    if ("Reception" in roles and
+            not roles & {"Finance Officer", "Finance Manager", "Course Owner", "Finance Auditor"}
+            and not actor_branches(actor)):
+        raise frappe.PermissionError(
+            "Reception receipt access requires a currently assigned Branch")
     authorize_command_scope("read_collection_receipt", {"payment_entry": payment_entry}, actor)
     doc = frappe.get_doc(PAYMENT, _text(payment_entry, "receipt"))
     if not doc.th_collection_fees or int(doc.docstatus) not in {1, 2}:
