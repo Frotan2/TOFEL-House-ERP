@@ -297,6 +297,7 @@ def get_collection_receipt(payment_entry):
     if (actor in {None, "Guest", "Administrator"} or not frappe.db.get_value("User", actor, "enabled")
             or not roles & {"Reception", "Finance Officer", "Finance Manager", "Course Owner", "Finance Auditor"}):
         raise frappe.PermissionError("A permitted staff account is required")
+    receipt_name = _text(payment_entry, "receipt")
     require_schema()
     from toefl_house.command_scope import actor_branches, authorize_command_scope
     # An ex-receptionist whose Branch User Permission was revoked must not
@@ -308,9 +309,17 @@ def get_collection_receipt(payment_entry):
             and not actor_branches(actor)):
         raise frappe.PermissionError(
             "Reception receipt access requires a currently assigned Branch")
-    authorize_command_scope("read_collection_receipt", {"payment_entry": payment_entry}, actor)
-    doc = frappe.get_doc(PAYMENT, _text(payment_entry, "receipt"))
-    if not doc.th_collection_fees or int(doc.docstatus) not in {1, 2}:
+    authorize_command_scope("read_collection_receipt", {"payment_entry": receipt_name}, actor)
+    doc = frappe.get_doc(PAYMENT, receipt_name)
+    # A guessed Payment Entry ID is not itself proof of a Reception receipt.
+    # Print only a genuinely issued/cancelled native student Receive entry
+    # carrying the guarded, original collector and matching tuition Fees.
+    if (doc.payment_type != "Receive" or doc.party_type != "Student"
+            or not doc.party or not doc.th_reception_collector
+            or not doc.th_collection_fees or int(doc.docstatus) not in {1, 2}
+            or len(doc.references or []) != 1
+            or doc.references[0].reference_doctype != "Fees"
+            or doc.references[0].reference_name != doc.th_collection_fees):
         raise frappe.PermissionError("This is not an issued Reception receipt")
     if not roles & {"Finance Officer", "Finance Manager", "Course Owner", "Finance Auditor"} and doc.th_reception_collector != actor:
         raise frappe.PermissionError("Reception can view only its own numbered receipts")
