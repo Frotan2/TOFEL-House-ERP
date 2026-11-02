@@ -1888,6 +1888,11 @@ frappe.provide("toefl_house.role_desks");
 	}
 
 	function loadDesk(page, surface, slug) {
+		// A save may reload the desk while an older GET remains in flight.
+		// Only the latest requested snapshot is allowed to replace the screen.
+		const revision = (page._thDeskRevision || 0) + 1;
+		page._thDeskRevision = revision;
+		const isCurrent = () => page._thDeskRevision === revision;
 		const body = page.body;
 		/* Sections live in their own container so a refresh never wipes the
 		 * page header, the desk strip or the search bar, and never
@@ -1901,6 +1906,7 @@ frappe.provide("toefl_house.role_desks");
 		frappe.call({
 			method: surface.endpoint,
 			callback(response) {
+				if (!isCurrent()) return;
 				loadingWrap.remove();
 				if (slug === "th-reception-desk") {
 					renderReceptionPrimaryAction(page, response.message || {});
@@ -1915,6 +1921,7 @@ frappe.provide("toefl_house.role_desks");
 				}
 			},
 			error() {
+				if (!isCurrent()) return;
 				loadingWrap.remove();
 				if (slug === "th-reception-desk") renderReceptionPrimaryAction(page, {});
 				const block = $("<section class='th-section'></section>").appendTo(sections);
@@ -1926,6 +1933,7 @@ frappe.provide("toefl_house.role_desks");
 					frappe.call({
 						method: surface.endpoint,
 						callback(response) {
+							if (!isCurrent()) return;
 							sectionBody.parent().remove();
 							if (slug === "th-reception-desk") {
 								renderReceptionPrimaryAction(page, response.message || {});
@@ -1933,6 +1941,7 @@ frappe.provide("toefl_house.role_desks");
 							loadSections(sections, response.message || {});
 						},
 						error() {
+							if (!isCurrent()) return;
 							sectionBody.empty();
 							/* Last resort: remount the whole desk cleanly. */
 							errorState(sectionBody, () => currentReload());
