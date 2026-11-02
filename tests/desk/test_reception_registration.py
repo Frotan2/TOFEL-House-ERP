@@ -874,6 +874,23 @@ class RegistrationDeskTests(unittest.TestCase):
             desk.lookup("A" * 121)
         self.assertEqual(calls, [], "oversized search must not query a shorter identity")
 
+    def test_afghan_mobile_search_matches_local_and_international_forms(self):
+        desk, calls = self.desk(placement=False, applicant=False)
+        desk.lookup("۰۷۹-۴۳۵ ۷۵۰۹")
+        self.assertIn((desk.INQUIRY, {
+            "phone": ("like", "%+93794357509%")
+        }), calls, "local typed contact must find an earlier +93 entry")
+        calls.clear()
+        desk.lookup("+93 79 435 7509")
+        self.assertIn((desk.INQUIRY, {
+            "phone": ("like", "%0794357509%")
+        }), calls, "+93 typed contact must find a national-format entry")
+        calls.clear()
+        desk.lookup("0794")
+        self.assertNotIn((desk.INQUIRY, {
+            "phone": ("like", "%+93794%")
+        }), calls, "partial national prefix is not proof of full equivalence")
+
     def test_search_rejects_nontext_input_before_any_data_read(self):
         desk, calls = self.desk(placement=False, applicant=False)
         with self.assertRaises(desk.frappe.ValidationError):
