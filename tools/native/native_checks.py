@@ -4297,6 +4297,12 @@ def main():
             assert len(historic)==1,historic
             assert historic[0]['integrity_review'] is False,historic[0]
             assert historic[0]['drawer_variance'] is False,historic[0]
+            # Verify the new historical per-account GL reconciliation using
+            # native MariaDB records, not the isolated Python finance double.
+            # All entries existed before this saved close: no late GL drift.
+            assert historic[0]['drift'] is False,(
+                'A freshly saved, untouched native cash close must not drift',
+                historic[0])
             assert abs(float(historic[0]['total_expected'])-expected_total)<0.01,historic[0]
             return {'cashier_day':result['cashier_day'],'drawer':account,
                     'drawers_counted':len(counts),
