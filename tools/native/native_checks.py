@@ -6178,10 +6178,16 @@ def main():
             for word in BANNED_PLUMBING:
                 assert word not in json.dumps(lmsg),('lookup payload',word)
             st=next((i for i in lmsg['students'] if i['id']==second['student']),None)
-            assert st and st['stage']=='Enrolled', \
-                ('D4: lookup must read the real class state (an open class exists for this level/year)',st)
-            assert not [i for i in lmsg['students'] if i['stage']=='Enrolled, no class'], \
-                'no learner here may read as unclassed while SYN-GRP-MAIN-1/2 are open'
+            # The original classes deliberately have no Branch. Once the
+            # receptionist is correctly Branch-scoped, they MUST NOT expose
+            # those unassigned students. A separate branch-isolation journey
+            # below verifies the positive Enrolled lifecycle on real branched
+            # students; expecting the legacy branchless student here was a
+            # privacy bug in the old acceptance fixture.
+            assert st is None,(
+                'Reception leaked a branchless legacy student into scoped lookup',st)
+            assert second['student'] not in people,(
+                'Reception leaked a branchless legacy student into dashboard',people)
             assert all(i.get('stage')!='Enrolled, no class' for i in people.values())
             # U1: affordances for the acting role, same payloads, gated
             aca_sch=desk_get('academic_scheduler','academic.work')
