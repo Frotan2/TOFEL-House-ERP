@@ -316,8 +316,7 @@ def _walkin_item(row, progress=None):
         "Reception", "toefl_house.reception_intake.update_walkin_inquiry",
         "Update follow-up", {"inquiry": row["name"],
                              "expected_version": row["version"],
-                             "status": ("Contacted" if row.get("status") == "New"
-                                        else row.get("status")),
+                             "status": row.get("status") or "New",
                              "notes": row.get("notes") or "",
                              "study_mode": row.get("study_mode") or "Undecided",
                              "contact_country": row.get("contact_country") or "",
