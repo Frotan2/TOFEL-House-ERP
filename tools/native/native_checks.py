@@ -4155,7 +4155,32 @@ def main():
         def cashier_close_fixture():
             from toefl_house.finance import cashier as fin_cash
             company=fin['company']; day=frappe.utils.today()
+            # Force an actual two-drawer fixture, not merely an algorithm
+            # that would handle multiple accounts if they happened to exist.
+            # This code only runs on the disposable synthetic native site.
+            frappe.set_user('Administrator')
+            primary=frappe.db.get_value(
+                'Account',{'company':company,'account_type':'Cash',
+                           'is_group':0,'disabled':0},'name')
+            assert primary,('synthetic company has no native Cash account',company)
+            base_drawer=frappe.get_doc('Account',primary)
+            assert base_drawer.parent_account,primary
+            secondary_name='SYN Cash Close Drawer B'
+            secondary=frappe.db.get_value(
+                'Account',{'company':company,'account_name':secondary_name},'name')
+            if not secondary:
+                extra=frappe.get_doc(dict(
+                    doctype='Account',account_name=secondary_name,
+                    company=company,parent_account=base_drawer.parent_account,
+                    account_type='Cash',is_group=0,
+                    root_type='Asset',report_type='Balance Sheet',
+                    account_currency=frappe.db.get_value(
+                        'Company',company,'default_currency')))
+                extra.insert()
+                secondary=extra.name
+            assert secondary!=primary,(primary,secondary)
             drawers=fin_cash.cash_drawers(company)
+            assert len(drawers)>=2,('native cash fixture must count at least two physical drawers',drawers)
             assert drawers,('synthetic company has no native physical Cash account',company)
             assert all(row['account_type']=='Cash' for row in drawers),drawers
             names=tuple(sorted(row['name'] for row in drawers))
@@ -4163,6 +4188,7 @@ def main():
                 'synthetic cash accounts need matching company-base currency',drawers)
             balances={row['account']:row for row in fin_cash.drawer_balances(company,names,day)}
             assert set(balances)==set(names),(balances,names)
+            assert primary in names and secondary in names,(names,primary,secondary)
             account=names[0]
             expected=balances[account]['closing']
             expected_total=round(sum(balances[name]['closing'] for name in names),2)
