@@ -730,6 +730,8 @@ class CommandContractTests(unittest.TestCase):
         self.assertIn('No payment or cash movement is created.', gui)
         self.assertIn('or company in currency_blocked', desk)
         self.assertIn('Cash account safety', desk)
+        self.assertIn('"Integrity review required" if integrity_companies', desk)
+        self.assertIn('if state in ("Integrity review", "Drift",', desk)
 
     def test_package_date_class_is_not_shadowed_inside_the_command(self):
         import ast
