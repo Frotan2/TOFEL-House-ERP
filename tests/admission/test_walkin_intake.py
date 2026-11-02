@@ -191,6 +191,46 @@ class ReceptionWalkinTests(unittest.TestCase):
         self.assertNotIn("student_email_id", self.saved["INQ-001"])
         self.assertEqual([kind for kind, _ in self.audit], ["create_walkin_inquiry"])
 
+    def test_blank_optional_native_form_controls_accept_null(self):
+        recorded = self.module.create_walkin_inquiry(
+            "null-optional-001", "Online Visitor", phone=None,
+            program_interest=None, notes=None, contact_country=None,
+            time_zone=None, study_mode="Online")
+        self.assertEqual(recorded["status"], "New")
+        stored = self.saved["INQ-001"]
+        for field in ("phone", "program_interest", "notes",
+                      "contact_country", "time_zone"):
+            self.assertEqual(stored[field], "", field)
+        self.assertIsNone(stored["open_identity_key"])
+
+        updated = self.module.update_walkin_inquiry(
+            "null-note-update", "INQ-001", 1, "New",
+            notes=None, time_zone="Europe/London")
+        self.assertEqual(updated["version"], 2)
+        self.assertEqual(self.saved["INQ-001"]["time_zone"], "Europe/London")
+
+    def test_omitted_followup_metadata_keeps_existing_global_contact_facts(self):
+        self.module.create_walkin_inquiry(
+            "global-001", "Global Student", phone="+447700900123",
+            study_mode="Online", contact_country="United Kingdom",
+            time_zone="Europe/London", notes="Asked about availability")
+        self.module.update_walkin_inquiry(
+            "followup-001", "INQ-001", 1, "Contacted",
+            notes="Spoke on the phone")
+        doc = self.saved["INQ-001"]
+        self.assertEqual(doc["study_mode"], "Online")
+        self.assertEqual(doc["contact_country"], "United Kingdom")
+        self.assertEqual(doc["time_zone"], "Europe/London")
+
+    def test_nontext_optional_values_still_fail_closed(self):
+        for field in ("phone", "program_interest", "contact_country",
+                      "time_zone", "notes"):
+            with self.subTest(field=field), self.assertRaises(ValidationError):
+                self.module.create_walkin_inquiry(
+                    "invalid-" + field, "Test Visitor",
+                    **{field: {"unexpected": "object"}})
+        self.assertEqual(self.saved, {})
+
     def test_online_learner_from_abroad_needs_no_afghan_number_or_email(self):
         saved = self.module.create_walkin_inquiry(
             "foreign-online", "Online Learner", phone="+44 7700 900123",
