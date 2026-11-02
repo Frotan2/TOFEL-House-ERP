@@ -473,6 +473,24 @@ def _balance_drift_after_close(snapshot, current):
         return True
 
 
+def drawer_variance_recorded(rows):
+    """A zero net difference never hides opposing short/over cash drawers.
+
+    Missing or malformed snapshot rows must not be labelled Balanced.
+    """
+    if not rows:
+        return True
+    for row in rows:
+        try:
+            variance = _stored_money(
+                row.get("variance"), "Recorded cash drawer variance")
+        except frappe.ValidationError:
+            return True
+        if abs(variance) > TOLERANCE:
+            return True
+    return False
+
+
 def cashier_position(day=None, companies=None):
     """Read-only drawer position and close state, for the finance desk.
 
@@ -499,6 +517,7 @@ def cashier_position(day=None, companies=None):
         )
         close = dict(closes[0]) if closes else None
         drift = False
+        has_drawer_variance = False
         if close:
             # Re-check every drawer against the immutable close snapshot.
             # Cancelled historical postings may change balances without a
@@ -506,9 +525,10 @@ def cashier_position(day=None, companies=None):
             saved_rows = frappe.db.get_all(
                 COUNT,
                 filters={"parent": close["name"], "parenttype": DAY},
-                fields=["account", "expected_amount"],
+                fields=["account", "expected_amount", "variance"],
                 limit_page_length=MAX_DRAWERS + 1,
             )
+            has_drawer_variance = drawer_variance_recorded(saved_rows or [])
             drift = _balance_drift_after_close(saved_rows or [], balances)
             # A bank-only posting is not physical cash drift. Scope even the
             # balance-neutral post-close audit signal to this company's Cash
@@ -530,6 +550,7 @@ def cashier_position(day=None, companies=None):
             "drawers": balances,
             "close": close,
             "drift": drift,
+            "drawer_variance": has_drawer_variance,
         })
     return out
 
@@ -547,7 +568,27 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
         order_by="date desc, creation desc",
         limit_page_length=min(int(limit), MAX_HISTORY),
     )
-    return [dict(row) for row in (rows or [])]
+    history = [dict(row) for row in (rows or [])]
+    if not history:
+        return history
+    names = [row["name"] for row in history]
+    child_rows = frappe.db.get_all(
+        COUNT,
+        filters={"parenttype": DAY, "parent": ["in", names]},
+        fields=["parent", "variance"],
+        limit_page_length=MAX_HISTORY * MAX_DRAWERS + 1,
+    )
+    by_parent = {name: [] for name in names}
+    for child in child_rows or []:
+        parent = child.get("parent")
+        if parent in by_parent:
+            by_parent[parent].append(child)
+    truncated = len(child_rows or []) > MAX_HISTORY * MAX_DRAWERS
+    for row in history:
+        snapshot = by_parent[row["name"]]
+        row["drawer_variance"] = (truncated or
+                                  drawer_variance_recorded(snapshot))
+    return history
 
 
 def day_window_hint():
