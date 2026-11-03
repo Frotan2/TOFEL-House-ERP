@@ -445,7 +445,7 @@ def reconcile_cashier_day(request_key, company, date, counts):
                 "submitted close is never overwritten")
 
         # The Company row lock serializes competing close commands, but it
-        # does NOT serialize normal Payment Entry / Journal Entry postings.
+        # does NOT serialize ordinary native cash-ledger postings.
         # Capture the audit boundary BEFORE the native cash-GL balance reads:
         # a concurrently created posting must not receive an apparent
         # pre-close creation time merely because the close document was built
