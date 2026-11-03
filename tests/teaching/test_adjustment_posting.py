@@ -133,6 +133,7 @@ def _install_command_harness(test):
     test.today = "2026-09-22"
     test.due_rows = []
     test.contracts = {}
+    test.employee_companies = {"EMP-1": "SYN Teaching House"}
     previous = dict(sys.modules)
     test.addCleanup(lambda: (sys.modules.clear(), sys.modules.update(previous)))
     fake = test
@@ -153,6 +154,8 @@ def _install_command_harness(test):
             return fake.policy_doc.name
         if doctype == "TH Instructor Contract":
             return fake.contracts.get(name_or_filters)
+        if doctype == "Employee" and fieldname == "company":
+            return fake.employee_companies.get(name_or_filters)
         raise AssertionError(f"unexpected get_value {doctype}")
 
     def get_doc(doctype, name=None, for_update=False, **kwargs):
@@ -319,8 +322,8 @@ class OrphanCollectionTests(unittest.TestCase):
     def setUp(self):
         _install_command_harness(self)
 
-    def _contract(self, instructor, model="Skill-Based"):
-        return SimpleNamespace(instructor=instructor,
+    def _contract(self, instructor, model="Skill-Based", employee="EMP-1"):
+        return SimpleNamespace(instructor=instructor, employee=employee,
                                compensation_model=model)
 
     def test_assigned_instructors_are_not_orphans(self):
@@ -329,7 +332,7 @@ class OrphanCollectionTests(unittest.TestCase):
         self.contracts = {"CON-A": self._contract("INS-A"),
                           "CON-B": self._contract("INS-B")}
         orphans = self.posting.collect_orphan_contracts(
-            "2026-09-01", "2026-09-30", {"INS-A"})
+            "2026-09-01", "2026-09-30", {"INS-A"}, "SYN Teaching House")
         self.assertEqual(orphans, {
             "CON-B": {"instructor": "INS-B", "adjustments": ["ADJ-2"]}})
 
@@ -337,13 +340,27 @@ class OrphanCollectionTests(unittest.TestCase):
         self.due_rows = [{"name": "ADJ-9", "parent": "CON-F"}]
         self.contracts = {"CON-F": self._contract("INS-F", "Fixed Salary")}
         self.assertEqual(self.posting.collect_orphan_contracts(
-            "2026-09-01", "2026-09-30", set()), {})
+            "2026-09-01", "2026-09-30", set(), "SYN Teaching House"), {})
 
     def test_missing_parents_are_ignored(self):
         self.due_rows = [{"name": "ADJ-X", "parent": "CON-GONE"}]
         self.contracts = {}
         self.assertEqual(self.posting.collect_orphan_contracts(
-            "2026-09-01", "2026-09-30", set()), {})
+            "2026-09-01", "2026-09-30", set(), "SYN Teaching House"), {})
+
+    def test_foreign_company_orphan_adjustment_is_not_posted_or_reported(self):
+        self.due_rows = [{"name": "ADJ-LOCAL", "parent": "CON-LOCAL"},
+                         {"name": "ADJ-FOREIGN", "parent": "CON-FOREIGN"}]
+        self.contracts = {
+            "CON-LOCAL": self._contract("INS-LOCAL"),
+            "CON-FOREIGN": self._contract("INS-FOREIGN", employee="EMP-FOREIGN"),
+        }
+        self.employee_companies["EMP-FOREIGN"] = "Other School"
+        self.assertEqual(self.posting.collect_orphan_contracts(
+            "2026-09-01", "2026-09-30", set(), "SYN Teaching House"), {
+                "CON-LOCAL": {"instructor": "INS-LOCAL",
+                              "adjustments": ["ADJ-LOCAL"]}
+            })
 
     def test_orphan_posting_vocabulary(self):
         validate = self.posting.validate_orphan_posting
