@@ -594,6 +594,20 @@ def work():
                 ambiguous_subjects.add(key)
             else:
                 existing_by_subject[key] = item
+    # A legacy email release must never silently take precedence over a
+    # different opaque candidate origin already attached to the same email.
+    # Multiple visible Applicants with the email are also ambiguous, even
+    # when some have their own THV candidate references.
+    email_origins = {}
+    for item in existing_emails:
+        email = item.get("student_email_id")
+        if not email or email not in email_subjects:
+            continue
+        if item.get("th_candidate_ref"):
+            ambiguous_subjects.add(email)
+        previous_id = email_origins.setdefault(email, item["name"])
+        if previous_id != item["name"]:
+            ambiguous_subjects.add(email)
     returning_students = _verified_returning_students(existing)
     decisions_by_applicant = {}
     for row in admissions:
