@@ -78,6 +78,12 @@ def collect_orphan_contracts(start, end, assigned_instructors, company):
         # Employee before including either postings or skip-mode reports.
         if frappe.db.get_value("Employee", info.employee, "company") != company:
             continue
+        # The Employee company alone does not prove this Instructor is
+        # linked to that Employee. A malformed/legacy cross-company link
+        # must not leak into even the SKIP report. POST mode independently
+        # rechecks both native identities using locking reads before posting.
+        if frappe.db.get_value("Instructor", info.instructor, "employee") != info.employee:
+            continue
         if info.instructor in (assigned_instructors or ()):
             continue
         orphans[parent] = {
