@@ -839,6 +839,47 @@ class CommandContractTests(unittest.TestCase):
         cls.security = (APP / "security.py").read_text(encoding="utf-8")
         cls.hooks = (APP / "hooks.py").read_text(encoding="utf-8")
 
+    def test_cash_drift_boundary_is_captured_before_native_ledger_read(self):
+        # A Company FOR UPDATE lock serializes two close submissions, not
+        # concurrent native GL postings. Old code took reconciled_on AFTER
+        # reading balances and could hide a posting created in that interval.
+        module = load_cashier(DRAWERS[:1])
+        module.frappe.db.get_value = lambda *args, **kwargs: "AFN"
+        clock = ["2026-10-24 18:00:00"]
+        module.frappe.utils.now_datetime = lambda: clock[0]
+        events = []
+
+        def native_balances(company, accounts, day):
+            events.append(("ledger-read", clock[0]))
+            self.assertEqual((company, accounts, day), (
+                "TOEFL House", ["Cash - TH"], "2026-10-24"))
+            # A separate native posting advances the clock during the read.
+            clock[0] = "2026-10-24 18:00:05"
+            return [{"account": "Cash - TH", "closing": 75.0}]
+
+        def make_doc(payload):
+            events.append(("document-created", payload["reconciled_on"]))
+            return types.SimpleNamespace(
+                name="TH-CASH-2026-00001",
+                flags=types.SimpleNamespace(),
+                insert=lambda **kwargs: None,
+                submit=lambda: None,
+            )
+
+        module.drawer_balances = native_balances
+        module.frappe.get_doc = make_doc
+        module.verify_submitted_cash_close = lambda *args: types.SimpleNamespace(
+            total_expected=75.0, total_counted=75.0, total_variance=0.0)
+        result = module.reconcile_cashier_day(
+            "cash_snapshot_boundary_test", "TOEFL House", "2026-10-24",
+            [{"account": "Cash - TH", "counted_amount": "75.00"}])
+        self.assertEqual(result["cashier_day"], "TH-CASH-2026-00001")
+        self.assertEqual(events, [
+            ("ledger-read", "2026-10-24 18:00:00"),
+            ("document-created", "2026-10-24 18:00:00"),
+        ])
+        self.assertEqual(clock[0], "2026-10-24 18:00:05")
+
     def test_close_is_a_receipted_finance_officer_command(self):
         self.assertIn('"reconcile_cashier_day": "Finance Officer"', self.security)
         self.assertIn('_execute("reconcile_cashier_day", request_key', self.source)
