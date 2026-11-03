@@ -98,6 +98,8 @@ class S2CompensationTests(unittest.TestCase):
         self.company_permissions = []  # HQ unrestricted unless explicitly scoped
         self.employee_companies = {"EMP-1": "SYN Teaching House"}
         self.instructor_employees = {"INS-1": "EMP-1"}
+        self.locked_employee_companies = {}
+        self.locked_instructor_employees = {}
         self.lock_order = []
         self.paid_queries = []
         self.paid_sql_queries = []
@@ -124,6 +126,16 @@ class S2CompensationTests(unittest.TestCase):
             if "tabTH Instructor Contract" in query and "for update" in query:
                 fake.lock_order.append(values[0])
                 return []
+            if "tabEmployee" in query and "for update" in query:
+                name = values[0]
+                company = fake.locked_employee_companies.get(
+                    name, fake.employee_companies.get(name))
+                return [SimpleNamespace(company=company)] if company else []
+            if "tabInstructor" in query and "for update" in query:
+                name = values[0]
+                employee = fake.locked_instructor_employees.get(
+                    name, fake.instructor_employees.get(name, "EMP-1"))
+                return [SimpleNamespace(employee=employee)] if employee else []
             if "tabAdditional Salary" in query:
                 assert "for update" in query, "posting re-read must lock"
                 fake.paid_sql_queries.append(query)
@@ -256,6 +268,26 @@ class S2CompensationTests(unittest.TestCase):
     def test_same_company_but_wrong_instructor_employee_is_refused(self):
         self.contract_doc.employee = "EMP-OTHER"
         self.employee_companies["EMP-OTHER"] = "SYN Teaching House"
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        with self.assertRaisesRegex(_ValidationError, "no longer matches"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_employee_transfer_during_calculation_fails_on_locking_read(self):
+        # Selection saw Company A, but a concurrent native HRMS transfer
+        # committed before the Employee row lock was acquired.
+        self.locked_employee_companies["EMP-1"] = "Other School"
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        with self.assertRaisesRegex(_ValidationError, "different payroll company"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_instructor_relink_during_calculation_fails_on_locking_read(self):
+        self.locked_instructor_employees["INS-1"] = "EMP-NEW"
         self.contract_lists.append([SimpleNamespace(
             name="C-1", effective_start="2026-01-01", effective_end=None,
             compensation_model="Skill-Based")])
