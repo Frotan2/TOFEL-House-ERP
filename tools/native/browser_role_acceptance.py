@@ -88,9 +88,25 @@ def prepare():
                 "first_name": "Synthetic " + actor, "enabled": 1, "send_welcome_email": 0,
                 "new_password": password, "roles": [{"role": role}],
             }).insert()
+        # The native Reception audience requires a Branch User Permission.
+        # This is only a disposable CI fixture: never relax the audience gate,
+        # and never create a user with an unrestricted Reception scope.
+        branch_name = "SYN-BROWSER-RECEPTION"
+        if not frappe.db.exists("Branch", branch_name):
+            frappe.get_doc({"doctype": "Branch", "branch": branch_name}).insert()
+        frappe.get_doc({
+            "doctype": "User Permission",
+            "user": "browser-reception@example.test",
+            "allow": "Branch",
+            "for_value": branch_name,
+        }).insert()
+        assert frappe.db.get_value(
+            "User Permission",
+            {"user": "browser-reception@example.test", "allow": "Branch"},
+            "for_value") == branch_name
         frappe.db.commit()
         frappe.clear_cache()
-        print("Prepared six minimal-role synthetic browser accounts; operational mode remains REFUSED")
+        print("Prepared six least-privilege synthetic browser accounts, including scoped Reception; operational mode remains REFUSED")
     except Exception:
         frappe.db.rollback()
         raise
