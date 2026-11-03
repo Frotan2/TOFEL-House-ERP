@@ -1830,7 +1830,10 @@ jobs:
           # All synthetic site, browser, backup and restore acceptance has
           # completed. Preserve a short diagnostic tail, then remove only the
           # disposable Compose stack, its database volume and generated data.
-          docker compose -f product/docker-compose.yml logs --no-color --tail 200 > "$RUNNER_TEMP/toefl-house-product-image-compose.log" 2>&1 || true
+          {
+            docker compose -f product/docker-compose.yml logs --no-color --tail 3 bootstrap 2>&1 || true
+            docker compose -f product/docker-compose.yml logs --no-color --tail 3 web 2>&1 || true
+          } > "$RUNNER_TEMP/toefl-house-product-image-compose.log" 2>&1
           docker compose -f product/docker-compose.yml down --volumes --remove-orphans
           rm -rf -- product/data /tmp/win-worktree
 
@@ -1990,7 +1993,7 @@ jobs:
           # Frappe messages, paths, source text, or stdin secrets. This short
           # tail gives startup failures an actionable, secret-free annotation.
           if [ -s "$RUNNER_TEMP/toefl-house-product-image-compose.log" ]; then
-            tail -3 "$RUNNER_TEMP/toefl-house-product-image-compose.log" | sed 's/^/::error::compose::/'
+            tail -6 "$RUNNER_TEMP/toefl-house-product-image-compose.log" | sed 's/^/::error::compose::/'
           else
             docker compose logs --tail 3 bootstrap 2>&1 | tail -3 | sed 's/^/::error::bootstrap::/' || true
             docker compose logs --tail 3 web 2>&1 | tail -3 | sed 's/^/::error::web::/' || true
