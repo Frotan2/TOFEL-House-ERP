@@ -96,6 +96,8 @@ class S2CompensationTests(unittest.TestCase):
         self.paid_rows = {}
         self.currency = "USD"
         self.company_permissions = []  # HQ unrestricted unless explicitly scoped
+        self.employee_companies = {"EMP-1": "SYN Teaching House"}
+        self.instructor_employees = {"INS-1": "EMP-1"}
         self.lock_order = []
         self.paid_queries = []
         self.paid_sql_queries = []
@@ -107,7 +109,18 @@ class S2CompensationTests(unittest.TestCase):
 
         def sql(query, values=(), **kwargs):
             if "tabTH Teaching Assignment" in query:
-                return list(fake.assignments)
+                # Reproduce the SQL joins and Company predicate. Merely
+                # checking the resulting payload's company would miss a
+                # regression where the source query selects every school.
+                assert "inner join `tabInstructor`" in query
+                assert "inner join `tabEmployee`" in query
+                assert "where e.company = %s" in query
+                company, _, _ = values
+                return [
+                    row for row in fake.assignments
+                    if fake.employee_companies.get(
+                        fake.instructor_employees.get(row.instructor, "EMP-1")) == company
+                ]
             if "tabTH Instructor Contract" in query and "for update" in query:
                 fake.lock_order.append(values[0])
                 return []
@@ -157,6 +170,10 @@ class S2CompensationTests(unittest.TestCase):
         def get_value(doctype, name, field=None, **kwargs):
             if doctype == "Salary Component" and field == "type":
                 return "Deduction" if name == "SYN Contract Deduction" else "Earning"
+            if doctype == "Employee" and field == "company":
+                return fake.employee_companies.get(name)
+            if doctype == "Instructor" and field == "employee":
+                return fake.instructor_employees.get(name, "EMP-1")
             return fake.currency
 
         stub.db = SimpleNamespace(
@@ -189,7 +206,7 @@ class S2CompensationTests(unittest.TestCase):
         posting.SKIP = "skip"
         posting.governing_posting_terms = lambda: {
             "effective_from": "2026-01-01", "orphan_posting": "skip"}
-        posting.collect_orphan_contracts = lambda start, end, assigned: {}
+        posting.collect_orphan_contracts = lambda start, end, assigned, company: {}
         sys.modules["toefl_house.teaching.adjustment_posting"] = posting
         finance_pkg = types.ModuleType("toefl_house.finance")
         finance_pkg.__path__ = [str(APP / "finance")]
@@ -213,6 +230,38 @@ class S2CompensationTests(unittest.TestCase):
             self._calc()
         self.assertEqual(self.posted, [])
         self.assertEqual(self.lock_order, [])
+
+    def test_foreign_company_assignment_is_excluded_before_payroll(self):
+        self.assignments = [_assignment("A-FOREIGN", "INS-FOREIGN", "C-FOREIGN")]
+        self.instructor_employees["INS-FOREIGN"] = "EMP-FOREIGN"
+        self.employee_companies["EMP-FOREIGN"] = "Other School"
+        result = self._calc()
+        self.assertEqual(result["assignments"], 0)
+        self.assertEqual(result["posted"], {})
+        self.assertEqual(self.posted, [])
+        self.assertEqual(self.lock_order, [])
+
+    def test_foreign_contract_employee_cannot_be_posted_as_local_salary(self):
+        # A native Instructor-to-Employee join selects the local class, but
+        # a mismatched contract Employee would otherwise receive the money.
+        self.contract_doc.employee = "EMP-FOREIGN"
+        self.employee_companies["EMP-FOREIGN"] = "Other School"
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        with self.assertRaisesRegex(_ValidationError, "different payroll company"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_same_company_but_wrong_instructor_employee_is_refused(self):
+        self.contract_doc.employee = "EMP-OTHER"
+        self.employee_companies["EMP-OTHER"] = "SYN Teaching House"
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        with self.assertRaisesRegex(_ValidationError, "no longer matches"):
+            self._calc()
+        self.assertEqual(self.posted, [])
 
     def test_covering_contracts_locked_before_posting(self):
         self.assignments = [_assignment("A-2", "INS-B", "C-ZEBRA"),
