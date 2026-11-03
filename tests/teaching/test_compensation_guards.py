@@ -318,7 +318,10 @@ class S2CompensationTests(unittest.TestCase):
         result = self._calc()
         self.assertEqual(self.lock_order, ["C-ORPHAN"])
         self.assertIn(("C-ORPHAN", True), self.get_doc_calls)
-        self.assertEqual(result["skipped_orphan_adjustments"], self.orphans)
+        self.assertEqual(
+            result["skipped_orphan_adjustments"],
+            {parent: info["adjustments"] for parent, info in self.orphans.items()},
+        )
         self.assertEqual(self.posted, [])
 
     def test_skip_orphan_report_refuses_concurrent_employee_transfer(self):
