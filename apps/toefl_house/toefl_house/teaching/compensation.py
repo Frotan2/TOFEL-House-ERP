@@ -452,7 +452,7 @@ def _covering_contract_name(instructor, start, end):
     return overlapping[0].name
 
 
-def _lock_covering_contracts(contracts, start, end):
+def _lock_covering_contracts(contracts, start, end, extra_contract_names=()):
     """Serialize overlapping calculations on the covering contract rows.
 
     Contract names are locked in sorted order so concurrent calculations
@@ -466,7 +466,11 @@ def _lock_covering_contracts(contracts, start, end):
     (historical reproducibility — the September payroll resolves from the
     September-covering revision, whatever its status today).
     """
-    for name in sorted({contract.name for contract in contracts.values()}):
+    # SKIP-mode orphan reports also carry company-sensitive contract identity.
+    # Lock those parent rows in the same global sorted order as payable contracts.
+    names = {contract.name for contract in contracts.values()}
+    names.update(extra_contract_names or ())
+    for name in sorted(names):
         frappe.db.sql("select name from `tabTH Instructor Contract` where name=%s for update",
                       (name,))
     for instructor in sorted(contracts):
@@ -623,14 +627,28 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                 contracts[info["instructor"]] = frappe.get_doc(
                     CONTRACT, _covering_contract_name(info["instructor"], start, end))
             skipped_orphans = {}
+            extra_contract_names = ()
         else:
+            # SKIP still returns contract/adjustment names to the caller.
+            # Lock and revalidate each parent before exposing that report:
+            # a concurrent Employee transfer or Instructor relink must not
+            # leak another Company's orphan details from a stale snapshot.
             skipped_orphans = {parent: info["adjustments"]
                                for parent, info in sorted(orphans.items())}
-        _lock_covering_contracts(contracts, start, end)
+            extra_contract_names = tuple(orphans)
+        _lock_covering_contracts(
+            contracts, start, end, extra_contract_names=extra_contract_names)
         # Validate the actual paid Employee, not just the Instructor linked
         # by the selection query. All contracts pass before the first insert.
         for instructor, contract in sorted(contracts.items()):
             _assert_payroll_company(contract, instructor, company_name)
+        if orphan_mode == posting.SKIP:
+            for parent, info in sorted(orphans.items()):
+                orphan_contract = frappe.get_doc(CONTRACT, parent, for_update=True)
+                if orphan_contract.instructor != info["instructor"]:
+                    raise frappe.ValidationError(
+                        "Orphan contract identity changed during payroll calculation")
+                _assert_payroll_company(orphan_contract, info["instructor"], company_name)
         for row in rows:
             contract = contracts[row.instructor]
             if contract.compensation_model == "Fixed Salary":

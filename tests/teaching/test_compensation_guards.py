@@ -104,6 +104,7 @@ class S2CompensationTests(unittest.TestCase):
         self.paid_queries = []
         self.paid_sql_queries = []
         self.posted = []
+        self.orphans = {}
         self.get_doc_calls = []
         previous = dict(sys.modules)
         self.addCleanup(lambda: (sys.modules.clear(), sys.modules.update(previous)))
@@ -222,7 +223,7 @@ class S2CompensationTests(unittest.TestCase):
         posting.SKIP = "skip"
         posting.governing_posting_terms = lambda: {
             "effective_from": "2026-01-01", "orphan_posting": "skip"}
-        posting.collect_orphan_contracts = lambda start, end, assigned, company: {}
+        posting.collect_orphan_contracts = lambda start, end, assigned, company: fake.orphans
         sys.modules["toefl_house.teaching.adjustment_posting"] = posting
         finance_pkg = types.ModuleType("toefl_house.finance")
         finance_pkg.__path__ = [str(APP / "finance")]
@@ -296,6 +297,53 @@ class S2CompensationTests(unittest.TestCase):
             name="C-1", effective_start="2026-01-01", effective_end=None,
             compensation_model="Skill-Based")])
         with self.assertRaisesRegex(_ValidationError, "no longer matches"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def _skip_orphan_fixture(self):
+        self.assignments = []
+        self.contract_doc = _contract("C-ORPHAN", [_adjustment("ADJ-ORPHAN")])
+        self.contract_doc.instructor = "INS-ORPHAN"
+        self.employee_companies["EMP-ORPHAN"] = "SYN Teaching House"
+        self.instructor_employees["INS-ORPHAN"] = "EMP-ORPHAN"
+        self.orphans = {
+            "C-ORPHAN": {
+                "instructor": "INS-ORPHAN",
+                "adjustments": ["ADJ-ORPHAN"],
+            }
+        }
+
+    def test_skip_orphan_contract_is_locked_and_identity_checked_before_reporting(self):
+        self._skip_orphan_fixture()
+        result = self._calc()
+        self.assertEqual(self.lock_order, ["C-ORPHAN"])
+        self.assertIn(("C-ORPHAN", True), self.get_doc_calls)
+        self.assertEqual(result["skipped_orphan_adjustments"], self.orphans)
+        self.assertEqual(self.posted, [])
+
+    def test_skip_orphan_report_refuses_concurrent_employee_transfer(self):
+        self._skip_orphan_fixture()
+        self.locked_employee_companies["EMP-ORPHAN"] = "Other School"
+        with self.assertRaisesRegex(_ValidationError, "different payroll company"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_skip_orphan_report_refuses_concurrent_instructor_relink(self):
+        self._skip_orphan_fixture()
+        self.employee_companies["EMP-OTHER"] = "SYN Teaching House"
+        self.locked_instructor_employees["INS-ORPHAN"] = "EMP-OTHER"
+        with self.assertRaisesRegex(_ValidationError, "no longer matches"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_skip_orphan_report_refuses_contract_instructor_replacement(self):
+        self._skip_orphan_fixture()
+        self.fresh_doc = _contract("C-ORPHAN", [_adjustment("ADJ-ORPHAN")])
+        self.fresh_doc.instructor = "INS-OTHER"
+        self.fresh_doc.employee = "EMP-OTHER"
+        self.employee_companies["EMP-OTHER"] = "SYN Teaching House"
+        self.instructor_employees["INS-OTHER"] = "EMP-OTHER"
+        with self.assertRaisesRegex(_ValidationError, "identity changed"):
             self._calc()
         self.assertEqual(self.posted, [])
 
