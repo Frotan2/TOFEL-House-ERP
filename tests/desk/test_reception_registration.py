@@ -125,6 +125,94 @@ class RegistrationDeskTests(unittest.TestCase):
         handover = next(x for x in view["sections"] if x["id"] == "handover")["items"]
         self.assertEqual(handover[0]["action"]["endpoint"], "toefl_house.admission.record_applicant")
 
+    def test_duplicate_candidate_applicants_have_no_admission_action(self):
+        desk, _ = self.desk()
+        desk._subject_index = lambda decisions: {row["name"]: "THV-DUP" for row in decisions}
+        original_read = desk.project_rows
+
+        def read(surface, doctype, fields, filters=None, **kwargs):
+            if doctype == desk.APPLICANT and filters and "th_candidate_ref" in filters:
+                return [
+                    {"name": "APP-A", "th_candidate_ref": "THV-DUP",
+                     "application_status": "Applied"},
+                    {"name": "APP-B", "th_candidate_ref": "THV-DUP",
+                     "application_status": "Applied"},
+                ]
+            return original_read(surface, doctype, fields, filters=filters, **kwargs)
+
+        desk.project_rows = read
+        handover = next(x for x in desk.work()["sections"]
+                        if x["id"] == "handover")["items"]
+        self.assertEqual(len(handover), 1)
+        self.assertIsNone(handover[0]["action"])
+        self.assertEqual(handover[0]["next_role"], "Academic Manager")
+        self.assertIn("ambiguous", handover[0]["next"])
+        self.assertIn("do not create a duplicate", handover[0]["next"])
+
+    def test_legacy_email_subject_collision_is_not_assigned_arbitrarily(self):
+        desk, _ = self.desk()
+        original_read = desk.project_rows
+
+        def read(surface, doctype, fields, filters=None, **kwargs):
+            if doctype == desk.APPLICANT and filters and "student_email_id" in filters:
+                return [
+                    {"name": "APP-A", "student_email_id": "learner@example.test",
+                     "application_status": "Applied"},
+                    {"name": "APP-B", "student_email_id": "learner@example.test",
+                     "application_status": "Applied"},
+                ]
+            return original_read(surface, doctype, fields, filters=filters, **kwargs)
+
+        desk.project_rows = read
+        handover = next(x for x in desk.work()["sections"]
+                        if x["id"] == "handover")["items"]
+        self.assertEqual(len(handover), 1)
+        self.assertIsNone(handover[0]["action"])
+        self.assertEqual(handover[0]["next_role"], "Academic Manager")
+
+    def test_full_candidate_page_is_not_proof_of_unique_identity(self):
+        desk, _ = self.desk()
+        desk.BOUNCE_WINDOW = 2
+        desk._subject_index = lambda decisions: {row["name"]: "THV-FIRST" for row in decisions}
+        original_read = desk.project_rows
+
+        def read(surface, doctype, fields, filters=None, **kwargs):
+            if doctype == desk.APPLICANT and filters and "th_candidate_ref" in filters:
+                return [
+                    {"name": "APP-FIRST", "th_candidate_ref": "THV-FIRST",
+                     "application_status": "Applied"},
+                    {"name": "APP-SECOND", "th_candidate_ref": "THV-OTHER",
+                     "application_status": "Applied"},
+                ]
+            return original_read(surface, doctype, fields, filters=filters, **kwargs)
+
+        desk.project_rows = read
+        handover = next(x for x in desk.work()["sections"]
+                        if x["id"] == "handover")["items"]
+        self.assertEqual(len(handover), 1)
+        self.assertIsNone(handover[0]["action"])
+        self.assertEqual(handover[0]["next_role"], "Academic Manager")
+        self.assertIn("incomplete", handover[0]["next"])
+
+    def test_unique_candidate_applicant_retains_normal_admission_action(self):
+        desk, _ = self.desk()
+        desk._subject_index = lambda decisions: {row["name"]: "THV-ONE" for row in decisions}
+        original_read = desk.project_rows
+
+        def read(surface, doctype, fields, filters=None, **kwargs):
+            if doctype == desk.APPLICANT and filters and "th_candidate_ref" in filters:
+                return [{"name": "APP-VERIFIED", "th_candidate_ref": "THV-ONE",
+                         "application_status": "Applied"}]
+            return original_read(surface, doctype, fields, filters=filters, **kwargs)
+
+        desk.project_rows = read
+        handover = next(x for x in desk.work()["sections"]
+                        if x["id"] == "handover")["items"]
+        self.assertEqual(len(handover), 1)
+        action = handover[0]["action"]
+        self.assertEqual(action["endpoint"], "toefl_house.admission.create_admission")
+        self.assertEqual(action["args"]["student_applicant"], "APP-VERIFIED")
+
     def test_expired_placement_never_offers_intake(self):
         desk, _ = self.desk(expired=True)
         view = desk.work()
