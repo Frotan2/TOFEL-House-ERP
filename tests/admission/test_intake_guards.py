@@ -255,6 +255,17 @@ class IntakeGuardTests(unittest.TestCase):
         self.assertIn("for update", probe_query)
         self.assertEqual(probe_values, ("subject@example.test",))
 
+    def test_duplicate_existing_applicants_cannot_be_reused_arbitrarily(self):
+        # Even a configured returning-student policy cannot choose the
+        # first of two native Applicants sharing the same placement subject.
+        self.applicant_probe = [{"name": "APP-OLD"}, {"name": "APP-DUP"}]
+        self.returning_mode = "placement_per_term"
+        with self.assertRaisesRegex(_ValidationError, "Multiple Applicants"):
+            self._record()
+        self.assertEqual(self.created, [])
+        self.assertEqual(len(self.calls), 2)
+        self.assertIn("for update", self.calls[1][0])
+
     def test_existing_applicant_denied_after_probe(self):
         self.applicant_probe = [{"name": "APP-OLD"}]
         with self.assertRaises(_ValidationError) as ctx:
