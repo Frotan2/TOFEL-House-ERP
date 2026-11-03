@@ -519,6 +519,25 @@ class CloseDriftTests(unittest.TestCase):
         self.assertIn("Petty Cash - TH", seen[0][1])
         self.assertNotIn("Bank - TH", seen[0][1])
 
+    def test_offsetting_post_close_cancellations_mark_daily_drift(self):
+        # Old Cash entries canceled after the signed close can offset exactly:
+        # a zero balance delta is not proof that the ledger is unchanged.
+        queries = []
+        def sql(statement, params=None, **kwargs):
+            queries.append((statement, params))
+            return ([{"name": "offsetting cancelled originals"}]
+                    if "modified > %s" in statement else [])
+        self.module.frappe.db.sql = sql
+        state = self.position()
+        self.assertTrue(state["drift"])
+        self.assertFalse(state["integrity_review"])
+        self.assertEqual(len(queries), 1)
+        self.assertIn("is_cancelled = 1 and modified > %s", queries[0][0])
+        self.assertEqual(queries[0][1][-2:],
+                         ("2026-10-24 18:00:00", "2026-10-24 18:00:00"))
+        self.assertIn("Cash - TH", queries[0][1])
+        self.assertIn("Petty Cash - TH", queries[0][1])
+
     def test_no_close_is_not_misreported_as_drift(self):
         self.closed = False
         self.assertFalse(self.position()["drift"])
@@ -618,10 +637,13 @@ class CashHistoryVarianceTests(unittest.TestCase):
         query, params, as_dict = calls[1]
         self.assertIn("from `tabGL Entry`", query)
         self.assertIn("is_cancelled = 0", query)
+        self.assertIn("is_cancelled = 1", query)
         self.assertIn("creation > %s", query)
+        self.assertIn("modified > %s", query)
         self.assertIn("group by account", query)
         self.assertEqual(params, (
-            "2026-10-24 18:00:00", "TOEFL House", "2026-10-24",
+            "2026-10-24 18:00:00", "2026-10-24 18:00:00",
+            "TOEFL House", "2026-10-24",
             "Cash - TH", "Petty Cash - TH"))
         self.assertTrue(as_dict)
 
@@ -656,6 +678,28 @@ class CashHistoryVarianceTests(unittest.TestCase):
         self.assertFalse(record["integrity_review"])
         self.assertTrue(record["drift"],
                         "Balance-neutral entries created after close require review")
+
+    def test_offsetting_post_close_cancellations_mark_historical_drift(self):
+        # Both canceled entries were in the signed original close, but their
+        # net balance was zero. An audit must still detect the later cancellation.
+        calls = []
+        def sql(query, params=None, as_dict=False):
+            calls.append((query, params))
+            if "tabTH Cashier Day" in query:
+                return []
+            return [
+                {"account": "Cash - TH", "closing": 100.0,
+                 "late_postings": 0, "late_cancellations": 2},
+                {"account": "Petty Cash - TH", "closing": 0.0,
+                 "late_postings": 0, "late_cancellations": 0},
+            ]
+        self.module.frappe.db.sql = sql
+        result = self.history()[0]
+        self.assertFalse(result["integrity_review"])
+        self.assertTrue(result["drift"])
+        self.assertIn("modified > %s", calls[1][0])
+        self.assertEqual(calls[1][1][:2],
+                         ("2026-10-24 18:00:00", "2026-10-24 18:00:00"))
 
     def test_historical_duplicate_close_is_flagged_even_when_off_page(self):
         # Only this close appears on the limited history page. The duplicate
