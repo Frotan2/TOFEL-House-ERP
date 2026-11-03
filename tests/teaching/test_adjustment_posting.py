@@ -132,6 +132,7 @@ def _install_command_harness(test):
     test.execute_calls = []
     test.today = "2026-09-22"
     test.due_rows = []
+    test.sql_scoped_queries = []
     test.contracts = {}
     test.employee_companies = {"EMP-1": "SYN Teaching House"}
     test.instructor_employees = {}
@@ -146,8 +147,36 @@ def _install_command_harness(test):
                 rows = rows[:limit]
             return rows
         if doctype == "TH Contract Adjustment":
-            return [dict(row) for row in fake.due_rows]
+            raise AssertionError("orphan rows must be scoped in SQL")
         raise AssertionError(f"unexpected get_all {doctype}")
+
+
+    def sql(query, values=(), as_dict=False, **kwargs):
+        # Assert the Company and native instructor/Employee relationship
+        # are enforced by the source query rather than Python after a
+        # global read of other companies' adjustment data.
+        assert as_dict is True
+        assert "from `tabTH Contract Adjustment` a" in query
+        assert "inner join `tabTH Instructor Contract` c" in query
+        assert "inner join `tabInstructor` i" in query
+        assert "inner join `tabEmployee` e" in query
+        assert "a.effective_date between %s and %s" in query
+        assert "e.company = %s" in query
+        assert "i.employee = c.employee" in query
+        assert "c.compensation_model != 'Fixed Salary'" in query
+        start, end, company = values
+        fake.sql_scoped_queries.append((start, end, company))
+        due = []
+        for row in fake.due_rows:
+            contract = fake.contracts.get(row["parent"])
+            if not contract or contract.compensation_model == "Fixed Salary":
+                continue
+            if fake.employee_companies.get(contract.employee) != company:
+                continue
+            if fake.instructor_employees.get(contract.instructor) != contract.employee:
+                continue
+            due.append(dict(row))
+        return due
 
     def get_value(doctype, name_or_filters, fieldname=None, **kwargs):
         if doctype == "TH Adjustment Posting Policy":
@@ -184,7 +213,7 @@ def _install_command_harness(test):
         today=lambda: fake.today,
         now_datetime=lambda: "2026-09-22 12:00:00")
     stub.db = SimpleNamespace(get_all=get_all, get_value=get_value,
-                              exists=exists)
+                              sql=sql, exists=exists)
     stub.get_doc = get_doc
     sys.modules["frappe"] = stub
     sys.modules["frappe.utils"] = stub.utils
@@ -351,6 +380,21 @@ class OrphanCollectionTests(unittest.TestCase):
         self.contracts = {}
         self.assertEqual(self.posting.collect_orphan_contracts(
             "2026-09-01", "2026-09-30", set(), "SYN Teaching House"), {})
+
+    def test_source_query_filters_adjustments_before_loading_company_rows(self):
+        self.due_rows = [{"name": "ADJ-A", "parent": "CON-A"},
+                         {"name": "ADJ-B", "parent": "CON-B"}]
+        self.contracts = {
+            "CON-A": self._contract("INS-A"),
+            "CON-B": self._contract("INS-B", employee="EMP-B"),
+        }
+        self.employee_companies["EMP-B"] = "Other School"
+        result = self.posting.collect_orphan_contracts(
+            "2026-09-01", "2026-09-30", set(), "SYN Teaching House")
+        self.assertEqual(result, {
+            "CON-A": {"instructor": "INS-A", "adjustments": ["ADJ-A"]}})
+        self.assertEqual(self.sql_scoped_queries, [
+            ("2026-09-01", "2026-09-30", "SYN Teaching House")])
 
     def test_foreign_company_orphan_adjustment_is_not_posted_or_reported(self):
         self.due_rows = [{"name": "ADJ-LOCAL", "parent": "CON-LOCAL"},
