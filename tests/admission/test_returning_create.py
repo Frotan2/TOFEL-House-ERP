@@ -121,7 +121,11 @@ class ReturningCreateTests(unittest.TestCase):
                                        th_candidate_ref=fake.applicant_candidate_ref,
                                        application_status=fake.applicant_status,
                                        paid=0,
-                                       get=lambda field: {"academic_term": "", "th_branch": fake.applicant_branch}.get(field))
+                                       get=lambda field: {
+                                           "academic_term": "",
+                                           "th_branch": fake.applicant_branch,
+                                           "th_candidate_ref": fake.applicant_candidate_ref,
+                                       }.get(field))
             raise AssertionError(f"unexpected get_doc {doctype}")
 
         stub = types.ModuleType("frappe")
