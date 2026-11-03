@@ -474,6 +474,22 @@ def _lock_covering_contracts(contracts, start, end):
     return contracts
 
 
+def _assert_payroll_company(contract, instructor, company):
+    """Refuse wrong-company or mismatched HRMS identities before any wage write.
+
+    The assignment query is company-scoped through Instructor.employee,
+    whereas Additional Salary pays contract.employee. Both links must agree
+    and the actual native Employee must belong to the requested Company.
+    This also protects orphan adjustments and imported/edited legacy rows.
+    """
+    if frappe.db.get_value(EMPLOYEE, contract.employee, "company") != company:
+        raise frappe.ValidationError(
+            "Teaching contract employee belongs to a different payroll company")
+    if frappe.db.get_value(INSTRUCTOR, instructor, "employee") != contract.employee:
+        raise frappe.ValidationError(
+            "Teaching contract employee no longer matches the instructor's HRMS employee record")
+
+
 def _payable_for(contract, assignment):
     for term in contract.skill_terms or []:
         if term.skill == assignment.skill:
@@ -558,10 +574,18 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                 "No active adjustment posting policy governs payroll; "
                 "the Course Owner must set one first")
         orphan_mode = posting_terms["orphan_posting"]
+        # Scope at the database boundary: a Company-A payroll run must not
+        # read or process Company-B teaching assignments. Instructor.employee
+        # is the native Education-to-HRMS link, not a user-supplied Company.
         rows = frappe.db.sql(
-            "select name, student_group, skill, instructor, contract, effective_start, effective_end "
-            "from `tabTH Teaching Assignment` where effective_start <= %s "
-            "and (effective_end is null or effective_end >= %s)", (end, start), as_dict=True)
+            "select a.name, a.student_group, a.skill, a.instructor, a.contract, "
+            "a.effective_start, a.effective_end "
+            "from `tabTH Teaching Assignment` a "
+            "inner join `tabInstructor` i on i.name = a.instructor "
+            "inner join `tabEmployee` e on e.name = i.employee "
+            "where e.company = %s and a.effective_start <= %s "
+            "and (a.effective_end is null or a.effective_end >= %s)",
+            (company_name, end, start), as_dict=True)
         posted, skipped_fixed, skipped_existing, adjustments_posted = {}, [], 0, 0
         orphans_posted = 0
         already_compensated = {}
@@ -569,7 +593,7 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
         for instructor in sorted({row.instructor for row in rows}):
             contracts[instructor] = frappe.get_doc(
                 CONTRACT, _covering_contract_name(instructor, start, end))
-        orphans = posting.collect_orphan_contracts(start, end, set(contracts))
+        orphans = posting.collect_orphan_contracts(start, end, set(contracts), company_name)
         orphan_adjustment_names = {name for info in orphans.values()
                                    for name in info["adjustments"]}
         if orphan_mode == posting.POST:
@@ -585,6 +609,10 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
             skipped_orphans = {parent: info["adjustments"]
                                for parent, info in sorted(orphans.items())}
         _lock_covering_contracts(contracts, start, end)
+        # Validate the actual paid Employee, not just the Instructor linked
+        # by the selection query. All contracts pass before the first insert.
+        for instructor, contract in sorted(contracts.items()):
+            _assert_payroll_company(contract, instructor, company_name)
         for row in rows:
             contract = contracts[row.instructor]
             if contract.compensation_model == "Fixed Salary":
