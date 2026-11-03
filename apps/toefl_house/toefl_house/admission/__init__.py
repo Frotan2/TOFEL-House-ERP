@@ -266,6 +266,12 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             prior = frappe.db.sql(
                 "select name from `tabStudent Applicant` "
                 "where student_email_id=%s for update", (subject,), as_dict=True)
+        if len(prior) > 1:
+            # An imported/legacy duplicate is not an authorization to
+            # choose the first matching Applicant and reassign a journey.
+            raise frappe.ValidationError(
+                "Multiple Applicants share this placement subject; "
+                "Academic Manager must reconcile the records before admission")
         if prior:
             # OD-NEW-01/B: native applicant email is unique, so a
             # returning student re-sitting placement REUSES their one
@@ -387,6 +393,18 @@ def create_admission(request_key, student_applicant, placement_decision, existin
             if not subject.startswith("THV-") or getattr(applicant, "th_candidate_ref", None) != subject:
                 raise frappe.PermissionError(
                     "Placement candidate reference does not match native Applicant")
+            # Lock the complete matching set, rather than trusting the
+            # caller-selected Applicant. A second legacy/imported row with
+            # this candidate key makes identity ambiguous even when each
+            # individual row seems to match the Placement subject.
+            matches = frappe.db.sql(
+                "select name from `tabStudent Applicant` "
+                "where th_candidate_ref=%s for update",
+                (subject,), as_dict=True)
+            if len(matches) != 1 or matches[0]["name"] != applicant_name:
+                raise frappe.PermissionError(
+                    "Applicant candidate identity is ambiguous or mismatched; "
+                    "Academic Manager must reconcile it before admission")
         elif (applicant.student_email_id or "") != subject:
             raise frappe.ValidationError("Placement subject does not match the native applicant")
         source_case = frappe.db.get_value(ATTEMPT, row.attempt, "case_name")
