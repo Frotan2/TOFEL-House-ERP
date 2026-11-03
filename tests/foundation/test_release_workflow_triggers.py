@@ -113,7 +113,7 @@ class ReleaseImageTriggerContract(unittest.TestCase):
             "      - name: Reclaim disposable Docker storage before image export", 1
         )[1].split("      - name: Assemble verified customer package", 1)[0]
         self.assertIn("docker compose -f product/docker-compose.yml down --volumes --remove-orphans", prepare)
-        self.assertIn("rm -rf -- product/data /tmp/win-worktree", prepare)
+        self.assertIn("sudo rm -rf -- product/data /tmp/win-worktree", prepare)
         self.assertIn("docker create --name toefl-house-image-export-pin toefl-house-erp-app:ci", prepare)
         self.assertIn("docker builder prune --all --force", prepare)
         self.assertIn("docker volume prune --force", prepare)

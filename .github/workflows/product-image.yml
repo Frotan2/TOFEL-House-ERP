@@ -1835,7 +1835,8 @@ jobs:
             docker compose -f product/docker-compose.yml logs --no-color --tail 3 web 2>&1 || true
           } > "$RUNNER_TEMP/toefl-house-product-image-compose.log" 2>&1
           docker compose -f product/docker-compose.yml down --volumes --remove-orphans
-          rm -rf -- product/data /tmp/win-worktree
+          # Frappe-owned bind-mounted assets are not removable by the runner UID.
+          sudo rm -rf -- product/data /tmp/win-worktree
 
           # Keep the exact app image reachable while removing unused images.
           # The stopped pin container is removed immediately after docker save.
