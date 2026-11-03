@@ -444,6 +444,14 @@ def reconcile_cashier_day(request_key, company, date, counts):
                 "This business day is already closed for this company; a "
                 "submitted close is never overwritten")
 
+        # The Company row lock serializes competing close commands, but it
+        # does NOT serialize normal Payment Entry / Journal Entry postings.
+        # Capture the audit boundary BEFORE the native cash-GL balance reads:
+        # a concurrently created posting must not receive an apparent
+        # pre-close creation time merely because the close document was built
+        # after the balances were read. This is a conservative drift signal,
+        # not a substitute for an accounting period lock.
+        ledger_snapshot_started = frappe.utils.now_datetime()
         balances = {row["account"]: row for row in
                     drawer_balances(company, sorted(prepared), day)}
         rows = []
@@ -468,7 +476,7 @@ def reconcile_cashier_day(request_key, company, date, counts):
             doctype=DAY,
             naming_series=DAY_SERIES,
             date=day, company=company, cashier=actor,
-            reconciled_on=frappe.utils.now_datetime(),
+            reconciled_on=ledger_snapshot_started,
             total_expected=round(sum(row["expected_amount"] for row in rows), 2),
             total_counted=round(sum(row["counted_amount"] for row in rows), 2),
             total_variance=round(sum(row["variance"] for row in rows), 2),
