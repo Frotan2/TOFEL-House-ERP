@@ -72,12 +72,35 @@ def validate_preset(data: dict) -> dict:
             if position in positions:
                 raise ValueError(f"Duplicate position in {code}: {position}")
             positions.add(position)
-            if (not isinstance(level["duration_months"], int)
+            if (type(level["duration_months"]) is not int
                     or level["duration_months"] < 1):
                 raise ValueError(f"Invalid duration for {level_code}")
-            if (not isinstance(level["semester_tuition_afn"], int)
+            if (type(level["semester_tuition_afn"]) is not int
                     or level["semester_tuition_afn"] < 1):
                 raise ValueError(f"Invalid fee for {level_code}")
+
+    # The first-install fixture is not an editable Owner policy version.
+    # A stale two-month TOEFL setup must never silently create a wrong
+    # curriculum or Fee Structure. Subsequent duration revisions use the
+    # authorized, effective-dated academic policy workflow instead.
+    toefl_programs = [
+        family for family in families
+        if family.get("code") == "TOEFL-PREP"
+        or family.get("title") == "TOEFL Preparation"
+    ]
+    if len(toefl_programs) != 1:
+        raise ValueError("The Owner-confirmed four-month TOEFL Preparation program is required")
+    toefl_levels = toefl_programs[0].get("levels") or []
+    if (len(toefl_levels) != 1
+            or toefl_levels[0].get("code") != "TOEFL-PREP-4M"
+            or type(toefl_levels[0].get("duration_months")) is not int
+            or toefl_levels[0]["duration_months"] != 4
+            or type(toefl_levels[0].get("semester_tuition_afn")) is not int
+            or toefl_levels[0]["semester_tuition_afn"] != 7000):
+        raise ValueError(
+            "The Owner-confirmed four-month TOEFL Preparation level "
+            "must have code TOEFL-PREP-4M and semester tuition AFN 7000"
+        )
     for family in families:
         count = len(family["levels"])
         if sorted(x["sequence"] for x in family["levels"]) != list(range(1, count + 1)):

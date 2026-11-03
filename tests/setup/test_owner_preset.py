@@ -1,5 +1,6 @@
 """Offline safety tests for the TOEFL House setup preset (no Frappe site)."""
 import copy
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -63,6 +64,42 @@ class TestInitialSetupPreset(unittest.TestCase):
                     self.assertEqual(level["semester_tuition_afn"],
                                      (500 if program["code"] == "GEN-ENG" else 1000)
                                      * level["duration_months"])
+
+    def test_toefl_initial_catalog_matches_owner_confirmed_four_month_policy(self):
+        decisions_path = Path(__file__).resolve().parents[2] / "docs" / "owner-decisions.json"
+        decisions = json.loads(decisions_path.read_text(encoding="utf-8"))
+        owner = decisions["owner_policy_addenda_2026_10_30_daily_setup"]["specialist_courses"]
+        toefl = next(p for p in self.preset["programs"] if p["code"] == "TOEFL-PREP")
+        self.assertEqual(len(toefl["levels"]), 1)
+        level = toefl["levels"][0]
+        self.assertEqual(owner["toefl_preparation_months"], 4)
+        self.assertEqual(owner["toefl_semester_fee_afn"], 7000)
+        self.assertEqual(level["code"], "TOEFL-PREP-4M")
+        self.assertEqual(level["duration_months"], owner["toefl_preparation_months"])
+        self.assertEqual(level["semester_tuition_afn"], owner["toefl_semester_fee_afn"])
+
+    def test_stale_or_malformed_toefl_initial_catalog_fails_closed(self):
+        for field, value, message in (
+                ("duration_months", 2, "four-month TOEFL"),
+                ("duration_months", 3, "four-month TOEFL"),
+                ("duration_months", True, "Invalid duration"),
+                ("code", "TOEFL-PREP-2M", "four-month TOEFL"),
+                ("semester_tuition_afn", 1000, "four-month TOEFL"),
+                ("semester_tuition_afn", True, "Invalid fee")):
+            with self.subTest(field=field, value=value):
+                altered = copy.deepcopy(self.preset)
+                toefl = next(p for p in altered["programs"] if p["code"] == "TOEFL-PREP")
+                toefl["levels"][0][field] = value
+                with self.assertRaisesRegex(ValueError, message):
+                    validate_preset(altered)
+
+    def test_toefl_initial_program_cannot_be_hidden_by_renaming(self):
+        altered = copy.deepcopy(self.preset)
+        toefl = next(p for p in altered["programs"] if p["code"] == "TOEFL-PREP")
+        toefl["code"] = "OTHER-PROGRAM"
+        toefl["title"] = "Other Program"
+        with self.assertRaisesRegex(ValueError, "four-month TOEFL"):
+            validate_preset(altered)
 
     def test_continuous_and_final_are_40_60(self):
         assessment = self.preset["assessment"]

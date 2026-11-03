@@ -43,6 +43,20 @@ class TestSetupCatalogPlanner(unittest.TestCase):
             {"issue_tuition_fees", "create_discount_rule", "set_backup_enabled",
              "publish_assessment_results", "create_salary_slip"}), set())
 
+    def test_toefl_four_months_and_owner_fee_reach_native_catalog_actions(self):
+        plan = prepare_catalog_plan({"programs": {}, "levels": {}, "years": {},
+                                     "fee_categories": [], "tuition": {}}, self.preset)
+        level = next(action for action in plan["actions"]
+                     if action["operation"] == "create_level"
+                     and action["code"] == "TOEFL-PREP-4M")
+        self.assertEqual(level["duration_value"], 4)
+        self.assertEqual(level["duration_unit"], "Solar Hijri Month")
+        fees = [action for action in plan["actions"]
+                if action["operation"] == "set_level_fee_component"
+                and action["level"] == "TOEFL-PREP-4M"]
+        self.assertEqual(len(fees), len(self.preset["academic_years"]))
+        self.assertTrue(all(action["amount"] == 7000 for action in fees))
+
     def test_existing_identical_records_plan_no_writes(self):
         p = self.preset
         snapshot = {

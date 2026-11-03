@@ -209,6 +209,45 @@ class ReceptionWalkinTests(unittest.TestCase):
         self.assertEqual(updated["version"], 2)
         self.assertEqual(self.saved["INQ-001"]["time_zone"], "Europe/London")
 
+    def test_multiline_reception_notes_work_for_first_contact_and_follow_up(self):
+        # A Small Text field must preserve readable line breaks for both
+        # Afghan-language and English notes pasted from Windows or browsers.
+        self.module.create_walkin_inquiry(
+            "multiline-create", "Visitor", notes="  تماس اول\r\nپیگیری فردا\rNext call  ")
+        self.assertEqual(self.saved["INQ-001"]["notes"],
+                         "تماس اول\nپیگیری فردا\nNext call")
+        updated = self.module.update_walkin_inquiry(
+            "multiline-update", "INQ-001", 1, "Contacted",
+            notes="  شاگرد آنلاین\nد وخت توپیر\nConfirm the time  ")
+        self.assertEqual(updated["version"], 2)
+        expected = "شاگرد آنلاین\nد وخت توپیر\nConfirm the time"
+        self.assertEqual(self.saved["INQ-001"]["notes"], expected)
+        # Omitting notes preserves the complete multi-line follow-up
+        # evidence, not just the first line.
+        self.module.update_walkin_inquiry("multiline-preserve", "INQ-001", 2,
+                                          "Awaiting Placement")
+        self.assertEqual(self.saved["INQ-001"]["notes"], expected)
+
+    def test_multiline_notes_reject_unsafe_controls_and_excessive_length(self):
+        for bad in ("First\tSecond", "First\x00Second",
+                    "First\x1bSecond", "First\n" + "x" * 1000):
+            with self.subTest(bad=repr(bad)[:40]), self.assertRaises(ValidationError):
+                self.module.create_walkin_inquiry("invalid-note", "Visitor", notes=bad)
+        self.assertEqual(self.saved, {})
+
+    def test_direct_crlf_notes_cannot_bypass_canonical_document_guard(self):
+        self.module.create_walkin_inquiry("initial", "Visitor", notes="Line one")
+        doc = Inquiry(self, self.saved["INQ-001"])
+        doc.notes = "Line one\r\nLine two"
+        doc.version += 1
+        self.kind = "update_walkin_inquiry"
+        try:
+            with self.assertRaisesRegex(ValidationError, "not normalized"):
+                self.module.protect_inquiry(doc)
+        finally:
+            self.kind = None
+        self.assertEqual(self.saved["INQ-001"]["notes"], "Line one")
+
     def test_omitted_note_preserves_evidence_but_explicit_blank_clears_it(self):
         self.module.create_walkin_inquiry(
             "note-source", "Visitor", phone="0794357509",
