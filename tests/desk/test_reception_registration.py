@@ -170,6 +170,27 @@ class RegistrationDeskTests(unittest.TestCase):
         self.assertIsNone(handover[0]["action"])
         self.assertEqual(handover[0]["next_role"], "Academic Manager")
 
+    def test_legacy_email_does_not_override_existing_candidate_origin(self):
+        desk, _ = self.desk()
+        original_read = desk.project_rows
+
+        def read(surface, doctype, fields, filters=None, **kwargs):
+            if doctype == desk.APPLICANT and filters and "student_email_id" in filters:
+                # The release is still identified by email, but this native
+                # Applicant has a different authoritative THV origin.
+                return [{"name": "APP-LINKED",
+                         "student_email_id": "learner@example.test",
+                         "th_candidate_ref": "THV-OTHER",
+                         "application_status": "Applied"}]
+            return original_read(surface, doctype, fields, filters=filters, **kwargs)
+
+        desk.project_rows = read
+        handover = next(x for x in desk.work()["sections"]
+                        if x["id"] == "handover")["items"]
+        self.assertEqual(len(handover), 1)
+        self.assertIsNone(handover[0]["action"])
+        self.assertEqual(handover[0]["next_role"], "Academic Manager")
+
     def test_full_candidate_page_is_not_proof_of_unique_identity(self):
         desk, _ = self.desk()
         desk.BOUNCE_WINDOW = 2
