@@ -648,6 +648,17 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                 if orphan_contract.instructor != info["instructor"]:
                     raise frappe.ValidationError(
                         "Orphan contract identity changed during payroll calculation")
+                if orphan_contract.compensation_model == "Fixed Salary":
+                    raise frappe.ValidationError(
+                        "Orphan contract compensation model changed during payroll calculation")
+                current_due_adjustments = {
+                    str(adjustment.name)
+                    for adjustment in (orphan_contract.adjustments or [])
+                    if start <= str(adjustment.effective_date) <= end
+                }
+                if current_due_adjustments != set(info["adjustments"]):
+                    raise frappe.ValidationError(
+                        "Orphan contract adjustments changed during payroll calculation")
                 _assert_payroll_company(orphan_contract, info["instructor"], company_name)
         for row in rows:
             contract = contracts[row.instructor]
