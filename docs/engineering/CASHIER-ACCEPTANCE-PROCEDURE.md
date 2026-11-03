@@ -104,7 +104,8 @@ Configure in native screens, with invented numbers; these are *test data*, not a
 proposal for the Owner's real prices or tax policy.
 
 1. Company `SYN Test Company`, country Afghanistan, currency `AFN`, with a
-   postable **Cash** account in the chart and a default receivable account.
+   postable **Cash** account in the chart, a separate **Bank** account for
+   negative testing, and a default receivable account.
 2. Selling Price List `SYN Test Prices` in `AFN` (must match the company
    currency; do not invent an exchange rate).
 3. `Fee Category` `SYN Tuition`, `Fee Structure` for the test program/year with
@@ -179,17 +180,27 @@ message; a silent success is a **FAIL**.
 
 | # | Actor | Action | Expected observable |
 | --- | --- | --- | --- |
-| C27 | Cashier | Finance desk → **Cash close** | Drawers in scope, today's **Opening**/**today movement**, state **Open**, expected = native ledger closing balance |
+| C27 | Cashier | Finance desk → **Cash close** | Only physical **Cash** accounts appear, not the Bank account; opening, movement and expected equal the native Cash GL closing balance |
 | C28 | Cashier | Desk **Tax configuration** fact | Shows `No native tax configured` for the company (owner supplied no tax policy). No rate, exemption or jurisdiction is displayed or implied |
 | C29 | Cashier | Record today's close: counted amount **equal** to the expected figure, submit | `TH Cashier Day` submitted; variance 0.00; state becomes **Closed**; **no** GL/stock entry is posted by the close (compare GL count before/after) |
 | C30 | Cashier | Close the same company/day again | Refused with `This business day is already closed for this company; a submitted close is never overwritten` |
 | C31 | Cashier (second day or second company) | Record a close with counted ≠ expected and **no** note | Refused with `Explain the … variance for … before closing` |
 | C32 | Cashier | Record the same close with the variance and a plain-language note | Submitted; variance stored exactly as counted − expected; desk **Variance recorded** shows it; history shows **Variance** |
+| C32a | Cashier (another invented company/day with two Cash accounts) | Count the first drawer 100 AFN short and the second 100 AFN over; give a written explanation on **both** | Even though total net variance is 0, **Closed with variance** is shown and history says **Variance**, not **Balanced**; the two drawer discrepancies remain independently recorded |
 | C33 | Cashier | Record a close for a **future** business date | Refused with `A cashier close cannot cover a future business day` |
 | C34 | Cashier | Record a close older than the billing policy's window | Refused with `The business day is older than the billing policy's closing window` |
 | C35 | Auditor | Finance desk → **Cash close history** | Submitted closes listed newest first with expected, counted, variance; entries cannot be edited |
 | C36 | Cashier | Post a small native `Payment Entry` dated **today** after the close | Desk shows **Drift** for that company; nothing is silently restated |
 | C37 | Staff no finance | Attempt a close | Refused (role). Record the message |
+| C37a | Cashier | Try to include a **Bank** account and its balance in physical Cash close | Refused: Bank is not a physical Cash account; no cash close or bank accounting entry created |
+| C37b | Cashier | After closing the cash drawer, post an authorized dated **Bank-only** movement without touching any Cash account | Cash close remains **Closed**, not Drift. Bank statement reconciliation is a separate task |
+| C37c | Cashier | On a separate invented test company with an AFN base currency and a USD-denominated Cash account, attempt physical cash close | Refused with a currency-review explanation; no arbitrary exchange rate, cash-count variance or submitted close is created |
+| C37d | Auditor | Close one synthetic AFN company-day correctly, then create an **additional Cash account** for the same company on a later business day | The historical day stays **Balanced** if its original drawers matched; do not falsely claim missing count for the new drawer |
+| C37e | Auditor | Disable a historically counted Cash account after an otherwise valid close | Earlier valid close remains **Balanced**; a disabled drawer cannot become part of a new daily count |
+| C37f | Auditor | Inspect a synthetic legacy close recording a Bank account, a wrong-company account, or parent expected/count totals that differ from its saved drawer rows | **Integrity review** for that historical document; no mutation, deletion or invented cash correction |
+| C37g | Finance Officer | On an isolated valid native Cash account where account currency is unset, use company default AFN; then separately try a Cash-typed non-Asset account | Inherited AFN is eligible; non-Asset account is blocked with a Cash account configuration explanation |
+| C37h | Auditor | For a successful physical Cash close, compare all native `GL Entry` counts before/after and reread the submitted parent and each `TH Cashier Count` row | No GL posting from the close, one submitted parent, exact drawer names/amounts/explanations in the database |
+| C37i | Auditor | On that same synthetic company, reload the closed day via `cashier_history` against MariaDB, with both physical Cash drawers counted | The saved history shows **Balanced** with no integrity review, per-drawer variance or drift; no present-day chart changes are projected backward |
 
 ### F. Permissions, branch and audit integrity
 

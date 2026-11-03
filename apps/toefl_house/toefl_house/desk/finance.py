@@ -918,7 +918,13 @@ def _cash_close_sections(day):
     drawers = [(row["company"], drawer) for row in position
                for drawer in row.get("drawers", [])]
     closed = [row for row in position if row.get("close")]
+    variance_companies = [row["company"] for row in closed
+                          if row.get("drawer_variance")]
+    integrity_companies = [row["company"] for row in closed
+                           if row.get("integrity_review")]
     drifted = [row["company"] for row in position if row.get("drift")]
+    currency_blocked = {row["company"]: row["currency_issue"]
+                        for row in position if row.get("currency_issue")}
     # In multi-company mode, a close in ONE company is never a global close.
     # Add each closed company's recorded expectation and each still-open
     # company's current native ledger position, without dropping either.
@@ -931,25 +937,47 @@ def _cash_close_sections(day):
 
     facts = [
         {"label": "Drawers in scope",
-         "definition": ("Native Cash and Bank accounts of the companies in your "
+         "definition": ("Native physical Cash accounts of the companies in your "
                         "scope. Expected money is their ledger closing balance."),
          "value": len(drawers), "owner": None},
         {"label": "Cash close today",
          "definition": ("All in-scope companies must have a submitted close to show Closed. "
                         "Partial company closes and posting drift are never reported as Closed."),
-         "value": ("No drawers" if not drawers else
+         "value": ("Cash account review" if currency_blocked else
+                   "Integrity review" if integrity_companies else
+                   "No drawers" if not drawers else
                    "Drift" if drifted else
+                   "Closed with variance" if (len(closed) == len(position)
+                                              and variance_companies) else
                    "Closed" if len(closed) == len(position) else
                    "Partially closed" if closed else "Open"),
          "owner": "Finance Officer"},
         {"label": "Expected at close",
-         "definition": ("Ledger closing balance of the drawers: the counted "
-                        "figure when a close exists, otherwise the live position."),
-         "value": f"{expected_total:.2f}", "owner": None},
+         "definition": ("Native GL expected balance for eligible Cash drawers. "
+                        "Submitted closes retain the expected balance at closure; "
+                        "open positions show the current ledger balance."),
+         "value": ("Cash-account review required" if currency_blocked else
+                   "Integrity review required" if integrity_companies
+                   else f"{expected_total:.2f}"), "owner": None},
+        {"label": "Cash account safety",
+         "definition": ("Physical Cash accounts must be Assets and use the "
+                        "company base currency (or inherit it if unset). "
+                        "Foreign-currency cash requires separate reconciliation."),
+         "value": ("; ".join(f"{name}: {reason}"
+                            for name, reason in sorted(currency_blocked.items()))
+                   if currency_blocked else
+                   "No active Cash drawer; existing close needs Finance Auditor review"
+                   if integrity_companies and not drawers
+                   else "Eligible for base-currency count"),
+         "owner": "Finance Officer"},
         {"label": "Variance recorded",
          "definition": ("Counted minus expected on the submitted close, exactly "
                         "as the control record states it."),
-         "value": f"{variance_total:.2f}" if closed else "Not closed",
+         "value": ("Cash-account review required" if currency_blocked else
+                   "Integrity review required" if integrity_companies else
+                   f"{variance_total:.2f} net; drawer discrepancies in "
+                   + ", ".join(variance_companies) if variance_companies else
+                   f"{variance_total:.2f}" if closed else "Not closed"),
          "owner": "Finance Officer"},
         {"label": "Ledger drift",
          "definition": ("A posting dated on or before a closed day was created "
@@ -963,10 +991,21 @@ def _cash_close_sections(day):
     closes = {row["company"]: row.get("close") for row in position}
     for company, drawer in drawers:
         close = closes.get(company)
-        if close and drifted and company in drifted:
+        if company in currency_blocked:
+            state, next_text = "Cash account review", currency_blocked[company]
+        elif close and company in integrity_companies:
+            state, next_text = "Integrity review", (
+                "Saved counted amounts, drawer variances or close totals do "
+                "not reconcile. Finance Auditor must review the immutable "
+                "cash close; do not treat this day as balanced.")
+        elif close and drifted and company in drifted:
             state, next_text = "Drift", ("Re-check the drawer against the ledger; "
                                          "the day was posted to after the close. "
                                          "The Finance Auditor reviews the difference.")
+        elif close and company in variance_companies:
+            state = "Closed with variance"
+            next_text = ("Review every drawer shortage or overage even if the "
+                         "company net is zero. The submitted close cannot be restated.")
         elif close:
             state = "Closed"
             next_text = "No action; the day is closed and cannot be re-stated."
@@ -978,20 +1017,49 @@ def _cash_close_sections(day):
         item = {
             "id": f"{company}:{drawer['account']}",
             "person": drawer["account"],
-            "detail": f"{company} · opening {drawer['opening']:.2f}, "
-                      f"today {drawer['movement']:.2f}",
+            "detail": (currency_blocked[company] if company in currency_blocked
+                       else f"{company} · opening {drawer['opening']:.2f}, "
+                            f"today {drawer['movement']:.2f}"),
             "status": state,
             "stage": "Cash drawer",
             "stage_definition": ("Expected money is the native ledger closing "
                                  "balance of this account; counted money is what "
                                  "the cashier records."),
             "next": next_text,
-            "next_role": "Finance Officer",
+            "next_role": ("Finance Auditor"
+                          if state in ("Integrity review", "Drift",
+                                       "Closed with variance")
+                          else "Finance Officer"),
             "waiting_since": day,
-            "amount": drawer["closing"],
+            "amount": (None if company in currency_blocked
+                       else drawer["closing"]),
             "currency": "",
         }
         items.append(item)
+
+    # If the only cash drawer was disabled after a saved close, there is no
+    # current drawer row to carry its exception. Surface the saved close as a
+    # distinct Finance Auditor item rather than an empty "No drawers" queue.
+    for row in position:
+        company = row["company"]
+        if row.get("close") and not row.get("drawers"):
+            items.append({
+                "id": f"{company}:missing-active-cash-drawer",
+                "person": company,
+                "detail": (f"{company} · submitted cash close exists, "
+                           "but no active physical Cash drawer remains"),
+                "status": "Integrity review",
+                "stage": "Cash drawer",
+                "stage_definition": ("The saved close remains auditable even "
+                                     "when its physical Cash account is disabled."),
+                "next": ("Finance Auditor must review the stored close, "
+                         "the disabled cash accounts and the original ledger. "
+                         "Do not treat this day as balanced or create a new close."),
+                "next_role": "Finance Auditor",
+                "waiting_since": day,
+                "amount": None,
+                "currency": "",
+            })
 
     # Offer ONE guarded company/day close, never independent row closes:
     # the accounting command requires a real count of ALL enabled drawers
@@ -1000,7 +1068,8 @@ def _cash_close_sections(day):
     for row in position:
         company = row["company"]
         company_drawers = row.get("drawers", [])
-        if (row.get("close") or company in drifted or not closing_window
+        if (row.get("close") or company in drifted
+                or company in currency_blocked or not closing_window
                 or not company_drawers
                 or len(company_drawers) > cashier_money.MAX_DRAWERS):
             continue
@@ -1026,22 +1095,44 @@ def _cash_close_sections(day):
     cash = section("cash-close", "Cash close", "queue", items=items,
                    facts=facts,
                    empty_title="No cash drawer in scope",
-                   empty_body="This company has no native Cash or Bank account yet; nothing can be counted until Finance configures one.")
+                   empty_body="This company has no native physical Cash account yet. Bank balances require a separate bank-statement reconciliation.")
 
     history_items = [{
         "id": row["name"],
         "person": row.get("cashier") or "",
-        "detail": f"{row.get('date')} · expected {float(row.get('total_expected') or 0):.2f}, "
-                  f"counted {float(row.get('total_counted') or 0):.2f}",
-        "status": "Variance" if abs(float(row.get("total_variance") or 0)) > 0.005
-                  else "Balanced",
+        "detail": (f"{row.get('date')} · Stored cash totals require integrity review"
+                   if row.get("integrity_review") else
+                   f"{row.get('date')} · expected {float(row.get('total_expected') or 0):.2f}, "
+                   f"counted {float(row.get('total_counted') or 0):.2f}"),
+        "status": ("Integrity review" if row.get("integrity_review") else
+                   "Drift" if row.get("drift") else
+                   "Variance" if (row.get("drawer_variance")
+                                  or abs(float(row.get("total_variance") or 0)) > 0.005)
+                   else "Balanced"),
         "stage": "Cash close",
         "stage_definition": ("A submitted cashier day close: the counted drawer "
                              "against the native ledger for that business day."),
-        "next": "No action; a submitted close is never overwritten.",
-        "next_role": None,
+        "next": ("Finance Auditor must review the original counted drawers, "
+                 "account identity, and cash ledger. Do not rewrite this close."
+                 if row.get("integrity_review") else
+                 "Finance Auditor must review backdated or cancelled native "
+                 "cash ledger entries against the original close; saved "
+                 "amounts may now be stale. Do not rewrite the close."
+                 if row.get("drift") else
+                 "Finance Auditor must review each drawer's shortage or overage "
+                 "and its written explanation; do not net them away."
+                 if row.get("drawer_variance") else
+                 "No action; this submitted close is not overwritten."),
+        "next_role": ("Finance Auditor" if (row.get("integrity_review")
+                                           or row.get("drift")
+                                           or row.get("drawer_variance"))
+                      else None),
         "waiting_since": row.get("date"),
-        "amount": row.get("total_variance") or 0,
+        # A corrupt historical parent total is evidence for the auditor, not
+        # a trusted amount for operational dashboards. Keep its original
+        # submitted record available; never alter financial history here.
+        "amount": (None if row.get("integrity_review")
+                   else (row.get("total_variance") or 0)),
         "currency": "",
     } for row in history]
     history_section = section(

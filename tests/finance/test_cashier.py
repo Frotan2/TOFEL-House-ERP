@@ -1,7 +1,7 @@
 """Cashier day close: the counted drawer against the native ledger.
 
 The close is a control record, not a ledger entry. These tests pin the shape
-rules that make it trustworthy: only company Cash/Bank drawers, one row per
+rules that make it trustworthy: only company Cash drawers, one row per
 drawer, expected money computed from the ledger (never typed), variance equal
 to counted minus expected, and a written explanation whenever they differ.
 """
@@ -98,8 +98,9 @@ def load_cashier(drawers=()):
     return module
 
 
-DRAWERS = [{"name": "Cash - TH", "account_type": "Cash"},
-           {"name": "Bank - TH", "account_type": "Bank"}]
+DRAWERS = [{"name": "Cash - TH", "account_type": "Cash", "root_type": "Asset"},
+           {"name": "Petty Cash - TH", "account_type": "Cash", "root_type": "Asset"}]
+BANK = {"name": "Bank - TH", "account_type": "Bank"}
 
 
 def close(**overrides):
@@ -126,7 +127,7 @@ class CloseShapeTests(unittest.TestCase):
 
     def test_partial_company_drawer_close_is_refused(self):
         module = load_cashier(DRAWERS)
-        with self.assertRaisesRegex(_ValidationError, "every enabled Cash/Bank drawer"):
+        with self.assertRaisesRegex(_ValidationError, "every enabled Cash drawer"):
             module.validate_close(close())
 
     def test_balanced_close_is_accepted(self):
@@ -195,10 +196,20 @@ class CloseShapeTests(unittest.TestCase):
     def test_non_cash_account_is_refused(self):
         row = _Row(account="Debtors - TH", account_type="Receivable",
                    expected_amount=0.0, counted_amount=0.0, variance=0.0, note="")
-        with self.assertRaisesRegex(_ValidationError, "not a Cash or Bank account"):
+        with self.assertRaisesRegex(_ValidationError, "not a Cash account"):
             self.module.validate_close(
                 close(accounts=[row], total_expected=0.0, total_counted=0.0,
                       total_variance=0.0))
+
+    def test_bank_balance_cannot_be_submitted_as_a_physical_count(self):
+        module = load_cashier([DRAWERS[0], BANK])
+        # Bank is reconciled against a statement, not by counting notes.
+        self.assertIsNone(module.validate_close(close()))
+        bank_row = _Row(account="Bank - TH", account_type="Bank",
+                        expected_amount=50.0, counted_amount=50.0,
+                        variance=0.0, note="")
+        with self.assertRaisesRegex(_ValidationError, "not a Cash account"):
+            module.validate_close(close(accounts=[bank_row]))
 
     def test_the_same_drawer_twice_is_refused(self):
         rows = [_Row(account="Cash - TH", account_type="Cash", expected_amount=10.0,
@@ -221,6 +232,17 @@ class CloseShapeTests(unittest.TestCase):
     def test_future_business_day_is_refused(self):
         with self.assertRaisesRegex(_ValidationError, "future"):
             self.module.validate_close(close(date="2026-10-25"))
+
+    def test_close_document_requires_canonical_iso_calendar_day(self):
+        self.assertEqual(self.module._strict_business_day("2026-10-24"),
+                         "2026-10-24")
+        # datetime.date.fromisoformat accepts both encodings as the SAME
+        # day; allowing their unnormalized strings into MariaDB GL/DATE
+        # checks would risk incorrect balances and duplicate-day identity.
+        for bad in ("20261024", "2026-W43-6"):
+            with self.subTest(date=bad), self.assertRaisesRegex(
+                    _ValidationError, "YYYY-MM-DD"):
+                self.module.validate_close(close(date=bad))
 
     def test_empty_close_is_refused(self):
         with self.assertRaisesRegex(_ValidationError, "at least one drawer"):
@@ -254,6 +276,46 @@ class DrawerTruthTests(unittest.TestCase):
     def test_no_drawers_means_nothing_to_reconcile(self):
         self.assertEqual(load_cashier().cash_drawers("TOEFL House"), [])
 
+    def test_foreign_currency_count_is_rejected_before_creating_a_close(self):
+        module = load_cashier([{"name": "USD Cash - TH", "account_type": "Cash",
+                                "root_type": "Asset", "account_currency": "USD"}])
+        module.frappe.db.get_value = lambda *args, **kwargs: "AFN"
+        with self.assertRaisesRegex(_ValidationError, "reconciled separately"):
+            module.reconcile_cashier_day(
+                "foreign_cash_count_001", "TOEFL House", "2026-10-24",
+                [{"account": "USD Cash - TH", "counted_amount": "100.00"}])
+
+    def test_same_currency_cash_drawer_is_eligible_for_count(self):
+        module = load_cashier(DRAWERS[:1])
+        module.frappe.db.get_value = lambda *args, **kwargs: "AFN"
+        self.assertEqual(module.cash_currency_issue(
+            "TOEFL House", [{**DRAWERS[0], "account_currency": "AFN"}]), "")
+        self.assertIn("reconciled separately",
+                      module.cash_currency_issue(
+                          "TOEFL House",
+                          [{**DRAWERS[0], "account_currency": "USD"}]))
+        self.assertEqual(module.cash_currency_issue(
+            "TOEFL House", [{**DRAWERS[0], "account_currency": ""}]), "")
+        self.assertEqual(module.cash_currency_issue(
+            "TOEFL House", [{**DRAWERS[0], "account_currency": None}]), "")
+        self.assertIn("must be Asset", module.cash_currency_issue(
+            "TOEFL House", [{**DRAWERS[0], "root_type": "Liability"}]))
+        self.assertIn("not configured", load_cashier().cash_currency_issue(
+            "TOEFL House", [DRAWERS[0]]))
+
+    def test_bank_account_is_not_returned_as_a_cash_drawer(self):
+        module = load_cashier([DRAWERS[0], BANK])
+        self.assertEqual(module.cash_drawers("TOEFL House"), [DRAWERS[0]])
+        calls = []
+        def get_all(doctype, **kwargs):
+            calls.append((doctype, kwargs))
+            return [DRAWERS[0], BANK]
+        module.frappe.db.get_all = get_all
+        self.assertEqual(module.cash_drawers("TOEFL House"), [DRAWERS[0]])
+        self.assertEqual(calls[0][1]["filters"]["account_type"],
+                         ["in", ["Cash"]])
+        self.assertIn("root_type", calls[0][1]["fields"])
+
 
 class CloseDriftTests(unittest.TestCase):
     """Never hide a cancelled old GL row or offsetting post-close movement."""
@@ -261,30 +323,40 @@ class CloseDriftTests(unittest.TestCase):
     def setUp(self):
         self.module = load_cashier(DRAWERS)
         self.saved = [
-            {"account": "Cash - TH", "expected_amount": 100.0},
-            {"account": "Bank - TH", "expected_amount": 50.0},
+            {"account": "Cash - TH", "expected_amount": 100.0,
+             "counted_amount": 100.0, "variance": 0.0},
+            {"account": "Petty Cash - TH", "expected_amount": 50.0,
+             "counted_amount": 50.0, "variance": 0.0},
         ]
         self.live = [
             {"account": "Cash - TH", "opening": 100.0,
              "movement": 0.0, "closing": 100.0},
-            {"account": "Bank - TH", "opening": 50.0,
+            {"account": "Petty Cash - TH", "opening": 50.0,
              "movement": 0.0, "closing": 50.0},
         ]
         self.after = False
         self.closed = True
         self.module.cash_drawers = lambda company: DRAWERS
-        self.module.drawer_balances = lambda company, accounts, day: self.live
+        # Mirror the real drawer_balances contract: never return positions
+        # for accounts the caller did not request, particularly [] when the
+        # final physical Cash account was disabled after a submitted close.
+        self.module.drawer_balances = lambda company, accounts, day: [
+            row for row in self.live if row["account"] in accounts]
 
         def get_all(doctype, **kwargs):
             if doctype == self.module.DAY:
                 return ([{"name": "TH-CASH-2026-01",
                           "reconciled_on": "2026-10-24 18:00:00",
-                          "total_expected": 150.0}] if self.closed else [])
+                          "cashier": "cashier@example.com",
+                          "total_expected": 150.0,
+                          "total_counted": 150.0,
+                          "total_variance": 0.0}] if self.closed else [])
             if doctype == self.module.COUNT:
                 self.assertEqual(kwargs["filters"]["parent"], "TH-CASH-2026-01")
                 self.assertEqual(kwargs["filters"]["parenttype"], self.module.DAY)
                 self.assertEqual(kwargs["limit_page_length"],
                                  self.module.MAX_DRAWERS + 1)
+                self.assertIn("note", kwargs["fields"])
                 return self.saved
             self.fail("Unexpected accounting read: " + doctype)
 
@@ -300,6 +372,61 @@ class CloseDriftTests(unittest.TestCase):
 
     def test_exact_match_is_not_drift(self):
         self.assertFalse(self.position()["drift"])
+
+    def test_closed_day_with_no_current_cash_accounts_remains_visible(self):
+        # Disabling the last physical Cash account after a submitted close
+        # must not make the saved company/day vanish from daily reporting.
+        self.module.cash_drawers = lambda company: []
+        state = self.position()
+        self.assertEqual(state["drawers"], [])
+        self.assertIsNotNone(state["close"])
+        self.assertTrue(state["integrity_review"])
+        # With no enabled drawer, there is no valid cash-GL IN () SQL query.
+        self.assertTrue(state["drift"])
+
+    def test_open_day_with_no_cash_account_has_no_drawer_position(self):
+        self.closed = False
+        self.module.cash_drawers = lambda company: []
+        self.assertEqual(self.module.cashier_position(
+            day="2026-10-24", companies=["TOEFL House"]), [])
+
+    def test_two_submitted_closes_same_company_day_require_integrity_review(self):
+        # Unexpected duplicate submitted control documents can exist after a
+        # faulty migration or an unaudited direct DB write. The one-row query
+        # used to conceal the second close and display "Closed".
+        original = self.module.frappe.db.get_all
+        def duplicate(doctype, **kwargs):
+            rows = original(doctype, **kwargs)
+            if doctype == self.module.DAY:
+                self.assertEqual(kwargs["limit_page_length"], 2)
+                return rows + [{**rows[0], "name": "TH-CASH-2026-DUP"}]
+            return rows
+        self.module.frappe.db.get_all = duplicate
+        position = self.position()
+        self.assertFalse(position["drift"])
+        self.assertFalse(position["drawer_variance"])
+        self.assertTrue(position["integrity_review"])
+
+    def test_missing_cashier_or_bad_timestamp_requires_daily_integrity_review(self):
+        original = self.module.frappe.db.get_all
+        for field, value in (
+            ("cashier", ""),
+            ("cashier", None),
+            ("reconciled_on", None),
+            ("reconciled_on", "bad timestamp"),
+            ("reconciled_on", "2026-10-23 23:59:59"),
+            ("reconciled_on", "2026-10-24 18:00:01"),
+            ("reconciled_on", "2026-10-24T18:00:00+00:00"),
+        ):
+            def corrupted(doctype, **kwargs):
+                rows = original(doctype, **kwargs)
+                if doctype == self.module.DAY:
+                    return [{**row, field: value} for row in rows]
+                return rows
+            self.module.frappe.db.get_all = corrupted
+            with self.subTest(field=field, value=value):
+                self.assertTrue(self.position()["integrity_review"])
+            self.module.frappe.db.get_all = original
 
     def test_cancelled_historical_entry_changed_balance_without_new_gl(self):
         # No GL creation after close: native cancellation invalidated an
@@ -319,10 +446,97 @@ class CloseDriftTests(unittest.TestCase):
         self.saved.append({"account": "Cash - TH", "expected_amount": 100.0})
         self.assertTrue(self.position()["drift"])
 
+    def test_opposing_cash_drawer_variances_do_not_disappear_at_net_zero(self):
+        self.saved[0]["variance"] = -100.0
+        self.saved[0]["counted_amount"] = 0.0
+        self.saved[1]["variance"] = 100.0
+        self.saved[1]["counted_amount"] = 150.0
+        self.saved[0]["note"] = "Cash shortage explained"
+        self.saved[1]["note"] = "Cash overage explained"
+        position = self.position()
+        self.assertFalse(position["drift"])
+        self.assertFalse(position["integrity_review"])
+        self.assertTrue(position["drawer_variance"])
+
+    def test_missing_saved_variance_explanation_requires_integrity_review(self):
+        # The parent stays internally balanced: a missing/whitespace note
+        # must still trigger the auditor, not appear as a valid signed close.
+        self.saved[0].update(
+            {"counted_amount": 90.0, "variance": -10.0, "note": "  "})
+        self.saved[1].update(
+            {"counted_amount": 60.0, "variance": 10.0,
+             "note": "Documented second-drawer overage"})
+        position = self.position()
+        self.assertFalse(position["drift"])
+        self.assertTrue(position["drawer_variance"])
+        self.assertTrue(position["integrity_review"])
+
+    def test_malformed_drawer_variance_is_review_not_balanced(self):
+        self.saved[0]["variance"] = "NaN"
+        position = self.position()
+        self.assertTrue(position["drawer_variance"])
+        self.assertTrue(position["integrity_review"])
+
+    def test_forged_saved_parent_count_never_shows_balanced(self):
+        original = self.module.frappe.db.get_all
+        def changed(doctype, **kwargs):
+            data = original(doctype, **kwargs)
+            if doctype == self.module.DAY:
+                data[0]["total_counted"] = 999.0
+            return data
+        self.module.frappe.db.get_all = changed
+        position = self.position()
+        self.assertTrue(position["integrity_review"])
+        self.assertFalse(position["drift"])
+
+    def test_saved_variance_mismatch_is_integrity_review(self):
+        self.saved[0]["variance"] = 5.0
+        position = self.position()
+        self.assertTrue(position["integrity_review"])
+        self.assertTrue(position["drawer_variance"])
+
     def test_new_backdated_gl_keeps_existing_audit_signal(self):
         # A balance-neutral new posting still matters to a closed ledger.
         self.after = True
         self.assertTrue(self.position()["drift"])
+
+    def test_a_legacy_bank_row_in_a_submitted_close_is_visible_as_drift(self):
+        # Old cash-day records that mixed bank/cash must not silently pass
+        # after correcting the definition of a physical Cash close.
+        self.saved.append({"account": "Bank - TH", "expected_amount": 50.0})
+        self.assertTrue(self.position()["drift"])
+
+    def test_a_bank_only_post_close_entry_is_not_cash_drift(self):
+        # A bank posting must not mark a physically counted cash drawer stale.
+        seen = []
+        def sql(statement, params=None, **kwargs):
+            seen.append((statement, params))
+            return [{"name": "bank posting"}] if "account in (" not in statement else []
+        self.module.frappe.db.sql = sql
+        self.assertFalse(self.position()["drift"])
+        self.assertIn("account in (%s, %s)", seen[0][0])
+        self.assertIn("Cash - TH", seen[0][1])
+        self.assertIn("Petty Cash - TH", seen[0][1])
+        self.assertNotIn("Bank - TH", seen[0][1])
+
+    def test_offsetting_post_close_cancellations_mark_daily_drift(self):
+        # Old Cash entries canceled after the signed close can offset exactly:
+        # a zero balance delta is not proof that the ledger is unchanged.
+        queries = []
+        def sql(statement, params=None, **kwargs):
+            queries.append((statement, params))
+            return ([{"name": "offsetting cancelled originals"}]
+                    if "modified > %s" in statement else [])
+        self.module.frappe.db.sql = sql
+        state = self.position()
+        self.assertTrue(state["drift"])
+        self.assertFalse(state["integrity_review"])
+        self.assertEqual(len(queries), 1)
+        self.assertIn("is_cancelled = 1 and modified > %s", queries[0][0])
+        self.assertEqual(queries[0][1][-2:],
+                         ("2026-10-24 18:00:00", "2026-10-24 18:00:00"))
+        self.assertIn("Cash - TH", queries[0][1])
+        self.assertIn("Petty Cash - TH", queries[0][1])
 
     def test_no_close_is_not_misreported_as_drift(self):
         self.closed = False
@@ -333,12 +547,385 @@ class CloseDriftTests(unittest.TestCase):
         self.assertTrue(self.position()["drift"])
 
 
+class CashHistoryVarianceTests(unittest.TestCase):
+    def setUp(self):
+        self.module = load_cashier(DRAWERS)
+        self.module.frappe.db.get_value = lambda *args, **kwargs: "AFN"
+        self.header = {
+            "name": "TH-CASH-1", "company": "TOEFL House",
+            "date": "2026-10-24", "cashier": "cashier@example.com",
+            "reconciled_on": "2026-10-24 18:00:00",
+            "total_expected": 100.0, "total_counted": 100.0,
+            "total_variance": 0.0,
+        }
+        self.rows = [
+            {"parent": "TH-CASH-1", "account": "Cash - TH",
+             "expected_amount": 100.0, "counted_amount": 0.0,
+             "variance": -100.0, "note": "Documented shortage"},
+            {"parent": "TH-CASH-1", "account": "Petty Cash - TH",
+             "expected_amount": 0.0, "counted_amount": 100.0,
+             "variance": 100.0, "note": "Documented overage"},
+        ]
+        self.accounts = [
+            {**row, "company": "TOEFL House", "account_currency": "AFN"}
+            for row in DRAWERS
+        ]
+        self.calls = []
+        def get_all(doctype, **kwargs):
+            self.calls.append((doctype, kwargs))
+            if doctype == self.module.DAY:
+                return [dict(self.header)]
+            if doctype == self.module.COUNT:
+                self.assertEqual(kwargs["filters"]["parent"],
+                                 ["in", ["TH-CASH-1"]])
+                self.assertLessEqual(kwargs["limit_page_length"],
+                                     self.module.MAX_DRAWERS * self.module.MAX_HISTORY + 1)
+                self.assertIn("note", kwargs["fields"])
+                return [dict(row) for row in self.rows]
+            if doctype == self.module.ACCOUNT:
+                return [dict(row) for row in self.accounts]
+            self.fail("Unexpected history read: " + doctype)
+        self.module.frappe.db.get_all = get_all
+
+    def history(self):
+        return self.module.cashier_history(companies=["TOEFL House"])
+
+    def test_opposing_variances_preserved_with_legitimate_net_zero(self):
+        history = self.history()
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["total_variance"], 0.0)
+        self.assertTrue(history[0]["drawer_variance"])
+        self.assertFalse(history[0]["integrity_review"])
+        self.assertEqual([name for name, _ in self.calls],
+                         [self.module.DAY, self.module.COUNT,
+                          self.module.ACCOUNT])
+
+    def test_missing_cashier_or_timestamp_is_historical_integrity_review(self):
+        for field, value in (
+            ("cashier", ""),
+            ("cashier", None),
+            ("reconciled_on", None),
+            ("reconciled_on", "not a time"),
+            ("reconciled_on", "2026-10-23 23:59:59"),
+            ("reconciled_on", "2026-10-24 18:00:01"),
+            ("reconciled_on", "2026-10-24T18:00:00+00:00"),
+        ):
+            original = self.header[field]
+            self.header[field] = value
+            with self.subTest(field=field, value=value):
+                self.assertTrue(self.history()[0]["integrity_review"])
+            self.header[field] = original
+
+    def test_historical_close_matches_its_native_gl_without_drift(self):
+        calls = []
+        def sql(query, params=None, as_dict=False):
+            calls.append((query, params, as_dict))
+            if "tabTH Cashier Day" in query:
+                return []
+            return [
+                {"account": "Cash - TH", "closing": 100.0,
+                 "late_postings": 0},
+                {"account": "Petty Cash - TH", "closing": 0.0,
+                 "late_postings": 0},
+            ]
+        self.module.frappe.db.sql = sql
+        record = self.history()[0]
+        self.assertFalse(record["integrity_review"])
+        self.assertFalse(record["drift"])
+        self.assertEqual(len(calls), 2,
+                         "One duplicate check and one grouped ledger read")
+        query, params, as_dict = calls[1]
+        self.assertIn("from `tabGL Entry`", query)
+        self.assertIn("is_cancelled = 0", query)
+        self.assertIn("is_cancelled = 1", query)
+        self.assertIn("creation > %s", query)
+        self.assertIn("modified > %s", query)
+        self.assertIn("group by account", query)
+        self.assertEqual(params, (
+            "2026-10-24 18:00:00", "2026-10-24 18:00:00",
+            "TOEFL House", "2026-10-24",
+            "Cash - TH", "Petty Cash - TH"))
+        self.assertTrue(as_dict)
+
+    def test_historical_cancelled_entry_changes_balance_and_flags_drift(self):
+        def sql(query, params=None, as_dict=False):
+            if "tabTH Cashier Day" in query:
+                return []
+            return [
+                {"account": "Cash - TH", "closing": 80.0, "late_postings": 0},
+                {"account": "Petty Cash - TH", "closing": 20.0,
+                 "late_postings": 0},
+            ]
+        self.module.frappe.db.sql = sql
+        record = self.history()[0]
+        self.assertEqual(record["total_expected"], 100.0)
+        self.assertFalse(record["integrity_review"])
+        self.assertTrue(record["drift"],
+                        "Offsetting balance changes must not mask ledger drift")
+
+    def test_balanced_historical_amounts_with_late_gl_still_flag_drift(self):
+        def sql(query, params=None, as_dict=False):
+            if "tabTH Cashier Day" in query:
+                return []
+            return [
+                {"account": "Cash - TH", "closing": 100.0,
+                 "late_postings": 2},
+                {"account": "Petty Cash - TH", "closing": 0.0,
+                 "late_postings": 0},
+            ]
+        self.module.frappe.db.sql = sql
+        record = self.history()[0]
+        self.assertFalse(record["integrity_review"])
+        self.assertTrue(record["drift"],
+                        "Balance-neutral entries created after close require review")
+
+    def test_offsetting_post_close_cancellations_mark_historical_drift(self):
+        # Both canceled entries were in the signed original close, but their
+        # net balance was zero. An audit must still detect the later cancellation.
+        calls = []
+        def sql(query, params=None, as_dict=False):
+            calls.append((query, params))
+            if "tabTH Cashier Day" in query:
+                return []
+            return [
+                {"account": "Cash - TH", "closing": 100.0,
+                 "late_postings": 0, "late_cancellations": 2},
+                {"account": "Petty Cash - TH", "closing": 0.0,
+                 "late_postings": 0, "late_cancellations": 0},
+            ]
+        self.module.frappe.db.sql = sql
+        result = self.history()[0]
+        self.assertFalse(result["integrity_review"])
+        self.assertTrue(result["drift"])
+        self.assertIn("modified > %s", calls[1][0])
+        self.assertEqual(calls[1][1][:2],
+                         ("2026-10-24 18:00:00", "2026-10-24 18:00:00"))
+
+    def test_historical_duplicate_close_is_flagged_even_when_off_page(self):
+        # Only this close appears on the limited history page. The duplicate
+        # submitted close is older and invisible in that page, but the
+        # bounded native grouping query must still detect it.
+        queries = []
+        def sql(query, params=None, as_dict=False):
+            queries.append((query, params, as_dict))
+            return [{"company": "TOEFL House", "date": "2026-10-24"}]
+        self.module.frappe.db.sql = sql
+        record = self.history()[0]
+        self.assertTrue(record["integrity_review"])
+        self.assertTrue(record["drawer_variance"])
+        self.assertIn("having count(*) > 1", queries[0][0])
+        self.assertEqual(queries[0][1], ("TOEFL House", "2026-10-24"))
+        self.assertTrue(queries[0][2])
+
+    def test_missing_variance_explanation_is_historical_integrity_review(self):
+        self.rows[0]["note"] = ""
+        record = self.history()[0]
+        self.assertEqual(record["total_variance"], 0.0)
+        self.assertTrue(record["drawer_variance"])
+        self.assertTrue(record["integrity_review"])
+
+    def test_missing_count_rows_never_mean_balanced(self):
+        self.rows.clear()
+        record = self.history()[0]
+        self.assertTrue(record["drawer_variance"])
+        self.assertTrue(record["integrity_review"])
+
+    def test_header_net_must_match_child_variances(self):
+        self.header["total_variance"] = 15.0
+        record = self.history()[0]
+        self.assertTrue(record["integrity_review"])
+        self.assertTrue(record["drawer_variance"])
+
+    def test_individual_drawer_variance_must_equal_counted_minus_expected(self):
+        self.rows[0]["variance"] = -90.0
+        self.header["total_variance"] = 10.0
+        self.assertTrue(self.history()[0]["integrity_review"])
+
+    def test_expected_and_counted_header_totals_must_match_child_rows(self):
+        for field in ("total_expected", "total_counted"):
+            self.header[field] = 900.0
+            with self.subTest(field=field):
+                self.assertTrue(self.history()[0]["integrity_review"])
+            self.header[field] = 100.0
+
+    def test_bank_in_legacy_close_is_not_eligible_cash(self):
+        self.rows.append({
+            "parent": "TH-CASH-1", "account": "Bank - TH",
+            "expected_amount": 0.0, "counted_amount": 0.0, "variance": 0.0})
+        self.accounts.append({
+            **BANK, "company": "TOEFL House", "root_type": "Asset",
+            "account_currency": "AFN"})
+        record = self.history()[0]
+        self.assertTrue(record["integrity_review"])
+        self.assertTrue(record["drawer_variance"])
+
+    def test_foreign_cash_history_is_not_mislabeled_balanced(self):
+        self.accounts[0]["account_currency"] = "USD"
+        record = self.history()[0]
+        self.assertTrue(record["integrity_review"])
+
+    def test_newly_enabled_cash_does_not_invalidate_an_older_valid_close(self):
+        # Cash number 3 opened months after this historical day.
+        self.accounts.append({
+            "name": "New Till - TH", "company": "TOEFL House",
+            "account_type": "Cash", "root_type": "Asset",
+            "account_currency": "AFN"})
+        record = self.history()[0]
+        self.assertFalse(record["integrity_review"])
+        self.assertTrue(record["drawer_variance"])
+        self.assertEqual(self.calls[-1][1]["filters"]["name"],
+                         ["in", ["Cash - TH", "Petty Cash - TH"]])
+
+    def test_disabled_historical_cash_does_not_invalidate_a_valid_close(self):
+        self.accounts[0]["disabled"] = 1
+        record = self.history()[0]
+        self.assertFalse(record["integrity_review"])
+
+    def test_historical_wrong_company_account_is_flagged(self):
+        self.accounts[0]["company"] = "Different Company"
+        self.assertTrue(self.history()[0]["integrity_review"])
+
+    def test_removed_historical_account_is_flagged(self):
+        self.accounts.pop()
+        self.assertTrue(self.history()[0]["integrity_review"])
+
+    def test_duplicate_historical_account_is_flagged(self):
+        self.rows[1]["account"] = "Cash - TH"
+        self.assertTrue(self.history()[0]["integrity_review"])
+
+
+class SubmittedClosePersistenceTests(unittest.TestCase):
+    """The submitted header and every counted drawer must survive DB reload."""
+
+    def setUp(self):
+        self.module = load_cashier(DRAWERS)
+        self.header = {
+            "docstatus": 1, "company": "TOEFL House",
+            "date": "2026-10-24", "cashier": "cashier@example.com",
+            "reconciled_on": "2026-10-24 18:00:00",
+            "total_expected": 150.0, "total_counted": 150.0,
+            "total_variance": 0.0,
+        }
+        self.saved = [
+            {"account": "Cash - TH", "expected_amount": 100.0,
+             "counted_amount": 100.0, "variance": 0.0, "note": ""},
+            {"account": "Petty Cash - TH", "expected_amount": 50.0,
+             "counted_amount": 50.0, "variance": 0.0, "note": ""},
+        ]
+        self.expected = [dict(row) for row in self.saved]
+        self.module.frappe.db.get_value = (
+            lambda *args, **kwargs: dict(self.header))
+        self.module.frappe.db.get_all = (
+            lambda *args, **kwargs: [dict(row) for row in self.saved])
+
+    def verify(self):
+        return self.module.verify_submitted_cash_close(
+            "TH-CASH-2026-00001", "TOEFL House", "2026-10-24",
+            "cashier@example.com", self.expected)
+
+    def test_saved_header_and_drawers_are_verified(self):
+        self.assertEqual(self.verify(), self.header)
+
+    def test_missing_or_unsubmitted_header_is_rejected(self):
+        self.header["docstatus"] = 0
+        with self.assertRaisesRegex(_ValidationError, "not submitted"):
+            self.verify()
+        self.header["docstatus"] = 1
+        self.header["company"] = "Other Company"
+        with self.assertRaisesRegex(_ValidationError, "expected company"):
+            self.verify()
+
+    def test_saved_receipt_refuses_missing_or_invalid_reconciliation_time(self):
+        for invalid in (
+                None, "", "invalid", "2026-10-23 23:59:59",
+                "2026-10-24 18:00:01", "2026-10-24T18:00:00+00:00"):
+            self.header["reconciled_on"] = invalid
+            with self.subTest(value=invalid), self.assertRaisesRegex(
+                    _ValidationError, "reconciliation time"):
+                self.verify()
+        self.header["reconciled_on"] = "2026-10-24 18:00:00"
+
+    def test_missing_extra_and_duplicate_saved_drawers_are_rejected(self):
+        self.saved.pop()
+        with self.assertRaisesRegex(_ValidationError, "drawers differ"):
+            self.verify()
+        self.saved = [dict(row) for row in self.expected]
+        self.saved.append(dict(self.expected[0]))
+        with self.assertRaisesRegex(_ValidationError, "drawers differ"):
+            self.verify()
+
+    def test_tampered_persisted_cash_amount_and_note_are_rejected(self):
+        for field, bad in (
+            ("expected_amount", 110),
+            ("counted_amount", 110),
+            ("variance", 10),
+            ("note", "unapproved edit"),
+        ):
+            self.saved = [dict(row) for row in self.expected]
+            self.saved[0][field] = bad
+            with self.subTest(field=field), self.assertRaisesRegex(
+                _ValidationError, "Stored cash close"):
+                self.verify()
+
+    def test_parent_totals_must_equal_saved_drawers(self):
+        for name in ("total_expected", "total_counted", "total_variance"):
+            self.header[name] = 900.0
+            with self.subTest(name=name), self.assertRaisesRegex(
+                _ValidationError, name):
+                self.verify()
+            self.header[name] = 150.0 if name != "total_variance" else 0.0
+
+
 class CommandContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = (APP / "finance" / "cashier.py").read_text(encoding="utf-8")
         cls.security = (APP / "security.py").read_text(encoding="utf-8")
         cls.hooks = (APP / "hooks.py").read_text(encoding="utf-8")
+
+    def test_cash_drift_boundary_is_captured_before_native_ledger_read(self):
+        # A Company FOR UPDATE lock serializes two close submissions, not
+        # concurrent native GL postings. Old code took reconciled_on AFTER
+        # reading balances and could hide a posting created in that interval.
+        module = load_cashier(DRAWERS[:1])
+        module.frappe.db.get_value = lambda *args, **kwargs: "AFN"
+        clock = ["2026-10-24 18:00:00"]
+        module.frappe.utils.now_datetime = lambda: clock[0]
+        events = []
+
+        def native_balances(company, accounts, day):
+            events.append(("ledger-read", clock[0]))
+            self.assertEqual((company, accounts, day), (
+                "TOEFL House", ["Cash - TH"], "2026-10-24"))
+            # A separate native posting advances the clock during the read.
+            clock[0] = "2026-10-24 18:00:05"
+            return [{"account": "Cash - TH", "closing": 75.0}]
+
+        def make_doc(payload):
+            events.append(("document-created", payload["reconciled_on"]))
+            return types.SimpleNamespace(
+                name="TH-CASH-2026-00001",
+                flags=types.SimpleNamespace(),
+                insert=lambda **kwargs: None,
+                submit=lambda: None,
+            )
+
+        module.drawer_balances = native_balances
+        module.frappe.get_doc = make_doc
+        module.verify_submitted_cash_close = lambda *args: types.SimpleNamespace(
+            total_expected=75.0, total_counted=75.0, total_variance=0.0)
+        result, receipt = module.reconcile_cashier_day(
+            "cash_snapshot_boundary_test", "TOEFL House", "2026-10-24",
+            [{"account": "Cash - TH", "counted_amount": "75.00"}])
+        # The lightweight _execute stub returns the command's (result,
+        # receipt) tuple, unlike its production envelope.
+        self.assertEqual(result["cashier_day"], "TH-CASH-2026-00001")
+        self.assertEqual(receipt["target"], "TH-CASH-2026-00001")
+        self.assertEqual(events, [
+            ("ledger-read", "2026-10-24 18:00:00"),
+            ("document-created", "2026-10-24 18:00:00"),
+        ])
+        self.assertEqual(clock[0], "2026-10-24 18:00:05")
 
     def test_close_is_a_receipted_finance_officer_command(self):
         self.assertIn('"reconcile_cashier_day": "Finance Officer"', self.security)
@@ -401,6 +988,15 @@ class CommandContractTests(unittest.TestCase):
                 [{"account": "Cash - TH", "counted_amount": 1}])
         self.assertIn("A valid business date is required", str(caught.exception))
 
+    def test_cash_close_post_rejects_noncanonical_dates_before_ledger_reads(self):
+        module = load_cashier(DRAWERS)
+        for bad in ("20261024", "2026-W43-6"):
+            with self.subTest(date=bad), self.assertRaisesRegex(
+                    _ValidationError, "YYYY-MM-DD"):
+                module.reconcile_cashier_day(
+                    "fin_cashier_noncanonical_01", "TOEFL House", bad,
+                    [{"account": "Cash - TH", "counted_amount": 1}])
+
     def test_http_form_encoded_drawer_counts_are_bounded_and_parsed(self):
         module = load_cashier(DRAWERS)
         for invalid, message in (
@@ -429,6 +1025,10 @@ class CommandContractTests(unittest.TestCase):
         self.assertIn("args.counts = JSON.stringify(counts);", gui)
         self.assertIn("never an assumed ledger amount.", gui)
         self.assertIn('No payment or cash movement is created.', gui)
+        self.assertIn('or company in currency_blocked', desk)
+        self.assertIn('Cash account safety', desk)
+        self.assertIn('"Integrity review required" if integrity_companies', desk)
+        self.assertIn('if state in ("Integrity review", "Drift",', desk)
 
     def test_package_date_class_is_not_shadowed_inside_the_command(self):
         import ast

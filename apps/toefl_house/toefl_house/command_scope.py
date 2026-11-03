@@ -240,7 +240,7 @@ def authorize_command_scope(kind, payload, actor, *, result=None):
     # Permission; the POST commands and cached receipts must enforce the
     # same boundary even when Frappe writes use ignore_permissions=True.
     if kind in {"create_walkin_inquiry", "update_walkin_inquiry",
-                "correct_walkin_inquiry"} and not allowed:
+                "correct_walkin_inquiry", "record_reception_collection"} and not allowed:
         raise frappe.PermissionError(
             "Reception commands require an explicitly assigned Branch")
     if allowed is None:

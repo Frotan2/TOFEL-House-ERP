@@ -4171,53 +4171,163 @@ def main():
         def cashier_close_fixture():
             from toefl_house.finance import cashier as fin_cash
             company=fin['company']; day=frappe.utils.today()
+            # Force an actual two-drawer fixture, not merely an algorithm
+            # that would handle multiple accounts if they happened to exist.
+            # This code only runs on the disposable synthetic native site.
+            frappe.set_user('Administrator')
+            primary=frappe.db.get_value(
+                'Account',{'company':company,'account_type':'Cash',
+                           'is_group':0,'disabled':0},'name')
+            assert primary,('synthetic company has no native Cash account',company)
+            base_drawer=frappe.get_doc('Account',primary)
+            assert base_drawer.parent_account,primary
+            secondary_name='SYN Cash Close Drawer B'
+            secondary=frappe.db.get_value(
+                'Account',{'company':company,'account_name':secondary_name},'name')
+            if not secondary:
+                extra=frappe.get_doc(dict(
+                    doctype='Account',account_name=secondary_name,
+                    company=company,parent_account=base_drawer.parent_account,
+                    account_type='Cash',is_group=0,
+                    root_type='Asset',report_type='Balance Sheet',
+                    account_currency=frappe.db.get_value(
+                        'Company',company,'default_currency')))
+                extra.insert()
+                secondary=extra.name
+            assert secondary!=primary,(primary,secondary)
+            # Qualify *nonzero* Cash closing arithmetic through a genuine
+            # submitted native Journal Entry. The positive debit in each
+            # physical drawer is offset by the synthetic company's configured
+            # Income account, not another Cash drawer (which would go negative).
+            # This fixture is never run on an Owner or production site.
+            source='SYN Cash Day Two Drawer Ledger Qualification'
+            existing=frappe.db.get_value('Journal Entry',
+                {'company':company,'user_remark':source},'name')
+            if not existing:
+                income=frappe.db.get_value(
+                    'Company',company,'default_income_account')
+                cost_center=frappe.db.get_value(
+                    'Company',company,'cost_center')
+                assert income and cost_center,(income,cost_center)
+                journal=frappe.get_doc(dict(
+                    doctype='Journal Entry',voucher_type='Journal Entry',
+                    company=company,posting_date=day,user_remark=source,
+                    accounts=[
+                        dict(account=primary,debit_in_account_currency=245,
+                             cost_center=cost_center),
+                        dict(account=secondary,debit_in_account_currency=85,
+                             cost_center=cost_center),
+                        dict(account=income,credit_in_account_currency=330,
+                             cost_center=cost_center),
+                    ]))
+                journal.insert()
+                journal.submit()
+                existing=journal.name
+            assert frappe.db.get_value(
+                'Journal Entry',existing,'docstatus')==1,existing
+            native_gl=frappe.db.get_all('GL Entry',
+                filters={'voucher_type':'Journal Entry',
+                         'voucher_no':existing,'is_cancelled':0},
+                fields=['account','debit','credit'],limit_page_length=10)
+            assert len(native_gl)>=3,native_gl
+            for cash_name,minimum in ((primary,245),(secondary,85)):
+                movement=sum(float(row['debit'])-float(row['credit'])
+                             for row in native_gl if row['account']==cash_name)
+                assert abs(movement-minimum)<0.01,(cash_name,movement,native_gl)
             drawers=fin_cash.cash_drawers(company)
-            assert drawers,('synthetic company has no native Cash/Bank account',company)
-            names=tuple(row['name'] for row in drawers)
+            assert len(drawers)>=2,('native cash fixture must count at least two physical drawers',drawers)
+            assert drawers,('synthetic company has no native physical Cash account',company)
+            assert all(row['account_type']=='Cash' for row in drawers),drawers
+            names=tuple(sorted(row['name'] for row in drawers))
+            assert not fin_cash.cash_currency_issue(company,drawers),(
+                'synthetic cash accounts need matching company-base currency',drawers)
             balances={row['account']:row for row in fin_cash.drawer_balances(company,names,day)}
-            account=sorted(balances)[0]
+            assert set(balances)==set(names),(balances,names)
+            assert primary in names and secondary in names,(names,primary,secondary)
+            account=names[0]
             expected=balances[account]['closing']
+            expected_total=round(sum(balances[name]['closing'] for name in names),2)
+            assert balances[primary]['closing']>=245,(primary,balances[primary])
+            assert balances[secondary]['closing']>=85,(secondary,balances[secondary])
+            assert expected_total>0,(names,balances)
+            # A close covers every cash drawer, even if a synthetic chart
+            # carries more than one account. The caller never supplies GL expected.
+            counts=[dict(account=name,counted_amount=balances[name]['closing'],note='')
+                    for name in names]
+            assert all(row['counted_amount']>=0 for row in counts),counts
+            partial=denied_because(
+                lambda:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
+                    'fin_cashier_partial_0001',company,day,counts[:1])),
+                'count every enabled Cash drawer')
+            assert partial['denied'],partial
             for index,invalid in enumerate(('NaN','Infinity','-Infinity','1e9999')):
+                invalid_counts=[dict(row) for row in counts]
+                invalid_counts[0]['counted_amount']=invalid
                 assert unavailable(
-                    lambda value=invalid, idx=index:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
-                        f'fin_cashier_nonfinite_{idx:04d}',company,day,
-                        [dict(account=account,counted_amount=value,note='SYN invalid count')])),
+                    lambda value=invalid_counts, idx=index:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
+                        f'fin_cashier_nonfinite_{idx:04d}',company,day,value)),
                     'finite amount')
-            # Independent ledger read: the close must equal the native GL sum
-            # with cancelled entries excluded.
-            gl=frappe.db.sql("""select coalesce(sum(debit-credit),0) from `tabGL Entry`
-                                where account=%s and company=%s and is_cancelled=0
-                                  and posting_date<=%s""",(account,company,day))[0][0]
-            assert abs(float(gl)-expected)<0.01,(gl,expected)
+            # Independent ledger read, per physical Cash account, excludes
+            # canceled entries and never includes Bank accounts.
+            for name in names:
+                gl=frappe.db.sql("""select coalesce(sum(debit-credit),0) from `tabGL Entry`
+                                    where account=%s and company=%s and is_cancelled=0
+                                      and posting_date<=%s""",(name,company,day))[0][0]
+                assert abs(float(gl)-balances[name]['closing'])<0.01,(name,gl,balances[name])
+            unexplained_counts=[dict(row) for row in counts]
+            unexplained_counts[0]['counted_amount']=expected+5
             unexplained=denied_because(
                 lambda:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
-                    'fin_cashier_var_000001',company,day,
-                    [dict(account=account,counted_amount=expected+5,note='')])),
+                    'fin_cashier_var_000001',company,day,unexplained_counts)),
                 'Explain the')
+            gl_count_before=frappe.db.count('GL Entry',{'company':company})
             result=as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
-                'fin_cashier_close_0001',company,day,
-                [dict(account=account,counted_amount=expected,note='')]))
-            assert abs(result['total_expected']-round(expected,2))<0.01,result
+                'fin_cashier_close_0001',company,day,counts))
+            gl_count_after=frappe.db.count('GL Entry',{'company':company})
+            assert gl_count_before==gl_count_after,(
+                'Cash close is a control snapshot and must never post GL',
+                gl_count_before,gl_count_after)
+            assert abs(result['total_expected']-expected_total)<0.01,result
             assert abs(result['total_variance'])<0.01,result
             stored=frappe.db.get_value('TH Cashier Day',result['cashier_day'],
                 ['docstatus','company','date','total_counted','total_variance','cashier'],
                 as_dict=True)
             assert int(stored.docstatus)==1,stored
             assert stored.company==company and str(stored.date)==day,stored
-            assert abs(float(stored.total_counted)-round(expected,2))<0.01,stored
+            assert abs(float(stored.total_counted)-expected_total)<0.01,stored
             assert abs(float(stored.total_variance))<0.01,stored
             duplicate=denied_because(
                 lambda:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
-                    'fin_cashier_dup_000001',company,day,
-                    [dict(account=account,counted_amount=expected,note='')])),
+                    'fin_cashier_dup_000001',company,day,counts)),
                 'already closed')
             position=[row for row in fin_cash.cashier_position(day=day,companies=[company])
                       if row['company']==company][0]
             assert position['close'] and position['close']['name']==result['cashier_day'],position
             assert position['drift'] is False,position
+            assert position['drawer_variance'] is False,position
+            # Exercise historical read on real Frappe/MariaDB after submission.
+            # A legitimate base-currency Cash-only snapshot must be Balanced,
+            # with parent totals equal to the saved per-drawer figures.
+            historic=[row for row in fin_cash.cashier_history(companies=[company])
+                      if row['name']==result['cashier_day']]
+            assert len(historic)==1,historic
+            assert historic[0]['integrity_review'] is False,historic[0]
+            assert historic[0]['drawer_variance'] is False,historic[0]
+            # Verify the new historical per-account GL reconciliation using
+            # native MariaDB records, not the isolated Python finance double.
+            # All entries existed before this saved close: no late GL drift.
+            assert historic[0]['drift'] is False,(
+                'A freshly saved, untouched native cash close must not drift',
+                historic[0])
+            assert abs(float(historic[0]['total_expected'])-expected_total)<0.01,historic[0]
             return {'cashier_day':result['cashier_day'],'drawer':account,
+                    'drawers_counted':len(counts),
+                    'native_cash_gl_journal':existing,
+                    'nonzero_ledger_expected':expected_total,
+                    'partial_close_refused':partial['denied'],
                     'ledger_closing':round(expected,2),
                     'counted':result['total_counted'],
+                    'total_expected':expected_total,
                     'variance':result['total_variance'],'cashier':stored.cashier,
                     'unexplained_variance_refused':unexplained['denied'],
                     'duplicate_refused':duplicate['denied'],'drift':position['drift']}
@@ -8065,6 +8175,20 @@ def main():
                 'Branch-scoped Reception student')
             fee=valid[0]['name']
             company=valid[0]['company']
+            # The opposite Branch's Reception login must not be able to
+            # receipt this Branch-A tuition, even before counter setup.
+            # Verify native command-scope denial, not only an HTTP 403
+            # caused by absent counter configuration.
+            from toefl_house.command_scope import authorize_command_scope
+            student=valid[0]['student']
+            assert _effective_student_branches(student)=={'SYN-BR-A'},student
+            assert actor_branches(users['branch_b_staff'])=={'SYN-BR-B'}
+            assert denied_because(
+                lambda:as_user('branch_b_staff',lambda:authorize_command_scope(
+                    'record_reception_collection',{'fees':fee,'amount':'100.00'},
+                    users['branch_b_staff'])),
+                "outside this login's permitted branches")['denied']=='PermissionError'
+            frappe.set_user('Administrator')
             prefix='toefl_house.finance.collections.'
             actors={key:login(key) for key in ('course_owner','receptionist','book_seller','outsider')}
 

@@ -16,7 +16,7 @@
  ],
  "fields": [
   {
-   "description": "A native Cash or Bank account of the company. Receivable, payable, income and equity accounts are refused.",
+   "description": "A native physical Cash account of the company. Bank, receivable, payable, income and equity accounts cannot be physically counted.",
    "fieldname": "account",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -35,7 +35,7 @@
    "fieldtype": "Column Break"
   },
   {
-   "description": "The native general-ledger closing balance of this account at the end of the reconciled day. Computed by the command; never typed.",
+   "description": "The native general-ledger closing balance of this physical Cash account at the end of the day, in company currency. Computed by the command; never typed.",
    "fieldname": "expected_amount",
    "fieldtype": "Currency",
    "in_list_view": 1,

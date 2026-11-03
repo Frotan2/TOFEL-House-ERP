@@ -70,12 +70,12 @@
   {
    "fieldname": "accounts_section",
    "fieldtype": "Section Break",
-   "label": "Cash and bank drawers"
+   "label": "Physical cash drawers"
   },
   {
    "fieldname": "accounts",
    "fieldtype": "Table",
-   "label": "Counted drawers",
+   "label": "Counted cash drawers",
    "options": "TH Cashier Count",
    "reqd": 1
   },

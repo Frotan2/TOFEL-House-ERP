@@ -3,7 +3,7 @@
 The cashier workflow this module supports, end to end:
 
 1. the drawer's **expected** amount is the native general-ledger closing
-   balance of the company's Cash/Bank accounts at the end of the business day
+   balance of the company's physical Cash accounts at the end of the business day
    — never a number a cashier types and never an owned running total;
 2. the cashier **counts** the physical money and records it;
 3. the difference is the variance, and any non-zero variance requires the
@@ -30,7 +30,7 @@ rather than a second invented limit. No active policy means no closes.
 # class is imported under an alias: inside ``reconcile_cashier_day`` the
 # name ``date`` is the argument, and ``date.fromisoformat`` would be an
 # AttributeError on the string (caught only by the native run, 2026-10-24).
-from datetime import date as _date
+from datetime import date as _date, datetime as _datetime
 from decimal import Decimal, InvalidOperation
 from math import isfinite
 import frappe
@@ -47,7 +47,7 @@ COUNT = "TH Cashier Count"
 GL = "GL Entry"
 ACCOUNT = "Account"
 COMPANY = "Company"
-CASH_TYPES = ("Cash", "Bank")
+CASH_TYPES = ("Cash",)
 MAX_DRAWERS = 25
 TOLERANCE = 0.005
 MAX_HISTORY = 25
@@ -108,6 +108,23 @@ def _stored_money(value, what):
         raise frappe.ValidationError(str(exc)) from exc
 
 
+def _strict_business_day(value):
+    """Canonical DATE identity for GL reads and the company/day close lock.
+
+    Python also parses compact and ISO-week notation, but passing those raw
+    spellings to MariaDB DATE comparisons or duplicate-day checks would make
+    the accounting day ambiguous. Only the native YYYY-MM-DD identity is safe.
+    """
+    day = str(value or "").strip()
+    try:
+        parsed = _date.fromisoformat(day)
+    except ValueError as exc:
+        raise frappe.ValidationError("A valid business date is required") from exc
+    if day != parsed.isoformat():
+        raise frappe.ValidationError("Business date must use YYYY-MM-DD")
+    return day
+
+
 def _company_permitted(company, user=None):
     """Whether the native Company User Permission scope reaches a company.
 
@@ -132,16 +149,43 @@ def _company_permitted(company, user=None):
 
 
 def cash_drawers(company):
-    """The company's postable native Cash and Bank accounts."""
+    """Only postable physical Cash accounts, never bank balances."""
     rows = frappe.db.get_all(
         ACCOUNT,
         filters={"company": company, "is_group": 0, "disabled": 0,
                  "account_type": ["in", list(CASH_TYPES)]},
-        fields=["name", "account_type"],
+        fields=["name", "account_type", "account_currency", "root_type"],
         order_by="name asc",
         limit_page_length=200,
     )
-    return [dict(row) for row in (rows or [])]
+    return [row for row in (rows or []) if row.get("account_type") == "Cash"]
+
+
+def cash_currency_issue(company, drawers):
+    """Refuse comparing a foreign-denominated physical count to base-currency GL.
+
+    Native GL Entry debit/credit is in the company's base currency. A Cash
+    account held in another currency must use a separately validated foreign
+    cash reconciliation; quietly comparing physical notes would be wrong.
+    """
+    base = frappe.db.get_value(COMPANY, company, "default_currency")
+    if not isinstance(base, str) or not base.strip():
+        return "Company base currency is not configured; cash close is blocked"
+    # Match guarded collection account semantics: a missing account_currency
+    # inherits the Company's base currency; an explicit foreign value does not.
+    # Cash is an Asset, never a Liability or Income account mislabeled Cash.
+    invalid_assets = [row["name"] for row in drawers
+                      if row.get("root_type") != "Asset"]
+    if invalid_assets:
+        return ("Cash accounts must be Asset accounts before a physical close: "
+                + ", ".join(invalid_assets[:5]))
+    foreign = [row["name"] for row in drawers
+               if (row.get("account_currency") or base) != base]
+    if foreign:
+        return ("Cash accounts with currency different from company base "
+                f"{base} must be reconciled separately: "
+                + ", ".join(foreign[:5]))
+    return ""
 
 
 def drawer_balances(company, accounts, day):
@@ -187,7 +231,8 @@ def validate_close(doc):
     company = doc.get("company")
     if not day or not company:
         raise frappe.ValidationError("A cashier close needs a business date and a company")
-    if _date.fromisoformat(str(day)) > _date.fromisoformat(str(frappe.utils.today())):
+    day = _strict_business_day(day)
+    if _date.fromisoformat(day) > _date.fromisoformat(str(frappe.utils.today())):
         raise frappe.ValidationError("A cashier close cannot cover a future business day")
     rows = list(doc.get("accounts") or [])
     if not rows:
@@ -197,8 +242,8 @@ def validate_close(doc):
             f"A cashier close covers at most {MAX_DRAWERS} drawers")
     drawers = {row["name"]: row.get("account_type") for row in cash_drawers(company)}
     seen = set()
-    # A signed close is for the *whole* company's postable Cash/Bank
-    # position, never just the drawers a caller chose to count.
+    # A signed close covers every postable physical Cash account, never just
+    # selected drawers; bank balances need statement reconciliation.
     if len(drawers) > MAX_DRAWERS:
         raise frappe.ValidationError("Too many enabled cash drawers for this supported close")
     total_expected = 0.0
@@ -207,7 +252,7 @@ def validate_close(doc):
         account = row.get("account")
         if not account or account not in drawers:
             raise frappe.ValidationError(
-                f"{account or 'A drawer'} is not a Cash or Bank account of {company}")
+                f"{account or 'A drawer'} is not a Cash account of {company}")
         if account in seen:
             raise frappe.ValidationError(f"{account} is counted twice in one close")
         seen.add(account)
@@ -224,7 +269,7 @@ def validate_close(doc):
         total_expected += expected
         total_counted += counted
     if seen != set(drawers):
-        raise frappe.ValidationError("Cashier close must include every enabled Cash/Bank drawer")
+        raise frappe.ValidationError("Cashier close must include every enabled Cash drawer")
     if abs(_stored_money(doc.get("total_expected"), "Close total expected") - round(total_expected, 2)) > TOLERANCE:
         raise frappe.ValidationError("The close total expected does not match its drawers")
     if abs(_stored_money(doc.get("total_counted"), "Close total counted") - round(total_counted, 2)) > TOLERANCE:
@@ -257,6 +302,61 @@ def _closing_window(day):
     return terms
 
 
+def verify_submitted_cash_close(name, company, day, actor, prepared):
+    """Re-read the committed-intent header and child snapshot from MariaDB.
+
+    Never mark this close successful based only on the in-memory Frappe Doc.
+    A forged, missing, duplicated, or truncated drawer snapshot is a failure.
+    No GL movement is posted by this control document.
+    """
+    stored = frappe.db.get_value(
+        DAY, name,
+        ["docstatus", "company", "date", "cashier", "reconciled_on",
+         "total_expected", "total_counted", "total_variance"],
+        as_dict=True)
+    if (not stored or int(stored.get("docstatus") or 0) != 1
+            or stored.get("company") != company
+            or str(stored.get("date")) != day
+            or stored.get("cashier") != actor):
+        raise frappe.ValidationError(
+            "The stored cash close is not submitted for the expected company, day and actor")
+    if cash_close_identity_issue(stored, day):
+        raise frappe.ValidationError(
+            "The stored cash close has an invalid cashier or reconciliation time")
+    actual = frappe.db.get_all(
+        COUNT,
+        filters={"parent": name, "parenttype": DAY},
+        fields=["account", "expected_amount", "counted_amount", "variance", "note"],
+        limit_page_length=MAX_DRAWERS + 1,
+    )
+    wanted = {row["account"]: row for row in prepared}
+    if (len(actual or []) != len(prepared)
+            or len(wanted) != len(prepared)
+            or {row.get("account") for row in (actual or [])} != set(wanted)):
+        raise frappe.ValidationError(
+            "Stored cash close drawers differ from the submitted count")
+    for row in actual:
+        expected = wanted[row["account"]]
+        for key in ("expected_amount", "counted_amount", "variance"):
+            saved_value = _stored_money(row.get(key), f"Stored {key}")
+            if abs(saved_value - expected[key]) > TOLERANCE:
+                raise frappe.ValidationError(
+                    f"Stored cash close amount differs for {row['account']}")
+        if (row.get("note") or "").strip() != expected["note"]:
+            raise frappe.ValidationError(
+                f"Stored cash close explanation differs for {row['account']}")
+    for field, wanted_total in (
+        ("total_expected", round(sum(row["expected_amount"] for row in prepared), 2)),
+        ("total_counted", round(sum(row["counted_amount"] for row in prepared), 2)),
+        ("total_variance", round(sum(row["variance"] for row in prepared), 2)),
+    ):
+        actual_total = _stored_money(stored.get(field), f"Stored {field}")
+        if abs(actual_total - wanted_total) > TOLERANCE:
+            raise frappe.ValidationError(
+                f"Stored cash close {field} does not match its drawers")
+    return stored
+
+
 @frappe.whitelist(methods=["POST"])
 def reconcile_cashier_day(request_key, company, date, counts):
     """Record one cashier day close against the native ledger.
@@ -280,11 +380,7 @@ def reconcile_cashier_day(request_key, company, date, counts):
     if len(counts) > MAX_DRAWERS:
         raise frappe.ValidationError("Too many cash drawers in this close")
     def work(actor):
-        day = str(date or "").strip()
-        try:
-            _date.fromisoformat(day)
-        except ValueError as exc:
-            raise frappe.ValidationError("A valid business date is required") from exc
+        day = _strict_business_day(date)
         if not isinstance(company, str) or not company or len(company) > 140:
             raise frappe.ValidationError("A company is required")
         if not frappe.db.exists(COMPANY, company):
@@ -307,10 +403,14 @@ def reconcile_cashier_day(request_key, company, date, counts):
                 f"A cashier close covers at most {MAX_DRAWERS} drawers")
         _closing_window(day)
 
-        drawers = {row["name"]: row.get("account_type") for row in cash_drawers(company)}
+        account_rows = cash_drawers(company)
+        drawers = {row["name"]: row.get("account_type") for row in account_rows}
         if not drawers:
             raise frappe.ValidationError(
-                f"{company} has no Cash or Bank account to reconcile")
+                f"{company} has no Cash account to reconcile")
+        currency_issue = cash_currency_issue(company, account_rows)
+        if currency_issue:
+            raise frappe.ValidationError(currency_issue)
         if len(drawers) > MAX_DRAWERS:
             raise frappe.ValidationError("More enabled drawers exist than this close supports")
         prepared = {}
@@ -320,7 +420,7 @@ def reconcile_cashier_day(request_key, company, date, counts):
             account = entry.get("account")
             if not isinstance(account, str) or account not in drawers:
                 raise frappe.ValidationError(
-                    f"{account or 'A drawer'} is not a Cash or Bank account of {company}")
+                    f"{account or 'A drawer'} is not a Cash account of {company}")
             if account in prepared:
                 raise frappe.ValidationError(f"{account} is counted twice in one close")
             counted = _counted(entry.get("counted_amount"), f"Counted amount for {account}")
@@ -330,7 +430,7 @@ def reconcile_cashier_day(request_key, company, date, counts):
             prepared[account] = {"counted": counted, "note": note.strip()}
         if set(prepared) != set(drawers):
             raise frappe.ValidationError(
-                "The close must count every enabled Cash/Bank drawer for this company")
+                "The close must count every enabled Cash drawer for this company")
 
         # Serialize closes for the same company/day, then refuse a duplicate.
         existing = frappe.db.sql(
@@ -344,6 +444,14 @@ def reconcile_cashier_day(request_key, company, date, counts):
                 "This business day is already closed for this company; a "
                 "submitted close is never overwritten")
 
+        # The Company row lock serializes competing close commands, but it
+        # does NOT serialize ordinary native cash-ledger postings.
+        # Capture the audit boundary BEFORE the native cash-GL balance reads:
+        # a concurrently created posting must not receive an apparent
+        # pre-close creation time merely because the close document was built
+        # after the balances were read. This is a conservative drift signal,
+        # not a substitute for an accounting period lock.
+        ledger_snapshot_started = frappe.utils.now_datetime()
         balances = {row["account"]: row for row in
                     drawer_balances(company, sorted(prepared), day)}
         rows = []
@@ -368,7 +476,7 @@ def reconcile_cashier_day(request_key, company, date, counts):
             doctype=DAY,
             naming_series=DAY_SERIES,
             date=day, company=company, cashier=actor,
-            reconciled_on=frappe.utils.now_datetime(),
+            reconciled_on=ledger_snapshot_started,
             total_expected=round(sum(row["expected_amount"] for row in rows), 2),
             total_counted=round(sum(row["counted_amount"] for row in rows), 2),
             total_variance=round(sum(row["variance"] for row in rows), 2),
@@ -379,12 +487,7 @@ def reconcile_cashier_day(request_key, company, date, counts):
         doc.insert(ignore_permissions=True)
         doc.flags.ignore_permissions = True
         doc.submit()
-        stored = frappe.db.get_value(
-            DAY, doc.name,
-            ["docstatus", "total_expected", "total_counted", "total_variance"],
-            as_dict=True)
-        if int(stored.docstatus or 0) != 1:
-            raise frappe.ValidationError("The cashier close must be submitted")
+        stored = verify_submitted_cash_close(doc.name, company, day, actor, rows)
         result = {
             "cashier_day": doc.name, "company": company, "date": day,
             "cashier": actor,
@@ -450,10 +553,146 @@ def _balance_drift_after_close(snapshot, current):
         return True
 
 
+def cash_close_identity_issue(parent, day):
+    """A submitted cash-control snapshot needs its attributed actor and time.
+
+    Saved money can add up while the signed control's cashier identity or
+    reconciliation timestamp is missing/corrupted. Treat such a record as an
+    audit exception, not an ordinary balanced close. No historical rewrites.
+    """
+    actor = parent.get("cashier")
+    if not isinstance(actor, str) or not actor.strip() or len(actor) > 140:
+        return True
+    try:
+        business_day = _date.fromisoformat(str(day))
+        reconciled = _datetime.fromisoformat(str(parent.get("reconciled_on")))
+        observed_now = _datetime.fromisoformat(str(frappe.utils.now_datetime()))
+    except (TypeError, ValueError, OverflowError):
+        return True
+    # Native Frappe/MariaDB Datetime values are site-local and offset-naive.
+    # An injected offset must not raise TypeError on comparisons or permit a
+    # fabricated future close-time to hide GL entries created after closure.
+    if reconciled.tzinfo is not None or observed_now.tzinfo is not None:
+        return True
+    return reconciled.date() < business_day or reconciled > observed_now
+
+
+def historical_cash_drift(company, day, reconciled_on, snapshot):
+    """Detect stale saved cash balances without relying on today's drawers.
+
+    A historical close can become stale after a backdated native GL posting
+    or a cancellation, even when its stored parent/child sums still agree.
+    Perform ONE bounded, account-grouped GL read per historic close. Include
+    creation-after-close evidence: offsetting new entries can leave balances
+    unchanged but still require an auditor.
+    """
+    accounts = sorted({row.get("account") for row in snapshot})
+    if not accounts or len(accounts) != len(snapshot) or len(accounts) > MAX_DRAWERS:
+        return True
+    placeholders = ", ".join(["%s"] * len(accounts))
+    try:
+        entries = frappe.db.sql(
+            f"""select account,
+                       coalesce(sum(case when is_cancelled = 0
+                                         then debit - credit else 0 end), 0)
+                           as closing,
+                       coalesce(sum(case when is_cancelled = 0
+                                             and creation > %s
+                                         then 1 else 0 end), 0)
+                           as late_postings,
+                       coalesce(sum(case when is_cancelled = 1
+                                             and modified > %s
+                                         then 1 else 0 end), 0)
+                           as late_cancellations
+                from `tabGL Entry`
+                where company = %s and posting_date <= %s
+                  and account in ({placeholders})
+                group by account""",
+            (reconciled_on, reconciled_on, company, day, *accounts),
+            as_dict=True,
+        )
+        ledger = {item["account"]: item for item in entries or []}
+        if len(ledger) != len(entries or []):
+            return True
+        return any(
+            abs(_stored_money(row.get("expected_amount"), "Stored expected cash")
+                - _stored_money(ledger.get(row["account"], {}).get("closing", 0),
+                                "Current historical cash ledger")) > TOLERANCE
+            or bool(int(ledger.get(row["account"], {}).get("late_postings") or 0))
+            or bool(int(ledger.get(row["account"], {}).get("late_cancellations") or 0))
+            for row in snapshot
+        )
+    except (frappe.ValidationError, ValueError, TypeError, KeyError, OverflowError):
+        # A failed/malformed audit read must never qualify the close as Balanced.
+        return True
+
+
+def drawer_variance_recorded(rows):
+    """A zero net difference never hides opposing short/over cash drawers.
+
+    Missing or malformed snapshot rows must not be labelled Balanced.
+    """
+    if not rows:
+        return True
+    for row in rows:
+        try:
+            variance = _stored_money(
+                row.get("variance"), "Recorded cash drawer variance")
+        except frappe.ValidationError:
+            return True
+        if abs(variance) > TOLERANCE:
+            return True
+    return False
+
+
+def cash_snapshot_amount_issue(snapshot, parent):
+    """Verify each stored drawer's variance and its signed parent totals.
+
+    Never display a submitted control record as reconciled merely because
+    the stored parent says zero. Missing, nonfinite or conflicting data
+    requires an auditor to inspect the immutable source document.
+    """
+    if not snapshot or len(snapshot) > MAX_DRAWERS:
+        return True
+    seen = set()
+    totals = {"total_expected": 0.0, "total_counted": 0.0,
+              "total_variance": 0.0}
+    try:
+        for row in snapshot:
+            account = row.get("account")
+            if not isinstance(account, str) or not account or account in seen:
+                return True
+            seen.add(account)
+            expected = _stored_money(row.get("expected_amount"),
+                                     f"Stored expected for {account}")
+            counted = _counted(row.get("counted_amount"),
+                               f"Stored counted for {account}")
+            variance = _stored_money(row.get("variance"),
+                                     f"Stored variance for {account}")
+            if abs(round(counted - expected, 2) - variance) > TOLERANCE:
+                return True
+            # A nonzero physical shortage or overage without its recorded
+            # explanation is not a valid audit trail, even if arithmetic and
+            # signed parent totals still agree. Do not rewrite the close.
+            note = row.get("note")
+            if abs(variance) > TOLERANCE and (
+                    not isinstance(note, str) or not note.strip()):
+                return True
+            totals["total_expected"] += expected
+            totals["total_counted"] += counted
+            totals["total_variance"] += variance
+        return any(
+            abs(_stored_money(parent.get(key), f"Stored {key}")
+                - round(value, 2)) > TOLERANCE
+            for key, value in totals.items())
+    except (frappe.ValidationError, ValueError, TypeError):
+        return True
+
+
 def cashier_position(day=None, companies=None):
     """Read-only drawer position and close state, for the finance desk.
 
-    Returns one row per native Cash/Bank account with opening/movement/closing
+    Returns one row per native physical Cash account with opening/movement/closing
     and the day's close (if any), plus a drift flag when a close no longer
     matches the ledger. No writes, no owned arithmetic beyond addition.
     """
@@ -462,19 +701,32 @@ def cashier_position(day=None, companies=None):
     out = []
     for name in companies:
         drawers = cash_drawers(name)
-        if not drawers:
-            continue
-        balances = drawer_balances(name, [row["name"] for row in drawers], day)
+        # Even if the last active Cash account is later disabled, a submitted
+        # close for this day remains an auditable financial control. Read the
+        # close BEFORE deciding whether to omit an empty, open company.
         closes = frappe.db.get_all(
             DAY,
             filters={"company": name, "date": day, "docstatus": 1},
             fields=["name", "total_expected", "total_counted", "total_variance",
                     "cashier", "reconciled_on"],
             order_by="creation desc",
-            limit_page_length=1,
+            # Read one extra close: a duplicate submitted company/day must
+            # never be silently hidden by a one-row status projection.
+            limit_page_length=2,
         )
         close = dict(closes[0]) if closes else None
+        if not drawers and not close:
+            continue
+        currency_issue = cash_currency_issue(name, drawers) if drawers else ""
+        balances = drawer_balances(name, [row["name"] for row in drawers], day)
+        multiple_submitted_closes = len(closes or []) > 1
         drift = False
+        has_drawer_variance = False
+        # There is no current physical Cash account to reconcile against this
+        # saved close. Keep it visible, but never present it as validated Closed.
+        integrity_review = (multiple_submitted_closes
+                            or bool(close and not drawers)
+                            or bool(close and cash_close_identity_issue(close, day)))
         if close:
             # Re-check every drawer against the immutable close snapshot.
             # Cancelled historical postings may change balances without a
@@ -482,31 +734,50 @@ def cashier_position(day=None, companies=None):
             saved_rows = frappe.db.get_all(
                 COUNT,
                 filters={"parent": close["name"], "parenttype": DAY},
-                fields=["account", "expected_amount"],
+                fields=["account", "expected_amount", "counted_amount",
+                        "variance", "note"],
                 limit_page_length=MAX_DRAWERS + 1,
             )
+            has_drawer_variance = drawer_variance_recorded(saved_rows or [])
+            integrity_review = (integrity_review
+                                or cash_snapshot_amount_issue(saved_rows or [], close))
             drift = _balance_drift_after_close(saved_rows or [], balances)
-            # Preserve the separate audit signal for subsequent backdated GL
-            # postings, including balance-neutral postings.
-            drift = drift or bool(frappe.db.sql(
-                """select 1 from `tabGL Entry`
-                   where company = %s and posting_date <= %s
-                     and is_cancelled = 0 and creation > %s
-                   limit 1""",
-                (name, day, close["reconciled_on"]),
-            ))
+            # A bank-only posting is not physical cash drift. Check only
+            # configured Cash drawers: with none active, an empty SQL IN ()
+            # would be invalid, and the saved close is already Integrity review.
+            if drawers:
+                placeholders = ", ".join(["%s"] * len(drawers))
+                drift = drift or bool(frappe.db.sql(
+                    f"""select 1 from `tabGL Entry`
+                        where company = %s and posting_date <= %s
+                          and account in ({placeholders})
+                          and ((is_cancelled = 0 and creation > %s)
+                               or (is_cancelled = 1 and modified > %s))
+                        limit 1""",
+                    (name, day, *(row["name"] for row in drawers),
+                     close["reconciled_on"], close["reconciled_on"]),
+                ))
         out.append({
             "company": name,
             "date": day,
+            "currency_issue": currency_issue,
             "drawers": balances,
             "close": close,
             "drift": drift,
+            "drawer_variance": has_drawer_variance,
+            "integrity_review": integrity_review,
         })
     return out
 
 
 def cashier_history(companies=None, limit=MAX_HISTORY):
-    """Read-only close history, newest first (bounded)."""
+    """Read-only, immutable past closes; current drawer membership is NOT history.
+
+    A new Cash account or an old disabled Cash account must not invalidate
+    a valid earlier day. Verify the actual saved account identities and all
+    recorded totals. No historic account membership snapshot exists for
+    arbitrary missing zero-balance drawers, so do not claim to prove one.
+    """
     filters = {"docstatus": 1}
     resolved = _resolve_companies(companies)
     filters["company"] = ["in", resolved] if resolved else ["in", [""]]
@@ -516,9 +787,94 @@ def cashier_history(companies=None, limit=MAX_HISTORY):
         fields=["name", "date", "company", "cashier", "total_expected",
                 "total_counted", "total_variance", "reconciled_on"],
         order_by="date desc, creation desc",
-        limit_page_length=min(int(limit), MAX_HISTORY),
+        limit_page_length=min(max(int(limit), 0), MAX_HISTORY),
     )
-    return [dict(row) for row in (rows or [])]
+    history = [dict(row) for row in (rows or [])]
+    if not history:
+        return history
+    # A second submitted close for the same Company/day invalidates BOTH
+    # historical records, not only the active daily desk projection. Query
+    # beyond the displayed history page so an older duplicate is still seen.
+    # All values are bound; the scopes and date sets are bounded by MAX_HISTORY.
+    company_names = sorted({row["company"] for row in history})
+    business_dates = sorted({str(row["date"]) for row in history})
+    company_marks = ", ".join(["%s"] * len(company_names))
+    date_marks = ", ".join(["%s"] * len(business_dates))
+    duplicate_rows = frappe.db.sql(
+        f"""select company, `date`
+               from `tabTH Cashier Day`
+               where docstatus = 1
+                 and company in ({company_marks})
+                 and `date` in ({date_marks})
+               group by company, `date`
+               having count(*) > 1""",
+        tuple(company_names + business_dates),
+        as_dict=True,
+    )
+    duplicate_days = {
+        (entry["company"], str(entry["date"])) for entry in duplicate_rows or []
+    }
+    names = [row["name"] for row in history]
+    child_rows = frappe.db.get_all(
+        COUNT,
+        filters={"parenttype": DAY, "parent": ["in", names]},
+        fields=["parent", "account", "expected_amount", "counted_amount",
+                "variance", "note"],
+        limit_page_length=MAX_HISTORY * MAX_DRAWERS + 1,
+    )
+    by_parent = {name: [] for name in names}
+    for child in child_rows or []:
+        if child.get("parent") in by_parent:
+            by_parent[child["parent"]].append(child)
+    truncated = len(child_rows or []) > MAX_HISTORY * MAX_DRAWERS
+    historical_accounts = {
+        child.get("account") for child in child_rows or []
+        if isinstance(child.get("account"), str) and child.get("account")
+    }
+    # Account records include disabled accounts: they were still legitimate
+    # cash drawers at the time of a historic close.
+    account_rows = (frappe.db.get_all(
+        ACCOUNT,
+        filters={"name": ["in", sorted(historical_accounts)]},
+        fields=["name", "company", "account_type", "root_type",
+                "account_currency"],
+        limit_page_length=MAX_HISTORY * MAX_DRAWERS + 1,
+    ) if historical_accounts else [])
+    accounts = {a["name"]: a for a in account_rows or []}
+    companies_currency = {}
+    for row in history:
+        company = row.get("company")
+        if company not in companies_currency:
+            companies_currency[company] = frappe.db.get_value(
+                COMPANY, company, "default_currency")
+        base = companies_currency[company]
+        snapshot = by_parent[row["name"]]
+        seen = [child.get("account") for child in snapshot]
+        integrity_issue = (
+            (company, str(row["date"])) in duplicate_days
+            or cash_close_identity_issue(row, row.get("date"))
+            or truncated or not snapshot or len(snapshot) > MAX_DRAWERS
+            or len(seen) != len(set(seen)) or not base
+        )
+        for account in seen:
+            detail = accounts.get(account)
+            if (not detail or detail.get("company") != company
+                    or detail.get("account_type") != "Cash"
+                    or detail.get("root_type") != "Asset"
+                    or (detail.get("account_currency") or base) != base):
+                integrity_issue = True
+        # Parent-child net and individual per-drawer arithmetic must both
+        # agree. Separate account-identity checks remain above.
+        integrity_issue = integrity_issue or cash_snapshot_amount_issue(
+            snapshot, row)
+        row["integrity_review"] = integrity_issue
+        row["drawer_variance"] = drawer_variance_recorded(snapshot)
+        row["drift"] = (
+            historical_cash_drift(company, str(row["date"]),
+                                  row.get("reconciled_on"), snapshot)
+            if not integrity_issue else False
+        )
+    return history
 
 
 def day_window_hint():
