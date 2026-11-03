@@ -173,10 +173,23 @@ class RegistrationDeskTests(unittest.TestCase):
     def test_full_candidate_page_is_not_proof_of_unique_identity(self):
         desk, _ = self.desk()
         desk.BOUNCE_WINDOW = 2
-        desk._subject_index = lambda decisions: {row["name"]: "THV-FIRST" for row in decisions}
+        desk._subject_index = lambda decisions: {
+            "PL-1": "THV-FIRST", "PL-2": "THV-OTHER"}
         original_read = desk.project_rows
 
         def read(surface, doctype, fields, filters=None, **kwargs):
+            if doctype == desk.DECISION:
+                # Two simultaneously released candidates, both returned by
+                # the normal bounded read. An unseen third Applicant could
+                # still share either reference.
+                return [
+                    {"name": "PL-1", "status": "Released",
+                     "expires_at": "2027-12-31 00:00:00",
+                     "released_at": "2026-09-15 12:00:00"},
+                    {"name": "PL-2", "status": "Released",
+                     "expires_at": "2027-12-31 00:00:00",
+                     "released_at": "2026-09-15 12:00:00"},
+                ]
             if doctype == desk.APPLICANT and filters and "th_candidate_ref" in filters:
                 return [
                     {"name": "APP-FIRST", "th_candidate_ref": "THV-FIRST",
@@ -189,10 +202,11 @@ class RegistrationDeskTests(unittest.TestCase):
         desk.project_rows = read
         handover = next(x for x in desk.work()["sections"]
                         if x["id"] == "handover")["items"]
-        self.assertEqual(len(handover), 1)
-        self.assertIsNone(handover[0]["action"])
-        self.assertEqual(handover[0]["next_role"], "Academic Manager")
-        self.assertIn("incomplete", handover[0]["next"])
+        self.assertEqual(len(handover), 2)
+        for item in handover:
+            self.assertIsNone(item["action"])
+            self.assertEqual(item["next_role"], "Academic Manager")
+            self.assertIn("incomplete", item["next"])
 
     def test_unique_candidate_applicant_retains_normal_admission_action(self):
         desk, _ = self.desk()
