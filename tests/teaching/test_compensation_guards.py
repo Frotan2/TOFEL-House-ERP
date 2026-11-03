@@ -211,10 +211,9 @@ class S2CompensationTests(unittest.TestCase):
         api = types.ModuleType("toefl_house.api")
         api._execute = lambda kind, key, payload, work: work(ACTOR)[0]
         sys.modules["toefl_house.api"] = api
-        # S13: the calculation judges the adjustment posting policy. This
-        # harness stands in for a skip-mode policy over fixtures with no
-        # orphans — the posted counts below keep proving the locking and
-        # one-off semantics they were written for.
+        # S13: the calculation judges the adjustment posting policy. The default
+        # fixture uses SKIP; explicit orphan fixtures prove reports are locked
+        # and identity-checked before company-sensitive names are returned.
         teaching_pkg = types.ModuleType("toefl_house.teaching")
         teaching_pkg.__path__ = []
         sys.modules["toefl_house.teaching"] = teaching_pkg
@@ -304,6 +303,7 @@ class S2CompensationTests(unittest.TestCase):
         self.assignments = []
         self.contract_doc = _contract("C-ORPHAN", [_adjustment("ADJ-ORPHAN")])
         self.contract_doc.instructor = "INS-ORPHAN"
+        self.contract_doc.employee = "EMP-ORPHAN"
         self.employee_companies["EMP-ORPHAN"] = "SYN Teaching House"
         self.instructor_employees["INS-ORPHAN"] = "EMP-ORPHAN"
         self.orphans = {
