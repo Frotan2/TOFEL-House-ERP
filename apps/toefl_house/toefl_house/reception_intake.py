@@ -21,12 +21,17 @@ STATUSES = ("New", "Contacted", "Awaiting Placement", "Closed")
 MODES = ("Undecided", "On-campus", "Online")
 
 
-def _text(value, label, *, required=False, length=140):
+def _text(value, label, *, required=False, length=140, multiline=False):
     if not isinstance(value, str):
         raise frappe.ValidationError(f"{label} must be text")
-    clean = value.strip()
+    # Small Text notes are entered in a textarea, whose line endings may be
+    # LF (browser), CRLF (Windows), or CR (pasted text). Canonicalize those
+    # endings without allowing other control characters or multiline names.
+    clean = (value.replace("\r\n", "\n").replace("\r", "\n")
+             if multiline else value).strip()
     if (len(clean) > length or (required and not clean)
-            or any(ord(char) < 32 for char in clean)):
+            or any(ord(char) < 32 and not (multiline and char == "\n")
+                   for char in clean)):
         raise frappe.ValidationError(f"{label} is missing or invalid")
     return clean
 
@@ -119,7 +124,7 @@ def protect_inquiry(doc, method=None):
             or _study_mode(doc.get("study_mode") or "Undecided") != (doc.get("study_mode") or "Undecided")
             or _text(doc.get("contact_country") or "", "Country", length=80) != (doc.get("contact_country") or "")
             or _time_zone(doc.get("time_zone") or "") != (doc.get("time_zone") or "")
-            or _text(doc.notes or "", "Notes", length=1000) != (doc.notes or "")):
+            or _text(doc.notes or "", "Notes", length=1000, multiline=True) != (doc.notes or "")):
         raise frappe.ValidationError("Inquiry fields are not normalized")
     if doc.is_new():
         if (kind != "create_walkin_inquiry" or doc.status != "New"
@@ -178,7 +183,7 @@ def create_walkin_inquiry(request_key, person_name, phone="", program_interest="
         mode = _study_mode(study_mode)
         country = _text(_optional_input(contact_country), "Country", length=80)
         zone = _time_zone(time_zone)
-        remark = _text(_optional_input(notes), "Notes", length=1000)
+        remark = _text(_optional_input(notes), "Notes", length=1000, multiline=True)
         chosen = resolve_creation_branch(branch, actor)
         if not chosen:
             raise frappe.ValidationError("Choose a reception branch before saving the visitor")
@@ -253,7 +258,7 @@ def update_walkin_inquiry(request_key, inquiry, expected_version, status, notes=
         # the visitor's previous follow-up evidence. The guided UI sends
         # "" deliberately when staff clear the note field.
         new_notes = ((doc.notes or "") if notes is None
-                     else _text(notes, "Notes", length=1000))
+                     else _text(notes, "Notes", length=1000, multiline=True))
         new_mode = _study_mode(study_mode) if study_mode is not None else (
             doc.get("study_mode") or "Undecided")
         new_country = (_text(contact_country, "Country", length=80)
