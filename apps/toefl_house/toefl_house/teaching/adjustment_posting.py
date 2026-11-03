@@ -55,11 +55,11 @@ def validate_orphan_posting(value):
     return value
 
 
-def collect_orphan_contracts(start, end, assigned_instructors):
+def collect_orphan_contracts(start, end, assigned_instructors, company):
     """Map due-adjustment parents with no overlapping assignment.
 
     Returns ``{contract: {"instructor": ..., "adjustments": [names]}}``
-    for non-fixed contracts carrying adjustments due inside the window
+    for same-company non-fixed contracts carrying adjustments due inside the window
     whose instructor holds no overlapping assignment. A pure read used
     inside the calculation work() closure; the caller posts or reports
     per the governing terms.
@@ -70,9 +70,13 @@ def collect_orphan_contracts(start, end, assigned_instructors):
     orphans = {}
     for parent in sorted({row["parent"] for row in due}):
         info = frappe.db.get_value(
-            CONTRACT, parent, ["instructor", "compensation_model"],
+            CONTRACT, parent, ["instructor", "compensation_model", "employee"],
             as_dict=True)
         if not info or info.compensation_model == "Fixed Salary":
+            continue
+        # Due adjustments are global, so filter by the contract's native
+        # Employee before including either postings or skip-mode reports.
+        if frappe.db.get_value("Employee", info.employee, "company") != company:
             continue
         if info.instructor in (assigned_instructors or ()):
             continue
