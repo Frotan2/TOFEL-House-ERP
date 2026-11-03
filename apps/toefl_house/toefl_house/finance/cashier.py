@@ -593,15 +593,22 @@ def historical_cash_drift(company, day, reconciled_on, snapshot):
     try:
         entries = frappe.db.sql(
             f"""select account,
-                       coalesce(sum(debit - credit), 0) as closing,
-                       coalesce(sum(case when creation > %s then 1 else 0 end), 0)
-                           as late_postings
+                       coalesce(sum(case when is_cancelled = 0
+                                         then debit - credit else 0 end), 0)
+                           as closing,
+                       coalesce(sum(case when is_cancelled = 0
+                                             and creation > %s
+                                         then 1 else 0 end), 0)
+                           as late_postings,
+                       coalesce(sum(case when is_cancelled = 1
+                                             and modified > %s
+                                         then 1 else 0 end), 0)
+                           as late_cancellations
                 from `tabGL Entry`
                 where company = %s and posting_date <= %s
-                  and is_cancelled = 0
                   and account in ({placeholders})
                 group by account""",
-            (reconciled_on, company, day, *accounts),
+            (reconciled_on, reconciled_on, company, day, *accounts),
             as_dict=True,
         )
         ledger = {item["account"]: item for item in entries or []}
@@ -612,6 +619,7 @@ def historical_cash_drift(company, day, reconciled_on, snapshot):
                 - _stored_money(ledger.get(row["account"], {}).get("closing", 0),
                                 "Current historical cash ledger")) > TOLERANCE
             or bool(int(ledger.get(row["account"], {}).get("late_postings") or 0))
+            or bool(int(ledger.get(row["account"], {}).get("late_cancellations") or 0))
             for row in snapshot
         )
     except (frappe.ValidationError, ValueError, TypeError, KeyError, OverflowError):
@@ -742,11 +750,12 @@ def cashier_position(day=None, companies=None):
                 drift = drift or bool(frappe.db.sql(
                     f"""select 1 from `tabGL Entry`
                         where company = %s and posting_date <= %s
-                          and is_cancelled = 0 and creation > %s
                           and account in ({placeholders})
+                          and ((is_cancelled = 0 and creation > %s)
+                               or (is_cancelled = 1 and modified > %s))
                         limit 1""",
-                    (name, day, close["reconciled_on"],
-                     *(row["name"] for row in drawers)),
+                    (name, day, *(row["name"] for row in drawers),
+                     close["reconciled_on"], close["reconciled_on"]),
                 ))
         out.append({
             "company": name,
