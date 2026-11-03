@@ -5207,26 +5207,68 @@ def main():
                     'audit_chain_ref_fields':True}
         check('teaching-compensation-calculation',compensation_calculation)
         def teaching_payroll_company_isolation():
-            # Real native Frappe / HRMS company-isolation regression. A
-            # different Company is a valid finance target but owns none of
-            # these teaching assignments or adjustments. A global assignment
-            # query used to post foreign Employee salary inputs here.
+            # Real native Frappe / HRMS company-isolation regression. Give the
+            # second company its own due orphan adjustment as a positive
+            # control: Company B must see its own skip report, while Company A
+            # must not learn that the foreign contract/adjustment exists.
             frappe.set_user('Administrator')
             other_company='TOEFL House'
             assert other_company != cfx['company']
             assert frappe.db.exists('Company',other_company),other_company
+            other_employee_label='SYN Payroll Isolation Employee'
+            other_employee=frappe.db.get_value(
+                'Employee',{'employee_name':other_employee_label},'name')
+            if not other_employee:
+                other_employee=frappe.get_doc(dict(
+                    doctype='Employee',naming_series='HR-EMP-',
+                    first_name=other_employee_label,employee_name=other_employee_label,
+                    company=other_company,status='Active',gender='Other',
+                    date_of_birth='1990-01-01',date_of_joining='2026-01-01')).insert().name
+            other_instructor_label='SYN Payroll Isolation Instructor'
+            other_instructor=frappe.db.get_value(
+                'Instructor',{'instructor_name':other_instructor_label},'name')
+            if not other_instructor:
+                other_instructor=frappe.get_doc(dict(
+                    doctype='Instructor',instructor_name=other_instructor_label,
+                    naming_series='EDU-INS-.YYYY.-',status='Active',
+                    employee=other_employee)).insert().name
+            else:
+                frappe.db.set_value('Instructor',other_instructor,'employee',other_employee)
+            frappe.db.commit()
+            company_b_contract=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_company_b_contract_0001',other_instructor,other_employee,'Skill-Based',
+                'SYN company isolation orphan adjustment','Monthly','2026-01-01','',
+                'SYN Company B positive-control contract',
+                [dict(skill=SK1,unit_of_payment='SYN Session',rate=7,payable_quantity=1)],
+                [dict(adjustment_type='Bonus',amount=17,effective_date='2026-09-10',
+                      approver=users['finance_officer'],
+                      reason='SYN Company B isolated adjustment')]))
+            company_b_adjustment=frappe.get_doc(CON,company_b_contract['name']).adjustments[0].name
             before_inputs=frappe.db.count(ADS)
             before_slips=frappe.db.count('Salary Slip')
-            foreign=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
-                'tc_calc_company_iso_001','2026-09-01','2026-09-30',
+            company_b=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_calc_company_b_positive_001','2026-09-01','2026-09-30',
                 other_company,cfx['earning'],cfx['deduction']))
             frappe.set_user('Administrator')
-            assert foreign['assignments']==0,foreign
-            assert not foreign['posted'],foreign
-            assert foreign['adjustments_posted']==0,foreign
-            assert not foreign['skipped_orphan_adjustments'],foreign
-            assert frappe.db.count(ADS)==before_inputs,('foreign payroll inserted Additional Salary')
-            assert frappe.db.count('Salary Slip')==before_slips,('foreign payroll created Salary Slip')
+            assert company_b['assignments']==0,company_b
+            assert not company_b['posted'],company_b
+            assert company_b['adjustments_posted']==0,company_b
+            assert company_b['skipped_orphan_adjustments']=={
+                company_b_contract['name']:[company_b_adjustment]},company_b
+            # Positive control proves the orphan is real and visible to its
+            # own company. Re-run Company A: it must not receive the foreign
+            # contract or adjustment names in its skip report.
+            company_a=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_calc_company_a_foreign_orphan_001','2026-09-01','2026-09-30',
+                cfx['company'],cfx['earning'],cfx['deduction']))
+            frappe.set_user('Administrator')
+            assert company_a['assignments']==3,company_a
+            assert company_a['skipped_existing']==5,company_a
+            assert not company_a['posted'],company_a
+            assert company_a['adjustments_posted']==0,company_a
+            assert company_a['skipped_orphan_adjustments']=={},company_a
+            assert frappe.db.count(ADS)==before_inputs,('cross-company payroll inserted Additional Salary')
+            assert frappe.db.count('Salary Slip')==before_slips,('cross-company payroll created Salary Slip')
             # The payroll recipient guard performs locking native reads
             # rather than trusting the selected Company's request payload.
             original=frappe.get_doc(CON,cauth['contracts']['one'])
@@ -5246,7 +5288,8 @@ def main():
                     'wrong-employee historic payroll reference was accepted')
             frappe.db.commit()
             return {'foreign_company_assignments':0,
-                    'foreign_company_adjustments':0,
+                    'company_b_orphan_visible_to_company_b':True,
+                    'company_a_orphan_report_excludes_company_b':True,
                     'foreign_company_additional_salary_writes':0,
                     'foreign_company_salary_slip_writes':0,
                     'native_recipient_company_lock_denied':True}
