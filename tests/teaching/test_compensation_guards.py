@@ -350,6 +350,25 @@ class S2CompensationTests(unittest.TestCase):
             self._calc()
         self.assertEqual(self.posted, [])
 
+    def test_skip_orphan_report_refuses_contract_changed_to_fixed_salary(self):
+        self._skip_orphan_fixture()
+        self.fresh_doc = _contract("C-ORPHAN", [_adjustment("ADJ-ORPHAN")])
+        self.fresh_doc.instructor = "INS-ORPHAN"
+        self.fresh_doc.employee = "EMP-ORPHAN"
+        self.fresh_doc.compensation_model = "Fixed Salary"
+        with self.assertRaisesRegex(_ValidationError, "compensation model changed"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_skip_orphan_report_refuses_changed_due_adjustment_rows(self):
+        self._skip_orphan_fixture()
+        self.fresh_doc = _contract("C-ORPHAN", [])
+        self.fresh_doc.instructor = "INS-ORPHAN"
+        self.fresh_doc.employee = "EMP-ORPHAN"
+        with self.assertRaisesRegex(_ValidationError, "adjustments changed"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
     def test_covering_contracts_locked_before_posting(self):
         self.assignments = [_assignment("A-2", "INS-B", "C-ZEBRA"),
                             _assignment("A-1", "INS-A", "C-ALPHA")]
