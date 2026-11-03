@@ -74,6 +74,10 @@ def collect_orphan_contracts(start, end, assigned_instructors, company):
             as_dict=True)
         if not info or info.compensation_model == "Fixed Salary":
             continue
+        # Assigned instructors are handled by the separate, fully locked
+        # compensation path. Avoid unnecessary HRMS lookups for those rows.
+        if info.instructor in (assigned_instructors or ()):
+            continue
         # Due adjustments are global, so filter by the contract's native
         # Employee before including either postings or skip-mode reports.
         if frappe.db.get_value("Employee", info.employee, "company") != company:
@@ -83,8 +87,6 @@ def collect_orphan_contracts(start, end, assigned_instructors, company):
         # must not leak into even the SKIP report. POST mode independently
         # rechecks both native identities using locking reads before posting.
         if frappe.db.get_value("Instructor", info.instructor, "employee") != info.employee:
-            continue
-        if info.instructor in (assigned_instructors or ()):
             continue
         orphans[parent] = {
             "instructor": info.instructor,
