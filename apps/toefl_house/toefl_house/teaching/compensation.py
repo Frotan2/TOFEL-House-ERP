@@ -482,10 +482,20 @@ def _assert_payroll_company(contract, instructor, company):
     and the actual native Employee must belong to the requested Company.
     This also protects orphan adjustments and imported/edited legacy rows.
     """
-    if frappe.db.get_value(EMPLOYEE, contract.employee, "company") != company:
+    # A normal get_value() could use an old REPEATABLE READ snapshot.
+    # Locking reads see the current native identities after concurrent
+    # transfers/relinks have committed, and hold them until our salary inputs
+    # are inserted. Contract rows are already locked in a sorted order.
+    employees = frappe.db.sql(
+        "select company from `tabEmployee` where name=%s for update",
+        (contract.employee,), as_dict=True)
+    if len(employees) != 1 or employees[0].company != company:
         raise frappe.ValidationError(
             "Teaching contract employee belongs to a different payroll company")
-    if frappe.db.get_value(INSTRUCTOR, instructor, "employee") != contract.employee:
+    instructors = frappe.db.sql(
+        "select employee from `tabInstructor` where name=%s for update",
+        (instructor,), as_dict=True)
+    if len(instructors) != 1 or instructors[0].employee != contract.employee:
         raise frappe.ValidationError(
             "Teaching contract employee no longer matches the instructor's HRMS employee record")
 
