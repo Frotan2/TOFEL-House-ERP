@@ -384,6 +384,17 @@ class OrphanCollectionTests(unittest.TestCase):
                               "adjustments": ["ADJ-VALID"]},
             })
 
+    def test_same_company_different_employee_is_not_a_valid_orphan(self):
+        # Company equality alone is insufficient. Two employees can belong
+        # to the same company; the contract must reference this instructor's
+        # exact Employee record.
+        self.due_rows = [{"name": "ADJ-MISLINK", "parent": "CON-MISLINK"}]
+        self.contracts = {"CON-MISLINK": self._contract("INS-MISLINK")}
+        self.employee_companies["EMP-OTHER"] = "SYN Teaching House"
+        self.instructor_employees["INS-MISLINK"] = "EMP-OTHER"
+        self.assertEqual(self.posting.collect_orphan_contracts(
+            "2026-09-01", "2026-09-30", set(), "SYN Teaching House"), {})
+
     def test_missing_orphan_instructor_identity_is_excluded(self):
         self.due_rows = [{"name": "ADJ-MISSING", "parent": "CON-MISSING"}]
         self.contracts = {"CON-MISSING": self._contract("INS-MISSING")}
