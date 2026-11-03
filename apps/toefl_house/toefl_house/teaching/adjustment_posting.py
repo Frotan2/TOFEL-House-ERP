@@ -76,8 +76,11 @@ def collect_orphan_contracts(start, end, assigned_instructors, company):
         "and e.company = %s and i.employee = c.employee "
         "and c.compensation_model != 'Fixed Salary'",
         (start, end, company), as_dict=True)
+    adjustments_by_parent = {}
+    for row in due:
+        adjustments_by_parent.setdefault(row["parent"], []).append(row["name"])
     orphans = {}
-    for parent in sorted({row["parent"] for row in due}):
+    for parent, names in sorted(adjustments_by_parent.items()):
         info = frappe.db.get_value(
             CONTRACT, parent, ["instructor", "compensation_model", "employee"],
             as_dict=True)
@@ -87,8 +90,8 @@ def collect_orphan_contracts(start, end, assigned_instructors, company):
         # compensation path. Avoid unnecessary HRMS lookups for those rows.
         if info.instructor in (assigned_instructors or ()):
             continue
-        # Due adjustments are global, so filter by the contract's native
-        # Employee before including either postings or skip-mode reports.
+        # Defence in depth: recheck the native Employee company even though
+        # SQL filtered by Company, in case identity changed during the read.
         if frappe.db.get_value("Employee", info.employee, "company") != company:
             continue
         # The Employee company alone does not prove this Instructor is
@@ -99,8 +102,7 @@ def collect_orphan_contracts(start, end, assigned_instructors, company):
             continue
         orphans[parent] = {
             "instructor": info.instructor,
-            "adjustments": sorted(row["name"] for row in due
-                                  if row["parent"] == parent),
+            "adjustments": sorted(names),
         }
     return orphans
 
