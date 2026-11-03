@@ -8175,6 +8175,20 @@ def main():
                 'Branch-scoped Reception student')
             fee=valid[0]['name']
             company=valid[0]['company']
+            # The opposite Branch's Reception login must not be able to
+            # receipt this Branch-A tuition, even before counter setup.
+            # Verify native command-scope denial, not only an HTTP 403
+            # caused by absent counter configuration.
+            from toefl_house.command_scope import authorize_command_scope
+            student=valid[0]['student']
+            assert _effective_student_branches(student)=={'SYN-BR-A'},student
+            assert actor_branches(users['branch_b_staff'])=={'SYN-BR-B'}
+            assert denied_because(
+                lambda:as_user('branch_b_staff',lambda:authorize_command_scope(
+                    'record_reception_collection',{'fees':fee,'amount':'100.00'},
+                    users['branch_b_staff'])),
+                "outside this login's permitted branches")['denied']=='PermissionError'
+            frappe.set_user('Administrator')
             prefix='toefl_house.finance.collections.'
             actors={key:login(key) for key in ('course_owner','receptionist','book_seller','outsider')}
 
