@@ -415,18 +415,26 @@ def end_teaching_assignment(request_key, assignment, effective_end):
                     {"assignment": assignment, "effective_end": effective_end}, work)
 
 
-def _paid_dates(ref_doctype, ref_docname):
-    """Payroll dates already posted for one payable reference.
+def _paid_dates(ref_doctype, ref_docname, company, employee):
+    """Read live payroll-input references, refusing historic identity conflicts.
 
-    A locking read: concurrent calculations serialize on the contract rows
-    first (see below), and this re-read runs after the lock wait, so it
-    observes the winner's post on every isolation level. Without it two
-    overlapping calculations could both read "unpaid" and double-post
-    (BUG-PAY-01). Served by the th_ads_ref index (install.py).
+    Contract locks serialize calculations and this SELECT FOR UPDATE observes
+    active native Additional Salary rows after the lock wait. A previous
+    wrong-Company or wrong-Employee posting must not silently mark today's
+    entitlement as paid, nor be ignored to create an automatic double pay.
+    Finance must reconcile that historical record explicitly.
     """
-    return sorted({str(payroll_date) for (payroll_date,) in frappe.db.sql(
-        "select payroll_date from `tabAdditional Salary` where ref_doctype=%s "
-        "and ref_docname=%s and disabled=0 and docstatus<2 for update", (ref_doctype, ref_docname))})
+    rows = frappe.db.sql(
+        "select payroll_date, company, employee from `tabAdditional Salary` "
+        "where ref_doctype=%s and ref_docname=%s "
+        "and disabled=0 and docstatus<2 for update",
+        (ref_doctype, ref_docname))
+    if any(stored_company != company or stored_employee != employee
+           for _, stored_company, stored_employee in rows):
+        raise frappe.ValidationError(
+            "Existing Additional Salary for this payable has a different "
+            "Company or Employee; Finance reconciliation is required")
+    return sorted({str(payroll_date) for payroll_date, _, _ in rows})
 
 
 def _covering_contract_name(instructor, start, end):
@@ -629,7 +637,7 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                 if contract.name not in skipped_fixed:
                     skipped_fixed.append(contract.name)
                 continue
-            already_paid = _paid_dates(ASSIGNMENT, row.name)
+            already_paid = _paid_dates(ASSIGNMENT, row.name, company_name, contract.employee)
             payment_state = _assignment_payment_state(contract, row, start, end, already_paid)
             if payment_state == "existing":
                 skipped_existing += 1
@@ -678,7 +686,7 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
             # own audit link (TH Contract Adjustment row name) and its own
             # one-off state, exactly like the assignment path above.
             for adjustment in due:
-                adjustment_paid = _paid_dates(ADJUSTMENT, adjustment.name)
+                adjustment_paid = _paid_dates(ADJUSTMENT, adjustment.name, company_name, contract.employee)
                 if end in adjustment_paid:
                     skipped_existing += 1
                     continue

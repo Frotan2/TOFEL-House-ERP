@@ -5233,6 +5233,17 @@ def main():
             assert denied(lambda:tcomp._assert_payroll_company(
                 original,cfx['ins']['One'],other_company)),(
                     'foreign company accepted the original contract Employee')
+            # The real Additional Salary input of this same-company assignment
+            # exists from the earlier payroll run. A mismatched historical
+            # Company or Employee must fail closed, not report a false paid
+            # state or create an automatic second salary.
+            payable=afacts['assignments']['a1']
+            assert denied(lambda:tcomp._paid_dates(
+                ASSIGN,payable,other_company,cfx['emps']['One'])),(
+                    'foreign-company historic payroll reference was accepted')
+            assert denied(lambda:tcomp._paid_dates(
+                ASSIGN,payable,cfx['company'],cfx['emps']['Two'])),(
+                    'wrong-employee historic payroll reference was accepted')
             frappe.db.commit()
             return {'foreign_company_assignments':0,
                     'foreign_company_adjustments':0,

@@ -138,6 +138,7 @@ class S2CompensationTests(unittest.TestCase):
                 return [SimpleNamespace(employee=employee)] if employee else []
             if "tabAdditional Salary" in query:
                 assert "for update" in query, "posting re-read must lock"
+                assert "select payroll_date, company, employee" in query
                 fake.paid_sql_queries.append(query)
                 fake.paid_queries.append((values[0], values[1]))
                 ref = (values[0], values[1])
@@ -147,8 +148,11 @@ class S2CompensationTests(unittest.TestCase):
                         rows = [row for row in rows if not row["disabled"]]
                     if "docstatus<2" in query:
                         rows = [row for row in rows if row["docstatus"] < 2]
-                    return [(row["payroll_date"],) for row in rows]
-                return [(day,) for day in fake.paid.get(ref, [])]
+                    return [(row["payroll_date"],
+                             row.get("company", "SYN Teaching House"),
+                             row.get("employee", "EMP-1")) for row in rows]
+                return [(day, "SYN Teaching House", "EMP-1")
+                        for day in fake.paid.get(ref, [])]
             raise AssertionError(f"unexpected sql {query[:80]}")
 
         def get_all(doctype, filters=None, fields=None, **kwargs):
@@ -388,6 +392,45 @@ class S2CompensationTests(unittest.TestCase):
         self.assertEqual(result["posted"], {})
         self.assertEqual(result["adjustments_posted"], 0)
         self.assertEqual(self.posted, [])
+
+    def test_foreign_company_additional_salary_blocks_silent_paid_skip(self):
+        # An older incorrect Company-A input for the same teaching fact must
+        # not make Company-B silently report an already-paid entitlement.
+        self.paid_rows[(ASSIGNMENT, "A-1")] = [
+            {"payroll_date": "2026-09-30", "company": "Other School",
+             "employee": "EMP-1", "disabled": 0, "docstatus": 1}]
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        with self.assertRaisesRegex(_ValidationError, "Finance reconciliation"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_wrong_employee_adjustment_refuses_without_new_salary(self):
+        # Prove the same safeguard on Contract Adjustment references.
+        self.paid[(ASSIGNMENT, "A-1")] = ["2026-09-30"]
+        self.paid_rows[(ADJUSTMENT, "ADJ-1")] = [
+            {"payroll_date": "2026-09-30", "company": "SYN Teaching House",
+             "employee": "EMP-WRONG", "disabled": 0, "docstatus": 1}]
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        with self.assertRaisesRegex(_ValidationError, "Finance reconciliation"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_cancelled_foreign_company_salary_does_not_block_new_draft(self):
+        self.paid_rows[(ASSIGNMENT, "A-1")] = [
+            {"payroll_date": "2026-09-30", "company": "Other School",
+             "employee": "EMP-1", "disabled": 0, "docstatus": 2},
+            {"payroll_date": "2026-09-30", "company": "Other School",
+             "employee": "EMP-1", "disabled": 1, "docstatus": 1}]
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        result = self._calc()
+        self.assertEqual(len(self.posted), 2)
+        self.assertEqual(result["adjustments_posted"], 1)
 
     def test_component_types_fail_closed_before_creating_payroll_inputs(self):
         with self.assertRaisesRegex(_ValidationError, "requires an Earning"):
