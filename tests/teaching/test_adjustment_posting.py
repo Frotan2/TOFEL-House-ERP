@@ -134,6 +134,7 @@ def _install_command_harness(test):
     test.due_rows = []
     test.contracts = {}
     test.employee_companies = {"EMP-1": "SYN Teaching House"}
+    test.instructor_employees = {}
     previous = dict(sys.modules)
     test.addCleanup(lambda: (sys.modules.clear(), sys.modules.update(previous)))
     fake = test
@@ -156,6 +157,8 @@ def _install_command_harness(test):
             return fake.contracts.get(name_or_filters)
         if doctype == "Employee" and fieldname == "company":
             return fake.employee_companies.get(name_or_filters)
+        if doctype == "Instructor" and fieldname == "employee":
+            return fake.instructor_employees.get(name_or_filters)
         raise AssertionError(f"unexpected get_value {doctype}")
 
     def get_doc(doctype, name=None, for_update=False, **kwargs):
@@ -323,6 +326,7 @@ class OrphanCollectionTests(unittest.TestCase):
         _install_command_harness(self)
 
     def _contract(self, instructor, model="Skill-Based", employee="EMP-1"):
+        self.instructor_employees.setdefault(instructor, employee)
         return SimpleNamespace(instructor=instructor, employee=employee,
                                compensation_model=model)
 
@@ -361,6 +365,31 @@ class OrphanCollectionTests(unittest.TestCase):
                 "CON-LOCAL": {"instructor": "INS-LOCAL",
                               "adjustments": ["ADJ-LOCAL"]}
             })
+
+    def test_mismatched_orphan_instructor_employee_never_enters_payroll_report(self):
+        # The contract points to a local Employee but its native Instructor
+        # links to a foreign Employee. Both POST and SKIP consume this
+        # collection; neither may treat it as a same-company orphan.
+        self.due_rows = [{"name": "ADJ-VALID", "parent": "CON-VALID"},
+                         {"name": "ADJ-MISLINK", "parent": "CON-MISLINK"}]
+        self.contracts = {
+            "CON-VALID": self._contract("INS-VALID"),
+            "CON-MISLINK": self._contract("INS-MISLINK"),
+        }
+        self.instructor_employees["INS-MISLINK"] = "EMP-FOREIGN"
+        self.employee_companies["EMP-FOREIGN"] = "Other School"
+        self.assertEqual(self.posting.collect_orphan_contracts(
+            "2026-09-01", "2026-09-30", set(), "SYN Teaching House"), {
+                "CON-VALID": {"instructor": "INS-VALID",
+                              "adjustments": ["ADJ-VALID"]},
+            })
+
+    def test_missing_orphan_instructor_identity_is_excluded(self):
+        self.due_rows = [{"name": "ADJ-MISSING", "parent": "CON-MISSING"}]
+        self.contracts = {"CON-MISSING": self._contract("INS-MISSING")}
+        self.instructor_employees.pop("INS-MISSING")
+        self.assertEqual(self.posting.collect_orphan_contracts(
+            "2026-09-01", "2026-09-30", set(), "SYN Teaching House"), {})
 
     def test_orphan_posting_vocabulary(self):
         validate = self.posting.validate_orphan_posting
