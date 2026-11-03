@@ -1,0 +1,44 @@
+name: One-time exact-head retirement for PR 127
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/retire-pr127-once.yml
+permissions:
+  contents: write
+  pull-requests: read
+jobs:
+  retire-exact-merged-pr127-branch:
+    if: github.repository == 'Frotan2/TOFEL-House-ERP'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout complete main commit ancestry
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact merged branch before deleting
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: e1028abad0fd2b200cf5477958c408759a47e031
+          MERGE_SHA: db908a876d2739201e095eb8c4e4d5fa4c8fd584
+          BRANCH: fix/toefl-four-month-first-install-validation-20261103
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'Frotan2/TOFEL-House-ERP'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/127" --jq .merged)" = true
+          test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/127" --jq .head.sha)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor "$EXPECTED_HEAD" HEAD
+          git merge-base --is-ancestor "$MERGE_SHA" HEAD
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$BRANCH" --jq .object.sha)"
+          test "$actual" = "$EXPECTED_HEAD"
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH" --silent
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$BRANCH" >/dev/null 2>&1; then
+            echo 'ERROR: Branch still exists after requested deletion' >&2
+            exit 1
+          fi
+          echo 'Verified PR #127 exact branch retired without losing merged commits.'
