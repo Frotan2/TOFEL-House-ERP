@@ -5206,6 +5206,40 @@ def main():
                     'receipt_idempotent':True,'salary_slips_untouched':True,
                     'audit_chain_ref_fields':True}
         check('teaching-compensation-calculation',compensation_calculation)
+        def teaching_payroll_company_isolation():
+            # Real native Frappe / HRMS company-isolation regression. A
+            # different Company is a valid finance target but owns none of
+            # these teaching assignments or adjustments. A global assignment
+            # query used to post foreign Employee salary inputs here.
+            frappe.set_user('Administrator')
+            other_company='TOEFL House'
+            assert other_company != cfx['company']
+            assert frappe.db.exists('Company',other_company),other_company
+            before_inputs=frappe.db.count(ADS)
+            before_slips=frappe.db.count('Salary Slip')
+            foreign=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_calc_company_iso_001','2026-09-01','2026-09-30',
+                other_company,cfx['earning'],cfx['deduction']))
+            frappe.set_user('Administrator')
+            assert foreign['assignments']==0,foreign
+            assert not foreign['posted'],foreign
+            assert foreign['adjustments_posted']==0,foreign
+            assert not foreign['skipped_orphan_adjustments'],foreign
+            assert frappe.db.count(ADS)==before_inputs,('foreign payroll inserted Additional Salary')
+            assert frappe.db.count('Salary Slip')==before_slips,('foreign payroll created Salary Slip')
+            # The payroll recipient guard performs locking native reads
+            # rather than trusting the selected Company's request payload.
+            original=frappe.get_doc(CON,cauth['contracts']['one'])
+            assert denied(lambda:tcomp._assert_payroll_company(
+                original,cfx['ins']['One'],other_company)),(
+                    'foreign company accepted the original contract Employee')
+            frappe.db.commit()
+            return {'foreign_company_assignments':0,
+                    'foreign_company_adjustments':0,
+                    'foreign_company_additional_salary_writes':0,
+                    'foreign_company_salary_slip_writes':0,
+                    'native_recipient_company_lock_denied':True}
+        check('teaching-payroll-company-isolation',teaching_payroll_company_isolation)
         def compensation_concurrent_calc():
             # S2 (BUG-PAY-01): two different-key calculations over the same
             # period must not double-post. A fourth assignment (Temp on
