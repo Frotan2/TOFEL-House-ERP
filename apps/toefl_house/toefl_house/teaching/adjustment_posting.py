@@ -64,9 +64,18 @@ def collect_orphan_contracts(start, end, assigned_instructors, company):
     inside the calculation work() closure; the caller posts or reports
     per the governing terms.
     """
-    due = frappe.db.get_all(
-        ADJUSTMENT, filters={"effective_date": ["between", [start, end]]},
-        fields=["name", "parent"])
+    # Constrain due child rows in SQL before they reach Python.  Reading
+    # every company's adjustments then filtering parent records can become
+    # unbounded and needlessly expose unrelated payroll facts in memory.
+    due = frappe.db.sql(
+        "select a.name, a.parent from `tabTH Contract Adjustment` a "
+        "inner join `tabTH Instructor Contract` c on c.name = a.parent "
+        "inner join `tabInstructor` i on i.name = c.instructor "
+        "inner join `tabEmployee` e on e.name = c.employee "
+        "where a.effective_date between %s and %s "
+        "and e.company = %s and i.employee = c.employee "
+        "and c.compensation_model != 'Fixed Salary'",
+        (start, end, company), as_dict=True)
     orphans = {}
     for parent in sorted({row["parent"] for row in due}):
         info = frappe.db.get_value(
