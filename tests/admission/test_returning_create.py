@@ -60,6 +60,10 @@ class ReturningCreateTests(unittest.TestCase):
         self.student_missing = False
         self.linked_applicant = "APP-OLD"
         self.production_mode = False
+        self.placement_subject = SUBJECT
+        self.applicant_candidate_ref = None
+        self.student_candidate_ref = None
+        self.candidate_matches = [{"name": "APP-OLD"}]
         self.placement_branch = None
         self.applicant_branch = None
         self.open_decisions = []
@@ -76,7 +80,7 @@ class ReturningCreateTests(unittest.TestCase):
                                        expires_at="2026-12-31 00:00:00",
                                        course_code="TH-A1", internal_level="A1")
             if doctype == "TH Placement Attempt" and fieldname == "subject":
-                return SUBJECT
+                return fake.placement_subject
             if doctype == "TH Placement Attempt" and fieldname == "case_name":
                 return "CASE-1"
             if doctype == "TH Placement Case" and fieldname == "th_branch":
@@ -85,10 +89,16 @@ class ReturningCreateTests(unittest.TestCase):
                 return None if fake.student_missing else fake.student_email
             if doctype == "Student" and fieldname == "student_applicant":
                 return fake.linked_applicant
+            if doctype == "Student" and fieldname == "th_candidate_ref":
+                return fake.student_candidate_ref
             raise AssertionError(f"unexpected get_value {doctype} {fieldname}")
 
         def sql(query, values=(), **kwargs):
             if "tabStudent Applicant" in query:
+                if "th_candidate_ref=%s" in query:
+                    assert "for update" in query
+                    assert values == (fake.placement_subject,)
+                    return list(fake.candidate_matches)
                 return []
             if "tabTH Admission Decision" in query and "placement_decision" in query:
                 return []
@@ -108,6 +118,7 @@ class ReturningCreateTests(unittest.TestCase):
                 return SimpleNamespace(name="APP-OLD", program="TH-PROG",
                                        academic_year="2026-27",
                                        student_email_id=fake.applicant_email,
+                                       th_candidate_ref=fake.applicant_candidate_ref,
                                        application_status=fake.applicant_status,
                                        paid=0,
                                        get=lambda field: {"academic_term": "", "th_branch": fake.applicant_branch}.get(field))
@@ -208,6 +219,32 @@ class ReturningCreateTests(unittest.TestCase):
         self.linked_applicant = "APP-OTHER"
         with self.assertRaises(_PermissionError):
             self._create()
+
+    def _as_verified_production_candidate(self):
+        self.production_mode = True
+        self.placement_subject = "THV-" + "a" * 32
+        self.applicant_candidate_ref = self.placement_subject
+        self.student_candidate_ref = self.placement_subject
+        self.placement_branch = "Branch Alpha"
+        self.applicant_branch = "Branch Alpha"
+
+    def test_production_unique_candidate_applicant_can_open_admission(self):
+        self._as_verified_production_candidate()
+        self.assertEqual(self._create()["student_applicant"], "APP-OLD")
+
+    def test_production_duplicate_candidate_applicants_refused_before_admission(self):
+        self._as_verified_production_candidate()
+        self.candidate_matches = [{"name": "APP-OLD"}, {"name": "APP-DUP"}]
+        with self.assertRaisesRegex(_PermissionError, "ambiguous"):
+            self._create()
+
+    def test_production_missing_or_wrong_candidate_identity_refused(self):
+        self._as_verified_production_candidate()
+        for matches in ([], [{"name": "APP-OTHER"}]):
+            with self.subTest(matches=matches), self.assertRaisesRegex(
+                    _PermissionError, "ambiguous or mismatched"):
+                self.candidate_matches = matches
+                self._create()
 
     def test_production_requires_branched_placement_origin(self):
         self.production_mode = True
