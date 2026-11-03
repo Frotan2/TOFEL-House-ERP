@@ -870,10 +870,13 @@ class CommandContractTests(unittest.TestCase):
         module.frappe.get_doc = make_doc
         module.verify_submitted_cash_close = lambda *args: types.SimpleNamespace(
             total_expected=75.0, total_counted=75.0, total_variance=0.0)
-        result = module.reconcile_cashier_day(
+        result, receipt = module.reconcile_cashier_day(
             "cash_snapshot_boundary_test", "TOEFL House", "2026-10-24",
             [{"account": "Cash - TH", "counted_amount": "75.00"}])
+        # The lightweight _execute stub returns the command's (result,
+        # receipt) tuple, unlike its production envelope.
         self.assertEqual(result["cashier_day"], "TH-CASH-2026-00001")
+        self.assertEqual(receipt["target"], "TH-CASH-2026-00001")
         self.assertEqual(events, [
             ("ledger-read", "2026-10-24 18:00:00"),
             ("document-created", "2026-10-24 18:00:00"),
