@@ -625,7 +625,23 @@ def main():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
                         enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
                         roles=[{'role':r} for r in roles])).insert()
-                return {'site':site,'users':len(users),'apps':frappe.get_installed_apps()}
+                # The Reception desk refuses an unassigned Branch. Seed two
+                # explicit synthetic Branch permissions for the cross-branch
+                # reception supervisor; this tests the authorized multi-Branch
+                # case, NEVER an unscoped receptionist / security bypass.
+                # Branch A/B operators below remain individually restricted.
+                for branch_name in ('SYN-BR-A', 'SYN-BR-B'):
+                    if not frappe.db.exists('Branch',branch_name):
+                        frappe.get_doc(dict(doctype='Branch',branch=branch_name)).insert()
+                    frappe.get_doc(dict(
+                        doctype='User Permission',user=users['receptionist'],
+                        allow='Branch',for_value=branch_name)).insert()
+                assigned=set(frappe.get_all('User Permission',filters={
+                    'user':users['receptionist'],'allow':'Branch'},
+                    pluck='for_value'))
+                assert assigned=={'SYN-BR-A','SYN-BR-B'},assigned
+                return {'site':site,'users':len(users),'apps':frappe.get_installed_apps(),
+                        'reception_branches':sorted(assigned)}
             check('native-fixtures-'+site,setup);frappe.destroy()
         connect('placement-test.localhost')
         # Placement-fee invoices are stamped by ERPNext with the posting date of the day they are created
@@ -6162,10 +6178,16 @@ def main():
             for word in BANNED_PLUMBING:
                 assert word not in json.dumps(lmsg),('lookup payload',word)
             st=next((i for i in lmsg['students'] if i['id']==second['student']),None)
-            assert st and st['stage']=='Enrolled', \
-                ('D4: lookup must read the real class state (an open class exists for this level/year)',st)
-            assert not [i for i in lmsg['students'] if i['stage']=='Enrolled, no class'], \
-                'no learner here may read as unclassed while SYN-GRP-MAIN-1/2 are open'
+            # The original classes deliberately have no Branch. Once the
+            # receptionist is correctly Branch-scoped, they MUST NOT expose
+            # those unassigned students. A separate branch-isolation journey
+            # below verifies the positive Enrolled lifecycle on real branched
+            # students; expecting the legacy branchless student here was a
+            # privacy bug in the old acceptance fixture.
+            assert st is None,(
+                'Reception leaked a branchless legacy student into scoped lookup',st)
+            assert second['student'] not in people,(
+                'Reception leaked a branchless legacy student into dashboard',people)
             assert all(i.get('stage')!='Enrolled, no class' for i in people.values())
             # U1: affordances for the acting role, same payloads, gated
             aca_sch=desk_get('academic_scheduler','academic.work')
@@ -6358,6 +6380,20 @@ def main():
                 'note':'OD-RD-1 evidence only: ratification waits for the owner'}
             frappe.db.commit()
             return observed
+        # Negative control for the Reception audience: merely holding the
+        # Reception role must never bypass mandatory Branch assignment.
+        # This synthetic operator receives its Branch only in the later
+        # branch-isolation fixture and is intentionally unassigned here.
+        def reception_missing_branch_denied():
+            from toefl_house.desk import reception as reception_desk
+            frappe.set_user('Administrator')
+            assert not frappe.db.exists('User Permission',{
+                'user':users['branch_a_staff'],'allow':'Branch'})
+            return denied_because(
+                lambda:as_user('branch_a_staff',lambda:reception_desk.work()),
+                'needs an assigned Branch')
+        check('reception-unassigned-branch-fails-closed',
+              traced(reception_missing_branch_denied))
         check('role-desk-hosted-qualification',traced(desk_qualification))
         # Separate receipts preserve the projection checks above while proving
         # the browser-facing getpage HTTP wrapper for every native role Page.
@@ -6467,7 +6503,7 @@ def main():
             for b in (BR_A,BR_B):
                 if not frappe.db.exists('Branch',b):
                     frappe.get_doc(dict(doctype='Branch',branch=b)).insert()
-            grp,stu,app,dec,d0={}, {}, {}, {}, {}
+            grp,stu,app,dec,d0,enroll={}, {}, {}, {}, {}, {}
             # One full native journey per branch — every write through its
             # sanctioned command: released result -> branch-recorded
             # applicant -> approved, accepted, converted admission ->
@@ -6521,9 +6557,9 @@ def main():
             frappe.db.commit(); frappe.clear_cache()
             # 0) Funnel surface over HTTP — while the applicants are still
             #    'Applied' (conversion sets 'Admitted' and leaves the
-            #    funnel, which filters on 'Applied'): the scoped
+            #    funnel, which filters on 'Applied'): each one-Branch
             #    receptionist sees only their branch's people; the
-            #    unscoped control sees both.
+            #    explicitly *two*-Branch receptionist sees both.
             sessA=login('branch_a_staff');sessB=login('branch_b_staff');sessHQ=login('receptionist')
             # BRISO DIAG: capture the exact state so a failure is self-
             # explaining (rows, in-process reads as the scoped user, and the
@@ -6581,14 +6617,41 @@ def main():
                 conv=as_user('approver',lambda:adm.convert_applicant(
                     'br_conv_'+t+'_0000000001',d0[tail]['name'],4))
                 assert conv['native_student'],conv
-                as_user('enrollment_officer',lambda:enr.enroll_in_program(
-                    'br_enr_'+t+'_0000000001',d0[tail]['name']))
+                enroll[tail]=as_user('enrollment_officer',lambda:enr.enroll_in_program(
+                    'br_enr_'+t+'_0000000001',d0[tail]['name']))['program_enrollment']
                 g=as_user('teaching_scheduler',lambda:tea.create_student_group(
                     'br_grp_'+t+'_0000000001','SYN-BR-CLASS-'+tail,
                     cat['program'],year,'',1,sd,ed,'On-site',b))
                 assert g['name']=='SYN-BR-CLASS-'+tail and g['students']==1,g
                 grp[tail]=g['name']; stu[tail]=conv['native_student']; dec[tail]=d0[tail]['name']
             frappe.db.commit()
+            # The positive Reception contract must use a genuinely branched
+            # Student, not the legacy branchless intake excluded above.
+            # Verify actual HTTP lookup with the one-Branch staff identities
+            # and the explicitly two-Branch receptionist, without bypasses.
+            lookup_sessions={'A':sessA,'B':sessB,'AB':sessHQ}
+            for viewer,owns in (('A',('A',)),('B',('B',)),('AB',('A','B'))):
+                for student_branch in ('A','B'):
+                    student_name=frappe.db.get_value(
+                        'Student',stu[student_branch],'student_name')
+                    reply=lookup_sessions[viewer].get(
+                        base+'/api/method/toefl_house.desk.reception.lookup',
+                        params={'query':student_name},timeout=30)
+                    assert reply.status_code==200,(viewer,reply.status_code,reply.text[:300])
+                    message=reply.json()['message']
+                    matched={item['id']:item for item in message['students']}
+                    student_id=stu[student_branch]
+                    if student_branch in owns:
+                        assert student_id in matched,(viewer,student_branch,matched)
+                        assert matched[student_id]['stage'] in (
+                            'Class planned',
+                            'Class assigned, schedule pending',
+                            'Class assigned, sessions scheduled',
+                            'Class assigned, timetable needs review'),matched[student_id]
+                    else:
+                        assert student_id not in matched,(
+                            'Cross-Branch Reception lookup leaked student',
+                            viewer,student_branch,matched)
             # 1) Document gate on the real rows (controller hook semantics,
             #    including the roster join). Scoped staff see their own
             #    branch only; the unscoped control sees both.
@@ -6617,7 +6680,8 @@ def main():
             names=[r[0] for r in frappe.db.sql("select name from `tabTH Admission Decision` where "+qd,as_list=True)]
             assert dec['A'] in names and dec['B'] not in names,(names)
             return {'branches':2,'scoped_staff':2,'hq_controls':2,'surfaces_proved':3,
-                    'fixture_students':stu,'fixture_years':{'A':'SYN-AY-2031','B':'SYN-AY-2032'}}
+                    'fixture_students':stu,'fixture_enrollments':enroll,
+                    'fixture_years':{'A':'SYN-AY-2031','B':'SYN-AY-2032'}}
         branch_fixture=check('branch-isolation-multi-branch-operating-rule',traced(branch_isolation))
         # --- S6 obs-engineering-layer: the health surface, in process ---
         # The GM desk and owner cockpit project native scheduler facts. This
@@ -6799,11 +6863,35 @@ def main():
                     sections=payload.get('sections') or []
                     target=next((x for x in sections if x.get('id')==section_id),None)
                     assert target,(label,'business section not rendered',section_id)
-                    # Realistic synthetic native rows must be visible on the
-                    # operational Reception, Finance and Instructor desks,
-                    # not merely a successful login with empty placeholders.
-                    if label in ('receptionist','finance_manager','teacher_one'):
-                        assert target.get('items'),(label,section_id,'empty despite native fixture data')
+                    # A branch-scoped Reception funnel is legitimately
+                    # EMPTY after its own applicants have been admitted:
+                    # do not demand visibility of older branchless intake.
+                    # Prove real business data through the live scoped Student
+                    # lookup instead. Finance and Teacher queues still require
+                    # populated items for their own separate qualifications.
+                    reception_verified=[]
+                    if label=='receptionist':
+                        for tail,student_id in branch_fixture['fixture_students'].items():
+                            student_name=frappe.db.get_value(
+                                'Student',student_id,'student_name')
+                            lookup=session.get(
+                                base+'/api/method/toefl_house.desk.reception.lookup',
+                                params={'query':student_name},timeout=40)
+                            assert lookup.status_code==200,(
+                                'reception populated student lookup',tail,
+                                lookup.status_code,lookup.text[:250])
+                            data=lookup.json().get('message')
+                            students=(data or {}).get('students') or []
+                            selected=next((row for row in students
+                                           if row.get('id')==student_id),None)
+                            assert selected,(
+                                'authorized Branch student missing from Reception',
+                                tail,student_id,students)
+                            reception_verified.append(student_id)
+                        assert len(reception_verified)==2,reception_verified
+                    elif label in ('finance_manager','teacher_one'):
+                        assert target.get('items'),(
+                            label,section_id,'empty despite native fixture data')
                     stranger=session.get(base+'/api/method/'+foreign_api,
                         headers={'Accept':'application/json'},timeout=40,
                         allow_redirects=False)
@@ -6813,6 +6901,7 @@ def main():
                     report[label]={'own_page':page,'role_http':200,
                         'business_section':section_id,
                         'native_rows':len(target.get('items') or []),
+                        'authorized_branch_students_verified':len(reception_verified),
                         'cross_role_denied':True}
             frappe.set_user('Administrator')
             assert frappe.db.count('Fees',{'docstatus':1})>=1,'populated native Finance ledger missing'
@@ -7914,10 +8003,68 @@ def main():
             # Run after the existing native financial fixtures, preserving
             # their independently qualified cash-close/outstanding baselines.
             frappe.set_user('Administrator')
-            fee=frappe.db.get_value('Fees',{'company':fin['company'],'docstatus':1,
-                'outstanding_amount':('>',100)},'name',order_by='name asc')
-            assert fee,'A submitted synthetic tuition balance is required'
-            company=frappe.db.get_value('Fees',fee,'company')
+            # A scoped Reception collector may only receipt a tuition Fee
+            # whose Student has a resolved roster/intake Branch in that
+            # collector's own explicit permissions. The old fixture selected
+            # the alphabetically first Fee, often for a branchless legacy
+            # Student; its 403 was correct and cannot be bypassed.
+            from toefl_house.command_scope import (
+                actor_branches, _effective_student_branches)
+            allowed=actor_branches(users['receptionist'])
+            assert allowed=={'SYN-BR-A','SYN-BR-B'},allowed
+            candidates=frappe.get_all('Fees',filters={
+                'company':fin['company'],'docstatus':1,
+                'outstanding_amount':('>',100)},
+                fields=['name','student','company'],order_by='name asc',
+                limit_page_length=500)
+            valid=[]
+            for row in candidates:
+                if not row.get('student'):
+                    continue
+                branches=_effective_student_branches(row['student'])
+                if branches and None not in branches and branches<=allowed:
+                    valid.append(row)
+                    break
+            if not valid:
+                # Older tuition qualification intentionally bills a legacy,
+                # branchless enrollee. Do not give that Student a made-up
+                # branch or disable receipt scope. Issue a real native Fees
+                # document for the *branch-A* student from the already
+                # qualified Branch admission -> enrollment -> class journey.
+                # This runs only on the disposable synthetic qualification
+                # site, and requires actual Finance Officer authority.
+                branch_student=branch_fixture['fixture_students']['A']
+                enrollment=branch_fixture['fixture_enrollments']['A']
+                year=branch_fixture['fixture_years']['A']
+                assert _effective_student_branches(branch_student)=={'SYN-BR-A'}
+                source=frappe.get_doc('Fee Structure',fin['fee_structure'])
+                plan=frappe.get_doc(dict(
+                    doctype='Fee Structure',
+                    naming_series='EDU-FST-.YYYY.-',
+                    program=cat['program'],academic_year=year,
+                    company=fin['company'],
+                    receivable_account=source.receivable_account,
+                    income_account=source.income_account,
+                    cost_center=source.cost_center))
+                for component in source.components:
+                    plan.append('components',{
+                        'fees_category':component.fees_category,
+                        'amount':component.amount})
+                plan.insert()
+                assert float(plan.total_amount)>100,plan.name
+                billed=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
+                    'native_branch_reception_tuition_a_0001',
+                    enrollment,plan.name,tf_post,tf_due))
+                assert billed['student']==branch_student,billed
+                assert billed['outstanding_amount']>100,billed
+                frappe.db.commit()
+                valid=[{'name':billed['fees'],'student':branch_student,
+                        'company':fin['company']}]
+            assert valid,(
+                'No submitted tuition Fee belongs to a verified '
+                'Branch-scoped Reception student')
+            fee=valid[0]['name']
+            company=valid[0]['company']
             prefix='toefl_house.finance.collections.'
             actors={key:login(key) for key in ('course_owner','receptionist','book_seller','outsider')}
 
@@ -7925,7 +8072,9 @@ def main():
                 url=base+'/api/method/'+prefix+method
                 response=(actors[role].get(url,params=payload,timeout=60) if get else
                           actors[role].post(url,json=payload,timeout=60))
-                assert response.status_code==expected,(method,response.status_code,response.json().get('exc_type'))
+                assert response.status_code==expected,(
+                    method,response.status_code,response.json().get('exc_type'),
+                    response.json().get('exception','')[:350])
                 assert not response.json().get('_server_messages'),(method,'unexpected blocking message')
                 return response.json().get('message')
 

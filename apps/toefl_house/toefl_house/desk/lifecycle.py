@@ -76,7 +76,18 @@ def admission_stage(admission_status, accepted, has_native_student):
             "role": "Admission Approver",
             "command": "decide_admission",
         }
-    if admission_status in ("Approved", "Conditional"):
+    if admission_status == "Conditional":
+        # Conditions are a mandatory independent decision gate. Recording the
+        # applicant's offer acceptance does not satisfy the conditions, and
+        # the conversion command refuses Conditional even when accepted.
+        return {
+            "label": "Conditions awaiting verification",
+            "definition": "An independent approver must check and record evidence before Student conversion.",
+            "next": "Verify the conditions and record the supporting evidence.",
+            "role": "Admission Approver",
+            "command": "satisfy_conditions",
+        }
+    if admission_status == "Approved":
         if has_native_student:
             return {
                 "label": "Student created",
@@ -94,7 +105,7 @@ def admission_stage(admission_status, accepted, has_native_student):
                 "command": "convert_applicant",
             }
         return {
-            "label": "Admission decided" if admission_status == "Approved" else "Conditional admission",
+            "label": "Admission decided" if admission_status == "Approved" else "Conditions awaiting verification",
             "definition": f"The admission outcome is {admission_status}.",
             "next": "Record the offer acceptance.",
             "role": "Admission Officer",
@@ -168,7 +179,7 @@ def funnel_order():
         "Admission drafted",
         "Admission review",
         "Admission decided",
-        "Conditional admission",
+        "Conditions awaiting verification",
         "Offer accepted",
         "Student created",
         "Awaiting enrollment",

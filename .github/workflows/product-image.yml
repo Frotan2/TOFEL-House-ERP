@@ -1168,8 +1168,22 @@ jobs:
               doc.new_password = "staff-a-ci-123"
               doc.add_roles("Reception")
               doc.save(ignore_permissions=True)
+          # Product image / tailnet staff must meet the same production
+          # Reception Branch precondition. The CI-only Branch is explicit,
+          # not a privileged role or a bypass for missing assignment.
+          ci_branch = "SYN-TAILNET-RECEPTION"
+          if not frappe.db.exists("Branch", ci_branch):
+              frappe.get_doc({"doctype": "Branch", "branch": ci_branch}).insert()
+          if not frappe.db.exists("User Permission", {
+                  "user": user, "allow": "Branch", "for_value": ci_branch}):
+              frappe.get_doc({
+                  "doctype": "User Permission", "user": user,
+                  "allow": "Branch", "for_value": ci_branch}).insert()
+          assert frappe.db.get_value(
+              "User Permission", {"user": user, "allow": "Branch"},
+              "for_value") == ci_branch
           frappe.db.commit()
-          print("staff user ready")
+          print("staff user ready with explicit Branch scope")
           EOF
           ) && staff_rc=0 || staff_rc=$?
           if [ "$staff_rc" -ne 0 ]; then

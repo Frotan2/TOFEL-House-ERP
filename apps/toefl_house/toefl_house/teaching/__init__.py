@@ -870,6 +870,15 @@ def add_class_member(request_key, student_group, student, override=None):
             raise frappe.ValidationError(
                 f"Student {student_name} is already an active member of "
                 f"{group_name}")
+        # An unreserved free seat is not permission to jump ahead of
+        # existing Waiting learners. This direct roster entry point must
+        # route an existing queue through the auditable admit-from-waiting
+        # command; otherwise the first-offer priority rule is bypassed.
+        if class_capacity.waiting_count(group_name):
+            raise frappe.ValidationError(
+                f"Class {group_name} has pending waiting-list entries. "
+                "Use the authorized offer/admit-from-waiting workflow or "
+                "withdraw declined requests with recorded reasons")
         label = frappe.db.get_value(STUDENT, student_name, "student_name")
         seat = None
         if existing is None:
@@ -938,9 +947,19 @@ def move_class_member(request_key, student_group, student, to_group):
         if existing is not None and int(existing.active or 0):
             raise frappe.ValidationError(
                 f"Student {student_name} is already an active member of {target}")
+        # A policy-enabled direct move has no exemption from the target
+        # class queue or from seats already held for Offered learners.
+        # Guard BEFORE changing the source roster; a rejected move must
+        # leave the learner in the original class.
+        if class_capacity.waiting_count(target):
+            raise frappe.ValidationError(
+                f"Target class {target} has pending waiting-list entries. "
+                "Resolve the queue through the authorized offer/admission "
+                "workflow before a direct move")
         label = frappe.db.get_value(STUDENT, student_name, "student_name")
         if existing is None:
             _require_capacity(target, target_facts)
+            class_capacity.assert_seat_available(target, student_name)
         _set_membership(source, student_name, label, False)
         _set_membership(target, student_name, label, True)
         result = {"from_group": source, "to_group": target,

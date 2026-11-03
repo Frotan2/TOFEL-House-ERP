@@ -119,10 +119,18 @@ def _group_facts(group_name, for_update=False):
 def _require_open_class(group_name, facts):
     if int(facts.disabled or 0):
         raise frappe.ValidationError(f"Student group {group_name} is disabled")
-    if facts.th_class_status in CLASS_TERMINAL:
+    if facts.th_class_status not in ("Planned", "Active"):
         raise frappe.ValidationError(
             f"Student group {group_name} is {facts.th_class_status}; seats apply "
             "to Planned or Active classes only")
+    # A forgotten Active lifecycle flag cannot reopen a semester that has
+    # already ended. Prefer refusing an unreliable date over enrolling a
+    # student into an expired class.
+    end_date = str(facts.th_class_end_date or "")
+    if not end_date or end_date < _today():
+        raise frappe.ValidationError(
+            f"Student group {group_name} has no current class end date; "
+            "ask Academic Manager to review the period before seating")
 
 
 def _require_active_student(student):
@@ -170,9 +178,20 @@ def _roster_status(group_name, student):
 def _open_entries(group_name, statuses=OPEN_WAITING_STATUSES):
     rows = frappe.get_all(
         WAITING, filters={"student_group": group_name, "status": ("in", list(statuses))},
-        fields=["name", "student", "status", "offer_expires_on", "priority"],
-        limit_page_length=MAX_ENTRIES)
+        fields=["name", "student", "status", "offer_expires_on", "priority",
+                "requested_on"],
+        limit_page_length=MAX_ENTRIES + 1)
+    if len(rows) > MAX_ENTRIES:
+        raise frappe.ValidationError(
+            "Open waiting entries exceed the complete seat reservation read; "
+            "narrow the class or resolve the queue before changing seats")
     return rows
+
+
+def waiting_count(group_name):
+    """Exact count for direct roster admission; never use a clipped queue page."""
+    return int(frappe.db.count(
+        WAITING, {"student_group": group_name, "status": "Waiting"}))
 
 
 def reserved_offers(group_name, on_date=None, exclude_entry=None):
@@ -182,9 +201,19 @@ def reserved_offers(group_name, on_date=None, exclude_entry=None):
     holding is exactly the seat being granted, so it must not be counted as a
     competing reservation for its own admission.
     """
-    return len([row for row in _open_entries(group_name, ("Offered",))
-                if unexpired(row.get("offer_expires_on"), on_date)
-                and row.get("name") != exclude_entry])
+    # The roster and reservations are financial/operational seat facts,
+    # not a page of sample rows. A MAX_ENTRIES slice could count 200 of 201
+    # live offers and incorrectly promise an extra seat. Use the native
+    # indexed aggregate for an exact count, without paging or materializing
+    # names of waiting learners.
+    filters = {
+        "student_group": group_name,
+        "status": "Offered",
+        "offer_expires_on": (">=", str(on_date or _today())),
+    }
+    if exclude_entry:
+        filters["name"] = ("!=", exclude_entry)
+    return int(frappe.db.count(WAITING, filters))
 
 
 def seat_facts(group_name, for_update=False, on_date=None, exclude_entry=None):
@@ -358,14 +387,15 @@ def _waiting_row(entry, for_update=True):
     return row
 
 
+def _queue_order(row):
+    return (-int(row.get("priority") or 0),
+            str(row.get("requested_on") or ""),
+            str(row.get("name") or ""))
+
+
 def _queue_position(entry, row):
-    ahead = frappe.get_all(
-        WAITING, filters={"student_group": row["student_group"],
-                          "status": ("in", list(OPEN_WAITING_STATUSES))},
-        fields=["name", "priority", "requested_on"], limit_page_length=MAX_ENTRIES)
-    ordered = sorted(ahead, key=lambda item: (
-        -int(item.get("priority") or 0), str(item.get("requested_on") or ""),
-        str(item.get("name") or "")))
+    ahead = _open_entries(row["student_group"])
+    ordered = sorted(ahead, key=_queue_order)
     for index, item in enumerate(ordered, 1):
         if item.get("name") == entry:
             return index
@@ -391,11 +421,16 @@ def join_waiting_list(request_key, student_group, student, note=""):
         if _roster_status(group_name, student_name) == 1:
             raise frappe.ValidationError(
                 f"Student {student_name} is already an active member of {group_name}")
-        for row in _open_entries(group_name):
+        existing_open = _open_entries(group_name)
+        for row in existing_open:
             if row.get("student") == student_name:
                 raise frappe.ValidationError(
                     f"Student {student_name} already has an open waiting-list entry "
                     f"({row.get('name')})")
+        if len(existing_open) >= MAX_ENTRIES:
+            raise frappe.ValidationError(
+                "This class waiting list reached the complete read limit; "
+                "contact Teaching Scheduler before adding more entries")
         seats = seat_facts(group_name)
         if seats["available"] >= 1:
             raise frappe.ValidationError(
@@ -472,6 +507,13 @@ def offer_waiting_list_seat(request_key, entry, expires_on=""):
         facts = _group_facts(group_name, for_update=True)
         _require_open_class(group_name, facts)
         require_matching_enrollment(row["student"], facts, group_name)
+        waiting = sorted(_open_entries(group_name, ("Waiting",)),
+                         key=_queue_order)
+        if not waiting or waiting[0]["name"] != row["name"]:
+            raise frappe.ValidationError(
+                "Earlier waiting-list entries have priority. Offer the "
+                "first eligible waiting entry or withdraw a declined "
+                "entry with a recorded reason before proceeding")
         seats = seat_facts(group_name)
         if seats["available"] < 1:
             raise frappe.ValidationError(
@@ -479,6 +521,15 @@ def offer_waiting_list_seat(request_key, entry, expires_on=""):
                 f"({seats['rostered']}/{seats['capacity']} seats, "
                 f"{seats['reserved']} reserved)")
         expiry = _offer_expiry(terms, expires_on)
+        # A seat cannot be promised past the last day of its class. Clip
+        # the default policy-window offer to the actual class end date;
+        # reject an explicit request extending beyond the period.
+        class_end = str(facts.th_class_end_date or "")
+        if expiry > class_end:
+            if expires_on:
+                raise frappe.ValidationError(
+                    "Seat-offer expiry cannot extend beyond the class end date")
+            expiry = class_end
         doc = frappe.get_doc(WAITING, row["name"])
         doc.flags.ignore_permissions = True
         doc.status = "Offered"
@@ -534,6 +585,17 @@ def admit_from_waiting_list(request_key, entry, override=""):
         if previous == 1:
             raise frappe.ValidationError(
                 f"Student {student} is already an active member of {group_name}")
+        # Direct admission from Waiting otherwise bypasses the same priority
+        # rule enforced by offer_waiting_list_seat. An existing unexpired
+        # Offered row already earned its place when the seat was reserved.
+        if row["status"] == "Waiting":
+            waiting = sorted(_open_entries(group_name, ("Waiting",)),
+                             key=_queue_order)
+            if not waiting or waiting[0]["name"] != row["name"]:
+                raise frappe.ValidationError(
+                    "Earlier waiting-list entries have priority. Admit the "
+                    "first eligible waiting entry or withdraw a declined "
+                    "entry with a recorded reason before proceeding")
         seat = assert_seat_available(group_name, student, override,
                                      exclude_entry=row["name"])
         from toefl_house.teaching import _set_membership
@@ -654,6 +716,28 @@ def _require_availability_reader():
     return user
 
 
+def _availability_branch_scope():
+    """Constrain both availability and waiting-list reads at the server.
+
+    A Reception login always needs an explicit Branch User Permission. Other
+    permitted academic roles can be HQ-wide only when they have no Branch
+    restrictions. A supplied browser Branch or Student Group is never
+    authority to escape the actual viewer's allowed branches.
+    """
+    user = _require_availability_reader()
+    rows = frappe.get_all(
+        "User Permission", filters={"user": user, "allow": "Branch"},
+        fields=["for_value"], limit_page_length=101)
+    if len(rows) >= 101:
+        raise frappe.ValidationError(
+            "Branch permissions exceed the complete read; ask an administrator")
+    branches = sorted({row.get("for_value") for row in rows if row.get("for_value")})
+    if "Reception" in set(frappe.get_roles(user)) and not branches:
+        raise frappe.PermissionError(
+            "Reception seat and waiting-list reads require an explicitly assigned Branch")
+    return branches or None
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def class_availability(student_group="", program="", academic_year="",
                        branch=""):
@@ -665,8 +749,14 @@ def class_availability(student_group="", program="", academic_year="",
     waiting and when the current classes end, so the next cohort can be
     planned — without inventing a date or a seat.
     """
-    _require_availability_reader()
-    filters = {"disabled": 0}
+    branches = _availability_branch_scope()
+    if branch and branches is not None and branch not in branches:
+        raise frappe.PermissionError("The selected branch is not assigned to this login")
+    # A completed or cancelled class is not accepting learners, even if
+    # its raw native roster count is below max_strength. Do not advertise
+    # unusable seats at Reception.
+    filters = {"disabled": 0, "th_class_status": ("in", ["Planned", "Active"]),
+               "th_class_end_date": (">=", _today())}
     if student_group:
         filters["name"] = student_group
     else:
@@ -674,29 +764,42 @@ def class_availability(student_group="", program="", academic_year="",
             filters["program"] = program
         if academic_year:
             filters["academic_year"] = academic_year
-        if branch:
-            filters["th_branch"] = branch
+    if branches is not None:
+        filters["th_branch"] = branch if branch else ("in", branches)
+    elif branch:
+        filters["th_branch"] = branch
     rows = frappe.get_all(
         GROUP, filters=filters,
         fields=["name", "student_group_name", "program", "academic_year",
                 "academic_term", "max_strength", "th_class_status",
                 "th_delivery_mode", "th_branch", "th_class_start_date",
                 "th_class_end_date"],
-        order_by="student_group_name asc", limit_page_length=MAX_CLASSES)
+        order_by="student_group_name asc", limit_page_length=MAX_CLASSES + 1)
+    if len(rows) > MAX_CLASSES:
+        raise frappe.ValidationError(
+            "Too many classes for a complete seat report; narrow program, year or branch")
     names = [row["name"] for row in rows]
     waiting_counts = {}
+    waiting_priority_counts = {}
     if names:
-        for entry in frappe.get_all(
-                WAITING, filters={"student_group": ("in", names),
-                                  "status": ("in", list(OPEN_WAITING_STATUSES))},
-                fields=["student_group", "status"], limit_page_length=MAX_CLASSES * 4):
-            waiting_counts[entry["student_group"]] = waiting_counts.get(
-                entry["student_group"], 0) + 1
+        open_entries = frappe.get_all(
+            WAITING, filters={"student_group": ("in", names),
+                              "status": ("in", list(OPEN_WAITING_STATUSES))},
+            fields=["student_group", "status"], limit_page_length=MAX_CLASSES * 4 + 1)
+        if len(open_entries) > MAX_CLASSES * 4:
+            raise frappe.ValidationError(
+                "Waiting-list totals exceed the complete read; narrow the class filter")
+        for entry in open_entries:
+            group_key = entry["student_group"]
+            waiting_counts[group_key] = waiting_counts.get(group_key, 0) + 1
+            if entry.get("status") == "Waiting":
+                waiting_priority_counts[group_key] = waiting_priority_counts.get(group_key, 0) + 1
     classes = []
     intake = {}
     for row in rows:
         seats = seat_facts(row["name"])
         waiting = waiting_counts.get(row["name"], 0)
+        unoffered_waiting = waiting_priority_counts.get(row["name"], 0)
         item = {
             "student_group": row["name"],
             "name": row.get("student_group_name") or row["name"],
@@ -711,32 +814,59 @@ def class_availability(student_group="", program="", academic_year="",
             "capacity": seats["capacity"], "rostered": seats["rostered"],
             "reserved": seats["reserved"], "available": seats["available"],
             "waiting": waiting,
+            "waiting_to_offer": unoffered_waiting,
+            # Another class's free seats cannot automatically satisfy a
+            # waiting learner's existing class-specific queue.
+            "projected_unmet_demand": max(0, unoffered_waiting - seats["available"]),
+            # Queue members must be processed before a newly-arrived walk-in.
+            # A physical free seat is not an immediately usable walk-in seat
+            # while any prior Waiting entries remain in this class.
+            "walk_in_available": 0 if unoffered_waiting else seats["available"],
+            "queue_has_priority": unoffered_waiting > 0,
             "full": seats["available"] < 1,
         }
         classes.append(item)
         key = (item["program"], item["academic_year"])
         bucket = intake.setdefault(key, {
             "program": key[0], "academic_year": key[1], "seats_available": 0,
-            "waiting": 0, "classes": 0, "next_class_end": ""})
+            "waiting": 0, "waiting_to_offer": 0,
+            "projected_unmet_demand": 0,
+            "walk_in_seats_available": 0,
+            "classes": 0, "next_class_end": ""})
         bucket["seats_available"] += item["available"]
         bucket["waiting"] += waiting
+        bucket["waiting_to_offer"] += unoffered_waiting
+        bucket["projected_unmet_demand"] += item["projected_unmet_demand"]
+        bucket["walk_in_seats_available"] += item["walk_in_available"]
         bucket["classes"] += 1
         if item["class_end_date"] and (
                 not bucket["next_class_end"]
                 or item["class_end_date"] < bucket["next_class_end"]):
             bucket["next_class_end"] = item["class_end_date"]
-    for bucket in intake.values():
-        bucket["projected_unmet_demand"] = max(
-            0, bucket["waiting"] - bucket["seats_available"])
+    # The intake bucket is only a summary. Seat decisions and unmet queue
+    # counts are always evaluated per class, never offset by spare seats in
+    # a different timetable/cohort/branch.
     return {
         "as_of": _today(), "classes": classes,
         "intake": sorted(intake.values(),
                          key=lambda item: (item["program"], item["academic_year"])),
         "definitions": {
             "available": "capacity minus every roster row (native counting) "
-                         "minus unexpired seat offers",
+                         "minus unexpired seat offers; Waiting entries still "
+                         "have first claim, so this is not a walk-in promise",
+            "walk_in_available": "zero when the class has Waiting entries "
+                                 "awaiting the first authorized offer; "
+                                 "otherwise equals unreserved available seats",
             "reserved": "unexpired waiting-list offers holding a seat",
             "waiting": "open waiting-list entries (Waiting or Offered)",
+            "waiting_to_offer": "Waiting entries still awaiting an initial "
+                                "seat offer; excludes the already reserved Offered",
+            "projected_unmet_demand": "sum over each class of max(0, its "
+                                      "unoffered Waiting entries minus its "
+                                      "unreserved seats); spare seats in "
+                                      "other classes cannot erase this queue",
+            "walk_in_seats_available": "sum of each class's walk-in seats "
+                                       "after its own Waiting priority",
         },
     }
 
@@ -750,15 +880,40 @@ def waiting_list_board(student_group=""):
     rather than merely reading it. Offers past their expiry are surfaced as
     an explicit action instead of silently holding a seat.
     """
-    _require_availability_reader()
+    branches = _availability_branch_scope()
     filters = {"status": ("in", list(OPEN_WAITING_STATUSES))}
-    if student_group:
+    if branches is not None:
+        # Restrict the waiting queue BEFORE reading any student identifiers.
+        # For a direct class query, both name and branch must match; for the
+        # board, collect only classes the viewer is authorized to see.
+        group_filters = {
+            "th_branch": ("in", branches),
+            "disabled": 0,
+        }
+        if student_group:
+            group_filters["name"] = student_group
+        group_rows = frappe.get_all(
+            GROUP, filters=group_filters, fields=["name"],
+            order_by="name asc", limit_page_length=MAX_CLASSES + 1)
+        if len(group_rows) > MAX_CLASSES:
+            raise frappe.ValidationError(
+                "Class branch scope exceeds the complete board read; narrow the search")
+        permitted = sorted({row["name"] for row in group_rows})
+        if student_group and student_group not in permitted:
+            raise frappe.PermissionError("The selected class is outside assigned Branch scope")
+        if not permitted:
+            return {"as_of": _today(), "entries": [], "count": 0}
+        filters["student_group"] = ("in", permitted)
+    elif student_group:
         filters["student_group"] = student_group
     rows = frappe.get_all(
         WAITING, filters=filters,
         fields=["name", "student", "student_group", "status", "priority",
                 "requested_on", "offer_expires_on", "requested_by"],
-        order_by="requested_on asc", limit_page_length=MAX_ENTRIES)
+        order_by="requested_on asc", limit_page_length=MAX_ENTRIES + 1)
+    if len(rows) > MAX_ENTRIES:
+        raise frappe.ValidationError(
+            "The waiting-list board exceeds the complete read; choose one class")
     groups = {}
     for row in rows:
         groups.setdefault(row["student_group"], []).append(row)
@@ -768,21 +923,41 @@ def waiting_list_board(student_group=""):
             seats = seat_facts(group_name)
         except frappe.ValidationError:
             seats = {"capacity": 0, "rostered": 0, "reserved": 0, "available": 0}
-        ordered = sorted(entries, key=lambda item: (
-            -int(item.get("priority") or 0), str(item.get("requested_on") or ""),
-            str(item.get("name") or "")))
+        ordered = sorted(entries, key=_queue_order)
+        first_waiting = next(
+            (entry["name"] for entry in ordered if entry["status"] == "Waiting"), None)
+        class_facts = seats.get("facts") or {}
+        closed = (not class_facts
+                  or bool(int(class_facts.get("disabled") or 0))
+                  or seats.get("class_status") not in ("Planned", "Active")
+                  or not seats.get("class_end_date")
+                  or seats["class_end_date"] < _today())
         for index, entry in enumerate(ordered, 1):
             offered = entry["status"] == "Offered"
             live = offered and unexpired(entry.get("offer_expires_on"))
-            if offered and not live:
-                next_step = "The seat offer expired; offer a seat again or withdraw the entry."
-                action = "offer_waiting_list_seat"
+            if closed:
+                next_step = ("This class is not open for new seating in the "
+                             "current period. Refer to Academic Manager.")
+                action = ""
+            elif offered and not live:
+                # The offer command only accepts Waiting rows; trying it on
+                # an expired Offered row would always fail. Keep the old
+                # offer's audit trail, withdraw it with a reason, then let
+                # the scheduler review current seats and any new queue entry.
+                next_step = ("This offer expired. Withdraw the old entry with "
+                             "a reason, then check current seats before a new "
+                             "admission or waiting-list request.")
+                action = "leave_waiting_list"
             elif offered and live:
                 next_step = "The student holds a seat offer; admit or let it expire."
                 action = "admit_from_waiting_list"
-            elif seats["available"] >= 1:
-                next_step = "A seat is free; offer it to this entry."
+            elif seats["available"] >= 1 and entry["name"] == first_waiting:
+                next_step = "A seat is free; offer it to the first waiting entry."
                 action = "offer_waiting_list_seat"
+            elif entry["status"] == "Waiting" and entry["name"] != first_waiting:
+                next_step = ("Wait for earlier waiting entries to receive or "
+                             "decline their offers before selecting this student.")
+                action = ""
             else:
                 next_step = "No seat yet; the entry holds its place in the queue."
                 action = ""
@@ -794,7 +969,7 @@ def waiting_list_board(student_group=""):
                 "offer_expires_on": str(entry.get("offer_expires_on") or ""),
                 "seats_available": seats["available"],
                 "next": next_step,
-                "next_role": "Teaching Scheduler",
+                "next_role": "Academic Manager" if closed else "Teaching Scheduler",
                 "next_command": action,
             })
     return {"as_of": _today(), "entries": board,

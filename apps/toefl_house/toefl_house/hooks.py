@@ -11,6 +11,7 @@ required_apps = ["erpnext", "education", "foundation_security"]
 # request-local seam; Education's module-global accessor is never replaced.
 override_doctype_class = {
     "Student Attendance": "toefl_house.teaching.native_attendance.THStudentAttendance",
+    "Student": "toefl_house.admission.native_student.THEmailOptionalStudent",
 }
 extend_doctype_class = {
     "Item": ["toefl_house.academic.native_fee_item.FeeItemPermissionMixin"],
@@ -52,7 +53,8 @@ _DESK_PAGES = (
 )
 page_js.update({name: "public/js/th_role_desks.js" for name in _DESK_PAGES})
 fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception", "Instructor"]]]},
-            {"dt": "Custom Field", "filters": [["dt", "in", ["Sales Invoice", "Fee Structure", "Fees", "Student Group", "Student Applicant", "Course Schedule", "Payment Entry"]]]}]
+            {"dt": "Custom Field", "filters": [["dt", "in", ["Sales Invoice", "Fee Structure", "Fees", "Student Group", "Student Applicant", "Student", "Course Schedule", "Payment Entry"]]]},
+            {"dt": "Property Setter", "filters": [["doc_type", "=", "Student"], ["field_name", "=", "student_email_id"], ["property", "=", "reqd"]]}]
 has_permission = {
     name: "toefl_house.permissions.has_permission"
     for name in ("TH Placement Item Revision", "TH Placement Key Revision", "TH Placement Audit Event",
@@ -92,6 +94,7 @@ has_permission = {
                  "TH Class Transfer", "TH Class Waiting List",
                  "TH Capacity Approval", "TH Class Suspension")
 }
+has_permission["TH Reception Inquiry"] = "toefl_house.permissions.reception_inquiry_has_permission"
 has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Program Level"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Discount Rule"] = "toefl_house.permissions.configuration_has_permission"
@@ -153,6 +156,7 @@ permission_query_conditions = {
         ("TH Capacity Approval", "capacity_approval"),
         ("TH Class Suspension", "class_suspension"))
 }
+permission_query_conditions["TH Reception Inquiry"] = "toefl_house.permissions.query_reception_inquiry"
 # Governance configuration is queried through the non-synthetic checker.
 permission_query_conditions["TH Academic Program"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Program Level"] = "toefl_house.permissions.configuration_query"
@@ -207,6 +211,15 @@ override_whitelisted_methods = {
 # frappe (delete_doc check_permission_and_not_submitted); drafts cannot
 # exist outside commands because insert is denied on validate.
 doc_events = {
+    "Student Applicant": {
+        "validate": "toefl_house.admission.native_student.protect_applicant_identity",
+    },
+    "TH Reception Inquiry": {
+        "validate": "toefl_house.reception_intake.protect_inquiry",
+        "before_cancel": "toefl_house.reception_intake.protect_inquiry",
+        "before_update_after_submit": "toefl_house.reception_intake.protect_inquiry",
+        "on_trash": "toefl_house.reception_intake.protect_inquiry",
+    },
     # Office 365 identity uniqueness (2026-10-18): one signed subject, at most one User.
     "User": {
         "validate": "toefl_house.identity_links.validate_office365_links",

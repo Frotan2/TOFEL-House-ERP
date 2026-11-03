@@ -9,6 +9,8 @@
   "field_order": [
     "subject",
     "purpose",
+    "th_branch",
+    "reception_inquiry",
     "status",
     "synthetic"
   ],
@@ -17,7 +19,8 @@
       "fieldname": "subject",
       "label": "Subject",
       "fieldtype": "Data",
-      "reqd": 1
+      "reqd": 1,
+      "unique": 1
     },
     {
       "fieldname": "purpose",
@@ -38,6 +41,21 @@
       "fieldtype": "Check",
       "default": "1",
       "read_only": 1
+    },
+    {
+      "fieldname": "th_branch",
+      "label": "Placement branch",
+      "fieldtype": "Link",
+      "options": "Branch",
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "reception_inquiry",
+      "label": "Reception inquiry",
+      "fieldtype": "Link",
+      "options": "TH Reception Inquiry",
+      "in_list_view": 1,
+      "unique": 1
     }
   ],
   "permissions": [

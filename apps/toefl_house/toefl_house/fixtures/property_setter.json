@@ -1,0 +1,12 @@
+[
+  {
+    "doctype": "Property Setter",
+    "name": "Student-student_email_id-reqd",
+    "doc_type": "Student",
+    "doctype_or_field": "DocField",
+    "field_name": "student_email_id",
+    "property": "reqd",
+    "property_type": "Check",
+    "value": "0"
+  }
+]

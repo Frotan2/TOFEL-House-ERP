@@ -164,6 +164,19 @@ class RequestTests(TransferTestBase):
             self.request(key="transfer-request-0002")
         self.assertIn("no transfer can land there", str(ctx.exception))
 
+    def test_transfer_request_refuses_target_class_ending_before_effective_day(self):
+        self.site.get("Student Group", "GRP-B")["th_class_end_date"] = "2026-09-24"
+        before = len(self.site.all("TH Class Transfer"))
+        with self.assertRaises(ValidationError) as ctx:
+            self.request(key="target-ended-before-effective-0001")
+        self.assertIn("after the target class ends", str(ctx.exception))
+        self.assertEqual(len(self.site.all("TH Class Transfer")), before)
+        self.site.get("Student Group", "GRP-B")["th_class_end_date"] = None
+        with self.assertRaises(ValidationError) as ctx:
+            self.request(key="target-missing-end-0001")
+        self.assertIn("no verified end date", str(ctx.exception))
+        self.assertEqual(len(self.site.all("TH Class Transfer")), before)
+
     def test_the_transfer_window_is_bounded_from_the_target_start(self):
         self.site.get("Student Group", "GRP-B")["th_class_start_date"] = \
             "2026-07-01"
@@ -208,6 +221,42 @@ class RequestTests(TransferTestBase):
 
 
 class ApprovalTests(TransferTestBase):
+    def setUp(self):
+        super().setUp()
+        # Approval executes the roster *now*, not on a future claimed date.
+        # Base request tests still use the earlier 2026-09-22 clock.
+        self.site.today = "2026-09-25"
+
+    def test_future_dated_approval_cannot_change_a_current_reception_roster(self):
+        pending = self.request(day="2026-09-26", key="future-effective-request")["name"]
+        before = (self.ops.roster("GRP-A"), self.ops.roster("GRP-B"))
+        self.ops.login(APPROVER)
+        self.site.set_roles(APPROVER, ["Academic Manager"])
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.transfers.approve_class_transfer(
+                "early-execute-0001", pending)
+        self.assertIn("approve and execute it on the effective date", str(ctx.exception))
+        self.assertEqual((self.ops.roster("GRP-A"), self.ops.roster("GRP-B")), before)
+        self.assertEqual(self.site.get("TH Class Transfer", pending)["status"], "Requested")
+        self.site.today = "2026-09-26"
+        result = self.ops.transfers.approve_class_transfer(
+            "on-date-execute-0001", pending)
+        self.assertEqual(result["status"], "Executed")
+        self.assertEqual(self.ops.roster("GRP-B"), [("STU-1", 1)])
+
+    def test_missed_effective_date_never_backdates_roster(self):
+        pending = self.request(key="missed-effective-request")["name"]
+        before = (self.ops.roster("GRP-A"), self.ops.roster("GRP-B"))
+        self.ops.login(APPROVER)
+        self.site.set_roles(APPROVER, ["Academic Manager"])
+        self.site.today = "2026-09-26"
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.transfers.approve_class_transfer(
+                "late-execute-0001", pending)
+        self.assertIn("effective date has passed", str(ctx.exception))
+        self.assertEqual((self.ops.roster("GRP-A"), self.ops.roster("GRP-B")), before)
+        self.assertEqual(self.site.get("TH Class Transfer", pending)["status"], "Requested")
+
     def test_approval_requires_the_pinned_role_and_a_different_person(self):
         transfer = self.request()["name"]
         with self.assertRaises(PermissionError_) as ctx:
@@ -326,6 +375,39 @@ class ApprovalTests(TransferTestBase):
         self.assertEqual(self.site.get("TH Capacity Approval",
                                        override)["status"], "Used")
         self.assertEqual(self.ops.roster("GRP-B"), [("STU-2", 1), ("STU-1", 1)])
+
+    def test_approval_cannot_bypass_target_waiting_queue(self):
+        # Request could have been valid yesterday. A newly queued learner
+        # now has first claim on target seats: approval must re-check
+        # live waiting priority before changing either class or consuming
+        # any separately authorized capacity override.
+        transfer = self.request(key="transfer-request-queue-0001")["name"]
+        first = self.ops.seed_waiting("GRP-B", "STU-3", status="Waiting")
+        override = self.ops.seed_override("GRP-B", "STU-1")
+        self.ops.login(APPROVER)
+        self.site.set_roles(APPROVER, ["Academic Manager"])
+        before = (self.ops.roster("GRP-A"), self.ops.roster("GRP-B"))
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.transfers.approve_class_transfer(
+                "transfer-queue-approve-0001", transfer, override=override)
+        self.assertIn("pending waiting-list entries", str(ctx.exception))
+        self.assertEqual(self.site.get("TH Capacity Approval", override)["status"],
+                         "Approved", "a refused queue bypass must not burn an override")
+        self.assertEqual((self.ops.roster("GRP-A"), self.ops.roster("GRP-B")),
+                         before)
+        self.assertEqual(self.site.get("TH Class Transfer", transfer)["status"],
+                         "Requested")
+        self.assertEqual(self.site.get("TH Class Waiting List", first)["status"],
+                         "Waiting")
+        self.ops.capacity.leave_waiting_list(
+            "transfer-queue-withdraw-0001", first,
+            "Student withdrew original seating request")
+        accepted = self.ops.transfers.approve_class_transfer(
+            "transfer-queue-approve-0002", transfer)
+        self.assertEqual(accepted["status"], "Executed")
+        self.assertEqual(self.ops.roster("GRP-A"),
+                         [("STU-1", 0), ("STU-2", 1)])
+        self.assertEqual(self.ops.roster("GRP-B"), [("STU-1", 1)])
 
     def test_approval_re_proves_eligibility_under_lock(self):
         transfer = self.request()["name"]

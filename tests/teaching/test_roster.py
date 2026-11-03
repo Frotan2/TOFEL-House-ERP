@@ -194,6 +194,9 @@ class RosterCommandTests(unittest.TestCase):
         capacity.assert_direct_move_allowed = assert_direct_move_allowed
         capacity.assert_seat_available = assert_seat_available
         capacity.assert_remove_allowed = assert_remove_allowed
+        # This focused roster double has no waiting-list records. The real
+        # capacity module uses a native exact count, never a paged read.
+        capacity.waiting_count = lambda group: 0
         sys.modules["toefl_house.teaching.capacity"] = capacity
         scheduling = types.ModuleType("toefl_house.teaching.scheduling")
         scheduling.governing_terms = lambda: {}

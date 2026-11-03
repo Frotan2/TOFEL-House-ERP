@@ -244,6 +244,24 @@ def accept_reception_handover(request_key, payment_entries, counted_amount):
         transfer.insert(ignore_permissions=True)
         transfer.flags.ignore_permissions = True
         transfer.submit()
+        # A native submit() returning is not enough to transfer custody.
+        # Read the persisted Payment Entry inside this same database transaction
+        # and verify the approved company, both cash legs, currency, exact
+        # counted amount and Submitted status before marking any source paid in.
+        posted = frappe.db.get_value(PAYMENT, transfer.name, [
+            "docstatus", "payment_type", "company", "paid_from", "paid_to",
+            "paid_from_account_currency", "paid_to_account_currency",
+            "paid_amount", "received_amount"], as_dict=True)
+        if (not posted or int(posted.docstatus or 0) != 1
+                or posted.payment_type != "Internal Transfer"
+                or posted.company != first.company
+                or posted.paid_from != counter.name or posted.paid_to != main
+                or posted.paid_from_account_currency != currency
+                or posted.paid_to_account_currency != currency
+                or Decimal(str(posted.paid_amount)) != total
+                or Decimal(str(posted.received_amount)) != total):
+            raise frappe.ValidationError(
+                "The native cash transfer did not reconcile; no receipts may be marked handed over")
         for doc in docs:
             doc.th_collection_handover = transfer.name
             doc.flags.ignore_permissions = True
@@ -297,11 +315,29 @@ def get_collection_receipt(payment_entry):
     if (actor in {None, "Guest", "Administrator"} or not frappe.db.get_value("User", actor, "enabled")
             or not roles & {"Reception", "Finance Officer", "Finance Manager", "Course Owner", "Finance Auditor"}):
         raise frappe.PermissionError("A permitted staff account is required")
+    receipt_name = _text(payment_entry, "receipt")
     require_schema()
-    from toefl_house.command_scope import authorize_command_scope
-    authorize_command_scope("read_collection_receipt", {"payment_entry": payment_entry}, actor)
-    doc = frappe.get_doc(PAYMENT, _text(payment_entry, "receipt"))
-    if not doc.th_collection_fees or int(doc.docstatus) not in {1, 2}:
+    from toefl_house.command_scope import actor_branches, authorize_command_scope
+    # An ex-receptionist whose Branch User Permission was revoked must not
+    # retrieve historical student/cash details merely by keeping a known
+    # receipt number. The normal finance/auditor roles retain their own
+    # separately-scoped, independent read authority.
+    if ("Reception" in roles and
+            not roles & {"Finance Officer", "Finance Manager", "Course Owner", "Finance Auditor"}
+            and not actor_branches(actor)):
+        raise frappe.PermissionError(
+            "Reception receipt access requires a currently assigned Branch")
+    authorize_command_scope("read_collection_receipt", {"payment_entry": receipt_name}, actor)
+    doc = frappe.get_doc(PAYMENT, receipt_name)
+    # A guessed Payment Entry ID is not itself proof of a Reception receipt.
+    # Print only a genuinely issued/cancelled native student Receive entry
+    # carrying the guarded, original collector and matching tuition Fees.
+    if (doc.payment_type != "Receive" or doc.party_type != "Student"
+            or not doc.party or not doc.th_reception_collector
+            or not doc.th_collection_fees or int(doc.docstatus) not in {1, 2}
+            or len(doc.references or []) != 1
+            or doc.references[0].reference_doctype != "Fees"
+            or doc.references[0].reference_name != doc.th_collection_fees):
         raise frappe.PermissionError("This is not an issued Reception receipt")
     if not roles & {"Finance Officer", "Finance Manager", "Course Owner", "Finance Auditor"} and doc.th_reception_collector != actor:
         raise frappe.PermissionError("Reception can view only its own numbered receipts")

@@ -203,14 +203,18 @@ class PolicyMirrorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.policy.validate_group_name("Grade-9-A")
 
-    def test_recommend_course_production_uses_real_codes(self):
+    def test_recommend_course_production_refuses_unqualified_cutoffs(self):
+        # Valid production codes are not evidence that the mapping is
+        # academically calibrated. The fixture any_correct rule must not
+        # assign a real student to a level even when the codes look real.
         course_map = {"algorithm": "course-map-v1", "entries": [
             {"internal_level": "L2", "course_code": "ENG-201",
              "match": "any_correct"}]}
         score = {"presented": 4, "correct": 2, "incorrect": 1, "missing": 1}
-        result = self.policy.recommend_course(score, course_map, production=True)
-        self.assertEqual(result["course_code"], "ENG-201")
-        self.assertNotIn("Synthetic", result["rationale"])
+        with self.assertRaisesRegex(ValueError, "not qualified for real students"):
+            self.policy.recommend_course(score, course_map, production=True)
+        self.assertEqual(self.policy.validate_course_map(
+            course_map, production=True), course_map)
 
 
 class StampAndGuardWiringTests(unittest.TestCase):

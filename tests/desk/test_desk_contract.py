@@ -621,7 +621,8 @@ class LifecycleStageTests(unittest.TestCase):
             ("Draft", False, False, "Admission drafted", "Admission Reviewer"),
             ("Review", False, False, "Admission review", "Admission Approver"),
             ("Approved", False, False, "Admission decided", "Admission Officer"),
-            ("Conditional", False, False, "Conditional admission", "Admission Officer"),
+            ("Conditional", False, False, "Conditions awaiting verification", "Admission Approver"),
+            ("Conditional", True, False, "Conditions awaiting verification", "Admission Approver"),
             ("Approved", True, False, "Offer accepted", "Admission Approver"),
             ("Approved", True, True, "Student created", "Enrollment Officer"),
             ("Deferred", False, False, "Deferred", "Admission Officer"),
@@ -652,7 +653,7 @@ class LifecycleStageTests(unittest.TestCase):
     def test_every_stage_label_appears_in_the_funnel_order(self):
         produced = {"Placement session", "Marking", "Independent review",
                     "Awaiting release", "Admission drafted", "Admission review",
-                    "Admission decided", "Conditional admission", "Offer accepted",
+                    "Admission decided", "Conditions awaiting verification", "Offer accepted",
                     "Student created", "Awaiting enrollment", "Enrolled, no class",
                     "Enrolled", "Deferred"}
         for label in produced:
@@ -773,7 +774,7 @@ class ReceptionLookupTests(unittest.TestCase):
             reception.lookup("a")
         self.assertIn("two characters", str(ctx.exception))
 
-    def test_long_query_is_truncated(self):
+    def test_long_query_is_refused_without_changing_its_meaning(self):
         reception = _import_desk("reception", roles={"Reception"})
         calls = []
 
@@ -784,13 +785,13 @@ class ReceptionLookupTests(unittest.TestCase):
         original = reception.project_rows
         reception.project_rows = fake_project_rows
         try:
-            reception.lookup("x" * 300)
+            with self.assertRaises(reception.frappe.ValidationError) as ctx:
+                reception.lookup("x" * 300)
+            self.assertIn("at most 120 characters", str(ctx.exception))
         finally:
             reception.project_rows = original
-        self.assertTrue(calls, "a truncated query must still search")
-        for _desk, _doctype, filters in calls:
-            self.assertNotIn("x" * 121, str(filters),
-                             "the lookup searched with untruncated text")
+        self.assertEqual(calls, [],
+                         "silently truncating a precise lookup can return the wrong person")
 
 
 class DeskPlainLanguageTests(unittest.TestCase):
@@ -864,6 +865,8 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                    ["request_key", "name", "expected_version"]),
         "toefl_house.admission.decide_admission": ("admission/__init__.py",
                                                    ["request_key", "name", "expected_version", "outcome", "reason", "conditions"]),
+        "toefl_house.admission.satisfy_conditions": ("admission/__init__.py",
+            ["request_key", "name", "expected_version", "evidence"]),
         "toefl_house.admission.accept_offer": ("admission/__init__.py",
                                                ["request_key", "name", "expected_version"]),
         "toefl_house.admission.convert_applicant": ("admission/__init__.py",
@@ -873,7 +876,15 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                     "program", "academic_year", "academic_term"]),
         "toefl_house.admission.record_applicant": ("admission/__init__.py",
                                                    ["request_key", "placement_decision", "first_name", "program", "academic_year",
-                                                    "branch"]),
+                                                    "branch", "last_name", "email"]),
+        "toefl_house.reception_intake.create_walkin_inquiry": ("reception_intake.py",
+            ["request_key", "person_name", "phone", "program_interest", "branch", "notes",
+             "study_mode", "contact_country", "time_zone"]),
+        "toefl_house.reception_intake.update_walkin_inquiry": ("reception_intake.py",
+            ["request_key", "inquiry", "expected_version", "status", "notes",
+             "study_mode", "contact_country", "time_zone"]),
+        "toefl_house.reception_intake.correct_walkin_inquiry": ("reception_intake.py",
+            ["request_key", "inquiry", "expected_version", "person_name", "phone", "reason"]),
         "toefl_house.enrollment.enroll_in_program": ("enrollment/__init__.py",
                                                      ["request_key", "admission_decision"]),
         "toefl_house.api.release_decision": ("api.py",
@@ -1492,7 +1503,7 @@ class FinanceBillingGuidanceWorldTests(unittest.TestCase):
     unconfigured while the command would have billed them).
     """
 
-    def _payload(self):
+    def _payload(self, fees=None, enrollments=None):
         world = {
             "Program Enrollment": [
                 {"name": "ENR-DRAFT", "student": "STU-1", "student_name": "One",
@@ -1549,6 +1560,10 @@ class FinanceBillingGuidanceWorldTests(unittest.TestCase):
             ],
         }
 
+        if fees is not None:
+            world["Fees"] = fees
+        if enrollments is not None:
+            world["Program Enrollment"] = enrollments
         world_get_all = desk_world_get_all("billing world", world)
 
         module = _import_desk("finance", roles={"Finance Manager", "Finance Officer"})
@@ -1563,6 +1578,64 @@ class FinanceBillingGuidanceWorldTests(unittest.TestCase):
     def _item(self, payload, enrollment):
         return next(item for item in self._billing(payload)["items"]
                     if item["id"] == enrollment)
+
+    def test_draft_fee_is_visible_but_never_collectible(self):
+        payload = self._payload(fees=[
+            {"name": "EDU-DRAFT-001", "program_enrollment": "ENR-SUB", "docstatus": 0}
+        ])
+        item = self._item(payload, "ENR-SUB")
+        self.assertEqual(item["status"], "Draft fee needs review")
+        self.assertEqual(item["next_role"], "Finance Manager")
+        self.assertIn("NOT a collectible bill", item["next"])
+        self.assertIn("EDU-DRAFT-001", item["next"])
+        self.assertNotIn("action", item)
+        self.assertIn("draft is not a collectible", item["stage_definition"])
+        other = self._item(payload, "ENR-DRAFT")
+        self.assertEqual(other["status"], "Unbilled")
+        self.assertIn("no issued or draft tuition bill", other["stage_definition"])
+        self.assertIn("action", other)
+
+    def test_posted_fee_is_not_a_duplicate_unbilled_queue_entry(self):
+        payload = self._payload(fees=[
+            {"name": "EDU-POSTED", "program_enrollment": "ENR-SUB", "docstatus": 1}
+        ])
+        ids = {row["id"] for row in self._billing(payload)["items"]}
+        self.assertNotIn("ENR-SUB", ids)
+        self.assertIn("ENR-DRAFT", ids)
+
+    def test_draft_beside_posted_bill_is_a_review_exception(self):
+        payload = self._payload(fees=[
+            {"name": "EDU-POSTED", "program_enrollment": "ENR-SUB", "docstatus": 1},
+            {"name": "EDU-DRAFT", "program_enrollment": "ENR-SUB", "docstatus": 0},
+        ])
+        item = self._item(payload, "ENR-SUB")
+        self.assertEqual(item["status"], "Draft fee needs review")
+        self.assertIn("separate submitted tuition bill", item["next"])
+        self.assertNotIn("action", item)
+
+    def test_full_fees_page_never_offers_issue_action(self):
+        fees = [
+            {"name": f"EDU-DRAFT-{i:04}", "program_enrollment": "ENR-SUB",
+             "docstatus": 0} for i in range(400)
+        ]
+        billing = self._billing(self._payload(fees=fees))
+        self.assertEqual(billing["items"][0]["id"], "BILLING-REGISTER-REVIEW")
+        self.assertIn("tuition bill records exceed", billing["items"][0]["next"])
+        self.assertTrue(all("action" not in item for item in billing["items"]))
+        self.assertIn("incomplete", next(
+            item["stage_definition"] for item in billing["items"] if item["id"] == "ENR-DRAFT"))
+
+    def test_full_enrollment_page_is_explicit_incomplete_read(self):
+        enrollments = [
+            {"name": f"ENR-{i:04}", "student": f"STU-{i:04}",
+             "student_name": f"Learner {i}", "program": "SYN-P2",
+             "academic_year": "2026", "enrollment_date": "2026-09-01",
+             "docstatus": 1} for i in range(400)
+        ]
+        billing = self._billing(self._payload(fees=[], enrollments=enrollments))
+        self.assertEqual(billing["items"][0]["id"], "BILLING-REGISTER-REVIEW")
+        self.assertIn("Enrollment records exceed", billing["items"][0]["next"])
+        self.assertTrue(all("action" not in item for item in billing["items"]))
 
     def test_submitted_plan_is_billed_not_blamed(self):
         payload = self._payload()
@@ -1779,6 +1852,86 @@ class DeskBranchScopeTests(unittest.TestCase):
     No new branch policy is asserted here — only that the declared behavior
     (scope applies where the schema supports it) executes on every affected
     projection call."""
+
+    def test_reception_transfer_requires_both_classes_in_permitted_branch(self):
+        module = _import_desk("reception", roles={"Reception"})
+        world = {
+            "Student Group": [
+                {"name": "GROUP-A", "th_branch": "BR-A"},
+                {"name": "GROUP-B", "th_branch": "BR-A"},
+                {"name": "GROUP-X", "th_branch": "BR-B"},
+            ],
+            "TH Class Transfer": [
+                {"name": "TR-VALID", "student": "STU-1",
+                 "from_group": "GROUP-A", "to_group": "GROUP-B",
+                 "status": "Requested", "transfer_kind": "Class",
+                 "effective_date": "2026-11-11",
+                 "reason": "PRIVATE family note"},
+                {"name": "TR-OUT", "student": "STU-1",
+                 "from_group": "GROUP-A", "to_group": "GROUP-X",
+                 "status": "Requested", "transfer_kind": "Branch",
+                 "effective_date": "2026-11-11"},
+                {"name": "TR-IN", "student": "STU-1",
+                 "from_group": "GROUP-X", "to_group": "GROUP-A",
+                 "status": "Requested", "transfer_kind": "Branch",
+                 "effective_date": "2026-11-11"},
+            ],
+        }
+        fake = desk_world_get_all("reception transfer branch", world)
+        def read(doctype, filters=None, fields=None, pluck=None, **kwargs):
+            if doctype == "User Permission" and pluck == "for_value":
+                return ["BR-A"] if (filters or {}).get("allow") == "Branch" else []
+            rows = fake(doctype, filters=filters, fields=fields, **kwargs)
+            return [{field: row.get(field) for field in fields} for row in rows] if fields else rows
+        module.frappe.get_all = read
+        module.frappe.db.get_all = read
+        fields = ["name", "student", "from_group", "to_group",
+                  "transfer_kind", "status", "effective_date"]
+        rows = module.project_rows("reception", "TH Class Transfer", fields,
+                                   filters={"student": "STU-1", "status": "Requested"},
+                                   limit=30)
+        self.assertEqual([row["name"] for row in rows], ["TR-VALID"])
+        self.assertNotIn("reason", rows[0])
+        with self.assertRaises(module.frappe.ValidationError):
+            module.project_rows("reception", "TH Class Transfer", fields + ["reason"])
+
+    def test_reception_suspension_read_is_branch_scoped_without_private_reason(self):
+        module = _import_desk("reception", roles={"Reception"})
+        world = {
+            "Student Group": [
+                {"name": "CLASS-A", "th_branch": "BR-A"},
+                {"name": "CLASS-B", "th_branch": "BR-B"},
+            ],
+            "TH Class Suspension": [
+                {"name": "SUSP-A", "scope": "Class", "student_group": "CLASS-A",
+                 "student": None, "status": "Active",
+                 "from_date": "2026-11-10", "until_date": "2026-11-12",
+                 "reason": "PRIVATE REASON A"},
+                {"name": "SUSP-B", "scope": "Student", "student_group": "CLASS-B",
+                 "student": "FOREIGN-STUDENT", "status": "Active",
+                 "from_date": "2026-11-10", "until_date": "2026-11-12",
+                 "reason": "PRIVATE REASON B"},
+            ],
+        }
+        fake = desk_world_get_all("reception suspension branch", world)
+        def read(doctype, filters=None, fields=None, pluck=None, **kwargs):
+            if doctype == "User Permission" and pluck == "for_value":
+                return ["BR-A"] if (filters or {}).get("allow") == "Branch" else []
+            rows = fake(doctype, filters=filters, fields=fields, **kwargs)
+            # The reusable fixture matcher returns the full source dict; real
+            # Frappe get_all sends ONLY requested columns across the network.
+            return [{field: row.get(field) for field in fields} for row in rows] if fields else rows
+        module.frappe.get_all = read
+        fields = ["name", "scope", "student_group", "status",
+                  "from_date", "until_date"]
+        rows = module.project_rows("reception", "TH Class Suspension", fields,
+                                   filters={"status": "Active"}, limit=30)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], "SUSP-A")
+        self.assertNotIn("reason", rows[0])
+        with self.assertRaises(module.frappe.ValidationError):
+            module.project_rows("reception", "TH Class Suspension",
+                                fields + ["reason"], filters={"status": "Active"})
 
     def test_scope_filters_apply_only_where_the_schema_supports_them(self):
         seen = []
@@ -2567,6 +2720,63 @@ class AdmissionMultiBranchProjectionTests(unittest.TestCase):
         desk.frappe.get_all = desk_world_get_all("intake isolation", world)
         self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["A"]), ["PE-A"])
         self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["B"]), ["PE-MOVED"])
+
+    def test_student_without_roster_is_visible_at_its_verified_admission_branch(self):
+        world = {
+            "Student Group": [
+                {"name": "GA", "th_branch": "A"},
+                {"name": "GB", "th_branch": "B"},
+            ],
+            "Student Group Student": [
+                {"name": "R-A", "parent": "GA", "student": "ST-A", "active": 1},
+                {"name": "R-B", "parent": "GB", "student": "ST-B", "active": 1},
+                {"name": "R-MIX-A", "parent": "GA", "student": "ST-MIX", "active": 1},
+                {"name": "R-MIX-B", "parent": "GB", "student": "ST-MIX", "active": 1},
+            ],
+            "Student Applicant": [
+                {"name": "AP-A", "th_branch": "A"},
+                {"name": "AP-B", "th_branch": "B"},
+            ],
+            "TH Admission Decision": [
+                {"name": "D-NEW", "student_applicant": "AP-A",
+                 "native_student": "ST-NEW", "existing_student": None},
+                {"name": "D-FOREIGN", "student_applicant": "AP-A",
+                 "native_student": "ST-B", "existing_student": None},
+                {"name": "D-MISMATCH", "student_applicant": "AP-A",
+                 "native_student": "ST-BADLINK", "existing_student": None},
+            ],
+            "Student": [
+                {"name": "ST-NEW", "student_applicant": "AP-A"},
+                {"name": "ST-A", "student_applicant": "AP-A"},
+                {"name": "ST-B", "student_applicant": "AP-B"},
+                {"name": "ST-MIX", "student_applicant": "AP-A"},
+                {"name": "ST-BADLINK", "student_applicant": "AP-B"},
+            ],
+        }
+        desk = _import_desk("__init__", roles={"Reception"})
+        desk.frappe.get_all = desk_world_get_all("student intake branch", world)
+        self.assertEqual(desk._branch_allowed_names("Student", ["A"]),
+                         ["ST-A", "ST-NEW"])
+        self.assertEqual(desk._branch_allowed_names("Student", ["B"]), ["ST-B"])
+
+    def test_student_scope_refuses_truncated_memberships(self):
+        world = {
+            "Student Group": [{"name": "GA", "th_branch": "A"}],
+            "Student Group Student": [
+                {"name": "R1", "parent": "GA", "student": "ST-1", "active": 1},
+                {"name": "R2", "parent": "GA", "student": "ST-2", "active": 1},
+            ],
+            "Student Applicant": [], "TH Admission Decision": [],
+            "Student": [
+                {"name": "ST-1", "student_applicant": None},
+                {"name": "ST-2", "student_applicant": None},
+            ],
+        }
+        desk = _import_desk("__init__", roles={"Reception"})
+        desk._CHAIN_LIMIT = 2
+        desk.frappe.get_all = desk_world_get_all("truncated student memberships", world)
+        with self.assertRaisesRegex(desk.frappe.ValidationError, "safe read limit"):
+            desk._branch_allowed_names("Student", ["A"])
 
     def test_truncated_first_enrollment_candidates_do_not_expand_scope(self):
         world = {

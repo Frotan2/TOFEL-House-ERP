@@ -642,6 +642,48 @@
 	margin: var(--th-space-2) 0 0;
 }
 
+
+/* Dedicated first-contact workspace with a restrained TOEFL House red accent. */
+.th-reception-intake {
+	background: var(--th-surface);
+	border: 1px solid var(--th-line);
+	border-top: 3px solid #b42332;
+	border-radius: var(--th-radius-lg);
+	box-shadow: var(--th-shadow-1);
+	padding: var(--th-space-5);
+}
+.th-reception-intake .th-section-title {
+	font-size: var(--th-fs-display);
+	margin-bottom: var(--th-space-2);
+}
+.th-reception-intake .th-section-body { display: grid; gap: var(--th-space-3); }
+.th-reception-intake .th-page-purpose { font-size: var(--th-fs-body); max-width: 72ch; }
+.th-reception-quick-actions { display: flex; flex-wrap: wrap; gap: var(--th-space-2); }
+.th-reception-intake .th-register-visitor {
+	min-height: 2.5rem;
+	padding-inline: var(--th-space-5);
+	background-color: #b42332;
+	border-color: #b42332;
+	color: #fff;
+	font-weight: var(--th-fw-semibold);
+}
+.th-reception-intake .th-register-visitor:hover,
+.th-reception-intake .th-register-visitor:focus {
+	background-color: #91202b;
+	border-color: #91202b;
+	color: #fff;
+}
+.th-reception-intake .th-register-visitor:focus-visible {
+	outline: 3px solid #e5a1aa;
+	outline-offset: 2px;
+}
+.th-reception-intake .th-search-bar { max-inline-size: 42rem; }
+.th-reception-intake .th-search-input { min-height: 2.5rem; }
+@media (max-width: 480px) {
+	.th-reception-intake { padding: var(--th-space-3); }
+	.th-reception-intake .th-register-visitor { width: 100%; }
+}
+
 /* Fact tiles: value first, label, then the definition that makes the number
  * meaningful. A number without its definition is not evidence. */
 .th-fact-grid {
@@ -1765,4 +1807,34 @@
 	.th-status {
 		border-width: 2px;
 	}
+}
+
+/* Placement invigilation: staff workstation, not a candidate kiosk. */
+.th-placement-console {
+	background: #fff;
+	border: 1px solid #e7cbd0;
+	border-top: 4px solid #bb2440;
+	border-radius: 12px;
+	padding: clamp(16px, 2vw, 28px);
+	color: #202127;
+	direction: ltr;
+	text-align: left;
+}
+.th-placement-toolbar,
+.th-placement-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.th-placement-label { display: grid; gap: 6px; font-weight: 600; min-width: 250px; }
+.th-placement-notice { min-height: 2.2rem; padding-top: 12px; }
+.th-placement-question { margin: 16px 0; padding: 18px; border: 1px solid #ddd; border-radius: 10px; }
+.th-placement-question legend { font-weight: 700; font-size: 1rem; }
+.th-placement-prompt { font-size: 1.2rem; line-height: 1.6; white-space: pre-wrap; }
+.th-placement-option {
+	display: flex; align-items: flex-start; gap: 10px; padding: 12px; margin: 8px 0;
+	border: 1px solid #ddd; border-radius: 8px; cursor: pointer; font-size: 1rem;
+}
+.th-placement-option:focus-within { outline: 2px solid #bb2440; outline-offset: 2px; }
+.th-placement-progress { font-weight: 700; }
+.th-placement-deadline { color: #6c4850; }
+@media (max-width: 620px) {
+	.th-placement-toolbar .btn, .th-placement-controls .btn { width: 100%; }
+	.th-placement-label { min-width: 100%; }
 }

@@ -123,6 +123,20 @@ assert.deepStrictEqual(Object.keys(client.frappe.pages), [], "shared script must
 const uiSource = fs.readFileSync(SCRIPT, "utf8");
 assert(uiSource.includes("This command has no supported form yet. Nothing was submitted."),
 	"unsupported commands must show actionable, fail-closed feedback");
+const receptionFields = client.toefl_house.role_desks.actionFields;
+const registrationFields = receptionFields["toefl_house.reception_intake.create_walkin_inquiry"];
+const followupFields = receptionFields["toefl_house.reception_intake.update_walkin_inquiry"];
+for (const name of ["study_mode", "contact_country", "time_zone"]) {
+	assert(registrationFields.some(field => field.fieldname === name),
+		"Reception registration must capture international learner " + name);
+	assert(followupFields.some(field => field.fieldname === name),
+		"Reception must amend international learner " + name + " with audit");
+}
+assert(!registrationFields.some(field => field.fieldname === "email"),
+	"Overseas online students still do not need email or a fabricated login");
+assert(registrationFields.some(field => field.fieldname === "phone" && !field.reqd),
+	"International contact phone remains optional");
+
 const teacherFormFields = client.toefl_house.role_desks.actionFields["toefl_house.teaching.record_instructor_attendance"];
 assert(teacherFormFields && teacherFormFields.some(field => field.fieldname === "course_schedule"),
     "Instructor form must target a native scheduled session");
@@ -210,6 +224,7 @@ const endpointFiles = {
 	"toefl_house.operations.owner_configuration": ["operations/owner_configuration.py"],
 	"toefl_house.setup_presets.native_grading_scale": ["setup_presets/native_grading_scale.py"],
 	"toefl_house.admission": ["admission/__init__.py"],
+	"toefl_house.reception_intake": ["reception_intake.py"],
 	"toefl_house.enrollment": ["enrollment/__init__.py"],
 	"toefl_house.api": ["api.py"],
 	"toefl_house.finance.corrections": ["finance/corrections.py"],
@@ -487,11 +502,15 @@ function payloadWith(queueItems, factValue) {
 	};
 }
 
-function runScenario({ workPayload, failFirstWork = false, failLookup = false, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null, readableSources = [] }) {
+function runScenario({ workPayload, failFirstWork = false, failLookup = false, deferLookup = false, deferRegister = false, deferWorkAfterFirst = false, lookupReply = null, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null, readableSources = [] }) {
 	const calls = [];
 	const dialogs = [];
+	const pendingLookups = [];
+	const pendingWorks = [];
+	const pendingRegistrations = [];
 	const routed = [];
 	const printed = [];
+	const confirmations = [];
 	const body = $("body").appendTo({ children: [] });
 	let workCalls = 0;
 	const frappe = {
@@ -501,6 +520,7 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, c
 		set_route(route) { routed.push(route); },
 		model: { can_read(doctype) { return readableSources.includes(doctype); } },
 		msgprint(opts) { printed.push(opts); },
+		confirm(message, callback) { confirmations.push({ message, callback }); },
 		ui: {
 			make_app_page() { return { body, main: { addClass() {} } }; },
 			Dialog: class {
@@ -538,12 +558,26 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, c
 			if (opts.method === "toefl_house.desk.reception.work") {
 				workCalls += 1;
 				if (failFirstWork && workCalls === 1) { opts.error(); return; }
+				if (deferWorkAfterFirst && workCalls > 1) {
+					pendingWorks.push(opts);
+					return;
+				}
 				opts.callback({ message: workPayload });
 				return;
 			}
 			if (opts.method === "toefl_house.desk.reception.lookup") {
+				if (deferLookup) { pendingLookups.push(opts); return; }
 				if (failLookup) { opts.error(); return; }
-				opts.callback({ message: { items: [hostileItem], students: [] } });
+				opts.callback({ message: lookupReply || { items: [hostileItem], students: [] } });
+				return;
+			}
+			if (opts.method === "toefl_house.reception_intake.create_walkin_inquiry") {
+				if (deferRegister) { pendingRegistrations.push(opts); return; }
+				opts.callback({ message: { name: "INQ-TEST", status: "New" } });
+				return;
+			}
+			if (opts.method === "toefl_house.reception_intake.update_walkin_inquiry") {
+				opts.callback({ message: { name: "INQ-TEST", status: opts.args.status } });
 				return;
 			}
 			if (opts.method === "toefl_house.admission.review_admission") {
@@ -562,7 +596,7 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, c
 	frappe.provide = (dotted) => { let target = sandbox; for (const part of dotted.split(".")) target = target[part] ||= {}; };
 	vm.runInNewContext(fs.readFileSync(SCRIPT, "utf8"), sandbox, { filename: SCRIPT });
 	frappe.pages["th-reception-desk"].on_page_load(body);
-	return { calls, dialogs, routed, printed, body, frappe, get workCalls() { return workCalls; } };
+	return { calls, dialogs, pendingLookups, pendingWorks, pendingRegistrations, confirmations, routed, printed, body, frappe, get workCalls() { return workCalls; } };
 }
 
 const hostileItem = {
@@ -658,6 +692,37 @@ const hostileItem = {
 }
 
 {
+	// A contact is not an Applicant/Student. Keep their phone visible
+	// only in the authorized reception search, under a separate heading.
+	const scenario = runScenario({
+		workPayload: payloadWith([], "0"),
+		lookupReply: {
+			items: [], students: [],
+			inquiries: [{
+				id: "INQ-001", person: "Walk-in", detail: "+93700000001 · General English",
+				status: "New", stage: "Pre-registration", next: "Contact the visitor",
+			}],
+		},
+	});
+	const input = findAll(scenario.body, "th-search-input")[0];
+	input.attrs.value = "0794";
+	const search = [];
+	(function walk(node) {
+		for (const child of node.children) {
+			if (child.tag === "button" && serialize(child).includes("Search")) search.push(child);
+			walk(child);
+		}
+	})(scenario.body);
+	search[0].click();
+	const words = serialize(findAll(scenario.body, "th-search-results")[0]);
+	assert(words.includes("Reception visits (check current stage)"),
+		"reception history must not imply that linked learners are still unenrolled");
+	assert(words.includes("+93700000001"));
+	assert(!words.includes("In the admission funnel"),
+		"reception inquiries must never be represented as academic applicants");
+}
+
+{
 	// Error path: a failed desk load renders an explicit error with retry,
 	// and the retry recovers into the normal sections.
 	const scenario = runScenario({ workPayload: payloadWith([], "3"), failFirstWork: true });
@@ -681,11 +746,239 @@ const hostileItem = {
 }
 
 {
+	// Two successful Reception commands may refresh concurrently. The
+	// earliest GET can finish after the latest GET, but must never replace
+	// the newest queue or leave an orphaned loading placeholder behind.
+	const scenario = runScenario({
+		workPayload: payloadWith([hostileItem], "1"), deferWorkAfterFirst: true,
+	});
+	const firstAction = findAll(scenario.body, "th-queue-action")[0];
+	for (let i = 0; i < 2; i += 1) {
+		firstAction.click();
+		const dialog = scenario.dialogs[scenario.dialogs.length - 1];
+		dialog.submit({ request_key: dialog.opts.fields[0].default,
+			name: "ADM-0001", expected_version: 2 });
+	}
+	assert.strictEqual(scenario.pendingWorks.length, 2,
+		"two completed writes may race to refresh the Reception desk");
+	assert.strictEqual(findAll(scenario.body, "th-desk-pending-load").length, 1,
+		"only the latest refresh may own a loading placeholder");
+	const newer = payloadWith([{ ...hostileItem, person: "Latest queue snapshot" }], "1");
+	const older = payloadWith([{ ...hostileItem, person: "Stale queue snapshot" }], "1");
+	scenario.pendingWorks[1].callback({ message: newer });
+	scenario.pendingWorks[0].callback({ message: older });
+	let html = serialize(scenario.body);
+	assert(html.includes("Latest queue snapshot"), "latest completed desk GET renders");
+	assert(!html.includes("Stale queue snapshot"), "older GET cannot roll back current desk");
+	assert.strictEqual(findAll(scenario.body, "th-desk-pending-load").length, 0);
+	// Equally, an old network failure must not clear the Register button or
+	// append a stale error panel after the current GET has succeeded.
+	scenario.pendingWorks[0].error();
+	html = serialize(scenario.body);
+	assert(html.includes("Latest queue snapshot"));
+	assert(!html.includes("could not be loaded"));
+}
+
+{
 	// Empty desk: every section explains itself instead of showing nothing.
 	const scenario = runScenario({ workPayload: payloadWith([], "0") });
 	const rendered = serialize(scenario.body);
 	assert(rendered.includes("No open applicants"), "queue empty states render");
 	assert(rendered.includes("No released result is waiting"), "handover empty state renders");
+}
+
+{
+	// Staff must be able to begin work even on the first day when the
+	// reception queue is empty. The action is supplied by the server,
+	// not exposed via a guessed browser permission.
+	const payload = payloadWith([], "0");
+	const register = {
+		role: "Reception",
+		endpoint: "toefl_house.reception_intake.create_walkin_inquiry",
+		label: "Register a new visitor",
+		args: { person_name: "", phone: "", program_interest: "", branch: "", notes: "" },
+	};
+	payload.primary_action = register;
+	payload.sections.unshift({
+		id: "walkins", title: "New visitors and follow-ups", kind: "queue",
+		items: [],
+		actions: [register],
+		empty: { title: "No open reception inquiries", body: "Register the first visitor" },
+	});
+	const scenario = runScenario({ workPayload: payload });
+	const top = findAll(scenario.body, "th-register-visitor");
+	assert.strictEqual(top.length, 1, "a fresh reception desk must show its primary Register button");
+	assert.strictEqual(findAll(scenario.body, "th-reception-intake").length, 1, "dedicated first-contact workspace renders");
+	const empty = findAll(scenario.body, "th-section-actions");
+	assert(empty.length >= 1, "empty queue must keep its server-authorized action");
+	assert(serialize(scenario.body).includes("Register the first visitor"));
+	top[0].click();
+	assert.strictEqual(scenario.dialogs.length, 1, "register opens a single guided dialog");
+	const fields = Array.from(scenario.dialogs[0].opts.fields, (row) => row.fieldname);
+	assert.deepStrictEqual(fields,
+		["request_key", "person_name", "phone", "program_interest",
+         "study_mode", "contact_country", "time_zone", "branch", "notes"],
+		"front counter should ask for real basic contact, not email or technical placement IDs");
+	assert(!scenario.calls.some((call) => call.method === register.endpoint),
+		"opening the form never creates a record");
+}
+
+{
+	// A Reception follow-up can be submitted from the queue while a search
+	// result is open. Successful POST must refresh that search's version too;
+	// otherwise staff see stale information and may retry a saved change.
+	const payload = payloadWith([], "0");
+	payload.primary_action = {
+		role: "Reception",
+		endpoint: "toefl_house.reception_intake.create_walkin_inquiry",
+		label: "Register a new visitor",
+		args: { person_name: "", phone: "", program_interest: "", branch: "", notes: "" },
+	};
+	const scenario = runScenario({ workPayload: payload });
+	const search = findAll(scenario.body, "th-search-bar")[0];
+	const input = findAll(scenario.body, "th-search-input")[0];
+	input.attrs.value = "0794357509";
+	search.children.find((node) => node.tag === "button").click();
+	assert.strictEqual(scenario.calls.filter((call) =>
+		call.method === "toefl_house.desk.reception.lookup").length, 1);
+	findAll(scenario.body, "th-register-visitor")[0].click();
+	const dialog = scenario.dialogs[0];
+	dialog.submit({ person_name: "Real Visitor", phone: "0794357509",
+		program_interest: "GE", branch: "", notes: "" });
+	const lookups = scenario.calls.filter((call) =>
+		call.method === "toefl_house.desk.reception.lookup");
+	assert.strictEqual(lookups.length, 2,
+		"successful Reception write must re-query the searched contact");
+	assert.strictEqual(lookups[1].args.query, "0794357509");
+	assert.strictEqual(scenario.workCalls, 2, "the Reception overview also refreshes");
+}
+
+{
+	// Frappe Dialog may return null for a cleared optional Data field.
+	// Registration must still work without a phone or country, while
+	// clearing the time zone during follow-up must really clear it.
+	const registration = {
+		role: "Reception", endpoint: "toefl_house.reception_intake.create_walkin_inquiry",
+		label: "Register a new visitor",
+		args: { person_name: "", phone: "", program_interest: "", branch: "", notes: "",
+			study_mode: "Undecided", contact_country: "", time_zone: "" },
+	};
+	const payload = payloadWith([], "0");
+	payload.primary_action = registration;
+	const scenario = runScenario({ workPayload: payload });
+	findAll(scenario.body, "th-register-visitor")[0].click();
+	const form = scenario.dialogs[0];
+	form.submit({ person_name: "Online Visitor", phone: null, program_interest: null,
+		study_mode: "Online", contact_country: null, time_zone: null,
+		branch: null, notes: null });
+	const registrationCall = scenario.calls.find((call) =>
+		call.method === "toefl_house.reception_intake.create_walkin_inquiry");
+	for (const field of ["phone", "program_interest", "contact_country",
+		"time_zone", "branch", "notes"]) {
+		assert.strictEqual(registrationCall.args[field], "",
+			"cleared optional " + field + " must be a truly blank value");
+	}
+	const followup = {
+		role: "Reception", endpoint: "toefl_house.reception_intake.update_walkin_inquiry",
+		label: "Update follow-up",
+		args: { inquiry: "INQ-TEST", expected_version: 1, status: "New",
+			study_mode: "Online", contact_country: "United Kingdom",
+			time_zone: "Europe/London", notes: "Earlier note" },
+	};
+	// Directly expose a guarded action in a fresh queue snapshot.
+	const visitor = payloadWith([{
+		id: "INQ-TEST", person: "Online Visitor", status: "New",
+		stage: "Pre-registration", next: "Contact visitor", action: followup,
+	}], "1");
+	const scenario2 = runScenario({ workPayload: visitor });
+	findAll(scenario2.body, "th-queue-action")[0].click();
+	scenario2.dialogs[0].submit({ inquiry: "INQ-TEST", expected_version: 1,
+		status: "New", notes: null, study_mode: "Online",
+		contact_country: null, time_zone: null });
+	const followupCall = scenario2.calls.find((call) =>
+		call.method === "toefl_house.reception_intake.update_walkin_inquiry");
+	assert.strictEqual(followupCall.args.time_zone, "");
+	assert.strictEqual(followupCall.args.contact_country, "");
+	assert.strictEqual(followupCall.args.notes, "");
+}
+
+{
+	// The newest query must own the results, even if the first HTTP response
+	// comes back after the second one or after an invalid short query.
+	const scenario = runScenario({ workPayload: payloadWith([], "0"), deferLookup: true });
+	const input = findAll(scenario.body, "th-search-input")[0];
+	const search = findAll(scenario.body, "th-search-bar")[0];
+	const button = search.children.find((node) => node.tag === "button");
+	input.attrs.value = "First";
+	button.click();
+	input.attrs.value = "Second";
+	button.click();
+	assert.strictEqual(scenario.pendingLookups.length, 2);
+	scenario.pendingLookups[1].callback({ message: { inquiries: [
+		{ id: "NEW", person: "Second visitor", stage: "Pre-registration", status: "New", next: "Call" },
+	] } });
+	scenario.pendingLookups[0].callback({ message: { inquiries: [
+		{ id: "OLD", person: "First visitor", stage: "Pre-registration", status: "New", next: "Call" },
+	] } });
+	assert(serialize(scenario.body).includes("Second visitor"), "current query result remains visible");
+	assert(!serialize(scenario.body).includes("First visitor"), "stale response cannot overwrite a newer result");
+	input.attrs.value = "Third";
+	button.click();
+	input.attrs.value = "X";
+	button.click();
+	scenario.pendingLookups[2].callback({ message: { inquiries: [
+		{ id: "LATE", person: "Late visitor", stage: "Pre-registration", status: "New", next: "Call" },
+	] } });
+	assert(!serialize(scenario.body).includes("Late visitor"),
+		"short-query guidance invalidates previous in-flight search requests");
+}
+
+{
+	// Fast double-click is common at a busy reception desk. Only one write
+	// request is issued while pending; a network error allows a same-key retry.
+	const register = {
+		role: "Reception", endpoint: "toefl_house.reception_intake.create_walkin_inquiry",
+		label: "Register a new visitor", args: { person_name: "", phone: "", program_interest: "", branch: "", notes: "" },
+	};
+	const payload = payloadWith([], "0");
+	payload.primary_action = register;
+	const scenario = runScenario({ workPayload: payload, deferRegister: true });
+	findAll(scenario.body, "th-register-visitor")[0].click();
+	const form = scenario.dialogs[0];
+	const values = { person_name: "Real Visitor", phone: "", program_interest: "", branch: "", notes: "" };
+	form.submit(values);
+	form.submit(values);
+	assert.strictEqual(scenario.pendingRegistrations.length, 1, "only one registration request while pending");
+	const firstKey = scenario.pendingRegistrations[0].args.request_key;
+	scenario.pendingRegistrations[0].error({ exc_type: "ValidationError", exception: "ValidationError: Retry" });
+	form.submit(values);
+	assert.strictEqual(scenario.pendingRegistrations.length, 2, "retry is possible after failure");
+	assert.strictEqual(scenario.pendingRegistrations[1].args.request_key, firstKey,
+		"the retry preserves the original idempotency key");
+}
+
+{
+	// Closing an inquiry is irreversible. The form must not send a
+	// close command without a deliberate confirmation from Reception.
+	const payload = payloadWith([{
+		id: "INQ-CLOSE", person: "Real Visitor", stage: "Pre-registration", status: "Contacted",
+		next: "Follow up", action: {
+			role: "Reception", endpoint: "toefl_house.reception_intake.update_walkin_inquiry",
+			label: "Update follow-up", args: { inquiry: "INQ-CLOSE", expected_version: 1, status: "Contacted", notes: "" },
+		},
+	}], "0");
+	const scenario = runScenario({ workPayload: payload });
+	findAll(scenario.body, "th-queue-action")[0].click();
+	const form = scenario.dialogs[0];
+	form.submit({ inquiry: "INQ-CLOSE", expected_version: 1, status: "Closed", notes: "No longer interested" });
+	const endpoint = "toefl_house.reception_intake.update_walkin_inquiry";
+	assert.strictEqual(scenario.calls.filter((call) => call.method === endpoint).length, 0,
+		"no irreversible closure occurs before confirmation");
+	assert.strictEqual(scenario.confirmations.length, 1, "explicit closure confirmation appears");
+	assert(scenario.confirmations[0].message.includes("Close this visitor inquiry?"));
+	scenario.confirmations[0].callback();
+	assert.strictEqual(scenario.calls.filter((call) => call.method === endpoint).length, 1,
+		"confirmed closure uses the existing guarded endpoint");
 }
 
 {

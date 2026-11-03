@@ -409,7 +409,7 @@ class Increment3ActorGuardTests(unittest.TestCase):
         tree = ast.parse(adm_src)
         expected = {
             "record_applicant": ["request_key", "placement_decision", "first_name",
-                                 "program", "academic_year", "branch"],
+                                 "program", "academic_year", "branch", "last_name", "email"],
             "create_admission": ["request_key", "student_applicant", "placement_decision",
                                  "existing_student", "program", "academic_year",
                                  "academic_term"],

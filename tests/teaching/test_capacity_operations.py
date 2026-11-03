@@ -32,6 +32,14 @@ class CapacityTests(unittest.TestCase):
             self.ops.seed_enrollment(student=f"STU-{index}")
         return "GRP-FULL"
 
+    def _log_in_branch_reception(self, branch="BR-A"):
+        """Synthetic Reception requires explicit native Branch permission."""
+        for group in self.site.all("Student Group"):
+            group["th_branch"] = branch
+        self.site.add("User Permission", name=f"RECEPTION-{branch}",
+                      user=RECEPTION, allow="Branch", for_value=branch)
+        self.ops.login(RECEPTION)
+
     # --- pure seat arithmetic -------------------------------------------
     def test_available_seats_never_goes_negative(self):
         self.assertEqual(self.ops.capacity.available_seats(20, 12, 3), 5)
@@ -58,6 +66,25 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(seats["reserved"], 1, "an expired offer holds no seat")
         self.assertEqual(seats["available"], 0)
 
+    def test_more_than_maximum_live_offers_are_counted_exactly(self):
+        # A finite get_all limit must never undercount offers and let staff
+        # reserve a seat that the existing live offers have already held.
+        group = self._full_class(capacity=260, roster=0)
+        for i in range(self.ops.capacity.MAX_ENTRIES):
+            self.ops.seed_waiting(group, f"WAIT-TEST-{i}",
+                                  status="Offered", expires="2026-09-30")
+        self.assertEqual(self.ops.capacity.seat_facts(group)["reserved"],
+                         self.ops.capacity.MAX_ENTRIES)
+        overflow = self.ops.seed_waiting(group, "WAIT-OVERFLOW",
+                                         status="Offered", expires="2026-09-30")
+        seats = self.ops.capacity.seat_facts(group)
+        self.assertEqual(seats["reserved"], self.ops.capacity.MAX_ENTRIES + 1)
+        self.assertEqual(seats["available"], 260 - (self.ops.capacity.MAX_ENTRIES + 1))
+        # A held seat for the exact entry being admitted is counted once,
+        # not again as a competing reservation.
+        self.assertEqual(self.ops.capacity.reserved_offers(
+            group, exclude_entry=overflow), self.ops.capacity.MAX_ENTRIES)
+
     def test_deactivated_rows_still_occupy_the_native_seat(self):
         # Native Education counts len(students): a moved-out member keeps the
         # seat. Availability must agree with what a native save would accept.
@@ -77,6 +104,23 @@ class CapacityTests(unittest.TestCase):
         self.assertIn("Completed", str(ctx.exception))
 
     # --- the seat gate ---------------------------------------------------
+    def test_stale_active_class_end_date_cannot_offer_new_seats(self):
+        group = self._full_class(capacity=3, roster=1)
+        self.site.get("Student Group", group)["th_class_end_date"] = "2026-09-21"
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.assert_seat_available(group, "STU-2")
+        self.assertIn("no current class end date", str(ctx.exception))
+        self.ops.login(RECEPTION)
+        self._log_in_branch_reception()
+        self.assertEqual(self.ops.capacity.class_availability(
+            student_group=group)["classes"], [])
+
+    def test_missing_class_end_date_never_becomes_an_open_seat(self):
+        group = self._full_class(capacity=3, roster=1)
+        self.site.get("Student Group", group)["th_class_end_date"] = None
+        with self.assertRaises(ValidationError):
+            self.ops.capacity.assert_seat_available(group, "STU-2")
+
     def test_free_seat_returns_no_override(self):
         group = self._full_class(capacity=3, roster=2)
         seat = self.ops.capacity.assert_seat_available(group, "STU-3")
@@ -186,6 +230,18 @@ class CapacityTests(unittest.TestCase):
             self.ops.capacity.join_waiting_list("join-dup-0001", group, "STU-3")
         self.assertIn("already has an open waiting-list entry", str(ctx.exception))
 
+    def test_full_waiting_queue_refuses_new_join_before_creation(self):
+        group = self._full_class()
+        self.ops.seed_policy()
+        for i in range(self.ops.capacity.MAX_ENTRIES):
+            self.ops.seed_waiting(group, f"WAIT-TEST-{i}", status="Waiting")
+        before = len(self.site.all("TH Class Waiting List"))
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.join_waiting_list(
+                "join-over-cap-0001", group, "STU-3")
+        self.assertIn("reached the complete read limit", str(ctx.exception))
+        self.assertEqual(len(self.site.all("TH Class Waiting List")), before)
+
     def test_offer_holds_a_seat_for_exactly_the_policy_window(self):
         self.ops.seed_class(name="GRP-OPEN", capacity=3, members=["STU-1"])
         self.ops.seed_student("STU-2")
@@ -203,6 +259,77 @@ class CapacityTests(unittest.TestCase):
         stored = self.site.get("TH Class Waiting List", entry)
         self.assertEqual(stored["offered_by"], ACTOR)
         self.assertEqual(stored["offer_expires_on"], "2026-09-29")
+
+    def test_offer_enforces_priority_and_time_order_at_server(self):
+        self.ops.seed_class(name="GRP-QUEUE", capacity=3, members=["STU-1"])
+        for student in ("STU-2", "STU-3", "STU-4"):
+            self.ops.seed_student(student)
+            self.ops.seed_enrollment(student)
+        self.ops.seed_policy()
+        earlier = self.ops.seed_waiting(
+            "GRP-QUEUE", "STU-2", priority=0,
+            requested_on="2026-09-20 08:00:00")
+        high = self.ops.seed_waiting(
+            "GRP-QUEUE", "STU-3", priority=10,
+            requested_on="2026-09-21 08:00:00")
+        later = self.ops.seed_waiting(
+            "GRP-QUEUE", "STU-4", priority=0,
+            requested_on="2026-09-21 09:00:00")
+        self.assertEqual(self.ops.capacity._queue_position(high, {
+            "student_group": "GRP-QUEUE"}), 1)
+        self.assertEqual(self.ops.capacity._queue_position(earlier, {
+            "student_group": "GRP-QUEUE"}), 2)
+        self.assertEqual(self.ops.capacity._queue_position(later, {
+            "student_group": "GRP-QUEUE"}), 3)
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.offer_waiting_list_seat(
+                "queue-skip-0001", earlier)
+        self.assertIn("Earlier waiting-list entries have priority", str(ctx.exception))
+        self.assertEqual(self.site.get("TH Class Waiting List", earlier)["status"],
+                         "Waiting")
+        result = self.ops.capacity.offer_waiting_list_seat(
+            "queue-first-0001", high)
+        self.assertEqual(result["status"], "Offered")
+        result = self.ops.capacity.offer_waiting_list_seat(
+            "queue-second-0001", earlier)
+        self.assertEqual(result["status"], "Offered")
+        with self.assertRaises(ValidationError):
+            self.ops.capacity.offer_waiting_list_seat("queue-full-0001", later)
+
+    def test_waiting_board_offers_only_the_first_waiting_student(self):
+        self.ops.seed_class(name="GRP-QUEUE", capacity=3, members=["STU-1"])
+        high = self.ops.seed_waiting(
+            "GRP-QUEUE", "STU-2", priority=8,
+            requested_on="2026-09-21 08:00:00")
+        lower = self.ops.seed_waiting(
+            "GRP-QUEUE", "STU-3", priority=0,
+            requested_on="2026-09-20 08:00:00")
+        self._log_in_branch_reception()
+        board = self.ops.capacity.waiting_list_board(student_group="GRP-QUEUE")
+        by_id = {row["entry"]: row for row in board["entries"]}
+        self.assertEqual(by_id[high]["position"], 1)
+        self.assertEqual(by_id[high]["next_command"], "offer_waiting_list_seat")
+        self.assertEqual(by_id[lower]["position"], 2)
+        self.assertEqual(by_id[lower]["next_command"], "")
+        self.assertIn("earlier waiting entries", by_id[lower]["next"])
+
+    def test_offer_expiry_cannot_outlive_the_class(self):
+        self.ops.seed_class(name="GRP-SOON", capacity=3,
+                            members=["STU-1"], end="2026-09-24")
+        self.ops.seed_student("STU-2")
+        self.ops.seed_enrollment("STU-2")
+        self.ops.seed_policy()
+        entry = self.ops.seed_waiting("GRP-SOON", "STU-2")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.offer_waiting_list_seat(
+                "offer-beyond-class-0001", entry, "2026-09-29")
+        self.assertIn("cannot extend beyond the class end date", str(ctx.exception))
+        self.assertEqual(self.site.get("TH Class Waiting List", entry)["status"],
+                         "Waiting")
+        result = self.ops.capacity.offer_waiting_list_seat(
+            "offer-clipped-class-0001", entry)
+        self.assertEqual(result["status"], "Offered")
+        self.assertEqual(result["offer_expires_on"], "2026-09-24")
 
     def test_offer_refuses_a_full_class_and_a_non_waiting_entry(self):
         group = self._full_class()
@@ -236,6 +363,31 @@ class CapacityTests(unittest.TestCase):
                          [("STU-1", 1), ("STU-2", 1)])
         self.assertEqual(self.site.get("TH Class Waiting List", entry)["status"],
                          "Admitted")
+
+    def test_direct_admission_from_waiting_cannot_skip_priority(self):
+        self.ops.seed_class(name="GRP-DIRECT", capacity=3, members=["STU-1"])
+        for student in ("STU-2", "STU-3"):
+            self.ops.seed_student(student)
+            self.ops.seed_enrollment(student)
+        self.ops.seed_policy()
+        first = self.ops.seed_waiting(
+            "GRP-DIRECT", "STU-2", priority=9,
+            requested_on="2026-09-21 09:00:00")
+        later = self.ops.seed_waiting(
+            "GRP-DIRECT", "STU-3", priority=0,
+            requested_on="2026-09-20 09:00:00")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.admit_from_waiting_list("skip-direct-0001", later)
+        self.assertIn("Earlier waiting-list entries have priority", str(ctx.exception))
+        self.assertEqual(self.ops.roster("GRP-DIRECT"), [("STU-1", 1)])
+        self.assertEqual(self.site.get("TH Class Waiting List", later)["status"],
+                         "Waiting")
+        result = self.ops.capacity.admit_from_waiting_list("first-direct-0001", first)
+        self.assertEqual(result["status"], "Admitted")
+        self.assertEqual(self.ops.roster("GRP-DIRECT"),
+                         [("STU-1", 1), ("STU-2", 1)])
+        result = self.ops.capacity.admit_from_waiting_list("next-direct-0001", later)
+        self.assertEqual(result["status"], "Admitted")
 
     def test_admission_refuses_an_expired_offer(self):
         group = self._full_class()
@@ -332,20 +484,34 @@ class CapacityTests(unittest.TestCase):
     def test_availability_is_readable_by_reception_and_refused_to_others(self):
         group = self._full_class(capacity=3, roster=2)
         self.ops.seed_waiting(group, "STU-3")
-        self.ops.login(RECEPTION)
+        self._log_in_branch_reception()
         report = self.ops.capacity.class_availability()
         self.assertEqual(report["as_of"], "2026-09-22")
         row = next(item for item in report["classes"]
                    if item["student_group"] == group)
         self.assertEqual((row["capacity"], row["rostered"], row["reserved"],
                           row["available"], row["waiting"]), (3, 2, 0, 1, 1))
+        self.assertEqual(row["walk_in_available"], 0)
+        self.assertTrue(row["queue_has_priority"])
         self.assertFalse(row["full"])
         self.assertIn("capacity minus every roster row", report["definitions"]["available"])
+        self.assertIn("not a walk-in promise", report["definitions"]["available"])
         self.ops.login("finance.officer@example.test")
         self.site.set_roles("finance.officer@example.test", ["Finance Officer"])
         with self.assertRaises(PermissionError_) as ctx:
             self.ops.capacity.class_availability()
         self.assertIn("Reception and Academic staff", str(ctx.exception))
+
+    def test_held_offer_does_not_block_other_free_seats_without_waiting_priority(self):
+        self.ops.seed_class(name="GRP-OPEN", capacity=4, members=["STU-1"])
+        self.ops.seed_waiting("GRP-OPEN", "STU-OFFERED",
+                              status="Offered", expires="2026-09-30")
+        self._log_in_branch_reception()
+        record = self.ops.capacity.class_availability(
+            student_group="GRP-OPEN")["classes"][0]
+        self.assertEqual(record["available"], 2)
+        self.assertEqual(record["walk_in_available"], 2)
+        self.assertFalse(record["queue_has_priority"])
 
     def test_intake_projection_shows_unmet_demand_and_the_next_class_end(self):
         self.ops.seed_class(name="GRP-A", capacity=2, members=["STU-1", "STU-2"],
@@ -355,7 +521,7 @@ class CapacityTests(unittest.TestCase):
         self.ops.seed_student("STU-3")
         for name in ("STU-3", "STU-4"):
             self.ops.seed_waiting("GRP-A", name)
-        self.ops.login(RECEPTION)
+        self._log_in_branch_reception()
         report = self.ops.capacity.class_availability(program="TH-PROG",
                                                        academic_year="2026-27")
         intake = report["intake"][0]
@@ -364,7 +530,42 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(intake["seats_available"], 3, "0 in GRP-A, 3 in GRP-B")
         self.assertEqual(intake["waiting"], 2)
         self.assertEqual(intake["next_class_end"], "2026-11-15")
+        self.assertEqual(intake["waiting_to_offer"], 2)
+        self.assertEqual(intake["walk_in_seats_available"], 3)
+        self.assertEqual(intake["projected_unmet_demand"], 2,
+                         "three spare GRP-B seats cannot satisfy GRP-A's "
+                         "two waiting learners without a separate approved move")
+        by_class = {row["student_group"]: row for row in report["classes"]}
+        self.assertEqual(by_class["GRP-A"]["projected_unmet_demand"], 2)
+        self.assertEqual(by_class["GRP-B"]["projected_unmet_demand"], 0)
+
+    def test_reserved_offered_seat_is_not_double_counted_as_unmet_demand(self):
+        self.ops.seed_class(name="GRP-INTAKE", capacity=3,
+                            members=["STU-1", "STU-2"])
+        self.ops.seed_waiting("GRP-INTAKE", "STU-OFFER",
+                              status="Offered", expires="2026-09-30")
+        self._log_in_branch_reception()
+        report = self.ops.capacity.class_availability(
+            student_group="GRP-INTAKE")
+        row = report["classes"][0]
+        self.assertEqual(row["waiting"], 1)
+        self.assertEqual(row["waiting_to_offer"], 0)
+        self.assertEqual(row["reserved"], 1)
+        self.assertEqual(row["available"], 0)
+        self.assertEqual(row["walk_in_available"], 0)
+        intake = report["intake"][0]
+        self.assertEqual(intake["waiting"], 1)
+        self.assertEqual(intake["waiting_to_offer"], 0)
         self.assertEqual(intake["projected_unmet_demand"], 0)
+        self.assertEqual(intake["walk_in_seats_available"], 0)
+
+        self.ops.seed_waiting("GRP-INTAKE", "STU-UNMET", status="Waiting")
+        report = self.ops.capacity.class_availability(
+            student_group="GRP-INTAKE")
+        row = report["classes"][0]
+        self.assertEqual(row["waiting"], 2)
+        self.assertEqual(row["waiting_to_offer"], 1)
+        self.assertEqual(report["intake"][0]["projected_unmet_demand"], 1)
 
     def test_waiting_board_names_the_next_action_for_each_entry(self):
         self.ops.seed_class(name="GRP-OPEN", capacity=3, members=["STU-1"])
@@ -374,7 +575,7 @@ class CapacityTests(unittest.TestCase):
                               expires="2026-09-25")
         self.ops.seed_waiting("GRP-OPEN", "STU-4", status="Offered",
                               expires="2026-09-01")
-        self.ops.login(RECEPTION)
+        self._log_in_branch_reception()
         board = self.ops.capacity.waiting_list_board("GRP-OPEN")
         by_student = {row["student"]: row for row in board["entries"]}
         self.assertEqual(by_student["STU-2"]["next_command"],
@@ -383,8 +584,9 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(by_student["STU-3"]["next_command"],
                          "admit_from_waiting_list")
         self.assertEqual(by_student["STU-4"]["next_command"],
-                         "offer_waiting_list_seat")
+                         "leave_waiting_list")
         self.assertIn("expired", by_student["STU-4"]["next"])
+        self.assertIn("Withdraw the old entry", by_student["STU-4"]["next"])
         self.assertEqual(by_student["STU-2"]["next_role"], "Teaching Scheduler")
 
 
