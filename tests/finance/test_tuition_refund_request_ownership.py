@@ -80,7 +80,11 @@ class TuitionRefundOwnershipTests(unittest.TestCase):
                 self.assertIn("select name from `tabFees` where name=%s for update", source)
                 self.assertLess(source.index("select name from `tabFees` where name=%s for update"),
                                 source.index("req = _pending_request("))
+                self.assertIn("if req.fees != fees:", source)
+                self.assertIn("Refund request Fees link changed during lock acquisition", source)
                 self.assertLess(source.index("req = _pending_request("),
+                                source.index("if req.fees != fees:"))
+                self.assertLess(source.index("if req.fees != fees:"),
                                 source.index("_require_request_fee_identity(req)"))
 
 
