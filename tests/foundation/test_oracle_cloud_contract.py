@@ -20,7 +20,7 @@ class OracleCloudContract(unittest.TestCase):
         self.assertGreaterEqual(compose.count("platform: linux/arm64"), 8)
         self.assertEqual(len(re.findall(r"^    image: .*@sha256:[0-9a-f]{64}$", compose, re.M)), 4)
         self.assertRegex(compose, r"image: \*app-image")
-        self.assertIn("@sha256:eb37f58646a901dc7727cf448cae36daaefaba79de33b5058dab79aa4c04aefb", compose)
+        self.assertIn("@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5", compose)
 
     def test_only_reverse_proxy_publishes_public_ports(self):
         compose = (CLOUD / "docker-compose.yml").read_text(encoding="utf-8")
@@ -49,7 +49,7 @@ class OracleCloudContract(unittest.TestCase):
         self.assertIn('test "$(uname -m)" = aarch64', workflow)
         self.assertIn("SHASUMS256.txt", workflow)
         self.assertIn("docker buildx build --platform linux/arm64", workflow)
-        self.assertIn("caddy:2.11.8-alpine@sha256:eb37f58646a901dc7727cf448cae36daaefaba79de33b5058dab79aa4c04aefb", workflow)
+        self.assertIn("caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5", workflow)
         self.assertIn("Node archive digest does not match", workflow)
         self.assertNotIn("qemu-user-static", workflow.lower())
 

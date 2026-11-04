@@ -189,7 +189,7 @@ services:
     logging: *bounded-logs
 
   proxy:
-    image: caddy:2.11.8-alpine@sha256:eb37f58646a901dc7727cf448cae36daaefaba79de33b5058dab79aa4c04aefb
+    image: caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
     platform: linux/arm64
     environment:
       PUBLIC_ADDRESS: ${PUBLIC_ADDRESS:?Set PUBLIC_ADDRESS to the actual public IP or approved domain}

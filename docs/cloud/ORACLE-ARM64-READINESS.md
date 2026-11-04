@@ -21,8 +21,8 @@ decision and data-custody rules are separately satisfied.
   A native ARM build must still verify the resolved manifest and execute all
   shipped Python/native dependencies; a tag name is not proof of runtime
   compatibility.
-- The staging reverse proxy is pinned to the official Caddy 2.11.8 Alpine OCI
-  index, which includes ARM64. Public ACME issuance and renewal require a real address.
+- The staging reverse proxy is pinned to the official Caddy 2.11.7 Alpine OCI
+  index, which includes ARM64. At audit time the newer 2.11.8 Docker Hub index listed zero manifests. Review its hardening changes and qualify the patched proxy before enabling a public edge. Public ACME issuance and renewal require a real address.
 - The current product web ingress already proxies HTTP and Socket.IO through
   one origin. The site identity and several Windows lifecycle helpers are
   fixed to `toeflhouse.localhost`; this must be kept behind the cloud reverse

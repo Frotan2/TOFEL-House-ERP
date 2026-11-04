@@ -83,7 +83,7 @@ jobs:
             docker pull --platform linux/arm64 "$image"
             test "$(docker image inspect "$image" --format '{{.Os}}/{{.Architecture}}')" = linux/arm64
           done
-          caddy_image='caddy:2.11.8-alpine@sha256:eb37f58646a901dc7727cf448cae36daaefaba79de33b5058dab79aa4c04aefb'
+          caddy_image='caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5'
           docker buildx imagetools inspect --raw "$caddy_image" | python3 -c 'import json,sys; doc=json.load(sys.stdin); platforms={(m.get("platform",{}).get("os"),m.get("platform",{}).get("architecture")) for m in doc.get("manifests",[])}; assert ("linux","arm64") in platforms, f"pinned proxy image has no Linux/ARM64 manifest: {platforms}"'
           docker pull --platform linux/arm64 "$caddy_image"
           test "$(docker image inspect "$caddy_image" --format '{{.Os}}/{{.Architecture}}')" = linux/arm64
