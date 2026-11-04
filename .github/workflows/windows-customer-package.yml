@@ -84,6 +84,11 @@ jobs:
         run: |
           python -m unittest tests.foundation.test_windows_pc_inventory -v
           if ($LASTEXITCODE -ne 0) { throw "PC storage inventory regression failed." }
+      - name: Preserve old installed-image identity on failed atomic replacement
+        shell: powershell
+        run: |
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'tests/foundation/test_windows_identity_receipt.ps1'
+          if ($LASTEXITCODE -ne 0) { throw "Installed-image receipt preservation regression failed." }
       - name: Verify Windows delivery finalization contracts
         shell: powershell
         run: |
