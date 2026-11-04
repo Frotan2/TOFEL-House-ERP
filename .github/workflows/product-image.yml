@@ -37,6 +37,10 @@ on:
       - "tools/release/Build Customer Installer.ps1"
       - tools/release/windows/**
       - tests/foundation/test_customer_exe.ps1
+      # Any Windows setup / image receipt test change is release critical.
+      # The product image must qualify the exact SHA alongside Windows CI.
+      - tests/foundation/test_online_installer.ps1
+      - tests/foundation/test_windows_identity_receipt.ps1
       - tests/foundation/test_offline_runtime.ps1
       - tests/foundation/test_customer_package_manifest.py
       - tests/foundation/test_customer_install_package.py
