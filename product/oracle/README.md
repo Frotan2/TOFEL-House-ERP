@@ -9,6 +9,8 @@ Redis, workers, scheduler and Socket.IO have no host-published ports. The
 Compose file fixes every service to Linux/ARM64 and pins third-party images by
 digest. App containers must use the config ID of the attested image.
 
+From authenticated OCI Cloud Shell, run `python3 product/oracle/check-capacity.py --tenancy <root-tenancy-OCID>` to collect the home region, A1 quotas and reported physical capacity.
+
 Before preparing an Oracle VM, verify in the OCI Console that the instance,
 storage, home region, public address, object storage and all other selected
 resources are Always Free eligible. Keep the tenancy out of any paid upgrade

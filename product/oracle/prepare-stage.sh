@@ -102,7 +102,7 @@ import secrets
 secrets_path = Path('data/secrets/db.env')
 fd = os.open(secrets_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
 with os.fdopen(fd, 'w', encoding='ascii') as stream:
-    stream.write('MARIADB_ROOT_PASSWORD=' + secrets.token_urlsafe(48) + '\n')
+    stream.write(f'MARIADB_ROOT_PASSWORD={secrets.token_urlsafe(48)}\n')
 marker = Path('data/.oracle-cloud-staging-v1')
 fd = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
 with os.fdopen(fd, 'w', encoding='ascii') as stream:

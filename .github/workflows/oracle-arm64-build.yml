@@ -104,10 +104,10 @@ jobs:
         run: |
           set -euo pipefail
           test "$(docker image inspect toefl-house-erp-app:arm64 --format '{{.Os}}/{{.Architecture}}')" = linux/arm64
-          docker run --rm --platform linux/arm64 --entrypoint /bin/sh toefl-house-erp-app:arm64 -ec '
+          python3 tools/foundation/annotated_step.py "Shipped ARM64 runtime" -- docker run --rm --platform linux/arm64 --entrypoint /bin/sh toefl-house-erp-app:arm64 -ec '
             test "$(dpkg --print-architecture)" = arm64
             test "$(node -p process.arch)" = arm64
-            python3 -c "import platform; assert platform.machine() == \"aarch64\", platform.machine()"
+            /home/frappe/bench/env/bin/python -c "import platform; assert platform.machine() == \"aarch64\", platform.machine()"
             cd /home/frappe/bench
             env/bin/python -c "import frappe, erpnext, education, payments, hrms, foundation_security, toefl_house"
             /build/tools/bin/bench --version
@@ -117,7 +117,7 @@ jobs:
 
       - name: Qualify Oracle Compose services through HTTPS
         timeout-minutes: 35
-        run: bash tools/oracle/qualify.sh
+        run: python3 tools/foundation/annotated_step.py "Oracle TLS and restart" -- bash tools/oracle/qualify.sh
 
       - name: Export the tested image
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/oracle-arm64-staging-foundation')
@@ -129,7 +129,7 @@ jobs:
           docker save "$tag" | zstd -T2 -3 -o "$RUNNER_TEMP/oracle-arm64-test.tar.zst"
       - name: Retain the Oracle TEST image
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/oracle-arm64-staging-foundation')
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: oracle-arm64-test-${{ github.sha }}
           path: ${{ runner.temp }}/oracle-arm64-test.tar.zst
@@ -152,6 +152,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "oracle-arm64-test-$GITHUB_SHA" --dir "$RUNNER_TEMP/verified"
       - name: Attest the tested ARM64 archive
-        uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4
+        uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
         with:
           subject-path: ${{ runner.temp }}/verified/oracle-arm64-test.tar.zst
