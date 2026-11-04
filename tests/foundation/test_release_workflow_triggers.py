@@ -78,6 +78,15 @@ class ReleaseImageTriggerContract(unittest.TestCase):
                 self.assertTrue("**" in watched or set(patterns).issubset(watched),
                                 f"{name}: advisory changes cannot reach this gate")
 
+    def test_windows_receipt_and_installer_regressions_trigger_exact_image_gate(self):
+        paths = push_paths("product-image.yml")
+        self.assertIn("tests/foundation/test_online_installer.ps1", paths)
+        self.assertIn("tests/foundation/test_windows_identity_receipt.ps1", paths)
+        self.assertIn("product/**", paths)
+        windows_workflow = (WORKFLOWS / "windows-customer-package.yml").read_text(encoding="utf-8")
+        self.assertIn("test_windows_identity_receipt.ps1", windows_workflow)
+        self.assertIn("test_online_installer.ps1", windows_workflow)
+
     def test_windows_only_package_manifest_suite_has_a_windows_runner(self):
         workflow = (WORKFLOWS / "windows-customer-package.yml").read_text(encoding="utf-8")
         self.assertIn("runs-on: windows-2022", workflow)
