@@ -122,6 +122,22 @@ def _pending_request(name):
     return frappe.get_doc(REQUEST, name, for_update=True)
 
 
+def _require_request_fee_identity(req):
+    """Lock and revalidate the authoritative Fees identity before GM transitions.
+
+    A stored refund request is not an authorization to approve or void a
+    different student's bill, even if a stale/corrupt record retains a valid
+    Fees link. Payout already performs this check independently.
+    """
+    fee = frappe.db.get_value(
+        FEES, req.fees, ["docstatus", "student", "company"],
+        as_dict=True, for_update=True)
+    if (not fee or int(fee.docstatus or 0) != 1
+            or fee.student != req.student or fee.company != req.company):
+        raise frappe.ValidationError("Refund request does not match its submitted Fees owner")
+    _require_target_company(req.fees)
+
+
 @frappe.whitelist(methods=["POST"])
 def request_tuition_refund(request_key, student, company, fees, requested_amount,
                            reason, evidence):
@@ -177,7 +193,7 @@ def approve_tuition_refund(request_key, request, evidence=None):
     def work(actor):
         _require_role(actor, tuition_refunds.APPROVER_ROLE)
         req = _pending_request(_name(request, "Tuition refund request"))
-        _require_target_company(req.fees)
+        _require_request_fee_identity(req)
         try:
             approved = tuition_refunds.approve_request(
                 {"status": req.status, "requested_by": req.requested_by,
@@ -208,7 +224,7 @@ def deny_tuition_refund(request_key, request):
     def work(actor):
         _require_role(actor, tuition_refunds.APPROVER_ROLE)
         req = _pending_request(_name(request, "Tuition refund request"))
-        _require_target_company(req.fees)
+        _require_request_fee_identity(req)
         try:
             tuition_refunds.deny_request(
                 {"status": req.status}, approver=actor,
@@ -240,7 +256,7 @@ def void_tuition_refund(request_key, request, reason):
         # cannot race a payout into a partial or contradictory state.
         frappe.db.sql("select name from `tabFees` where name=%s for update", (fees,))
         req = _pending_request(name)
-        _require_target_company(req.fees)
+        _require_request_fee_identity(req)
         try:
             result = tuition_refunds.void_approval(req.as_dict(), actor=actor,
                                                   roles=frappe.get_roles(actor), reason=reason)
