@@ -578,12 +578,36 @@ def work():
         "reception", APPLICANT, APPLICANT_FIELDS,
         filters={"student_email_id": ("in", email_subjects)},
         order_by="creation desc", limit=BOUNCE_WINDOW) if email_subjects else []
+    # A bounded result at capacity is not proof that every matching
+    # Applicant was returned. A hidden duplicate could otherwise leave
+    # Reception choosing an arbitrary identity for the admission action.
+    candidate_read_complete = len(existing_candidates) < BOUNCE_WINDOW
+    email_read_complete = len(existing_emails) < BOUNCE_WINDOW
     existing = list({row["name"]: row for row in existing_emails + existing_candidates}.values())
     existing_by_subject = {}
+    ambiguous_subjects = set()
     for item in existing:
         key = item.get("th_candidate_ref") or item.get("student_email_id")
         if key:
-            existing_by_subject[key] = item
+            previous = existing_by_subject.get(key)
+            if previous and previous["name"] != item["name"]:
+                ambiguous_subjects.add(key)
+            else:
+                existing_by_subject[key] = item
+    # A legacy email release must never silently take precedence over a
+    # different opaque candidate origin already attached to the same email.
+    # Multiple visible Applicants with the email are also ambiguous, even
+    # when some have their own THV candidate references.
+    email_origins = {}
+    for item in existing_emails:
+        email = item.get("student_email_id")
+        if not email or email not in email_subjects:
+            continue
+        if item.get("th_candidate_ref"):
+            ambiguous_subjects.add(email)
+        previous_id = email_origins.setdefault(email, item["name"])
+        if previous_id != item["name"]:
+            ambiguous_subjects.add(email)
     returning_students = _verified_returning_students(existing)
     decisions_by_applicant = {}
     for row in admissions:
@@ -597,13 +621,27 @@ def work():
     for row in ready:
         subject = subjects[row["name"]]
         applicant = existing_by_subject.get(subject)
-        if applicant and applicant["name"] in pending_applicants:
+        identity_unverified = (
+            subject in ambiguous_subjects
+            or (subject.startswith("THV-") and not candidate_read_complete)
+            or (not subject.startswith("THV-") and not email_read_complete))
+        if applicant and applicant["name"] in pending_applicants and not identity_unverified:
             continue
         context = {
             "placement_course_code": row.get("course_code") or "",
             "placement_level": row.get("internal_level") or "",
         }
-        if applicant and applicant.get("application_status") == "Admitted":
+        if identity_unverified:
+            # Never attach a new Admission to whichever duplicate happened
+            # to be last in a bounded lookup. The Academic Manager must
+            # reconcile the original Applicant links before staff proceed.
+            action = None
+            next_step = (
+                "The Applicant identity is ambiguous or the lookup is incomplete. "
+                "Ask Academic Manager to verify the original candidate links; "
+                "do not create a duplicate Applicant or open an Admission.")
+            next_role = "Academic Manager"
+        elif applicant and applicant.get("application_status") == "Admitted":
             existing_student = returning_students.get(applicant["name"])
             if existing_student:
                 action = guided_action("Admission Officer", "toefl_house.admission.create_admission",
