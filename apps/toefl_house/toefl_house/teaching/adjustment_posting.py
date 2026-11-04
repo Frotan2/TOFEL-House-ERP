@@ -55,31 +55,54 @@ def validate_orphan_posting(value):
     return value
 
 
-def collect_orphan_contracts(start, end, assigned_instructors):
+def collect_orphan_contracts(start, end, assigned_instructors, company):
     """Map due-adjustment parents with no overlapping assignment.
 
     Returns ``{contract: {"instructor": ..., "adjustments": [names]}}``
-    for non-fixed contracts carrying adjustments due inside the window
+    for same-company non-fixed contracts carrying adjustments due inside the window
     whose instructor holds no overlapping assignment. A pure read used
     inside the calculation work() closure; the caller posts or reports
     per the governing terms.
     """
-    due = frappe.db.get_all(
-        ADJUSTMENT, filters={"effective_date": ["between", [start, end]]},
-        fields=["name", "parent"])
+    # Constrain due child rows in SQL before they reach Python.  Reading
+    # every company's adjustments then filtering parent records can become
+    # unbounded and needlessly expose unrelated payroll facts in memory.
+    due = frappe.db.sql(
+        "select a.name, a.parent from `tabTH Contract Adjustment` a "
+        "inner join `tabTH Instructor Contract` c on c.name = a.parent "
+        "inner join `tabInstructor` i on i.name = c.instructor "
+        "inner join `tabEmployee` e on e.name = c.employee "
+        "where a.effective_date between %s and %s "
+        "and e.company = %s and i.employee = c.employee "
+        "and c.compensation_model != 'Fixed Salary'",
+        (start, end, company), as_dict=True)
+    adjustments_by_parent = {}
+    for row in due:
+        adjustments_by_parent.setdefault(row["parent"], []).append(row["name"])
     orphans = {}
-    for parent in sorted({row["parent"] for row in due}):
+    for parent, names in sorted(adjustments_by_parent.items()):
         info = frappe.db.get_value(
-            CONTRACT, parent, ["instructor", "compensation_model"],
+            CONTRACT, parent, ["instructor", "compensation_model", "employee"],
             as_dict=True)
         if not info or info.compensation_model == "Fixed Salary":
             continue
+        # Assigned instructors are handled by the separate, fully locked
+        # compensation path. Avoid unnecessary HRMS lookups for those rows.
         if info.instructor in (assigned_instructors or ()):
+            continue
+        # Defence in depth: recheck the native Employee company even though
+        # SQL filtered by Company, in case identity changed during the read.
+        if frappe.db.get_value("Employee", info.employee, "company") != company:
+            continue
+        # The Employee company alone does not prove this Instructor is
+        # linked to that Employee. A malformed/legacy cross-company link
+        # must not leak into even the SKIP report. POST mode independently
+        # rechecks both native identities using locking reads before posting.
+        if frappe.db.get_value("Instructor", info.instructor, "employee") != info.employee:
             continue
         orphans[parent] = {
             "instructor": info.instructor,
-            "adjustments": sorted(row["name"] for row in due
-                                  if row["parent"] == parent),
+            "adjustments": sorted(names),
         }
     return orphans
 

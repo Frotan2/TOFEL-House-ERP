@@ -17,6 +17,7 @@ on:
       # contracts change, even if application source is unchanged.
       - tests/teaching/test_compensation_guards.py
       - tests/teaching/test_compensation.py
+      - tests/teaching/test_adjustment_posting.py
       - tools/foundation/audit_stored_html.py
       - apps/foundation_security/**
       # The native installer executes both security patch helpers before build.

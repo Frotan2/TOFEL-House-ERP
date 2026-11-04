@@ -1823,6 +1823,64 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/release/verify_ci_gates.py --timeout 3600 --scope-ref "$GITHUB_REF" --output "$RUNNER_TEMP/toefl-house-ci-gates.json"
+      - name: Reclaim disposable Docker storage before image export
+        if: success()
+        run: |
+          set -euo pipefail
+          # All synthetic site, browser, backup and restore acceptance has
+          # completed. Preserve a short diagnostic tail, then remove only the
+          # disposable Compose stack, its database volume and generated data.
+          {
+            docker compose -f product/docker-compose.yml logs --no-color --tail 3 bootstrap 2>&1 || true
+            docker compose -f product/docker-compose.yml logs --no-color --tail 3 web 2>&1 || true
+          } > "$RUNNER_TEMP/toefl-house-product-image-compose.log" 2>&1
+          docker compose -f product/docker-compose.yml down --volumes --remove-orphans
+          # Frappe-owned bind-mounted assets are not removable by the runner UID.
+          sudo rm -rf -- product/data /tmp/win-worktree
+
+          # Keep the exact app image reachable while removing unused images.
+          # The stopped pin container is removed immediately after docker save.
+          image_id=$(docker image inspect --format '{{.Id}}' toefl-house-erp-app:ci)
+          docker create --name toefl-house-image-export-pin toefl-house-erp-app:ci >/dev/null
+          docker builder prune --all --force
+          docker volume prune --force
+          docker image prune --all --force
+          # Image pruning can remove the tag even when the stopped pin keeps
+          # the exact image ID alive. Restore the tag used by the export and
+          # verify that the pinned image survived pruning.
+          docker image inspect "$image_id" >/dev/null
+          docker tag "$image_id" toefl-house-erp-app:ci
+
+          image_revision=$(docker image inspect toefl-house-erp-app:ci --format '{{index .Config.Labels "org.toefl-house.source-revision"}}')
+          test "$image_revision" = "$GITHUB_SHA"
+          image_bytes=$(docker image inspect toefl-house-erp-app:ci --format '{{.Size}}')
+          test "$image_bytes" -gt 0
+          docker_root=$(docker info --format '{{.DockerRootDir}}')
+          docker_available=$(df -B1 --output=avail "$docker_root" | awk 'NR==2 {print $1}')
+          runner_available=$(df -B1 --output=avail "$RUNNER_TEMP" | awk 'NR==2 {print $1}')
+          docker_device=$(stat -c '%d' "$docker_root")
+          runner_device=$(stat -c '%d' "$RUNNER_TEMP")
+          reserve_bytes=$((1024 * 1024 * 1024))
+          if [ "$docker_device" = "$runner_device" ]; then
+            required_bytes=$((image_bytes * 2 + reserve_bytes))
+            if [ "$docker_available" -lt "$required_bytes" ]; then
+              echo "::error::Insufficient free space for the Docker image export: need $required_bytes bytes, have $docker_available on the shared Docker/runner filesystem."
+              docker system df
+              df -h "$docker_root" "$RUNNER_TEMP"
+              exit 1
+            fi
+          else
+            required_bytes=$((image_bytes + reserve_bytes))
+            if [ "$docker_available" -lt "$required_bytes" ] || [ "$runner_available" -lt "$required_bytes" ]; then
+              echo "::error::Insufficient free space for the Docker image export: need $required_bytes bytes on each filesystem; Docker has $docker_available and runner temp has $runner_available."
+              docker system df
+              df -h "$docker_root" "$RUNNER_TEMP"
+              exit 1
+            fi
+          fi
+          echo "::notice title=Export storage::image=$image_bytes bytes; Docker free=$docker_available; runner-temp free=$runner_available; required=$required_bytes"
+          docker system df
+          df -h "$docker_root" "$RUNNER_TEMP"
       - name: Assemble verified customer package
         if: success()
         run: |
@@ -1831,8 +1889,16 @@ jobs:
           image_archive="$RUNNER_TEMP/toefl-house-erp-app.tar"
           image_labels="$RUNNER_TEMP/toefl-house-image-labels.json"
           docker tag toefl-house-erp-app:ci toefl-house-erp-app:local
+          trap 'docker rm -f toefl-house-image-export-pin >/dev/null 2>&1 || true' EXIT
           docker save --output "$image_archive" toefl-house-erp-app:local
           docker image inspect toefl-house-erp-app:ci --format '{{json .Config.Labels}}' > "$image_labels"
+          docker rm toefl-house-image-export-pin >/dev/null
+          trap - EXIT
+          # The verified archive is now the package input; release Docker's
+          # multi-gigabyte image layers before copying it into the package.
+          docker image rm toefl-house-erp-app:ci >/dev/null
+          docker image rm toefl-house-erp-app:local >/dev/null
+          docker image prune --all --force
           # A large offline EXE must not depend on the optional GitHub ZIP
           # (<2 GiB). Preserve ZIP output only for the separate tagged legacy
           # release path, which still fails if it exceeds that limit.
@@ -1854,6 +1920,13 @@ jobs:
             test -s "$package_root"/*.zip
           fi
           test -s "$package_root/TOEFL-House-ERP-Customer-$TOEFL_HOUSE_RELEASE_VERSION/product/release/ci-gates.json"
+          release_dir="$package_root/TOEFL-House-ERP-Customer-$TOEFL_HOUSE_RELEASE_VERSION/product/release"
+          test -s "$release_dir/toefl-house-erp-app.tar"
+          (cd "$release_dir" && sha256sum -c toefl-house-erp-app.tar.sha256)
+          # create_customer_package has verified and copied the image archive;
+          # remove the temporary source copy to avoid retaining two 3+ GB files.
+          rm -f -- "$image_archive"
+          test ! -e "$image_archive"
           echo "::notice title=Customer package::version $TOEFL_HOUSE_RELEASE_VERSION; image archive, checksum, manifest and allowlisted GUI included"
       - name: Export pinned offline database and cache images
         if: success()
@@ -1926,8 +1999,12 @@ jobs:
           # OS error code, and compact frame names/line numbers; it never forwards
           # Frappe messages, paths, source text, or stdin secrets. This short
           # tail gives startup failures an actionable, secret-free annotation.
-          docker compose logs --tail 3 bootstrap 2>&1 | tail -3 | sed 's/^/::error::bootstrap::/' || true
-          docker compose logs --tail 3 web 2>&1 | tail -3 | sed 's/^/::error::web::/' || true
+          if [ -s "$RUNNER_TEMP/toefl-house-product-image-compose.log" ]; then
+            tail -6 "$RUNNER_TEMP/toefl-house-product-image-compose.log" | sed 's/^/::error::compose::/'
+          else
+            docker compose logs --tail 3 bootstrap 2>&1 | tail -3 | sed 's/^/::error::bootstrap::/' || true
+            docker compose logs --tail 3 web 2>&1 | tail -3 | sed 's/^/::error::web::/' || true
+          fi
 
   windows-worktree-eol:
     name: Windows stale-worktree EOL normalization

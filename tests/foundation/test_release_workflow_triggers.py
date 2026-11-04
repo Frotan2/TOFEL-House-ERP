@@ -107,6 +107,44 @@ class ReleaseImageTriggerContract(unittest.TestCase):
         self.assertIn('--gate-evidence "$RUNNER_TEMP/toefl-house-ci-gates.json"', workflow)
         self.assertIn("/product/release/ci-gates.json", workflow)
 
+    def test_product_image_reclaims_disposable_docker_storage_before_export(self):
+        workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
+        prepare = workflow.split(
+            "      - name: Reclaim disposable Docker storage before image export", 1
+        )[1].split("      - name: Assemble verified customer package", 1)[0]
+        self.assertIn("docker compose -f product/docker-compose.yml down --volumes --remove-orphans", prepare)
+        self.assertIn("sudo rm -rf -- product/data /tmp/win-worktree", prepare)
+        self.assertIn("image_id=$(docker image inspect --format '{{.Id}}' toefl-house-erp-app:ci)", prepare)
+        self.assertIn("docker create --name toefl-house-image-export-pin toefl-house-erp-app:ci", prepare)
+        self.assertIn("docker builder prune --all --force", prepare)
+        self.assertIn("docker volume prune --force", prepare)
+        self.assertIn("docker image prune --all --force", prepare)
+        self.assertIn('docker image inspect "$image_id" >/dev/null', prepare)
+        self.assertIn('docker tag "$image_id" toefl-house-erp-app:ci', prepare)
+        self.assertIn("org.toefl-house.source-revision", prepare)
+        self.assertIn("DockerRootDir", prepare)
+        self.assertIn("required_bytes", prepare)
+        self.assertLess(prepare.index("docker create"), prepare.index("docker image prune"))
+        self.assertLess(prepare.index("docker image prune"), prepare.index('docker tag "$image_id"'))
+        self.assertLess(prepare.index('docker tag "$image_id"'), prepare.index("image_revision="))
+
+        assembly = workflow.split(
+            "      - name: Assemble verified customer package", 1
+        )[1].split("      - name: Export pinned offline database", 1)[0]
+        self.assertLess(assembly.index("docker save"), assembly.index("docker image rm"))
+        self.assertIn("docker rm toefl-house-image-export-pin", assembly)
+        self.assertIn("docker image rm toefl-house-erp-app:ci", assembly)
+        self.assertIn("docker image rm toefl-house-erp-app:local", assembly)
+        self.assertIn("sha256sum -c toefl-house-erp-app.tar.sha256", assembly)
+        self.assertLess(assembly.index("sha256sum -c"), assembly.index('rm -f -- "$image_archive"'))
+        self.assertIn('test ! -e "$image_archive"', assembly)
+
+        self.assertLess(
+            workflow.index("Require release checks on the same source revision"),
+            workflow.index("Reclaim disposable Docker storage before image export"),
+        )
+        self.assertIn("toefl-house-product-image-compose.log", workflow)
+
     def test_actions_customer_download_does_not_wrap_another_zip(self):
         workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
         artifact = workflow.split("      - name: Publish customer package artifact", 1)[1].split(

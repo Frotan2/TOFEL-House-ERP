@@ -415,18 +415,26 @@ def end_teaching_assignment(request_key, assignment, effective_end):
                     {"assignment": assignment, "effective_end": effective_end}, work)
 
 
-def _paid_dates(ref_doctype, ref_docname):
-    """Payroll dates already posted for one payable reference.
+def _paid_dates(ref_doctype, ref_docname, company, employee):
+    """Read live payroll-input references, refusing historic identity conflicts.
 
-    A locking read: concurrent calculations serialize on the contract rows
-    first (see below), and this re-read runs after the lock wait, so it
-    observes the winner's post on every isolation level. Without it two
-    overlapping calculations could both read "unpaid" and double-post
-    (BUG-PAY-01). Served by the th_ads_ref index (install.py).
+    Contract locks serialize calculations and this SELECT FOR UPDATE observes
+    active native Additional Salary rows after the lock wait. A previous
+    wrong-Company or wrong-Employee posting must not silently mark today's
+    entitlement as paid, nor be ignored to create an automatic double pay.
+    Finance must reconcile that historical record explicitly.
     """
-    return sorted({str(payroll_date) for (payroll_date,) in frappe.db.sql(
-        "select payroll_date from `tabAdditional Salary` where ref_doctype=%s "
-        "and ref_docname=%s and disabled=0 and docstatus<2 for update", (ref_doctype, ref_docname))})
+    rows = frappe.db.sql(
+        "select payroll_date, company, employee from `tabAdditional Salary` "
+        "where ref_doctype=%s and ref_docname=%s "
+        "and disabled=0 and docstatus<2 for update",
+        (ref_doctype, ref_docname))
+    if any(stored_company != company or stored_employee != employee
+           for _, stored_company, stored_employee in rows):
+        raise frappe.ValidationError(
+            "Existing Additional Salary for this payable has a different "
+            "Company or Employee; Finance reconciliation is required")
+    return sorted({str(payroll_date) for payroll_date, _, _ in rows})
 
 
 def _covering_contract_name(instructor, start, end):
@@ -444,7 +452,7 @@ def _covering_contract_name(instructor, start, end):
     return overlapping[0].name
 
 
-def _lock_covering_contracts(contracts, start, end):
+def _lock_covering_contracts(contracts, start, end, extra_contract_names=()):
     """Serialize overlapping calculations on the covering contract rows.
 
     Contract names are locked in sorted order so concurrent calculations
@@ -458,7 +466,11 @@ def _lock_covering_contracts(contracts, start, end):
     (historical reproducibility — the September payroll resolves from the
     September-covering revision, whatever its status today).
     """
-    for name in sorted({contract.name for contract in contracts.values()}):
+    # SKIP-mode orphan reports also carry company-sensitive contract identity.
+    # Lock those parent rows in the same global sorted order as payable contracts.
+    names = {contract.name for contract in contracts.values()}
+    names.update(extra_contract_names or ())
+    for name in sorted(names):
         frappe.db.sql("select name from `tabTH Instructor Contract` where name=%s for update",
                       (name,))
     for instructor in sorted(contracts):
@@ -472,6 +484,32 @@ def _lock_covering_contracts(contracts, start, end):
                 f"Contract cover for {instructor} changed during calculation; recalculation required")
         contracts[instructor] = fresh
     return contracts
+
+
+def _assert_payroll_company(contract, instructor, company):
+    """Refuse wrong-company or mismatched HRMS identities before any wage write.
+
+    The assignment query is company-scoped through Instructor.employee,
+    whereas Additional Salary pays contract.employee. Both links must agree
+    and the actual native Employee must belong to the requested Company.
+    This also protects orphan adjustments and imported/edited legacy rows.
+    """
+    # A normal get_value() could use an old REPEATABLE READ snapshot.
+    # Locking reads see the current native identities after concurrent
+    # transfers/relinks have committed, and hold them until our salary inputs
+    # are inserted. Contract rows are already locked in a sorted order.
+    employees = frappe.db.sql(
+        "select company from `tabEmployee` where name=%s for update",
+        (contract.employee,), as_dict=True)
+    if len(employees) != 1 or employees[0].company != company:
+        raise frappe.ValidationError(
+            "Teaching contract employee belongs to a different payroll company")
+    instructors = frappe.db.sql(
+        "select employee from `tabInstructor` where name=%s for update",
+        (instructor,), as_dict=True)
+    if len(instructors) != 1 or instructors[0].employee != contract.employee:
+        raise frappe.ValidationError(
+            "Teaching contract employee no longer matches the instructor's HRMS employee record")
 
 
 def _payable_for(contract, assignment):
@@ -558,10 +596,18 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                 "No active adjustment posting policy governs payroll; "
                 "the Course Owner must set one first")
         orphan_mode = posting_terms["orphan_posting"]
+        # Scope at the database boundary: a Company-A payroll run must not
+        # read or process Company-B teaching assignments. Instructor.employee
+        # is the native Education-to-HRMS link, not a user-supplied Company.
         rows = frappe.db.sql(
-            "select name, student_group, skill, instructor, contract, effective_start, effective_end "
-            "from `tabTH Teaching Assignment` where effective_start <= %s "
-            "and (effective_end is null or effective_end >= %s)", (end, start), as_dict=True)
+            "select a.name, a.student_group, a.skill, a.instructor, a.contract, "
+            "a.effective_start, a.effective_end "
+            "from `tabTH Teaching Assignment` a "
+            "inner join `tabInstructor` i on i.name = a.instructor "
+            "inner join `tabEmployee` e on e.name = i.employee "
+            "where e.company = %s and a.effective_start <= %s "
+            "and (a.effective_end is null or a.effective_end >= %s)",
+            (company_name, end, start), as_dict=True)
         posted, skipped_fixed, skipped_existing, adjustments_posted = {}, [], 0, 0
         orphans_posted = 0
         already_compensated = {}
@@ -569,7 +615,7 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
         for instructor in sorted({row.instructor for row in rows}):
             contracts[instructor] = frappe.get_doc(
                 CONTRACT, _covering_contract_name(instructor, start, end))
-        orphans = posting.collect_orphan_contracts(start, end, set(contracts))
+        orphans = posting.collect_orphan_contracts(start, end, set(contracts), company_name)
         orphan_adjustment_names = {name for info in orphans.values()
                                    for name in info["adjustments"]}
         if orphan_mode == posting.POST:
@@ -581,17 +627,46 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                 contracts[info["instructor"]] = frappe.get_doc(
                     CONTRACT, _covering_contract_name(info["instructor"], start, end))
             skipped_orphans = {}
+            extra_contract_names = ()
         else:
+            # SKIP still returns contract/adjustment names to the caller.
+            # Lock and revalidate each parent before exposing that report:
+            # a concurrent Employee transfer or Instructor relink must not
+            # leak another Company's orphan details from a stale snapshot.
             skipped_orphans = {parent: info["adjustments"]
                                for parent, info in sorted(orphans.items())}
-        _lock_covering_contracts(contracts, start, end)
+            extra_contract_names = tuple(orphans)
+        _lock_covering_contracts(
+            contracts, start, end, extra_contract_names=extra_contract_names)
+        # Validate the actual paid Employee, not just the Instructor linked
+        # by the selection query. All contracts pass before the first insert.
+        for instructor, contract in sorted(contracts.items()):
+            _assert_payroll_company(contract, instructor, company_name)
+        if orphan_mode == posting.SKIP:
+            for parent, info in sorted(orphans.items()):
+                orphan_contract = frappe.get_doc(CONTRACT, parent, for_update=True)
+                if orphan_contract.instructor != info["instructor"]:
+                    raise frappe.ValidationError(
+                        "Orphan contract identity changed during payroll calculation")
+                if orphan_contract.compensation_model == "Fixed Salary":
+                    raise frappe.ValidationError(
+                        "Orphan contract compensation model changed during payroll calculation")
+                current_due_adjustments = {
+                    str(adjustment.name)
+                    for adjustment in (orphan_contract.adjustments or [])
+                    if start <= str(adjustment.effective_date) <= end
+                }
+                if current_due_adjustments != set(info["adjustments"]):
+                    raise frappe.ValidationError(
+                        "Orphan contract adjustments changed during payroll calculation")
+                _assert_payroll_company(orphan_contract, info["instructor"], company_name)
         for row in rows:
             contract = contracts[row.instructor]
             if contract.compensation_model == "Fixed Salary":
                 if contract.name not in skipped_fixed:
                     skipped_fixed.append(contract.name)
                 continue
-            already_paid = _paid_dates(ASSIGNMENT, row.name)
+            already_paid = _paid_dates(ASSIGNMENT, row.name, company_name, contract.employee)
             payment_state = _assignment_payment_state(contract, row, start, end, already_paid)
             if payment_state == "existing":
                 skipped_existing += 1
@@ -640,7 +715,7 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
             # own audit link (TH Contract Adjustment row name) and its own
             # one-off state, exactly like the assignment path above.
             for adjustment in due:
-                adjustment_paid = _paid_dates(ADJUSTMENT, adjustment.name)
+                adjustment_paid = _paid_dates(ADJUSTMENT, adjustment.name, company_name, contract.employee)
                 if end in adjustment_paid:
                     skipped_existing += 1
                     continue

@@ -96,10 +96,15 @@ class S2CompensationTests(unittest.TestCase):
         self.paid_rows = {}
         self.currency = "USD"
         self.company_permissions = []  # HQ unrestricted unless explicitly scoped
+        self.employee_companies = {"EMP-1": "SYN Teaching House"}
+        self.instructor_employees = {"INS-1": "EMP-1"}
+        self.locked_employee_companies = {}
+        self.locked_instructor_employees = {}
         self.lock_order = []
         self.paid_queries = []
         self.paid_sql_queries = []
         self.posted = []
+        self.orphans = {}
         self.get_doc_calls = []
         previous = dict(sys.modules)
         self.addCleanup(lambda: (sys.modules.clear(), sys.modules.update(previous)))
@@ -107,12 +112,34 @@ class S2CompensationTests(unittest.TestCase):
 
         def sql(query, values=(), **kwargs):
             if "tabTH Teaching Assignment" in query:
-                return list(fake.assignments)
+                # Reproduce the SQL joins and Company predicate. Merely
+                # checking the resulting payload's company would miss a
+                # regression where the source query selects every school.
+                assert "inner join `tabInstructor`" in query
+                assert "inner join `tabEmployee`" in query
+                assert "where e.company = %s" in query
+                company, _, _ = values
+                return [
+                    row for row in fake.assignments
+                    if fake.employee_companies.get(
+                        fake.instructor_employees.get(row.instructor, "EMP-1")) == company
+                ]
             if "tabTH Instructor Contract" in query and "for update" in query:
                 fake.lock_order.append(values[0])
                 return []
+            if "tabEmployee" in query and "for update" in query:
+                name = values[0]
+                company = fake.locked_employee_companies.get(
+                    name, fake.employee_companies.get(name))
+                return [SimpleNamespace(company=company)] if company else []
+            if "tabInstructor" in query and "for update" in query:
+                name = values[0]
+                employee = fake.locked_instructor_employees.get(
+                    name, fake.instructor_employees.get(name, "EMP-1"))
+                return [SimpleNamespace(employee=employee)] if employee else []
             if "tabAdditional Salary" in query:
                 assert "for update" in query, "posting re-read must lock"
+                assert "select payroll_date, company, employee" in query
                 fake.paid_sql_queries.append(query)
                 fake.paid_queries.append((values[0], values[1]))
                 ref = (values[0], values[1])
@@ -122,8 +149,11 @@ class S2CompensationTests(unittest.TestCase):
                         rows = [row for row in rows if not row["disabled"]]
                     if "docstatus<2" in query:
                         rows = [row for row in rows if row["docstatus"] < 2]
-                    return [(row["payroll_date"],) for row in rows]
-                return [(day,) for day in fake.paid.get(ref, [])]
+                    return [(row["payroll_date"],
+                             row.get("company", "SYN Teaching House"),
+                             row.get("employee", "EMP-1")) for row in rows]
+                return [(day, "SYN Teaching House", "EMP-1")
+                        for day in fake.paid.get(ref, [])]
             raise AssertionError(f"unexpected sql {query[:80]}")
 
         def get_all(doctype, filters=None, fields=None, **kwargs):
@@ -157,6 +187,10 @@ class S2CompensationTests(unittest.TestCase):
         def get_value(doctype, name, field=None, **kwargs):
             if doctype == "Salary Component" and field == "type":
                 return "Deduction" if name == "SYN Contract Deduction" else "Earning"
+            if doctype == "Employee" and field == "company":
+                return fake.employee_companies.get(name)
+            if doctype == "Instructor" and field == "employee":
+                return fake.instructor_employees.get(name, "EMP-1")
             return fake.currency
 
         stub.db = SimpleNamespace(
@@ -177,10 +211,9 @@ class S2CompensationTests(unittest.TestCase):
         api = types.ModuleType("toefl_house.api")
         api._execute = lambda kind, key, payload, work: work(ACTOR)[0]
         sys.modules["toefl_house.api"] = api
-        # S13: the calculation judges the adjustment posting policy. This
-        # harness stands in for a skip-mode policy over fixtures with no
-        # orphans — the posted counts below keep proving the locking and
-        # one-off semantics they were written for.
+        # S13: the calculation judges the adjustment posting policy. The default
+        # fixture uses SKIP; explicit orphan fixtures prove reports are locked
+        # and identity-checked before company-sensitive names are returned.
         teaching_pkg = types.ModuleType("toefl_house.teaching")
         teaching_pkg.__path__ = []
         sys.modules["toefl_house.teaching"] = teaching_pkg
@@ -189,7 +222,7 @@ class S2CompensationTests(unittest.TestCase):
         posting.SKIP = "skip"
         posting.governing_posting_terms = lambda: {
             "effective_from": "2026-01-01", "orphan_posting": "skip"}
-        posting.collect_orphan_contracts = lambda start, end, assigned: {}
+        posting.collect_orphan_contracts = lambda start, end, assigned, company: fake.orphans
         sys.modules["toefl_house.teaching.adjustment_posting"] = posting
         finance_pkg = types.ModuleType("toefl_house.finance")
         finance_pkg.__path__ = [str(APP / "finance")]
@@ -213,6 +246,128 @@ class S2CompensationTests(unittest.TestCase):
             self._calc()
         self.assertEqual(self.posted, [])
         self.assertEqual(self.lock_order, [])
+
+    def test_foreign_company_assignment_is_excluded_before_payroll(self):
+        self.assignments = [_assignment("A-FOREIGN", "INS-FOREIGN", "C-FOREIGN")]
+        self.instructor_employees["INS-FOREIGN"] = "EMP-FOREIGN"
+        self.employee_companies["EMP-FOREIGN"] = "Other School"
+        result = self._calc()
+        self.assertEqual(result["assignments"], 0)
+        self.assertEqual(result["posted"], {})
+        self.assertEqual(self.posted, [])
+        self.assertEqual(self.lock_order, [])
+
+    def test_foreign_contract_employee_cannot_be_posted_as_local_salary(self):
+        # A native Instructor-to-Employee join selects the local class, but
+        # a mismatched contract Employee would otherwise receive the money.
+        self.contract_doc.employee = "EMP-FOREIGN"
+        self.employee_companies["EMP-FOREIGN"] = "Other School"
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        with self.assertRaisesRegex(_ValidationError, "different payroll company"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_same_company_but_wrong_instructor_employee_is_refused(self):
+        self.contract_doc.employee = "EMP-OTHER"
+        self.employee_companies["EMP-OTHER"] = "SYN Teaching House"
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        with self.assertRaisesRegex(_ValidationError, "no longer matches"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_employee_transfer_during_calculation_fails_on_locking_read(self):
+        # Selection saw Company A, but a concurrent native HRMS transfer
+        # committed before the Employee row lock was acquired.
+        self.locked_employee_companies["EMP-1"] = "Other School"
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        with self.assertRaisesRegex(_ValidationError, "different payroll company"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_instructor_relink_during_calculation_fails_on_locking_read(self):
+        self.locked_instructor_employees["INS-1"] = "EMP-NEW"
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        with self.assertRaisesRegex(_ValidationError, "no longer matches"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def _skip_orphan_fixture(self):
+        self.assignments = []
+        self.contract_doc = _contract("C-ORPHAN", [_adjustment("ADJ-ORPHAN")])
+        self.contract_doc.instructor = "INS-ORPHAN"
+        self.contract_doc.employee = "EMP-ORPHAN"
+        self.employee_companies["EMP-ORPHAN"] = "SYN Teaching House"
+        self.instructor_employees["INS-ORPHAN"] = "EMP-ORPHAN"
+        self.orphans = {
+            "C-ORPHAN": {
+                "instructor": "INS-ORPHAN",
+                "adjustments": ["ADJ-ORPHAN"],
+            }
+        }
+
+    def test_skip_orphan_contract_is_locked_and_identity_checked_before_reporting(self):
+        self._skip_orphan_fixture()
+        result = self._calc()
+        self.assertEqual(self.lock_order, ["C-ORPHAN"])
+        self.assertIn(("C-ORPHAN", True), self.get_doc_calls)
+        self.assertEqual(
+            result["skipped_orphan_adjustments"],
+            {parent: info["adjustments"] for parent, info in self.orphans.items()},
+        )
+        self.assertEqual(self.posted, [])
+
+    def test_skip_orphan_report_refuses_concurrent_employee_transfer(self):
+        self._skip_orphan_fixture()
+        self.locked_employee_companies["EMP-ORPHAN"] = "Other School"
+        with self.assertRaisesRegex(_ValidationError, "different payroll company"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_skip_orphan_report_refuses_concurrent_instructor_relink(self):
+        self._skip_orphan_fixture()
+        self.employee_companies["EMP-OTHER"] = "SYN Teaching House"
+        self.locked_instructor_employees["INS-ORPHAN"] = "EMP-OTHER"
+        with self.assertRaisesRegex(_ValidationError, "no longer matches"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_skip_orphan_report_refuses_contract_instructor_replacement(self):
+        self._skip_orphan_fixture()
+        self.fresh_doc = _contract("C-ORPHAN", [_adjustment("ADJ-ORPHAN")])
+        self.fresh_doc.instructor = "INS-OTHER"
+        self.fresh_doc.employee = "EMP-OTHER"
+        self.employee_companies["EMP-OTHER"] = "SYN Teaching House"
+        self.instructor_employees["INS-OTHER"] = "EMP-OTHER"
+        with self.assertRaisesRegex(_ValidationError, "identity changed"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_skip_orphan_report_refuses_contract_changed_to_fixed_salary(self):
+        self._skip_orphan_fixture()
+        self.fresh_doc = _contract("C-ORPHAN", [_adjustment("ADJ-ORPHAN")])
+        self.fresh_doc.instructor = "INS-ORPHAN"
+        self.fresh_doc.employee = "EMP-ORPHAN"
+        self.fresh_doc.compensation_model = "Fixed Salary"
+        with self.assertRaisesRegex(_ValidationError, "compensation model changed"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_skip_orphan_report_refuses_changed_due_adjustment_rows(self):
+        self._skip_orphan_fixture()
+        self.fresh_doc = _contract("C-ORPHAN", [])
+        self.fresh_doc.instructor = "INS-ORPHAN"
+        self.fresh_doc.employee = "EMP-ORPHAN"
+        with self.assertRaisesRegex(_ValidationError, "adjustments changed"):
+            self._calc()
+        self.assertEqual(self.posted, [])
 
     def test_covering_contracts_locked_before_posting(self):
         self.assignments = [_assignment("A-2", "INS-B", "C-ZEBRA"),
@@ -307,6 +462,45 @@ class S2CompensationTests(unittest.TestCase):
         self.assertEqual(result["posted"], {})
         self.assertEqual(result["adjustments_posted"], 0)
         self.assertEqual(self.posted, [])
+
+    def test_foreign_company_additional_salary_blocks_silent_paid_skip(self):
+        # An older incorrect Company-A input for the same teaching fact must
+        # not make Company-B silently report an already-paid entitlement.
+        self.paid_rows[(ASSIGNMENT, "A-1")] = [
+            {"payroll_date": "2026-09-30", "company": "Other School",
+             "employee": "EMP-1", "disabled": 0, "docstatus": 1}]
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        with self.assertRaisesRegex(_ValidationError, "Finance reconciliation"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_wrong_employee_adjustment_refuses_without_new_salary(self):
+        # Prove the same safeguard on Contract Adjustment references.
+        self.paid[(ASSIGNMENT, "A-1")] = ["2026-09-30"]
+        self.paid_rows[(ADJUSTMENT, "ADJ-1")] = [
+            {"payroll_date": "2026-09-30", "company": "SYN Teaching House",
+             "employee": "EMP-WRONG", "disabled": 0, "docstatus": 1}]
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        with self.assertRaisesRegex(_ValidationError, "Finance reconciliation"):
+            self._calc()
+        self.assertEqual(self.posted, [])
+
+    def test_cancelled_foreign_company_salary_does_not_block_new_draft(self):
+        self.paid_rows[(ASSIGNMENT, "A-1")] = [
+            {"payroll_date": "2026-09-30", "company": "Other School",
+             "employee": "EMP-1", "disabled": 0, "docstatus": 2},
+            {"payroll_date": "2026-09-30", "company": "Other School",
+             "employee": "EMP-1", "disabled": 1, "docstatus": 1}]
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        result = self._calc()
+        self.assertEqual(len(self.posted), 2)
+        self.assertEqual(result["adjustments_posted"], 1)
 
     def test_component_types_fail_closed_before_creating_payroll_inputs(self):
         with self.assertRaisesRegex(_ValidationError, "requires an Earning"):
