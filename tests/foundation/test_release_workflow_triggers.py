@@ -114,14 +114,19 @@ class ReleaseImageTriggerContract(unittest.TestCase):
         )[1].split("      - name: Assemble verified customer package", 1)[0]
         self.assertIn("docker compose -f product/docker-compose.yml down --volumes --remove-orphans", prepare)
         self.assertIn("sudo rm -rf -- product/data /tmp/win-worktree", prepare)
+        self.assertIn("image_id=$(docker image inspect --format '{{.Id}}' toefl-house-erp-app:ci)", prepare)
         self.assertIn("docker create --name toefl-house-image-export-pin toefl-house-erp-app:ci", prepare)
         self.assertIn("docker builder prune --all --force", prepare)
         self.assertIn("docker volume prune --force", prepare)
         self.assertIn("docker image prune --all --force", prepare)
+        self.assertIn('docker image inspect "$image_id" >/dev/null', prepare)
+        self.assertIn('docker tag "$image_id" toefl-house-erp-app:ci', prepare)
         self.assertIn("org.toefl-house.source-revision", prepare)
         self.assertIn("DockerRootDir", prepare)
         self.assertIn("required_bytes", prepare)
         self.assertLess(prepare.index("docker create"), prepare.index("docker image prune"))
+        self.assertLess(prepare.index("docker image prune"), prepare.index('docker tag "$image_id"'))
+        self.assertLess(prepare.index('docker tag "$image_id"'), prepare.index("image_revision="))
 
         assembly = workflow.split(
             "      - name: Assemble verified customer package", 1

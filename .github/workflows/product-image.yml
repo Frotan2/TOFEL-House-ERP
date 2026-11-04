@@ -1840,10 +1840,16 @@ jobs:
 
           # Keep the exact app image reachable while removing unused images.
           # The stopped pin container is removed immediately after docker save.
+          image_id=$(docker image inspect --format '{{.Id}}' toefl-house-erp-app:ci)
           docker create --name toefl-house-image-export-pin toefl-house-erp-app:ci >/dev/null
           docker builder prune --all --force
           docker volume prune --force
           docker image prune --all --force
+          # Image pruning can remove the tag even when the stopped pin keeps
+          # the exact image ID alive. Restore the tag used by the export and
+          # verify that the pinned image survived pruning.
+          docker image inspect "$image_id" >/dev/null
+          docker tag "$image_id" toefl-house-erp-app:ci
 
           image_revision=$(docker image inspect toefl-house-erp-app:ci --format '{{index .Config.Labels "org.toefl-house.source-revision"}}')
           test "$image_revision" = "$GITHUB_SHA"
