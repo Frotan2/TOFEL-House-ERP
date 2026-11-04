@@ -32,17 +32,17 @@
   },
   "deployment_and_state": {
     "current_deployment": "Local/server-based deployment accessed by authorized staff through Tailscale.",
-    "future_deployment": "Internet-hosted deployment is future direction; provider, hostname, DNS, public edge, and public TLS values are not selected.",
+    "future_deployment": "Owner selected Oracle Cloud Infrastructure Always Free Ampere A1 ARM64 for an isolated synthetic cloud staging workstream on 2026-11-04, with direct public-IP HTTPS behind a reverse proxy and optional Cloudflare. This direction does not authorize production or real-data migration; tenancy home region, actual address, and capacity remain to be checked.",
     "current_database": "Local/server-based.",
     "current_files": "Local/server-based.",
-    "current_trust_boundary": "Authorized staff access through the controlled Tailscale network; public internet access is not a current deployment assumption.",
+    "current_trust_boundary": "The preserved Windows deployment remains limited to authorized staff through Tailscale. The separately requested Oracle staging target uses public-IP HTTPS and strict firewall isolation; real-data public deployment remains blocked pending explicit production authorization.",
     "future_migration_boundary": "Future internet hosting requires a separate topology, edge, session, TLS, durability, capacity, and deployment evidence record; none is fabricated here."
   },
   "continuity_and_recovery": {
     "backup": "Automated multi-version encrypted backup is REQUIRED.",
     "recovery": "Recovery onto another system MUST be supported.",
     "priority": "Preserving data is more important than minimizing recovery time.",
-    "offsite_backup": "DEFERRED FUTURE SCOPE. It is not a current launch requirement. The current launch backup is an automated multi-version encrypted backup stored on a separate local drive on the same computer; any off-site/NAS/second-device strategy will be decided later by the Course Owner.",
+    "offsite_backup": "The existing Windows launch backup remains an automated multi-version encrypted backup on a separate local drive on the same computer; off-site storage remains deferred for Windows. The Oracle cloud workstream requires encrypted independently recoverable off-host backups within verified Always Free quotas, as confirmed on 2026-11-04. No real data may be sent before separate production authorization.",
     "retention_and_rotation": "Engineering-owned implementation contract: versioned encrypted backups with deterministic rotation and restoration verification; exact deployed retention values remain configuration, not invented business policy.",
     "rpo_rto": "RPO 24 hours; RTO 8 hours. These are owner-selected targets for the current local-server + Tailscale deployment and must be measured and evidenced; recording them does not mean they are met."
   },
@@ -66,6 +66,7 @@
       "configuration versioning",
       "audit trail",
       "deletion and archival mechanics",
+      "Oracle ARM64 cloud deployment and cloud recovery implementation",
       "topology contracts",
       "capacity testing",
       "rollback",
@@ -82,9 +83,9 @@
     "production_authorization": "REJECT until every applicable release gate is actually proven."
   },
   "unresolved_business_inputs_not_reinterpreted": [
-    "Future internet-hosted provider, hostname, DNS, and public-edge selection.",
+    "Oracle cloud account home region, tenancy quota/capacity, actual public IP or approved domain, and actual TLS issuance remain unverified; they are not invented from the 2026-11-04 staging-direction decision.",
     "Academic GE/EAP grading and same-level transfer are superseded only to the extent of Owner's 2026-10-28 addendum; advanced withdrawal/refund execution, specialist assessment, tax, guardian delegation and derived metrics stay held until qualified integration.",
-    "Resolved RPO/RTO authorize engineering measurement; off-site backup is deferred future scope and is not a current release gate."
+    "The Owner-approved RPO 24 hours / RTO 8 hours apply to the local Windows + Tailscale target only. Cloud RPO/RTO remain unselected. The 2026-11-04 Oracle direction makes encrypted off-host backup a cloud-workstream requirement; its measured size/retention must fit verified Always Free limits."
   ],
   "source_documents": [
     "ef14970:docs/engineering/PRODUCTION-OPERATIONS-IMPLEMENTATION-CONTRACT.md",
@@ -853,5 +854,34 @@
       "initial_conservative_operating_limit": 15,
       "individual_measured_capacities_not_supplied": true
     }
+  },
+  "owner_policy_addenda_2026_11_04_cloud_direction": {
+    "source": "Direct Owner instruction pasted into Codex on 2026-11-04; explicitly selects Oracle Cloud Always Free and asks for an independently verifiable ARM64 cloud deployment path.",
+    "status": "OWNER_CONFIRMED_CLOUD_STAGING_DIRECTION_NOT_PRODUCTION_AUTHORIZATION",
+    "supersedes": "The previous local/Tailscale-only deployment direction is superseded for isolated cloud staging only. It remains authoritative for the preserved Windows installation. Production stays REJECT.",
+    "scope": {
+      "provider": "Oracle Cloud Infrastructure",
+      "compute": "Always Free eligible Ampere A1 ARM64 only",
+      "access": "Direct public IP over trusted HTTPS behind a reverse proxy; Cloudflare may be optional and Tailscale is not required for ordinary staff access.",
+      "domain": "No domain may be assumed or invented; evaluate a publicly trusted IP certificate if a domain is unavailable.",
+      "resource_cost": "Never upgrade the tenancy, consume promotional credits, or create paid resources. Stop before any resource or quota could incur a charge.",
+      "staging_data": "Synthetic records only, isolated from the existing Windows site and database."
+    },
+    "cloud_backup": {
+      "requirement": "Encrypted, independently recoverable, off-host backups are required for the Oracle deployment objective.",
+      "free_tier_boundary": "Use only verified Always Free capacity; retention must stop or be reported blocked before exceeding free quotas.",
+      "real_data_boundary": "This instruction does not authorize uploading or migrating real institutional data before production authorization and all applicable privacy, security, and release gates pass.",
+      "supersedes": "For the future Oracle deployment only, supersedes the 2026-10-14 decision to defer off-site backups. It does not change the existing Windows backup destination or its preservation hold."
+    },
+    "authorizes": [
+      "Prepare and test a separate ARM64 Oracle deployment path and security configuration.",
+      "Deploy an isolated synthetic staging instance only when authorized OCI account access is available and the exact resource plan is confirmed Always Free."
+    ],
+    "not_authorized": [
+      "Production promotion, real-data migration, or cutover.",
+      "Any paid resource, paid-tier upgrade, or use of temporary promotional credits.",
+      "Modification, reset, reinstall, or deletion of the preserved Windows installation, credentials, backups, or Docker volumes."
+    ],
+    "production_authorization": "REJECT until every applicable release gate is objectively proven and explicit production authorization is separately recorded."
   }
 }

@@ -5,9 +5,14 @@
 **Customer data: TEST PACKAGE — NO REAL DATA.**
 
 The TOEFL House ERP is a native-first institute management system based on
-Frappe, ERPNext, Education and HRMS. The integration and review branch is
-`work`; `main` is not yet the approved customer release. Review is tracked
-in [draft PR #120](https://github.com/Frotan2/TOFEL-House-ERP/pull/120).
+Frappe, ERPNext, Education and HRMS. The primary source branch is `main`. The
+former `work` branch and PR #120 were merged on 2026-10-31; payroll company
+isolation and the exact-revision image export fix were merged through PR #128
+on 2026-11-04. The current main revision is
+`415d0145f09b546d474853bafb33c235593441db`. These merges do **not** change the
+production decision: the source remains a TEST package, with no real data and
+no production authorization. Cloud readiness is tracked separately in
+[Oracle ARM64 readiness](docs/cloud/ORACLE-ARM64-READINESS.md).
 
 > **Existing Owner installation:** Preserve the existing Frappe site,
 > `product/data`, Docker volumes, credentials, encrypted backups, and

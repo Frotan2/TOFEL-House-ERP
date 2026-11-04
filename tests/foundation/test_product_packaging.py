@@ -212,6 +212,9 @@ class DependencyPinContract(unittest.TestCase):
         # owner's local build verifies too.
         text = DOCKERFILE.read_text()
         self.assertIn("ARG NODE_TARBALL_SHA256", text)
+        self.assertIn("ARG NODE_TARBALL_ARCH=x64", text)
+        self.assertIn('"${TARGETARCH}:${NODE_TARBALL_ARCH}"', text)
+        self.assertIn('linux-${NODE_TARBALL_ARCH}.tar.xz', text)
         self.assertIn("sha256sum -c", text)
         compose = COMPOSE.read_text()
         arg_value = re.search(r'NODE_TARBALL_SHA256:\s*"([^"]*)"', compose).group(1)
@@ -221,6 +224,18 @@ class DependencyPinContract(unittest.TestCase):
         workflow = (ROOT / ".github/workflows" / "product-image.yml").read_text()
         self.assertIn("SHASUMS256.txt", workflow)
         self.assertIn("--build-arg NODE_TARBALL_SHA256", workflow)
+
+    def test_node_arm64_tarball_pin_is_recorded_separately(self):
+        node = next(c for c in json.loads(self.MATRIX.read_text())["components"]
+                    if c["name"] == "node")
+        self.assertEqual(node["selected_version"], "24.21.0")
+        self.assertEqual(node["tarball_arm64_filename"],
+                         "node-v24.21.0-linux-arm64.tar.xz")
+        self.assertRegex(node["tarball_sha256_arm64"], r"^[0-9a-f]{64}$")
+        workflow = (ROOT / ".github/workflows/oracle-arm64-build.yml").read_text()
+        self.assertIn("ubuntu-24.04-arm", workflow)
+        self.assertIn("tarball_sha256_arm64", workflow)
+        self.assertIn("linux/arm64", workflow)
 
     def test_runner_probe_probes_the_pinned_images(self):
         # The probe pulls the exact digest-pinned images the product runs —

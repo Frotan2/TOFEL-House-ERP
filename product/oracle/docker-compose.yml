@@ -1,0 +1,219 @@
+# Oracle ARM64 isolated synthetic staging. This file never refers to
+# product/data or to the Windows installation's Docker project/volume.
+name: toefl-house-cloud-staging
+
+x-app-image: &app-image ${ERP_APP_IMAGE:?Set ERP_APP_IMAGE to the exact reviewed ARM64 image digest}
+x-logging: &bounded-logs
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+services:
+  bootstrap:
+    image: *app-image
+    platform: linux/arm64
+    user: root
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        install -o frappe -g frappe -m 0400 /run/cloud-secrets/db.env /run/bootstrap-secrets/db.env
+        exec /product/entrypoint.sh bootstrap
+    tmpfs:
+      - /run/bootstrap-secrets:mode=0755,size=64k,nosuid,nodev,noexec
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    volumes:
+      - ./data/sites:/home/frappe/bench/sites
+      - ./data/logs:/home/frappe/bench/logs
+      - type: bind
+        source: ./data/secrets/db.env
+        target: /run/cloud-secrets/db.env
+        read_only: true
+        bind:
+          create_host_path: false
+    restart: "no"
+    mem_limit: 4g
+    logging: *bounded-logs
+
+  web:
+    image: *app-image
+    platform: linux/arm64
+    user: root
+    entrypoint: ["/product/entrypoint.sh", "web"]
+    environment:
+      SITE_NAME: toeflhouse.localhost
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    expose:
+      - "8000"
+    volumes:
+      - ./data/sites:/home/frappe/bench/sites
+      - ./data/logs:/home/frappe/bench/logs
+      - ./data/activation:/run/activation:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 20
+      start_period: 25m
+    restart: unless-stopped
+    mem_limit: 3g
+    logging: *bounded-logs
+
+  worker:
+    image: *app-image
+    platform: linux/arm64
+    user: root
+    entrypoint: ["/product/entrypoint.sh", "worker"]
+    environment:
+      SITE_NAME: toeflhouse.localhost
+    depends_on:
+      web:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    working_dir: /home/frappe/bench
+    volumes:
+      - ./data/sites:/home/frappe/bench/sites
+      - ./data/logs:/home/frappe/bench/logs
+    restart: unless-stopped
+    mem_limit: 2g
+    logging: *bounded-logs
+
+  scheduler:
+    image: *app-image
+    platform: linux/arm64
+    user: root
+    entrypoint: ["/product/entrypoint.sh", "scheduler"]
+    environment:
+      SITE_NAME: toeflhouse.localhost
+    depends_on:
+      web:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    working_dir: /home/frappe/bench
+    volumes:
+      - ./data/sites:/home/frappe/bench/sites
+      - ./data/logs:/home/frappe/bench/logs
+    restart: unless-stopped
+    mem_limit: 768m
+    logging: *bounded-logs
+
+  socketio:
+    image: *app-image
+    platform: linux/arm64
+    user: root
+    entrypoint: ["/product/entrypoint.sh", "socketio"]
+    environment:
+      SITE_NAME: toeflhouse.localhost
+    depends_on:
+      web:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    working_dir: /home/frappe/bench
+    expose:
+      - "9000"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:9000/socket.io/?EIO=4&transport=polling"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    volumes:
+      - ./data/sites:/home/frappe/bench/sites
+      - ./data/logs:/home/frappe/bench/logs
+    restart: unless-stopped
+    mem_limit: 512m
+    logging: *bounded-logs
+
+  db:
+    image: mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62
+    platform: linux/arm64
+    stop_grace_period: 2m
+    env_file:
+      - ./data/secrets/db.env
+    environment:
+      MARIADB_ROOT_HOST: "%"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    mem_limit: 3g
+    logging: *bounded-logs
+
+  redis-queue:
+    image: redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36
+    platform: linux/arm64
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+    mem_limit: 384m
+    logging: *bounded-logs
+
+  redis-cache:
+    image: redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36
+    platform: linux/arm64
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+    mem_limit: 384m
+    logging: *bounded-logs
+
+  proxy:
+    image: caddy:2.11.8-alpine@sha256:eb37f58646a901dc7727cf448cae36daaefaba79de33b5058dab79aa4c04aefb
+    platform: linux/arm64
+    environment:
+      PUBLIC_ADDRESS: ${PUBLIC_ADDRESS:?Set PUBLIC_ADDRESS to the actual public IP or approved domain}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+      socketio:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 256m
+    logging: *bounded-logs
+
+volumes:
+  db-data:
+    name: toefl-house-cloud-staging-db-data
+  caddy-data:
+    name: toefl-house-cloud-staging-caddy-data
+  caddy-config:
+    name: toefl-house-cloud-staging-caddy-config

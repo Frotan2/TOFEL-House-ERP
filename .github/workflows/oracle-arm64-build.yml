@@ -1,0 +1,119 @@
+name: Oracle ARM64 image build
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/oracle-arm64-build.yml
+      - product/app.Dockerfile
+      - product/docker-compose.yml
+      - product/**
+      - apps/**
+      - docs/engineering/foundation-version-matrix.json
+      - docs/owner-decisions.json
+      - tools/foundation/**
+      - tools/native/**
+      - tools/oracle/**
+      - tests/**
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/oracle-arm64-build.yml
+      - product/app.Dockerfile
+      - product/docker-compose.yml
+      - product/**
+      - apps/**
+      - docs/engineering/foundation-version-matrix.json
+      - docs/owner-decisions.json
+      - tools/foundation/**
+      - tools/native/**
+      - tools/oracle/**
+      - tests/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracle-arm64-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  arm64-image:
+    # Native ARM execution: no QEMU emulation is accepted as ARM qualification.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify native runner and canonical architecture pins
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import urllib.request
+
+          matrix = json.loads(pathlib.Path("docs/engineering/foundation-version-matrix.json").read_text())
+          components = {item["name"]: item for item in matrix["components"]}
+          node = components["node"]
+          filename = node["tarball_arm64_filename"]
+          expected = node["tarball_sha256_arm64"]
+          if filename != f"node-v{node['selected_version']}-linux-arm64.tar.xz":
+              raise SystemExit("ARM64 Node archive name does not match the pinned Node release")
+          with urllib.request.urlopen(f"https://nodejs.org/dist/v{node['selected_version']}/SHASUMS256.txt", timeout=30) as response:
+              rows = [line.split() for line in response.read().decode().splitlines() if line.strip()]
+          matches = [row[0] for row in rows if len(row) == 2 and row[1] == filename]
+          if matches != [expected]:
+              raise SystemExit("ARM64 Node archive digest does not match nodejs.org SHASUMS256.txt and the canonical pin")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write(f"NODE_TARBALL_SHA256={expected}\n")
+              env.write(f"MARIADB_IMAGE={components['mariadb']['image_digest']}\n")
+              env.write(f"REDIS_IMAGE={components['redis']['image_digest']}\n")
+              env.write(f"PYTHON_BASE=python:{components['python']['selected_version']}-slim-bookworm\n")
+          PY
+      - name: Verify pinned database and cache manifests include ARM64
+        run: |
+          set -euo pipefail
+          for image in "$MARIADB_IMAGE" "$REDIS_IMAGE"; do
+            docker buildx imagetools inspect --raw "$image" | python3 -c 'import json,sys; doc=json.load(sys.stdin); platforms={(m.get("platform",{}).get("os"),m.get("platform",{}).get("architecture")) for m in doc.get("manifests",[])}; assert ("linux","arm64") in platforms, f"pinned image has no Linux/ARM64 manifest: {platforms}"'
+            docker pull --platform linux/arm64 "$image"
+            test "$(docker image inspect "$image" --format '{{.Os}}/{{.Architecture}}')" = linux/arm64
+          done
+          caddy_image='caddy:2.11.8-alpine@sha256:eb37f58646a901dc7727cf448cae36daaefaba79de33b5058dab79aa4c04aefb'
+          docker buildx imagetools inspect --raw "$caddy_image" | python3 -c 'import json,sys; doc=json.load(sys.stdin); platforms={(m.get("platform",{}).get("os"),m.get("platform",{}).get("architecture")) for m in doc.get("manifests",[])}; assert ("linux","arm64") in platforms, f"pinned proxy image has no Linux/ARM64 manifest: {platforms}"'
+          docker pull --platform linux/arm64 "$caddy_image"
+          test "$(docker image inspect "$caddy_image" --format '{{.Os}}/{{.Architecture}}')" = linux/arm64
+          docker buildx imagetools inspect --raw "$PYTHON_BASE" | python3 -c 'import json,sys; doc=json.load(sys.stdin); platforms={(m.get("platform",{}).get("os"),m.get("platform",{}).get("architecture")) for m in doc.get("manifests",[])}; assert ("linux","arm64") in platforms, f"Python base has no Linux/ARM64 manifest: {platforms}"'
+      - name: Build the pinned TOEFL House application for native ARM64
+        run: |
+          set -euo pipefail
+          revision=$(git rev-parse HEAD)
+          release_version="ci-${revision:0:12}-arm64"
+          docker buildx build --platform linux/arm64 --load \
+            --build-arg NODE_TARBALL_ARCH=arm64 \
+            --build-arg NODE_TARBALL_SHA256="$NODE_TARBALL_SHA256" \
+            --build-arg TOEFL_HOUSE_SOURCE_REVISION="$revision" \
+            --build-arg TOEFL_HOUSE_RELEASE_VERSION="$release_version" \
+            -f product/app.Dockerfile -t toefl-house-erp-app:arm64 .
+      - name: Verify shipped runtime and native binaries are ARM64
+        run: |
+          set -euo pipefail
+          test "$(docker image inspect toefl-house-erp-app:arm64 --format '{{.Os}}/{{.Architecture}}')" = linux/arm64
+          docker run --rm --platform linux/arm64 --entrypoint /bin/sh toefl-house-erp-app:arm64 -ec '
+            test "$(dpkg --print-architecture)" = arm64
+            test "$(node -p process.arch)" = arm64
+            python3 -c "import platform; assert platform.machine() == \"aarch64\", platform.machine()"
+            cd /home/frappe/bench
+            env/bin/python -c "import frappe, erpnext, education, payments, hrms, foundation_security, toefl_house"
+            /build/tools/bin/bench --version
+            wkhtmltopdf --version
+            fc-list >/dev/null
+          '
+
+      - name: Qualify Oracle Compose services through HTTPS
+        timeout-minutes: 35
+        run: bash tools/oracle/qualify.sh
