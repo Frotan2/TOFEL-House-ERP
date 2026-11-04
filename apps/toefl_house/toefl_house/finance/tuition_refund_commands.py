@@ -192,7 +192,13 @@ def approve_tuition_refund(request_key, request, evidence=None):
     """General Manager approval; requester may not self-approve."""
     def work(actor):
         _require_role(actor, tuition_refunds.APPROVER_ROLE)
-        req = _pending_request(_name(request, "Tuition refund request"))
+        name = _name(request, "Tuition refund request")
+        fees = frappe.db.get_value(REQUEST, name, "fees")
+        if not fees:
+            raise frappe.ValidationError("Unknown tuition refund request")
+        # Match payout/void lock order: Fees first, then the refund request.
+        frappe.db.sql("select name from `tabFees` where name=%s for update", (fees,))
+        req = _pending_request(name)
         _require_request_fee_identity(req)
         try:
             approved = tuition_refunds.approve_request(
@@ -223,7 +229,13 @@ def deny_tuition_refund(request_key, request):
     """General Manager denial. No money moves."""
     def work(actor):
         _require_role(actor, tuition_refunds.APPROVER_ROLE)
-        req = _pending_request(_name(request, "Tuition refund request"))
+        name = _name(request, "Tuition refund request")
+        fees = frappe.db.get_value(REQUEST, name, "fees")
+        if not fees:
+            raise frappe.ValidationError("Unknown tuition refund request")
+        # Match payout/void lock order: Fees first, then the refund request.
+        frappe.db.sql("select name from `tabFees` where name=%s for update", (fees,))
+        req = _pending_request(name)
         _require_request_fee_identity(req)
         try:
             tuition_refunds.deny_request(
