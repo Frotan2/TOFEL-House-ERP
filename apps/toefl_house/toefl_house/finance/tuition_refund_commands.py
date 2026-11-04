@@ -199,6 +199,11 @@ def approve_tuition_refund(request_key, request, evidence=None):
         # Match payout/void lock order: Fees first, then the refund request.
         frappe.db.sql("select name from `tabFees` where name=%s for update", (fees,))
         req = _pending_request(name)
+        # The unlocked lookup above only chooses which Fees row to lock.
+        # Never follow a changed Fees link after acquiring the request lock:
+        # doing so would reverse the Fees -> request lock order.
+        if req.fees != fees:
+            raise frappe.ValidationError("Refund request Fees link changed during lock acquisition")
         _require_request_fee_identity(req)
         try:
             approved = tuition_refunds.approve_request(
@@ -236,6 +241,11 @@ def deny_tuition_refund(request_key, request):
         # Match payout/void lock order: Fees first, then the refund request.
         frappe.db.sql("select name from `tabFees` where name=%s for update", (fees,))
         req = _pending_request(name)
+        # The unlocked lookup above only chooses which Fees row to lock.
+        # Never follow a changed Fees link after acquiring the request lock:
+        # doing so would reverse the Fees -> request lock order.
+        if req.fees != fees:
+            raise frappe.ValidationError("Refund request Fees link changed during lock acquisition")
         _require_request_fee_identity(req)
         try:
             tuition_refunds.deny_request(
@@ -268,6 +278,11 @@ def void_tuition_refund(request_key, request, reason):
         # cannot race a payout into a partial or contradictory state.
         frappe.db.sql("select name from `tabFees` where name=%s for update", (fees,))
         req = _pending_request(name)
+        # The unlocked lookup above only chooses which Fees row to lock.
+        # Never follow a changed Fees link after acquiring the request lock:
+        # doing so would reverse the Fees -> request lock order.
+        if req.fees != fees:
+            raise frappe.ValidationError("Refund request Fees link changed during lock acquisition")
         _require_request_fee_identity(req)
         try:
             result = tuition_refunds.void_approval(req.as_dict(), actor=actor,
