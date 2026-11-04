@@ -7,7 +7,7 @@ This stack uses its own Compose project, named database volume and
 Only the Caddy reverse proxy publishes ports 80 and 443; the app, database,
 Redis, workers, scheduler and Socket.IO have no host-published ports. The
 Compose file fixes every service to Linux/ARM64 and pins third-party images by
-digest. App containers must use a full verified GHCR digest.
+digest. App containers must use the config ID of the attested image.
 
 Before preparing an Oracle VM, verify in the OCI Console that the instance,
 storage, home region, public address, object storage and all other selected
@@ -21,8 +21,11 @@ are separate mandatory gates and are not implemented by this Compose target.
 
 On a new OCI Linux ARM64 VM, make a private `product/oracle/.env` based on
 `.env.example`. Set `PUBLIC_ADDRESS` to the real public IPv4 address or an
-approved DNS name. Set `ERP_APP_IMAGE` to the full SHA-256 reference of a
-verified ARM64 image. Keep the file readable by the VM administrator only
+approved DNS name. Download the `oracle-arm64-test-<commit>` artifact from the
+successful Oracle workflow for the reviewed commit. On the VM, use
+`bash import-image.sh /path/to/oracle-arm64-test.tar.zst <commit>` with
+GitHub CLI, zstd and Docker installed. Set `ERP_APP_IMAGE` to the value it prints
+after checking GitHub provenance, architecture and the source label. Keep the file readable by the VM administrator only
 (mode `600`). Never place credentials in the `.env`; the first-run script
 creates a separate random MariaDB root secret with mode `600`.
 

@@ -12,6 +12,7 @@ x-logging: &bounded-logs
 services:
   bootstrap:
     image: *app-image
+    pull_policy: never
     platform: linux/arm64
     user: root
     entrypoint:
@@ -44,6 +45,7 @@ services:
 
   web:
     image: *app-image
+    pull_policy: never
     platform: linux/arm64
     user: root
     entrypoint: ["/product/entrypoint.sh", "web"]
@@ -76,6 +78,7 @@ services:
 
   worker:
     image: *app-image
+    pull_policy: never
     platform: linux/arm64
     user: root
     entrypoint: ["/product/entrypoint.sh", "worker"]
@@ -96,6 +99,7 @@ services:
 
   scheduler:
     image: *app-image
+    pull_policy: never
     platform: linux/arm64
     user: root
     entrypoint: ["/product/entrypoint.sh", "scheduler"]
@@ -116,6 +120,7 @@ services:
 
   socketio:
     image: *app-image
+    pull_policy: never
     platform: linux/arm64
     user: root
     entrypoint: ["/product/entrypoint.sh", "socketio"]

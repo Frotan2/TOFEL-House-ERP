@@ -4,8 +4,8 @@ on:
   pull_request:
     paths:
       - .github/workflows/oracle-arm64-build.yml
-      - product/app.Dockerfile
-      - product/docker-compose.yml
+      - .dockerignore
+      - .gitattributes
       - product/**
       - apps/**
       - docs/engineering/foundation-version-matrix.json
@@ -13,13 +13,13 @@ on:
       - tools/foundation/**
       - tools/native/**
       - tools/oracle/**
-      - tests/**
+      - tests/foundation/test_oracle_cloud_contract.py
   push:
-    branches: [main]
+    branches: ["**"]
     paths:
       - .github/workflows/oracle-arm64-build.yml
-      - product/app.Dockerfile
-      - product/docker-compose.yml
+      - .dockerignore
+      - .gitattributes
       - product/**
       - apps/**
       - docs/engineering/foundation-version-matrix.json
@@ -27,7 +27,7 @@ on:
       - tools/foundation/**
       - tools/native/**
       - tools/oracle/**
-      - tests/**
+      - tests/foundation/test_oracle_cloud_contract.py
   workflow_dispatch:
 
 permissions:
@@ -40,6 +40,7 @@ concurrency:
 jobs:
   arm64-image:
     # Native ARM execution: no QEMU emulation is accepted as ARM qualification.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
     steps:
@@ -117,3 +118,40 @@ jobs:
       - name: Qualify Oracle Compose services through HTTPS
         timeout-minutes: 35
         run: bash tools/oracle/qualify.sh
+
+      - name: Export the tested image
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/oracle-arm64-staging-foundation')
+        run: |
+          set -euo pipefail
+          tag="toefl-house-erp-oracle-test:$GITHUB_SHA"
+          docker tag toefl-house-erp-app:arm64 "$tag"
+          docker builder prune --all --force
+          docker save "$tag" | zstd -T2 -3 -o "$RUNNER_TEMP/oracle-arm64-test.tar.zst"
+      - name: Retain the Oracle TEST image
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/oracle-arm64-staging-foundation')
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: oracle-arm64-test-${{ github.sha }}
+          path: ${{ runner.temp }}/oracle-arm64-test.tar.zst
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
+
+  attest-test-image:
+    needs: arm64-image
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/oracle-arm64-staging-foundation')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Retrieve tested archive from this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "oracle-arm64-test-$GITHUB_SHA" --dir "$RUNNER_TEMP/verified"
+      - name: Attest the tested ARM64 archive
+        uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4
+        with:
+          subject-path: ${{ runner.temp }}/verified/oracle-arm64-test.tar.zst

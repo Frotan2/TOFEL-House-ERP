@@ -50,8 +50,8 @@ except ValueError:
 else:
     if not ip.is_global or ip.version != 4:
         raise SystemExit('PUBLIC_ADDRESS must be a globally routable IPv4 address. No files were changed.')
-if not re.fullmatch(r'ghcr\.io/frotan2/tofel-house-erp(?::[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}', image, re.I):
-    raise SystemExit('ERP_APP_IMAGE must be a reviewed TOEFL House GHCR image pinned by sha256. No files were changed.')
+if not re.fullmatch(r'toefl-house-erp-oracle-test:[0-9a-f]{64}', image):
+    raise SystemExit('Set ERP_APP_IMAGE to the config-ID tag from import-image.sh.')
 print(address)
 print(image)
 PY
@@ -86,7 +86,7 @@ if docker volume inspect "$DB_VOLUME" >/dev/null 2>&1 && [[ ! -s data/sites/toef
 fi
 docker info >/dev/null
 docker compose -f docker-compose.yml --project-name toefl-house-cloud-staging config --no-env-resolution --quiet
-docker pull --platform linux/arm64 "$ERP_APP_IMAGE"
+[[ "$(docker image inspect "$ERP_APP_IMAGE" --format '{{.Id}}')" == "sha256:${ERP_APP_IMAGE##*:}" ]] || { echo "Import the reviewed ARM64 archive first." >&2; exit 2; }
 if [[ "$(docker image inspect "$ERP_APP_IMAGE" --format '{{.Os}}/{{.Architecture}}')" != linux/arm64 ]]; then
   printf '%s\n' 'The pinned application image is not Linux/ARM64. No cloud data was changed.' >&2
   exit 2
@@ -128,5 +128,5 @@ if Path('data/.oracle-cloud-staging-v1').read_text(encoding='ascii') != 'synthet
 PY
 
 docker compose -f docker-compose.yml --project-name toefl-house-cloud-staging config --quiet
-docker compose -f docker-compose.yml --project-name toefl-house-cloud-staging up --detach --pull always
+docker compose -f docker-compose.yml --project-name toefl-house-cloud-staging up --detach --wait --wait-timeout 1800
 printf '%s\n' 'Started the isolated synthetic Oracle staging stack. Confirm HTTPS, service health, and the backup/recovery gate before any operational use.'
