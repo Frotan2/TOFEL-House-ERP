@@ -16,6 +16,45 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+# Record an installed-image identity without destroying the previous receipt
+# when an atomic replacement or its read-back verification fails.
+function Test-InstalledIdentityContents {
+    param([string]$Path, [string]$Contents)
+    return [IO.File]::ReadAllText($Path) -ceq $Contents
+}
+
+function Write-VerifiedInstalledImageIdentity {
+    param([string]$Path, [string]$Contents, [switch]$CreateOnly)
+    $temporaryIdentity = $Path + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
+    $identityBackup = $Path + '.' + [guid]::NewGuid().ToString('N') + '.bak'
+    $committed = $false
+    try {
+        [IO.File]::WriteAllText($temporaryIdentity, $Contents,
+            (New-Object System.Text.UTF8Encoding($false)))
+        if ($CreateOnly) {
+            # Never overwrite an existing installation's identity on first boot.
+            [IO.File]::Move($temporaryIdentity, $Path)
+        } else {
+            # The backup must survive a failed Replace or failed verification.
+            # Windows PowerShell 5.1 requires a backup path for File.Replace.
+            [IO.File]::Replace($temporaryIdentity, $Path, $identityBackup)
+        }
+        if (-not (Test-InstalledIdentityContents -Path $Path -Contents $Contents)) {
+            throw "Installed-image identity read-back failed; preserve the previous receipt for recovery."
+        }
+        $committed = $true
+    } finally {
+        if ([IO.File]::Exists($temporaryIdentity)) {
+            [IO.File]::Delete($temporaryIdentity)
+        }
+        # A failed atomic replacement may have produced a recoverable backup.
+        # Never delete that backup unless the new receipt was read back exactly.
+        if ($committed -and [IO.File]::Exists($identityBackup)) {
+            [IO.File]::Delete($identityBackup)
+        }
+    }
+}
+
 function Get-ProductFileSha256 {
     param([string]$LiteralPath)
     $fullPath = [IO.Path]::GetFullPath($LiteralPath)
@@ -260,27 +299,8 @@ try {
                 release_version = $releaseVersion
                 original_release_revision = [string]$release.source_revision
             }
-            $temporaryIdentity = $identityPath + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
-            $identityBackup = $identityPath + '.' + [guid]::NewGuid().ToString('N') + '.bak'
-            try {
-                [IO.File]::WriteAllText($temporaryIdentity, ($record | ConvertTo-Json -Depth 5),
-                    (New-Object System.Text.UTF8Encoding($false)))
-                if ($RecordFactoryImage) {
-                    [IO.File]::Move($temporaryIdentity, $identityPath)
-                } else {
-                    # Windows PowerShell 5.1/.NET Framework requires a valid
-                    # backup path for this atomic replacement overload.
-                    # Keep the prior identity recoverable until replacement succeeds.
-                    [IO.File]::Replace($temporaryIdentity, $identityPath, $identityBackup)
-                }
-            } finally {
-                if (Test-Path -LiteralPath $temporaryIdentity) {
-                    Remove-Item -LiteralPath $temporaryIdentity -Force
-                }
-                if (Test-Path -LiteralPath $identityBackup) {
-                    Remove-Item -LiteralPath $identityBackup -Force
-                }
-            }
+            Write-VerifiedInstalledImageIdentity -Path $identityPath `
+                -Contents ($record | ConvertTo-Json -Depth 5) -CreateOnly:$RecordFactoryImage
             Write-Host "Verified installed image ID recorded in protected activation storage."
             exit 0
         }

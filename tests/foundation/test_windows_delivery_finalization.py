@@ -66,7 +66,8 @@ class InstalledImageIdentityTests(unittest.TestCase):
         self.assertIn("-VerifyLoadedImage -RecordFactoryImage", INSTALL)
         self.assertLess(INSTALL.index("-RecordFactoryImage"), INSTALL.index("docker compose up -d --no-build"))
         self.assertIn("installed-image-identity.json", VERIFY)
-        self.assertIn("File]::Move($temporaryIdentity, $identityPath)", VERIFY)
+        self.assertIn("[IO.File]::Move($temporaryIdentity, $Path)", VERIFY)
+        self.assertIn("-CreateOnly:$RecordFactoryImage", VERIFY)
         self.assertIn("The verified installed-image record is missing", VERIFY)
 
     def test_start_requires_pinned_image_id_not_just_labels(self):
@@ -80,8 +81,9 @@ class InstalledImageIdentityTests(unittest.TestCase):
         self.assertLess(UPDATE.index("-RecordSignedUpdateImage -ExpectedUpdatedImageId"),
                         UPDATE.index('Set-JournalState "completed" $Check.Version'))
         self.assertIn("Set-JournalState \"recovery-required\" $Check.Version", UPDATE)
-        self.assertIn("[IO.File]::Replace($temporaryIdentity, $identityPath, $identityBackup)", VERIFY)
-        self.assertIn("if (Test-Path -LiteralPath $identityBackup)", VERIFY)
+        self.assertIn("[IO.File]::Replace($temporaryIdentity, $Path, $identityBackup)", VERIFY)
+        self.assertIn("Test-InstalledIdentityContents -Path $Path -Contents $Contents", VERIFY)
+        self.assertIn("if ($committed -and [IO.File]::Exists($identityBackup))", VERIFY)
 
     def test_factory_repair_refuses_signed_update_journal(self):
         self.assertIn(r"if exist data\updates\journal.json goto :updaterepairhold", REPAIR)

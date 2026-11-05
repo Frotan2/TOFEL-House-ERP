@@ -16,9 +16,23 @@ try {
     $args = @('"' + $fixture + '"', '"' + $payload + '"', '"' + $portFile + '"', '"' + $logFile + '"')
     $python = (Get-Command python -ErrorAction Stop).Source
     $server = Start-Process -FilePath $python -ArgumentList $args -PassThru -WindowStyle Hidden
-    for ($n=0; $n -lt 40 -and -not (Test-Path $portFile); $n++) { Start-Sleep -Milliseconds 200 }
-    if (-not (Test-Path $portFile)) { throw 'Local HTTP fixture failed.' }
-    $url = 'http://127.0.0.1:' + [IO.File]::ReadAllText($portFile).Trim() + '/setup'
+    # The Python fixture may create port.txt while still holding its Windows
+    # write handle. File existence alone does not guarantee ReadAllText works.
+    # Retry only fixture startup, bounded by eight seconds.
+    $port = ''
+    for ($n=0; $n -lt 40; $n++) {
+        if (Test-Path -LiteralPath $portFile -PathType Leaf) {
+            try { $port = [IO.File]::ReadAllText($portFile).Trim() }
+            catch { $port = '' }
+            if ($port -match '^[0-9]{1,5}$' -and [int]$port -ge 1 -and [int]$port -le 65535) { break }
+        }
+        if ($server.HasExited) { throw 'Local HTTP fixture exited before publishing its port.' }
+        Start-Sleep -Milliseconds 200
+    }
+    if ($port -notmatch '^[0-9]{1,5}$' -or [int]$port -lt 1 -or [int]$port -gt 65535) {
+        throw 'Local HTTP fixture did not publish a valid readable port.'
+    }
+    $url = 'http://127.0.0.1:' + $port + '/setup'
     $hash = (Get-FileHash $payload -Algorithm SHA256).Hash.ToLowerInvariant()
     function Build([string]$name, [string]$sha) {
         $plan = Join-Path $work ($name + '.txt')
