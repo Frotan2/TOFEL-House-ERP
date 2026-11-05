@@ -312,9 +312,10 @@ def pay_tuition_refund(request_key, request):
     def work(actor):
         _require_role(actor, tuition_refunds.PAYER_ROLE)
         name = _name(request, "Tuition refund request")
-        before_hash = _audit_hash(frappe.get_doc(REQUEST, name))
         try:
-            req, result = post_approved_refund(name)
+            # Native payout captures the audit pre-state only after it holds
+            # the Fees and request row locks, preventing stale event hashes.
+            req, result, before_hash = post_approved_refund(name)
         except (tuition_refunds.RefundError, ValueError) as exc:
             raise frappe.ValidationError(str(exc)) from exc
         return result, dict(target=req.name, before_hash=before_hash, after_hash=_audit_hash(req))

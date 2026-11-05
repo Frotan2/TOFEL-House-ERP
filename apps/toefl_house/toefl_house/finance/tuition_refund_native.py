@@ -312,6 +312,10 @@ def post_approved_refund(name):
     lock_cash_accounts([cash])
     fee = frappe.get_doc("Fees", fee_name, for_update=True)
     req = frappe.get_doc(REQUEST, name, for_update=True)
+    # Both authoritative rows are now locked; this is the actual pre-payout
+    # state, not an earlier unlocked read that could race a GM transition.
+    from toefl_house.finance.tuition_refund_commands import _audit_hash
+    before_hash = _audit_hash(req)
     require_finance_company(fee.company)
     permitted = frappe.db.sql("select for_value from `tabUser Permission` where user=%s and `allow`='Account' "
         "limit 1001 for update", (actor,))
@@ -380,7 +384,7 @@ def post_approved_refund(name):
         req.save(ignore_permissions=True)
     return req, dict(name=req.name, status="Paid", credit_journal=credit.name, payment_entry=payout.name,
         approved_amount=str(amount), gross_collections=authority["verified_collections_afn"],
-        prior_refunds=authority["prior_refunds_afn"], remaining_refundable=authority["remaining_after_proposal_afn"], currency="AFN")
+        prior_refunds=authority["prior_refunds_afn"], remaining_refundable=authority["remaining_after_proposal_afn"], currency="AFN"), before_hash
 
 
 def guard_payment(doc, method=None):
