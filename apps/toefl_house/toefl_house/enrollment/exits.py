@@ -56,11 +56,30 @@ def _name(value, label):
     return value
 
 
+# Separation-of-duties guard (Group 1): the command role for every
+# dismissal command is Enrollment Officer, so an approver role equal to
+# it would let one actor satisfy both keys of the dual key.
+# Administrator and System Manager are likewise never legitimate
+# approver roles here. Refused at version-append time (and by the
+# doctype controller, which calls this validator on save); a version
+# pinned before this guard existed fails closed in governing_exit_terms
+# (which returns {} on a ValueError here) and again at decision time in
+# _require_approver, instead of being silently rewritten.
+_COLLAPSED_APPROVER_ROLES = frozenset(
+    {"Enrollment Officer", "Administrator", "System Manager"})
+
+
 def validate_terms(approver_role):
     """Shape-check one policy version's dismissal approver term."""
     if not isinstance(approver_role, str) or not approver_role \
             or len(approver_role) > 140:
         raise ValueError("Approver role required")
+    if approver_role in _COLLAPSED_APPROVER_ROLES:
+        raise ValueError(
+            "Approver role must differ from the Enrollment Officer "
+            "command role and must not be an administrative role; a "
+            "collapsed approver role would let one actor satisfy both "
+            "keys of the dismissal dual key")
     return approver_role
 
 
@@ -377,14 +396,18 @@ def _locked_enrollment_facts(pe_name):
 
 
 def _refuse_live_fees(pe_name):
+    # Only a live receivable blocks the exit: a submitted Fees that is
+    # fully paid (outstanding 0, within the codebase's 0.005 currency
+    # tolerance) is settled, not live, and must not block the exit.
     billed = frappe.db.get_all(
         FEES, filters={"program_enrollment": pe_name, "docstatus": 1},
-        fields=["name"], limit=1)
-    if billed:
-        raise frappe.ValidationError(
-            f"Program enrollment {pe_name} is billed by submitted Fees "
-            f"{billed[0]['name']}; settle or void the receivable through "
-            "finance before exiting the enrollment")
+        fields=["name", "outstanding_amount"])
+    for row in billed:
+        if float(row.get("outstanding_amount") or 0) > 0.005:
+            raise frappe.ValidationError(
+                f"Program enrollment {pe_name} is billed by submitted Fees "
+                f"{row['name']}; settle or void the receivable through "
+                "finance before exiting the enrollment")
 
 
 def _fees_snapshot(pe_name):
@@ -485,6 +508,12 @@ def _pending_exit(exit_name):
 
 
 def _require_approver(pinned_role, actor):
+    if pinned_role in _COLLAPSED_APPROVER_ROLES:
+        raise frappe.PermissionError(
+            "The pinned approver role collapses the dismissal dual key "
+            "(it equals the Enrollment Officer command role or is an "
+            "administrative role); repair the policy with a distinct "
+            "approver role and raise a new request")
     if pinned_role not in frappe.get_roles(actor):
         raise frappe.PermissionError(
             "Actor does not hold the policy-configured approver role")
@@ -626,6 +655,9 @@ def approve_enrollment_dismissal(request_key, exit):
             raise frappe.ValidationError(
                 "This dismissal request has no currently resolved D5 supersession decision and cannot be approved") from exc
         _require_approver(req.pinned_approver_role, actor)
+        if actor == getattr(req, "requested_by", None):
+            raise frappe.PermissionError(
+                "A dismissal cannot be approved by the person who requested it")
         facts = _locked_enrollment_facts(req.program_enrollment)
         if int(facts.docstatus or 0) != 1:
             raise frappe.ValidationError(
@@ -665,6 +697,9 @@ def deny_enrollment_dismissal(request_key, exit):
     def work(actor):
         req = _pending_exit(_name(exit, "Enrollment exit"))
         _require_approver(req.pinned_approver_role, actor)
+        if actor == getattr(req, "requested_by", None):
+            raise frappe.PermissionError(
+                "A dismissal cannot be denied by the person who requested it")
         req.flags.ignore_permissions = True
         req.status = DENIED
         req.approved_by = actor

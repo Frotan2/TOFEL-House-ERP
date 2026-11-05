@@ -10,6 +10,7 @@ import json
 import re
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps/toefl_house"))
@@ -390,6 +391,72 @@ class PolicyPinningTests(unittest.TestCase):
                      "approve_fees_correction"):
             body = _correction_function_body(name)
             self.assertIn("terms.correction_window_days", body, name)
+
+
+class Group1SeparationAndFullReversalTests(unittest.TestCase):
+    """Group 1 (2026-11-05): money and separation-of-duties fixes.
+
+    NEW-04: a collapsed approver role (equal to the Finance Officer
+    command role, or administrative) is refused at configuration time,
+    flagged by validation, and fails closed again at decision time for
+    policies pinned before the guard existed. C-01: a full-amount
+    correction must not reverse a partially-paid invoice or Fees.
+    C-13: deny paths carry the same requester self-decision bar as the
+    approve paths.
+    """
+
+    def _isolated_require_approver(self):
+        tree = ast.parse(CORRECTIONS.read_text(encoding="utf-8"))
+        nodes = [n for n in tree.body
+                 if (isinstance(n, ast.Assign)
+                     and getattr(n.targets[0], "id", "") == "_COLLAPSED_APPROVER_ROLES")
+                 or (isinstance(n, ast.FunctionDef)
+                     and n.name == "_require_approver")]
+        namespace = {
+            "frappe": SimpleNamespace(
+                PermissionError=PermissionError,
+                get_roles=lambda user: {"Finance Officer", "Accounts User"}),
+        }
+        exec(compile(ast.Module(body=nodes, type_ignores=[]),
+                     str(CORRECTIONS), "exec"), namespace)
+        return namespace["_require_approver"]
+
+    def test_collapsed_approver_role_fails_closed_at_decision_time(self):
+        require = self._isolated_require_approver()
+        policy = SimpleNamespace()
+        for bad in ("Finance Officer", "Administrator", "System Manager"):
+            policy.get = lambda key, _bad=bad: _bad
+            with self.subTest(role=bad), self.assertRaises(PermissionError):
+                require(policy, "finance.officer@example.com")
+        policy.get = lambda key: "Accounts User"
+        require(policy, "finance.officer@example.com")  # distinct role passes
+        policy.get = lambda key: "General Manager"
+        with self.assertRaises(PermissionError):
+            require(policy, "finance.officer@example.com")
+
+    def test_configure_and_validate_flag_collapsed_approver_roles(self):
+        configure = _correction_function_body("configure_correction_policy")
+        self.assertIn("_COLLAPSED_APPROVER_ROLES", configure)
+        validate = _correction_function_body("validate_correction_policy")
+        self.assertIn("_COLLAPSED_APPROVER_ROLES", validate)
+        self.assertIn("collapsed", validate)
+
+    def test_full_reversal_refuses_partially_paid_documents(self):
+        for name, artifact in (("approve_invoice_correction", "note = make_sales_return"),
+                               ("approve_fees_correction", "fee_doc.cancel()")):
+            body = _correction_function_body(name)
+            with self.subTest(command=name):
+                self.assertIn("outstanding_amount", body)
+                self.assertIn("partially paid", body)
+                self.assertLess(body.index("outstanding_amount"),
+                                body.index(artifact),
+                                "outstanding must be re-read before the money artifact")
+
+    def test_deny_paths_bar_self_decision(self):
+        for name in ("deny_invoice_correction", "deny_fees_correction"):
+            body = _correction_function_body(name)
+            with self.subTest(command=name):
+                self.assertIn("cannot deny their own financial correction", body)
 
 
 class ValidateResultJsonTests(unittest.TestCase):

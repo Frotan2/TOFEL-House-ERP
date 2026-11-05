@@ -77,6 +77,36 @@ class ClassSuspensionTests(unittest.TestCase):
                 "2026-09-22", "2026-09-23")
         self.assertIn("not permitted", str(ctx.exception))
 
+    def test_overlap_starting_before_an_existing_window_is_refused(self):
+        self.ops.suspensions.suspend_class(
+            "suspend-class-0003b", "GRP-A", "one", "2026-09-22", "2026-09-24")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.suspensions.suspend_class(
+                "suspend-class-0004b", "GRP-A", "two", "2026-09-20",
+                "2026-09-23")
+        self.assertIn("already has an active suspension", str(ctx.exception))
+
+    def test_adjacent_window_after_an_existing_window_is_allowed(self):
+        self.ops.suspensions.suspend_class(
+            "suspend-class-0003c", "GRP-A", "one", "2026-09-22", "2026-09-24")
+        result = self.ops.suspensions.suspend_class(
+            "suspend-class-0004c", "GRP-A", "two", "2026-09-25",
+            "2026-09-26")
+        self.assertEqual(result["status"], "Active")
+
+    def test_class_suspension_blocks_scheduling_even_when_a_student_row_sorts_first(self):
+        self.ops.suspensions.suspend_student_membership(
+            "suspend-student-first", "GRP-A", "STU-2", "travelling",
+            "2026-09-21", "2026-09-25")
+        self.ops.suspensions.suspend_class(
+            "suspend-class-first", "GRP-A", "flood", "2026-09-21",
+            "2026-09-23")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.teaching.schedule_session(
+                "suspend-session-first", "GRP-A", "2026-09-22", "09:00:00",
+                "10:00:00", "INS-1", "ROOM-1", "ENG-101")
+        self.assertIn("is suspended on 2026-09-22", str(ctx.exception))
+
     def test_overlapping_class_suspensions_are_refused(self):
         self.ops.suspensions.suspend_class(
             "suspend-class-0003", "GRP-A", "one", "2026-09-22", "2026-09-24")

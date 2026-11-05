@@ -2141,6 +2141,11 @@ class FinanceAssignmentFactsTests(unittest.TestCase):
         module = _import_desk("finance", roles={"Finance Manager"})
         module.frappe.get_all = world_get_all
         module.frappe.db.get_all = world_get_all
+        # The count tile resolves through the desk package's project_count,
+        # so the stub ledger must report the one assignment on file.
+        module.frappe.db.count = (
+            lambda doctype, filters=None:
+            1 if doctype == "TH Teaching Assignment" else 0)
         return module.work()
 
     def test_assignments_are_listed_without_pay_figures(self):
@@ -3023,6 +3028,9 @@ class FinanceOutstandingWorldTests(unittest.TestCase):
         module.frappe.db.get_all = getter
         if count is not None:
             module.project_count = lambda *args, **kwargs: count
+            # count_or_unknown resolves through the desk package's own
+            # project_count, so the stub ledger count must agree too.
+            module.frappe.db.count = lambda doctype, filters=None: count
         return module.work()
 
     @staticmethod
@@ -3042,7 +3050,7 @@ class FinanceOutstandingWorldTests(unittest.TestCase):
         self.assertNotIn("INV-SETTLED", items)
 
     def test_money_facts_count_the_native_queues(self):
-        payload = self._payload()
+        payload = self._payload(count=1)
         facts = {fact["label"]: fact["value"]
                  for fact in self._section(payload, "facts")["facts"]}
         self.assertEqual(facts["Outstanding invoices"], 1)

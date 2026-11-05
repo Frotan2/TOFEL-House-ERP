@@ -12,7 +12,15 @@ from __future__ import annotations
 from contextlib import contextmanager
 import os
 import shlex
+import signal
 import subprocess
+import threading
+import time
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - non-POSIX platforms
+    resource = None
 
 
 _GPG_DIAGNOSTIC_CATEGORIES = (
@@ -45,6 +53,237 @@ _PREFIX = "gpg --yes --passphrase "
 _SAFE_GPG_PREFIX = [
     "gpg", "--batch", "--yes", "--passphrase-fd", "0", "--pinentry-mode", "loopback",
 ]
+
+# Hardening for every GPG child process (Group C refinement of the Group 2
+# decrypt probe). The probe used to drain stdout fully and only then read
+# stderr, with no timeout: a child that filled the stderr pipe while the
+# parent waited on stdout deadlocked forever, and a hanging or endlessly
+# streaming child never returned at all. Every GPG child now runs in its
+# own session with a wall-clock timeout, POSIX resource limits where safe,
+# and a cap on what the parent retains or reads.
+PROBE_TIMEOUT_SECONDS = 120
+PROBE_MAX_PLAINTEXT_BYTES = 2 * 1024 * 1024 * 1024
+PROBE_MAX_DIAGNOSTIC_BYTES = 1024 * 1024
+PROBE_MAX_CPU_SECONDS = 600
+PROBE_MAX_MEMORY_BYTES = 512 * 1024 * 1024
+GPG_TRANSPORT_TIMEOUT_SECONDS = 1800
+GPG_LIST_PACKETS_TIMEOUT_SECONDS = 120
+
+
+def _gpg_child_limits():
+    """POSIX resource limits applied in the GPG child before exec.
+
+    Only ever used as ``preexec_fn``: CPU time, then address space. GPG
+    streams plaintext, so its memory stays flat regardless of artifact
+    size; a 512 MiB address-space cap leaves ample headroom while still
+    stopping a runaway child from exhausting the host. A limit that
+    cannot be set is skipped — the wall-clock timeout and output cap
+    still bind the child.
+    """
+    if resource is None:
+        return
+    for limit_name, limit_value in (
+            ("RLIMIT_CPU", PROBE_MAX_CPU_SECONDS),
+            ("RLIMIT_AS", PROBE_MAX_MEMORY_BYTES)):
+        limit = getattr(resource, limit_name, None)
+        if limit is None:
+            continue
+        try:
+            resource.setrlimit(limit, (limit_value, limit_value))
+        except (ValueError, OSError):
+            pass
+
+
+def gpg_spawn_options():
+    """Options shared by every GPG child process.
+
+    The child runs in its own session, so a timeout kill reaches the
+    whole process group, not just the direct child. ``preexec_fn`` is
+    unsafe while other threads run (the child inherits locks held at
+    fork time), so the POSIX limits are only requested from a
+    single-threaded caller; the timeout and output caps apply regardless.
+    """
+    options = {"start_new_session": True}
+    if (os.name == "posix" and resource is not None
+            and threading.active_count() == 1):
+        options["preexec_fn"] = _gpg_child_limits
+    return options
+
+
+def _terminate_process(process) -> None:
+    """Kill a GPG child and its process group; never raise.
+
+    The child runs in its own session (see gpg_spawn_options), so the
+    group kill also reaches any helper the child spawned. Stand-ins used
+    by the test suite may lack ``pid``/``kill``; both are optional here.
+    """
+    pid = getattr(process, "pid", None)
+    if pid is not None:
+        try:
+            os.killpg(pid, signal.SIGKILL)
+            return
+        except (OSError, AttributeError, ProcessLookupError):
+            pass
+    try:
+        process.kill()
+    except Exception:
+        pass
+
+
+class _StreamDrain(threading.Thread):
+    """Drain one child pipe in the background, capping what is kept.
+
+    ``limit`` caps the total bytes read before the drain stops early and
+    flags over-limit; ``keep`` caps the bytes retained (diagnostics).
+    Plaintext is discarded as it arrives — it is never stored — except
+    for the first 512 bytes, which the tar-header check needs.
+    """
+
+    def __init__(self, stream, *, limit: int, keep: int):
+        super().__init__(daemon=True)
+        self._stream = stream
+        self._limit = limit
+        self._keep = keep
+        self.total = 0
+        self.head = b""
+        self.kept = b""
+        self.over_limit = False
+        self.read_error = False
+
+    def run(self) -> None:
+        try:
+            while True:
+                chunk = self._stream.read(64 * 1024)
+                if not chunk:
+                    break
+                self.total += len(chunk)
+                if len(self.head) < 512:
+                    self.head += chunk[:512 - len(self.head)]
+                if len(self.kept) < self._keep:
+                    self.kept += chunk[:self._keep - len(self.kept)]
+                if self.total > self._limit:
+                    self.over_limit = True
+                    break
+        except Exception:
+            self.read_error = True
+
+
+def _wait_for_process(process, outcome: dict) -> None:
+    try:
+        outcome["returncode"] = process.wait()
+    except Exception:
+        outcome["error"] = True
+
+
+class GpgProbeError(ValueError):
+    """A GPG decrypt probe failed. ``category`` is a fixed safe label only;
+    raw child output is never carried, so it cannot leak paths or secrets."""
+
+    def __init__(self, category: str = "unclassified"):
+        self.category = category
+        super().__init__("GPG decrypt probe failed; sensitive diagnostics were withheld")
+
+
+def probe_gpg_decrypt(path, passphrase: str, *, expect_tar: bool = False,
+                      timeout: float = PROBE_TIMEOUT_SECONDS,
+                      max_plaintext_bytes: int = PROBE_MAX_PLAINTEXT_BYTES) -> None:
+    """Decrypt ``path`` with ``passphrase`` over stdin and discard the output.
+
+    The plaintext is streamed and discarded in bounded chunks, never stored
+    in memory or on disk: a wrong key, corrupt data, or a truncated archive
+    fails here, before any caller mutates live data. With ``expect_tar`` the
+    first 512 decrypted bytes must also carry the ``ustar`` magic of a tar
+    header, so a decryptable but non-tar payload is refused as well. Raises
+    :class:`GpgProbeError` on every failure, including an unusable
+    passphrase shape; the passphrase itself never appears in argv or output.
+
+    Hardening (Group C): stdout and stderr are drained concurrently by
+    background threads, so a child that floods stderr can no longer
+    deadlock the parent; the child is killed on timeout or when the
+    decrypted plaintext exceeds ``max_plaintext_bytes`` (categories
+    ``probe-timeout`` / ``output-limit-exceeded``), and POSIX CPU/memory
+    limits apply where safe. A timeout, kill, or over-limit child is
+    always a refusal — never a partial success — and this probe creates
+    no file, so no partial plaintext can be left behind on any path.
+    """
+    if (not isinstance(passphrase, str) or not passphrase or not passphrase.isascii()
+            or any(char in passphrase for char in "\x00\r\n")):
+        raise GpgProbeError("probe-error")
+    if (not isinstance(timeout, (int, float)) or isinstance(timeout, bool)
+            or timeout <= 0 or not isinstance(max_plaintext_bytes, int)
+            or isinstance(max_plaintext_bytes, bool) or max_plaintext_bytes <= 0):
+        raise GpgProbeError("probe-error")
+    arguments = [
+        "gpg", "--batch", "--yes", "--passphrase-fd", "0",
+        "--pinentry-mode", "loopback", "-d", str(path),
+    ]
+    try:
+        process = subprocess.Popen(
+            arguments,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            **gpg_spawn_options(),
+        )
+    except Exception:
+        raise GpgProbeError("probe-error") from None
+    stdout_drain = _StreamDrain(process.stdout, limit=max_plaintext_bytes, keep=0)
+    stderr_drain = _StreamDrain(process.stderr, limit=PROBE_MAX_DIAGNOSTIC_BYTES,
+                                keep=PROBE_MAX_DIAGNOSTIC_BYTES)
+    wait_outcome: dict = {}
+    waiter = threading.Thread(target=_wait_for_process, args=(process, wait_outcome),
+                              daemon=True)
+    timed_out = False
+    over_limit = False
+    try:
+        try:
+            process.stdin.write((passphrase + "\n").encode("ascii"))
+            process.stdin.close()
+        except (BrokenPipeError, OSError, ValueError):
+            # GPG already exited (for example, on unreadable input). The
+            # exit code below still decides the outcome; never retry.
+            pass
+        stdout_drain.start()
+        stderr_drain.start()
+        waiter.start()
+        deadline = time.monotonic() + timeout
+        while waiter.is_alive():
+            waiter.join(timeout=0.2)
+            if stdout_drain.over_limit or stderr_drain.over_limit:
+                over_limit = True
+                break
+            if time.monotonic() >= deadline:
+                timed_out = True
+                break
+        if timed_out or over_limit:
+            _terminate_process(process)
+            waiter.join(timeout=5)
+        else:
+            # The child exited; both drains finish at EOF. Bound the wait
+            # so a pathological pipe cannot hang the caller after exit.
+            stdout_drain.join(timeout=5)
+            stderr_drain.join(timeout=5)
+            if stdout_drain.is_alive() or stderr_drain.is_alive():
+                _terminate_process(process)
+                raise GpgProbeError("probe-error")
+    except GpgProbeError:
+        raise
+    except Exception:
+        _terminate_process(process)
+        raise GpgProbeError("probe-error") from None
+    if over_limit:
+        raise GpgProbeError("output-limit-exceeded")
+    if timed_out:
+        raise GpgProbeError("probe-timeout")
+    if (wait_outcome.get("error") or stdout_drain.read_error
+            or stderr_drain.read_error):
+        raise GpgProbeError("probe-error")
+    returncode = wait_outcome.get("returncode")
+    if returncode != 0:
+        raise GpgProbeError(safe_gpg_diagnostic_category(stderr_drain.kept))
+    if expect_tar and (len(stdout_drain.head) < 512
+                       or stdout_drain.head[257:262] != b"ustar"):
+        raise GpgProbeError("invalid-tar-header")
 
 
 def _contains_passphrase_option(command) -> bool:
@@ -127,11 +366,28 @@ def safe_gpg_transport(frappe, passphrase_or_provider):
             "stdout": subprocess.PIPE,
             "stderr": subprocess.PIPE,
             "check": False,
+            # A hung GPG child must fail the operation, never hang the
+            # caller: subprocess.run kills the child on timeout and
+            # TimeoutExpired below refuses it. The child also runs in its
+            # own session with POSIX limits where safe (see
+            # gpg_spawn_options); low_priority keeps its own preexec step.
+            "timeout": GPG_TRANSPORT_TIMEOUT_SECONDS,
+            **gpg_spawn_options(),
         }
         if low_priority:
-            run_options["preexec_fn"] = lambda: os.nice(10)
+            base_preexec = run_options.pop("preexec_fn", None)
+
+            def _preexec_with_limits(base=base_preexec):
+                if base is not None:
+                    base()
+                os.nice(10)
+
+            run_options["preexec_fn"] = _preexec_with_limits
         try:
             result = subprocess.run(arguments, **run_options)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(
+                "Native GPG transport failed; sensitive diagnostics were withheld") from None
         except Exception:
             raise RuntimeError(
                 "Native GPG transport failed; sensitive diagnostics were withheld") from None

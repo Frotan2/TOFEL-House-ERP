@@ -43,6 +43,10 @@ from __future__ import annotations
 
 import argparse
 import base64
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows has no flock
+    fcntl = None  # type: ignore[assignment]
 import hashlib
 import hmac
 import json
@@ -53,6 +57,7 @@ import subprocess
 import sys
 import tarfile
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path, PurePosixPath
 from typing import Mapping, Sequence
 
@@ -112,6 +117,7 @@ RECOVERY_APPROVER_ROLES = ("course-owner", "general-manager", "recovery-authorit
 RECOVERY_REQUEST_ID = re.compile(r"^[0-9a-f]{32}$")
 RECOVERY_CONSUMED_DIR = "consumed-recovery-requests"
 ENGINE_AUTH_KEY_NAME = "engine-auth.key"
+ENGINE_AUTH_KEY_LOCK_NAME = "engine-auth.key.lock"
 ENGINE_AUTH_KEY_BYTES = 32
 SAFE_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
@@ -141,7 +147,72 @@ CENSUS_DOCTYPES = (
     "Employee",
     "User",
     "Role",
+    # Native Education billing and enrollment records: a migration that
+    # silently drops tuition bills or enrollments must not pass a census
+    # that only counts students and invoices.
+    "Fees",
+    "Program Enrollment",
+    "Student Applicant",
+    # TH policy masters, each verified against its own doctype JSON "name"
+    # field (not guessed from a directory name): losing a policy master
+    # silently changes billing, progression, or discount behaviour.
+    "TH Billing Policy",
+    "TH Program Level",
+    "TH Assessment Policy",
+    "TH Discount Rule",
+    "TH Level Duration",
+    "TH Enrollment Exit Policy",
+    "TH Correction Policy",
 )
+# Per-record census content, hashed before and after a supported migration
+# (U-02 refinement). Counts plus the Fees grand_total sum cannot see a
+# migration that swaps amounts between two Fees rows, renames one row
+# while adding another, or edits a non-totalled field: every count and the
+# sum stay identical. Each census doctype is therefore also hashed row by
+# row over a FIXED, small field set, so a migration that changes any
+# hashed cell refuses exactly like a count loss.
+#
+# Field sets use only column names this repository itself proves against
+# the native doctypes (corrections re-read Fees/Sales Invoice
+# grand_total/outstanding_amount/posting_date; the desk reads Payment
+# Entry payment_type/party_type/party/paid_amount; payroll_periods reads
+# Salary Slip employee/start_date/end_date/net_pay; enrollment reads
+# Program Enrollment student/program; admission builds Student Applicant
+# with first_name/program and Student with student_name). Doctypes with
+# no proven extra field hash name + docstatus only: that still catches a
+# row replaced by another row under the same count, a rename, or a
+# docstatus flip. ``name`` is always the first selected column and is
+# part of every row digest; ``docstatus`` exists on every Frappe table.
+# Never add ``modified`` or any other migration-touched column here: a
+# legitimate migration that re-saves a row would then fail the census.
+# A hash mismatch refuses with apply.records_lost, the same code as a
+# count loss or a Fees sum change.
+CENSUS_HASH_FIELDS: dict[str, tuple[str, ...]] = {
+    "Student": ("student_name", "docstatus"),
+    "Student Group": ("docstatus",),
+    "Course": ("docstatus",),
+    "Program": ("docstatus",),
+    "Sales Invoice": ("grand_total", "outstanding_amount", "posting_date", "docstatus"),
+    "Payment Entry": ("payment_type", "party_type", "party", "paid_amount", "docstatus"),
+    "Attendance": ("docstatus",),
+    "Salary Slip": ("employee", "start_date", "end_date", "net_pay", "docstatus"),
+    "Employee": ("docstatus",),
+    "User": ("docstatus",),
+    "Role": ("docstatus",),
+    "Fees": ("student", "program_enrollment", "grand_total", "outstanding_amount",
+             "posting_date", "docstatus"),
+    "Program Enrollment": ("student", "program", "docstatus"),
+    "Student Applicant": ("first_name", "program", "docstatus"),
+    "TH Billing Policy": ("docstatus",),
+    "TH Program Level": ("docstatus",),
+    "TH Assessment Policy": ("docstatus",),
+    "TH Discount Rule": ("docstatus",),
+    "TH Level Duration": ("docstatus",),
+    "TH Enrollment Exit Policy": ("docstatus",),
+    "TH Correction Policy": ("docstatus",),
+}
+_CENSUS_COLUMN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_CENSUS_NUMBER = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
 # The eight role desks must survive every supported update.
 ROLE_DESK_PAGES = (
     "th-owner-cockpit",
@@ -1550,7 +1621,13 @@ def authorize(request: Mapping[str, object], *, now: datetime,
         return response
     assert context is not None
     _bind_transaction(transaction, context)
-    response["transaction"] = _persist_authorization(state_dir, context, phase="authorized", now=now)
+    try:
+        if state_dir is not None:
+            _invalidate_transaction(Path(state_dir), transaction["transaction_id"])
+        response["transaction"] = _persist_authorization(state_dir, context, phase="authorized",
+                                                         now=now)
+    except UpdateError as error:
+        return _refusal("authorize", error, request)
     return response
 
 
@@ -1834,12 +1911,175 @@ def _state_directory(state_dir: Path | None) -> Path | None:
     return path
 
 
+def _fsync_directory(path: Path) -> None:
+    """Fsync a directory's entry table where the platform allows it.
+
+    POSIX (including the pinned product image) supports opening a directory
+    and fsyncing it, which is what makes a creation or deletion durable, not
+    merely visible.  Platforms without ``O_DIRECTORY`` have no stdlib
+    equivalent, so the file fsync in :func:`_write_private_file_exclusive`
+    remains the durable step there.
+    """
+    if not hasattr(os, "O_DIRECTORY"):
+        return
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _write_private_file_exclusive(path: Path, data: bytes) -> None:
+    """Create ``path`` exclusively with mode 0o600 and make it durable.
+
+    ``os.open`` with ``O_EXCL`` and mode 0o600 means the bytes are never
+    visible through a world-readable temporary: the umask can only narrow
+    0o600, never widen it.  The file and its parent directory are both
+    fsynced, so a power loss cannot lose a record the engine already relied
+    on.  ``FileExistsError`` propagates so callers can fail closed (or, for
+    use markers, report a replay) instead of overwriting an existing record.
+    """
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        try:
+            os.fchmod(fd, 0o600)
+        except (AttributeError, NotImplementedError, OSError):
+            pass
+        view = memoryview(data)
+        while view:
+            written = os.write(fd, view)
+            if written == 0:  # pragma: no cover - a regular file cannot stall here
+                raise OSError("short write while creating a private engine file")
+            view = view[written:]
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    _fsync_directory(path.parent)
+
+
+class _EngineKeyLock:
+    """Serialize engine-auth key creation with a lock file.
+
+    On platforms with ``fcntl`` the lock is an advisory ``flock`` on the lock
+    file, which the operating system releases if the holder dies, so a crash
+    can never leave a stale lock behind.  Without ``fcntl`` the lock file
+    itself is claimed exclusively; a claim whose owner process is dead is
+    stolen, and a live holder fails the creation closed rather than waiting.
+    The lock file is created with mode 0o600 and never followed through a
+    symlink.
+    """
+
+    def __init__(self, state_dir: Path) -> None:
+        self._lock_path = state_dir / ENGINE_AUTH_KEY_LOCK_NAME
+        self._fd: int | None = None
+        self._exclusive_claim = False
+
+    def __enter__(self) -> "_EngineKeyLock":
+        if self._lock_path.is_symlink():
+            raise refuse("transaction.invalid", "the engine authentication key lock is unsafe")
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+        if fcntl is not None:
+            try:
+                self._fd = os.open(self._lock_path, os.O_CREAT | os.O_RDWR | nofollow, 0o600)
+            except OSError:
+                raise refuse("transaction.invalid",
+                             "the engine authentication key lock could not be opened") from None
+            try:
+                fcntl.flock(self._fd, fcntl.LOCK_EX)
+            except OSError:
+                os.close(self._fd)
+                self._fd = None
+                raise refuse("transaction.invalid",
+                             "the engine authentication key lock could not be acquired") from None
+            return self
+        for _attempt in range(3):
+            try:
+                fd = os.open(self._lock_path,
+                             os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow, 0o600)
+            except FileExistsError:
+                if not self._stale_claim():
+                    raise refuse("transaction.invalid",
+                                 "the engine authentication key is already being created") from None
+                try:
+                    self._lock_path.unlink()
+                except OSError:
+                    raise refuse("transaction.invalid",
+                                 "the engine authentication key lock could not be recovered") from None
+                continue
+            except OSError:
+                raise refuse("transaction.invalid",
+                             "the engine authentication key lock could not be opened") from None
+            self._fd = fd
+            self._exclusive_claim = True
+            try:
+                os.write(fd, str(os.getpid()).encode("ascii"))
+            except OSError:
+                pass
+            return self
+        raise refuse("transaction.invalid",
+                     "the engine authentication key lock could not be acquired") from None
+
+    def _stale_claim(self) -> bool:
+        """True only when the lock file names a process that is dead.
+
+        An unreadable or unparseable lock file is treated as live: stealing
+        it could break a creator that is mid-write.
+        """
+        try:
+            pid = int(self._lock_path.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            return False
+        if pid <= 0:
+            return False
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        except OSError:
+            return False
+        return False
+
+    def __exit__(self, *exc: object) -> bool:
+        if self._fd is not None:
+            try:
+                os.close(self._fd)
+            except OSError:
+                pass
+            self._fd = None
+        if self._exclusive_claim:
+            try:
+                self._lock_path.unlink()
+            except OSError:
+                pass
+            self._exclusive_claim = False
+        return False
+
+
+def _read_authentication_key(key_path: Path) -> bytes:
+    try:
+        raw = key_path.read_bytes()
+    except OSError:
+        raise refuse("transaction.invalid", "the engine authentication key is unreadable") from None
+    try:
+        value = base64.b64decode(raw, validate=True)
+    except ValueError:
+        raise refuse("transaction.invalid", "the engine authentication key is malformed") from None
+    if len(value) != ENGINE_AUTH_KEY_BYTES:
+        raise refuse("transaction.invalid", "the engine authentication key is malformed")
+    return value
+
+
 def _authentication_key(state_dir: Path) -> bytes:
     """Load (or create once) the engine's own HMAC key for transaction records.
 
     The key lives only inside the durable state folder the engine was given.
     It authenticates records the engine wrote and is never returned to the
     caller, so a fabricated ``authorized`` document cannot carry a valid tag.
+
+    Creation is serialized with a lock file and the key file itself is
+    created exclusively with mode 0o600, so the key bytes are never visible
+    through a world-readable temporary and two racing creators cannot each
+    return a different key.
     """
     key_path = state_dir / ENGINE_AUTH_KEY_NAME
     if key_path.is_symlink():
@@ -1848,24 +2088,19 @@ def _authentication_key(state_dir: Path) -> bytes:
         state_dir.mkdir(parents=True, exist_ok=True)
     except OSError:
         raise refuse("transaction.invalid", "the engine state folder could not be prepared") from None
-    if key_path.is_file():
-        raw = key_path.read_bytes()
+    with _EngineKeyLock(state_dir):
+        if key_path.is_symlink():
+            raise refuse("transaction.invalid", "the engine authentication key is unsafe")
+        if key_path.is_file():
+            return _read_authentication_key(key_path)
+        value = secrets.token_bytes(ENGINE_AUTH_KEY_BYTES)
         try:
-            value = base64.b64decode(raw, validate=True)
-        except (ValueError, OSError):
-            raise refuse("transaction.invalid", "the engine authentication key is malformed") from None
-        if len(value) != ENGINE_AUTH_KEY_BYTES:
-            raise refuse("transaction.invalid", "the engine authentication key is malformed")
+            _write_private_file_exclusive(key_path, base64.b64encode(value))
+        except FileExistsError:
+            # A creator outside the lock won the race; trust only the file
+            # that is actually on disk, after the usual validation.
+            return _read_authentication_key(key_path)
         return value
-    value = secrets.token_bytes(ENGINE_AUTH_KEY_BYTES)
-    temporary = key_path.with_name(key_path.name + ".partial")
-    temporary.write_bytes(base64.b64encode(value))
-    try:
-        os.chmod(temporary, 0o600)
-    except OSError:  # pragma: no cover - platform dependent
-        pass
-    os.replace(temporary, key_path)
-    return value
 
 
 def _transaction_mac(key: bytes, transaction: Mapping[str, object]) -> str:
@@ -1874,17 +2109,31 @@ def _transaction_mac(key: bytes, transaction: Mapping[str, object]) -> str:
 
 
 def _persist_transaction(state_dir: Path, transaction: dict) -> dict:
-    """Write an engine-issued transaction where ``apply`` can authenticate it."""
+    """Write an engine-issued transaction where ``apply`` can authenticate it.
+
+    The record is created exclusively with mode 0o600 and fsynced with its
+    directory: an existing record is never overwritten, so a second issue
+    cannot silently replace the authenticated record ``apply`` will read.
+    """
     key = _authentication_key(state_dir)
     folder = state_dir / TRANSACTION_RECORDS_DIR
-    folder.mkdir(parents=True, exist_ok=True)
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        raise refuse("transaction.invalid",
+                     "the update transaction folder could not be prepared") from None
     record = dict(transaction)
     record["auth_mac"] = _transaction_mac(key, transaction)
     path = folder / (transaction["transaction_id"] + ".json")
-    temporary = path.with_name(path.name + ".partial")
-    temporary.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n",
-                         encoding="utf-8", newline="\n")
-    os.replace(temporary, path)
+    payload = (json.dumps(record, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    try:
+        _write_private_file_exclusive(path, payload)
+    except FileExistsError:
+        raise refuse("transaction.invalid",
+                     "the update transaction record already exists") from None
+    except OSError:
+        raise refuse("transaction.invalid",
+                     "the update transaction record could not be written") from None
     return record
 
 
@@ -1930,6 +2179,44 @@ def _persist_authorization(state_dir: Path | None, context: dict, *, phase: str,
     if state_dir is not None:
         _persist_transaction(state_dir, transaction)
     return transaction
+
+
+def _invalidate_transaction(state_dir: Path, transaction_id: str) -> None:
+    """Atomically retire a manifest-phase record before its replacement is issued.
+
+    ``authorize`` calls this after the image-phase evaluation allows and
+    after the evidence binding proves, but before the ``authorized``
+    transaction is persisted.  That delete-then-issue order is deliberate:
+    a crash between the two steps leaves no usable transaction at all
+    (fail-closed; a fresh preflight is required) instead of two live
+    transactions minted from one preflight.  The deletion itself is the
+    atomic claim against a concurrent authorize: only the caller whose
+    unlink succeeds may proceed, and the loser is refused because the
+    record is already gone.  The directory fsync makes the retirement
+    durable before any authorized record exists.
+
+    Residual race: true single-step atomicity of delete-plus-create is not
+    available with plain files, so a concurrent authorize that already
+    loaded the record may still run its (read-only) evaluation after the
+    deletion -- but it cannot issue, because its own unlink then fails.
+    """
+    path = state_dir / TRANSACTION_RECORDS_DIR / (transaction_id + ".json")
+    if path.is_symlink():
+        raise refuse("transaction.invalid", "the update transaction record is unsafe")
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        raise refuse("transaction.invalid",
+                     "the manifest transaction was already authorized") from None
+    except OSError:
+        raise refuse("transaction.invalid",
+                     "the manifest transaction could not be retired; nothing was authorized") from None
+    try:
+        _fsync_directory(path.parent)
+    except OSError:
+        raise refuse("transaction.invalid",
+                     "the manifest transaction retirement could not be made durable; "
+                     "nothing was authorized") from None
 
 
 def _issue_transaction(context: dict, *, phase: str, now: datetime) -> dict:
@@ -2061,6 +2348,56 @@ def _public_installed(installed: Mapping[str, object] | None) -> dict:
 # Apply: supported migration plus a preservation census
 # --------------------------------------------------------------------------
 
+# These database columns have numeric semantics. Textual IDs, including
+# leading zeroes, must retain their exact value in preservation hashes.
+_CENSUS_NUMERIC_FIELDS = frozenset({
+    "docstatus", "grand_total", "outstanding_amount", "paid_amount", "net_pay",
+})
+
+
+def _canonical_census_value(value: object, *, numeric: bool = False) -> str:
+    """Type-preserving census cell encoding with explicit numeric columns."""
+    if value is None:
+        return "null"
+    if numeric:
+        if isinstance(value, bool):
+            raise ValueError("Boolean in numeric census column")
+        try:
+            decimal_value = Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError):
+            raise ValueError("Non-numeric value in numeric census column") from None
+        if not decimal_value.is_finite():
+            raise ValueError("Non-finite value in numeric census column")
+        return "number:" + format(decimal_value.normalize(), "f")
+    if isinstance(value, str):
+        return "text:" + value
+    if isinstance(value, bool):
+        return "boolean:true" if value else "boolean:false"
+    return "other:" + type(value).__name__ + ":" + str(value)
+
+
+def _census_row_digest(row: Sequence[object], *,
+                       numeric_columns: frozenset[int] = frozenset()) -> str:
+    """Hash typed, JSON-delimited cells; never concatenate ambiguous text."""
+    canonical = [
+        _canonical_census_value(cell, numeric=index in numeric_columns)
+        for index, cell in enumerate(row)
+    ]
+    data = json.dumps(canonical, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def _census_digest(rows: Sequence[Sequence[object]], *,
+                   numeric_columns: frozenset[int] = frozenset()) -> str:
+    """Order-independent digest of every row and its typed values."""
+    digest = hashlib.sha256()
+    for row_digest in sorted(_census_row_digest(row, numeric_columns=numeric_columns)
+                             for row in rows):
+        digest.update(row_digest.encode("ascii"))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
 class BenchRunner:
     """Run the pinned bench entrypoint and parse only structured output."""
 
@@ -2161,6 +2498,96 @@ class BenchRunner:
                 raise refuse("apply.counts_unavailable",
                              "the referential integrity report is incomplete")
         return counts
+
+    def fees_total(self, site: str) -> str:
+        """Exact sum of Fees.grand_total, as a decimal string.
+
+        Counts alone cannot catch content loss: a migration could keep
+        every Fees row while zeroing or rescaling amounts. The sum is
+        compared exactly before and after; an unreadable answer is a hard
+        refusal, like the orphan check, never evidence of preservation.
+        """
+        result = self._run(["--site", site, "execute", "frappe.db.sql",
+                            "--kwargs", json.dumps({"query":
+                                "SELECT CAST(COALESCE(SUM(grand_total), 0) AS CHAR) "
+                                "FROM `tabFees`"})], timeout=300)
+        if result.returncode != 0:
+            raise refuse("apply.counts_unavailable",
+                         "the Fees billing total could not be verified")
+        payload = None
+        for line in reversed((result.stdout or "").splitlines()):
+            line = line.strip()
+            if line.startswith("["):
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    payload = None
+                if payload is not None:
+                    break
+        if (not isinstance(payload, list) or len(payload) != 1
+                or not isinstance(payload[0], list) or len(payload[0]) != 1):
+            raise refuse("apply.counts_unavailable",
+                         "the Fees billing total report is unreadable")
+        try:
+            total = Decimal(str(payload[0][0]))
+        except (InvalidOperation, ValueError):
+            raise refuse("apply.counts_unavailable",
+                         "the Fees billing total report is malformed") from None
+        if total < 0:
+            raise refuse("apply.counts_unavailable",
+                         "the Fees billing total is negative")
+        return format(total.normalize(), "f")
+
+    def census_hashes(self, site: str) -> dict[str, str]:
+        """Per-record canonical hash of every census doctype.
+
+        One read-only ``SELECT name, <fixed fields> ... ORDER BY name``
+        per doctype; the digest is computed locally from the returned
+        rows. Cheap by design: only the fixed field set in
+        ``CENSUS_HASH_FIELDS`` is fetched, never ``*``. An unreadable or
+        malformed answer is a hard refusal, like the orphan check, never
+        evidence of preservation.
+        """
+        return {doctype: self._census_hash(site, doctype)
+                for doctype in CENSUS_DOCTYPES}
+
+    def _census_hash(self, site: str, doctype: str) -> str:
+        fields = CENSUS_HASH_FIELDS[doctype]
+        columns = ["name", *fields]
+        for column in columns:
+            if not _CENSUS_COLUMN.fullmatch(column):
+                raise refuse("apply.counts_unavailable",
+                             f"the census hash for {doctype} is misconfigured")
+        query = ("SELECT " + ", ".join(columns) + f" FROM `tab{doctype}` "
+                 "ORDER BY name")
+        result = self._run(["--site", site, "execute", "frappe.db.sql",
+                            "--kwargs", json.dumps({"query": query})], timeout=600)
+        if result.returncode != 0:
+            raise refuse("apply.counts_unavailable",
+                         f"the {doctype} census hash could not be verified")
+        payload = None
+        for line in reversed((result.stdout or "").splitlines()):
+            line = line.strip()
+            if line.startswith("["):
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    payload = None
+                if payload is not None:
+                    break
+        if not isinstance(payload, list) or not all(
+                isinstance(row, list) and len(row) == len(columns)
+                for row in payload):
+            raise refuse("apply.counts_unavailable",
+                         f"the {doctype} census hash report is unreadable")
+        numeric_columns = frozenset(
+            index for index, column in enumerate(columns)
+            if column in _CENSUS_NUMERIC_FIELDS)
+        try:
+            return _census_digest(payload, numeric_columns=numeric_columns)
+        except (ValueError, InvalidOperation):
+            raise refuse("apply.counts_unavailable",
+                         f"the {doctype} census hash contains invalid values") from None
 
     def migrate(self, site: str) -> None:
         result = self._run(["--site", site, "migrate"], timeout=self.timeout)
@@ -2284,13 +2711,20 @@ def apply_update(request: Mapping[str, object], *, now: datetime,
 
     counts_before: dict[str, int | None] = {}
     apps_before: list[str] = []
+    fees_total_before: str | None = None
+    fees_total_after: str | None = None
+    hashes_before: dict[str, str] = {}
+    hashes_after: dict[str, str] = {}
     try:
         apps_before = runner.list_apps(SITE_NAME)
         counts_before = _strict_census(runner.census(SITE_NAME), "before")
+        fees_total_before = runner.fees_total(SITE_NAME)
+        hashes_before = _strict_hashes(runner.census_hashes(SITE_NAME), "before")
         orphans_before = runner.orphans(SITE_NAME)
     except UpdateError as error:
         return _apply_report("failed", "pre-migrate", blockers=[_block(error.code, error.detail)],
                              counts_before=counts_before, apps_before=apps_before,
+                             census_hashes_before=hashes_before,
                              target_version=manifest["version"])
 
     if manifest["database"]["migration"] == "supported":
@@ -2306,11 +2740,15 @@ def apply_update(request: Mapping[str, object], *, now: datetime,
     try:
         apps_after = runner.list_apps(SITE_NAME)
         counts_after = _strict_census(runner.census(SITE_NAME), "after")
+        fees_total_after = runner.fees_total(SITE_NAME)
+        hashes_after = _strict_hashes(runner.census_hashes(SITE_NAME), "after")
         orphans_after = runner.orphans(SITE_NAME)
         pages = runner.role_desk_pages(SITE_NAME)
     except UpdateError as error:
         return _apply_report("failed", "verify-data", blockers=[_block(error.code, error.detail)],
                              counts_before=counts_before, apps_before=apps_before,
+                             census_hashes_before=hashes_before,
+                             census_hashes_after=hashes_after,
                              target_version=manifest["version"])
 
     for doctype in CENSUS_DOCTYPES:
@@ -2319,6 +2757,15 @@ def apply_update(request: Mapping[str, object], *, now: datetime,
         if after < before:
             blockers.append(_block("apply.records_lost",
                                    f"{doctype}: {before} before, {after} after the migration"))
+    if fees_total_before is not None and fees_total_after != fees_total_before:
+        blockers.append(_block("apply.records_lost",
+                               "Fees grand_total sum changed: "
+                               f"{fees_total_before} before, {fees_total_after} after the migration"))
+    for doctype in CENSUS_DOCTYPES:
+        if hashes_after[doctype] != hashes_before[doctype]:
+            blockers.append(_block(
+                "apply.records_lost",
+                f"{doctype}: per-record content changed during the migration"))
     lost_apps = [app for app in apps_before if app not in apps_after]
     missing_apps = [app for app in REQUIRED_APPS if app not in apps_after]
     if lost_apps or missing_apps:
@@ -2340,6 +2787,8 @@ def apply_update(request: Mapping[str, object], *, now: datetime,
     return _apply_report(status, "verified" if status == "succeeded" else "verify-data",
                          blockers=blockers, counts_before=counts_before, counts_after=counts_after,
                          apps_before=apps_before, apps_after=apps_after, role_pages=pages,
+                         fees_total_before=fees_total_before, fees_total_after=fees_total_after,
+                         census_hashes_before=hashes_before, census_hashes_after=hashes_after,
                          target_version=manifest["version"])
 
 
@@ -2357,6 +2806,26 @@ def _strict_census(values: object, phase: str) -> dict[str, int]:
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise refuse("apply.counts_unavailable",
                          f"the {phase}-migration count for {doctype} is unavailable")
+        required[doctype] = value
+    return required
+
+
+def _strict_hashes(values: object, phase: str) -> dict[str, str]:
+    """Every census hash must be a real 64-hex digest.
+
+    A missing or malformed hash is not evidence of preservation, so it
+    fails the update before any migration instead of being treated as
+    success, exactly like a missing count.
+    """
+    if not isinstance(values, Mapping):
+        raise refuse("apply.counts_unavailable",
+                     f"the {phase}-migration census hashes are unavailable")
+    required: dict[str, str] = {}
+    for doctype in CENSUS_DOCTYPES:
+        value = values.get(doctype)
+        if not isinstance(value, str) or not HEX64.fullmatch(value):
+            raise refuse("apply.counts_unavailable",
+                         f"the {phase}-migration census hash for {doctype} is unavailable")
         required[doctype] = value
     return required
 
@@ -2387,16 +2856,27 @@ def _rebind_apply(request: Mapping[str, object], product_root: Path, transaction
         raise refuse("apply.archive_mismatch", "the image identity does not match the authorized release")
 
     evidence = transaction["evidence"]
-    receipt_path = resolve_inside(product_root, request["backup_receipt"], "request.backup_receipt")
-    if sha256_file(receipt_path) != evidence.get("backup_receipt_sha256"):
-        raise refuse("apply.evidence_mismatch", "the backup receipt changed after authorization")
-    backup_dir = resolve_inside(product_root, request["backup_dir"], "request.backup_dir")
-    validate_backup_receipt(receipt_path, site=SITE_NAME, backup_dir=backup_dir, now=now,
-                            max_age_hours=manifest["requirements"]["backup_max_age_hours"])
-    authorization_path = resolve_inside(product_root, request["recovery_authorization"],
-                                        "request.recovery_authorization")
-    if sha256_file(authorization_path) != evidence.get("recovery_authorization_sha256"):
-        raise refuse("apply.evidence_mismatch", "the recovery authorization changed after authorization")
+    # A release that needs no backup and no recovery authorization carries
+    # None evidence for both: there is no receipt or authorization document
+    # to rebind, and resolving an empty request path would dead-end the
+    # apply. Only rebind evidence the authorize phase actually recorded.
+    if evidence.get("backup_receipt_sha256") is not None:
+        receipt_path = resolve_inside(product_root, request["backup_receipt"], "request.backup_receipt")
+        if sha256_file(receipt_path) != evidence.get("backup_receipt_sha256"):
+            raise refuse("apply.evidence_mismatch", "the backup receipt changed after authorization")
+        # Default exactly as _evaluate does: an omitted backup_dir means the
+        # site's own backup folder, not a KeyError.
+        if request.get("backup_dir"):
+            backup_dir = resolve_inside(product_root, request["backup_dir"], "request.backup_dir")
+        else:
+            backup_dir = product_root / "data" / "sites" / SITE_NAME / "private" / "backups"
+        validate_backup_receipt(receipt_path, site=SITE_NAME, backup_dir=backup_dir, now=now,
+                                max_age_hours=manifest["requirements"]["backup_max_age_hours"])
+    if evidence.get("recovery_authorization_sha256") is not None:
+        authorization_path = resolve_inside(product_root, request["recovery_authorization"],
+                                            "request.recovery_authorization")
+        if sha256_file(authorization_path) != evidence.get("recovery_authorization_sha256"):
+            raise refuse("apply.evidence_mismatch", "the recovery authorization changed after authorization")
     if evidence.get("recovery_authorization_sha256") is not None:
         if not request.get("recovery_signature_2"):
             raise refuse("preflight.recovery.approval_missing",
@@ -2436,15 +2916,13 @@ def _consume_transaction(state_dir: Path, transaction: dict) -> None:
         try:
             recovery_folder.mkdir(parents=True, exist_ok=True)
             recovery_marker = recovery_folder / (request_id + ".json")
-            with recovery_marker.open("x", encoding="utf-8", newline="\n") as handle:
-                json.dump({
-                    "schema_version": 1,
-                    "document_type": "toefl-house-erp-recovery-request-use",
-                    "request_id": request_id,
-                    "consumed_utc": parse_utc_iso(datetime.now(timezone.utc)),
-                    "transaction_id": transaction["transaction_id"],
-                }, handle, sort_keys=True)
-                handle.write("\n")
+            _write_private_file_exclusive(recovery_marker, (json.dumps({
+                "schema_version": 1,
+                "document_type": "toefl-house-erp-recovery-request-use",
+                "request_id": request_id,
+                "consumed_utc": parse_utc_iso(datetime.now(timezone.utc)),
+                "transaction_id": transaction["transaction_id"],
+            }, sort_keys=True) + "\n").encode("utf-8"))
         except FileExistsError:
             raise refuse("transaction.replayed", "this recovery request was already used") from None
         except OSError:
@@ -2453,19 +2931,20 @@ def _consume_transaction(state_dir: Path, transaction: dict) -> None:
     # Consume the recovery approval before the transaction marker. If the
     # process crashes between writes, the approval must remain spent;
     # otherwise a new transaction could reuse the same two signatures.
+    # Both markers are created exclusively with mode 0o600 and fsynced with
+    # their directory, so a power loss cannot lose a "spent" marker and
+    # allow a replay.
     folder = state_dir / TRANSACTION_CONSUMED_DIR
     try:
         folder.mkdir(parents=True, exist_ok=True)
         marker = folder / (transaction["transaction_id"] + ".json")
-        with marker.open("x", encoding="utf-8", newline="\n") as handle:
-            json.dump({
-                "schema_version": 1,
-                "document_type": "toefl-house-erp-update-transaction-use",
-                "transaction_id": transaction["transaction_id"],
-                "consumed_utc": parse_utc_iso(datetime.now(timezone.utc)),
-                "target_version": transaction["target"].get("version"),
-            }, handle, sort_keys=True)
-            handle.write("\n")
+        _write_private_file_exclusive(marker, (json.dumps({
+            "schema_version": 1,
+            "document_type": "toefl-house-erp-update-transaction-use",
+            "transaction_id": transaction["transaction_id"],
+            "consumed_utc": parse_utc_iso(datetime.now(timezone.utc)),
+            "target_version": transaction["target"].get("version"),
+        }, sort_keys=True) + "\n").encode("utf-8"))
     except FileExistsError:
         raise refuse("transaction.replayed", "this update transaction was already used") from None
     except OSError:
@@ -2475,7 +2954,11 @@ def _consume_transaction(state_dir: Path, transaction: dict) -> None:
 def _apply_report(status: str, phase: str, *, blockers: list[dict] | None = None,
                   counts_before: dict | None = None, counts_after: dict | None = None,
                   apps_before: list | None = None, apps_after: list | None = None,
-                  role_pages: list | None = None, target_version: str | None = None) -> dict:
+                  role_pages: list | None = None, target_version: str | None = None,
+                  fees_total_before: str | None = None,
+                  fees_total_after: str | None = None,
+                  census_hashes_before: dict | None = None,
+                  census_hashes_after: dict | None = None) -> dict:
     return {
         "schema_version": ENGINE_SCHEMA_VERSION,
         "document_type": DOCUMENT_RESPONSE,
@@ -2490,6 +2973,10 @@ def _apply_report(status: str, phase: str, *, blockers: list[dict] | None = None
         "apps_before": apps_before or [],
         "apps_after": apps_after or [],
         "role_desk_pages": role_pages or [],
+        "fees_total_before": fees_total_before,
+        "fees_total_after": fees_total_after,
+        "census_hashes_before": census_hashes_before or {},
+        "census_hashes_after": census_hashes_after or {},
         "target_version": target_version,
         "transaction_outcome": ("completed" if status == "succeeded"
                                 else ("recovery-required"

@@ -282,12 +282,15 @@ class Site:
         self.roles[user] = list(roles)
 
     # -- query helpers ----------------------------------------------------
-    def select(self, doctype, filters=None, order_by=None, limit=None):
+    def select(self, doctype, filters=None, order_by=None, limit=None,
+               offset=None):
         rows = [row for row in self.table(doctype).values() if _match(row, filters)]
         if order_by:
             field, _, direction = order_by.partition(" ")
             rows.sort(key=lambda row: str(row.get(field) or ""),
                       reverse=direction.strip().lower().startswith("desc"))
+        if offset:
+            rows = rows[int(offset):]
         if limit:
             rows = rows[: int(limit)]
         return rows
@@ -399,9 +402,10 @@ def build_frappe(site):
         return len(site.select(doctype, filters))
 
     def get_all(doctype, filters=None, fields=None, limit_page_length=None,
-                limit=None, order_by=None):
+                limit=None, limit_start=None, order_by=None):
         rows = site.select(doctype, filters, order_by=order_by,
-                           limit=limit or limit_page_length)
+                           limit=limit or limit_page_length,
+                           offset=limit_start)
         if fields is None:
             return [deepcopy(row) for row in rows]
         return [{field: row.get(field) for field in fields} for row in rows]
@@ -457,6 +461,20 @@ def build_frappe(site):
             return rows if as_dict else [(row.get("active"),) for row in rows]
 
         if "from `tabStudent Attendance` a" in text:
+            # The transfer preservation count: attendance in one class,
+            # counted with the same join/filter as the sample below.
+            if "count(*)" in text:
+                total = 0
+                for record in site.all("Student Attendance"):
+                    session = site.get("Course Schedule",
+                                       record.get("course_schedule"))
+                    if record.get("student") != values[0]:
+                        continue
+                    if int(record.get("docstatus") or 0) != 1:
+                        continue
+                    if session and session.get("student_group") == values[1]:
+                        total += 1
+                return [{"total": total}] if as_dict else [(total,)]
             # The transfer preservation sample: attendance in one class.
             rows = []
             for record in site.all("Student Attendance"):

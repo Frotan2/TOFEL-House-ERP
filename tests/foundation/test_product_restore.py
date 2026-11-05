@@ -27,6 +27,39 @@ def load_restore():
     return module
 
 
+def _tar_header_bytes() -> bytes:
+    header = bytearray(512)
+    header[257:262] = b"ustar"
+    header[263:265] = b"00"
+    return bytes(header)
+
+
+class _FakeDecryptStdin:
+    def __init__(self, calls):
+        self.calls = calls
+
+    def write(self, data: bytes) -> int:
+        self.calls.append(data)
+        return len(data)
+
+    def close(self) -> None:
+        pass
+
+
+class _FakeDecryptPopen:
+    """Stand-in for GPG decrypt probes: every staged artifact decrypts."""
+
+    def __init__(self, arguments, **kwargs):
+        self.arguments = arguments
+        self.stdin_calls = []
+        self.stdin = _FakeDecryptStdin(self.stdin_calls)
+        self.stdout = io.BytesIO(_tar_header_bytes())
+        self.stderr = io.BytesIO(b"")
+
+    def wait(self) -> int:
+        return 0
+
+
 def payload(site="toeflhouse.localhost", backup_set="20261008-test"):
     return {
         "site": site,
@@ -287,18 +320,33 @@ class ProductRestoreInputTests(unittest.TestCase):
         caller_cwd = Path.cwd()
         stdout, stderr = io.StringIO(), io.StringIO()
         gpg_calls = []
+        probe_calls = []
 
         def fake_gpg_run(arguments, **kwargs):
             gpg_calls.append((arguments, kwargs))
             return types.SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
 
+        def fake_popen(arguments, **kwargs):
+            probe = _FakeDecryptPopen(arguments, **kwargs)
+            probe_calls.append(probe)
+            return probe
+
         import native_gpg
         with patch.dict(sys.modules, modules):
             with patch.object(native_gpg.subprocess, "run", side_effect=fake_gpg_run):
-                status = restore.main(io.StringIO(json.dumps(request)), stdout, stderr, argv=[])
+                with patch.object(native_gpg.subprocess, "Popen", side_effect=fake_popen):
+                    status = restore.main(io.StringIO(json.dumps(request)), stdout, stderr, argv=[])
 
         self.assertEqual(status, 1)
         self.assertEqual(len(gpg_calls), 1)
+        # The staged database artifact and both staged file archives are
+        # decrypt-probed before native _restore runs; keys travel on stdin.
+        self.assertEqual(len(probe_calls), 3)
+        for probe in probe_calls:
+            self.assertNotIn(request["encryption_key"], " ".join(probe.arguments))
+            self.assertNotIn("--passphrase", probe.arguments)
+            self.assertEqual(probe.stdin_calls,
+                             [(request["encryption_key"] + "\n").encode("ascii")])
         self.assertIn(
             "Restore context before frappe.init: cwd=site-data; ../logs=unknown\n",
             stdout.getvalue())

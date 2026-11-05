@@ -855,7 +855,7 @@ class D3LifecycleTests(unittest.TestCase):
     ROLES = {"Finance Officer", "Finance Manager"}
 
     def _seed_roles(self, fake):
-        for role in ("Finance Officer", "Finance Manager"):
+        for role in ("Finance Officer", "Finance Manager", "Accounts User"):
             fake.store.setdefault("Role", {})[role] = {"name": role}
 
     def _fee(self, fake, name, total, posting):
@@ -867,6 +867,12 @@ class D3LifecycleTests(unittest.TestCase):
             "name": "TOEFL House",
         }
         fee = _Doc(fake, "Fees", {"name": name, "grand_total": total,
+                                  # Group 1 (C-01): model a genuinely unpaid
+                                  # native Fees — outstanding equals the
+                                  # total — instead of the insert default
+                                  # (components sum, 0 here), which would
+                                  # describe a fully-paid fee.
+                                  "outstanding_amount": total,
                                   "company": "TOEFL House",
                                   "posting_date": posting})
         fee.insert()
@@ -919,8 +925,11 @@ class D3LifecycleTests(unittest.TestCase):
                     "Window beyond the guard")
             # The second version supersedes: the predecessor is closed,
             # never rewritten.
+            # Group 1 (NEW-04): the second version's approver role must
+            # differ from the Finance Officer command role; the old test
+            # used the collapsed role itself.
             v2 = corrections.configure_correction_policy(
-                "V" * 23 + "8", "Finance Officer", 0, "2026-09-17",
+                "V" * 23 + "8", "Accounts User", 0, "2026-09-17",
                 "Same-day window from today")
             v1_after = fake.store["TH Correction Policy"][v1["name"]]
             self.assertEqual(v1_after.get("status"), "Retired")
@@ -945,7 +954,7 @@ class D3LifecycleTests(unittest.TestCase):
                 "N" * 23 + "2", fee_old.name, "Stale fee under v1", 200.0)
             self.assertEqual(req_old["correction_policy"], v1["name"])
             corrections.configure_correction_policy(
-                "N" * 23 + "3", "Finance Officer", 0, "2026-09-17",
+                "N" * 23 + "3", "Accounts User", 0, "2026-09-17",
                 "Same-day window from today")
             req_new = corrections.request_fees_correction(
                 "N" * 23 + "4", fee_new.name, "Fresh fee under v2", 300.0)

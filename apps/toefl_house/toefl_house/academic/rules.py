@@ -398,9 +398,20 @@ def resolve_charge_discount(rules_list, fee_category=None, program=None, student
         # A malformed active discount must never silently become the
         # winning rule and corrupt a native tuition charge. Invalid legacy
         # percentages require Owner correction before issuing new Fees.
+        # The same applies to guard-violating rules: an otherwise-eligible
+        # Active rule above 50% (but below 100%) or a beneficiary-less
+        # 100% waiver must RAISE, not be silently skipped — skipping
+        # would bill the student at full price while the Owner believes
+        # a discount is in force. Non-numeric percentages still fail
+        # closed inside validate_discount_percentage above.
         percent = validate_discount_percentage(rule.get("discount_percentage"))
         if 50 < percent < 100 or (percent == 100 and not beneficiary):
-            continue
+            raise ValueError(
+                f"Active discount rule "
+                f"{rule.get('code') or rule.get('name') or '?'} violates "
+                "the discount guard (ordinary discounts stop at 50%; a "
+                "100% waiver requires an identified student beneficiary); "
+                "the Owner must correct the rule before issuing new Fees")
         eligible.append(rule)
 
     if not eligible:
