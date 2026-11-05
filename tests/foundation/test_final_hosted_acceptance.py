@@ -201,6 +201,51 @@ class FinalHostedAcceptanceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Missing executed placement journeys"):
             verify_report(evidence, COMMIT)
 
+    def test_cash_refund_and_payroll_receipts_cannot_be_replaced_by_passing_padding(self):
+        critical = {
+            "finance": (
+                "finance-cashier-day-close-native-ledger",
+                "finance-cashier-close-wrong-role-denied",
+                "finance-cashier-close-future-day-denied",
+                "finance-cashier-receipt-company-scope",
+            ),
+            "tuition_refunds": (
+                "native-tuition-refund-list-document-role-parity",
+                "native-tuition-refund-unpaid-approval-withdrawal",
+                "native-refund-atomic-failure-preserves-caller",
+                "native-student-journal-refund-bypass-denied",
+                "native-tuition-refund-real-concurrent-transactions",
+                "native-deferred-refund-recovery-server-gate",
+            ),
+            "teacher_compensation": (
+                "teaching-payroll-company-isolation",
+                "teaching-compensation-concurrent-calc-first-writer",
+                "teaching-native-payroll-slip-bridge",
+                "teaching-native-per-contract-monthly-earning",
+            ),
+        }
+        complete = synthetic_report()
+        present = {check["name"] for check in complete["checks"]}
+        # Keep this evidence independent of the verifier's requirement list so
+        # removing a gate cannot silently remove its regression fixture too.
+        complete["checks"].extend(
+            {"name": name, "status": "pass"}
+            for names in critical.values() for name in names if name not in present
+        )
+        complete["checks"].extend(
+            {"name": f"critical-padding-{index}", "status": "pass"} for index in range(25)
+        )
+        self.assertGreater(len(complete["checks"]), MIN_NATIVE_CHECKS)
+        self.assertEqual(verify_report(complete, COMMIT)["production_authorization"], "REJECT")
+        for journey, names in critical.items():
+            for name in names:
+                evidence = copy.deepcopy(complete)
+                receipt(evidence, name)["name"] = "irrelevant-replacement"
+                with self.subTest(receipt=name), self.assertRaisesRegex(
+                    ValueError, "Missing executed " + journey + " journeys",
+                ):
+                    verify_report(evidence, COMMIT)
+
     def test_failed_check_is_not_masked_by_a_green_top_level(self):
         evidence = synthetic_report()
         evidence["checks"][10]["status"] = "fail"

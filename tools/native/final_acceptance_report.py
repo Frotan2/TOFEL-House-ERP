@@ -65,6 +65,10 @@ REQUIRED_JOURNEYS = {
         "reception-native-http-cash-receipt-correction-handover",
         "finance-tuition-happy-path",
         "finance-placement-happy-path",
+        "finance-cashier-day-close-native-ledger",
+        "finance-cashier-close-wrong-role-denied",
+        "finance-cashier-close-future-day-denied",
+        "finance-cashier-receipt-company-scope",
         "book-native-stock-catalog-and-receipt",
         "book-native-unauthorized-role-denied",
         "book-native-mixed-service-invoice-denied",
@@ -83,6 +87,14 @@ REQUIRED_JOURNEYS = {
         "book-native-program-subgroup-sale",
         "book-native-stock-ledger-reconciliation",
     ),
+    "tuition_refunds": (
+        "native-tuition-refund-list-document-role-parity",
+        "native-tuition-refund-unpaid-approval-withdrawal",
+        "native-refund-atomic-failure-preserves-caller",
+        "native-student-journal-refund-bypass-denied",
+        "native-tuition-refund-real-concurrent-transactions",
+        "native-deferred-refund-recovery-server-gate",
+    ),
     "desks_and_branch_permissions": (
         "role-desk-hosted-qualification",
         "role-desk-teacher-hosted",
@@ -100,6 +112,10 @@ REQUIRED_JOURNEYS = {
     "teacher_compensation": (
         "teaching-compensation-contract-authority",
         "teaching-compensation-calculation",
+        "teaching-payroll-company-isolation",
+        "teaching-compensation-concurrent-calc-first-writer",
+        "teaching-native-payroll-slip-bridge",
+        "teaching-native-per-contract-monthly-earning",
     ),
     "access_control_and_failure_safety": (
         "http-guest-denied",
