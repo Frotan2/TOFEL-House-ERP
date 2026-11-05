@@ -34,6 +34,46 @@ STATUSES = ("Active", "Ended")
 REASON_LIMIT = 500
 NAME_LIMIT = 140
 
+# Suspension reads are paged, never capped: the page size is a fetch
+# size, not a result limit, so a covering row past the first page is
+# still found. A result set past _SUSPENSION_MAX_ROWS refuses
+# explicitly instead of deciding on a truncated set (fail closed).
+_SUSPENSION_PAGE_LENGTH = 50
+_SUSPENSION_MAX_ROWS = 200
+
+
+def _paged_get_all(filters, fields):
+    """All rows matching the database filters, in pages.
+
+    Date and scope filtering already happened in the database query
+    (the filters passed in); this only defeats the page cap. A read
+    path that ignores ``limit_start`` returns the same page again;
+    that is detected (no new names) and iteration stops instead of
+    looping forever.
+    """
+    seen = set()
+    rows = []
+    start = 0
+    while True:
+        page = frappe.get_all(
+            SUSPENSION, filters=filters, fields=fields,
+            limit_start=start, limit_page_length=_SUSPENSION_PAGE_LENGTH)
+        if not page:
+            return rows
+        fresh = [row for row in page if row.get("name") not in seen]
+        if not fresh:
+            return rows
+        for row in fresh:
+            seen.add(row.get("name"))
+            rows.append(row)
+            if len(rows) > _SUSPENSION_MAX_ROWS:
+                raise frappe.ValidationError(
+                    "Too many active suspensions to decide safely; "
+                    "refusing to act on a partial set")
+        if len(page) < _SUSPENSION_PAGE_LENGTH:
+            return rows
+        start += len(page)
+
 
 def _bounded(value, what):
     if not isinstance(value, str) or not value.strip() or len(value.strip()) > NAME_LIMIT:
@@ -77,39 +117,71 @@ def suspension_window_valid(from_date, until_date, limit_days, label):
     return start, end
 
 
-def overlapping_suspension(group_name, student="", scope=None, on_date=None):
-    """An existing Active suspension covering the date for the same target."""
-    filters = {"student_group": group_name, "status": "Active"}
+def overlapping_suspension(group_name, student="", scope=None, on_date=None,
+                           until_date=None):
+    """An existing Active suspension intersecting the proposed window.
+
+    With only ``on_date`` given, this is the legacy single-date cover check.
+    With ``until_date`` given, the test is interval intersection:
+    ``new.from <= existing.until AND existing.from <= new.until`` — a new
+    window that starts before an existing one still overlaps it. The
+    interval test and the scope filter both run in the database query,
+    and the read is paged, so an overlapping row past the first page is
+    still found instead of being silently dropped.
+    """
+    if until_date is None:
+        day = str(on_date or _today())
+        start, end = day, day
+    else:
+        start, end = str(on_date), str(until_date)
+    filters = {"student_group": group_name, "status": "Active",
+               "from_date": ("<=", end), "until_date": (">=", start)}
     if scope:
         filters["scope"] = scope
     if student:
         filters["student"] = student
-    rows = frappe.get_all(SUSPENSION, filters=filters,
-                          fields=["name", "scope", "student", "from_date",
-                                  "until_date"], limit_page_length=50)
-    day = str(on_date or _today())
-    for row in rows:
-        if str(row.get("from_date") or "") <= day <= str(row.get("until_date") or ""):
-            return row
-    return None
+    rows = _paged_get_all(
+        filters, ["name", "scope", "student", "from_date", "until_date"])
+    return rows[0] if rows else None
+
+
+def _class_suspension_covering(group_name, day):
+    """The covering Class-scope suspension, if any — queried explicitly.
+
+    ``active_suspension`` returns the first date-covering row of any scope
+    with no ordering, so an assert must never depend on which scope sorts
+    first. This query filters scope == "Class" and the covering date at
+    the source instead, and reads in pages so a covering row past the
+    first page is still found.
+    """
+    rows = _paged_get_all(
+        {"student_group": group_name, "status": "Active",
+         "scope": "Class", "from_date": ("<=", day),
+         "until_date": (">=", day)},
+        ["name", "scope", "student", "from_date", "until_date", "reason"])
+    return rows[0] if rows else None
 
 
 def active_suspension(group_name, student="", on_date=None):
-    """The Active suspension covering a date, class-wide or for one student."""
+    """The Active suspension covering a date, class-wide or for one student.
+
+    The class scope is queried explicitly first; only then is the
+    student scope queried, with the student and the covering date in
+    the database filters — never by picking through a mixed,
+    silently-capped list.
+    """
     day = str(on_date or _today())
-    rows = frappe.get_all(
-        SUSPENSION,
-        filters={"student_group": group_name, "status": "Active"},
-        fields=["name", "scope", "student", "from_date", "until_date", "reason"],
-        limit_page_length=50)
-    for row in rows:
-        if not str(row.get("from_date") or "") <= day <= str(row.get("until_date") or ""):
-            continue
-        if row.get("scope") == "Class":
-            return row
-        if student and row.get("student") == student:
-            return row
-    return None
+    row = _class_suspension_covering(group_name, day)
+    if row:
+        return row
+    if not student:
+        return None
+    rows = _paged_get_all(
+        {"student_group": group_name, "status": "Active",
+         "scope": "Student", "student": student,
+         "from_date": ("<=", day), "until_date": (">=", day)},
+        ["name", "scope", "student", "from_date", "until_date", "reason"])
+    return rows[0] if rows else None
 
 
 def assert_scheduling_allowed(group_name, day):
@@ -117,8 +189,8 @@ def assert_scheduling_allowed(group_name, day):
     group = frappe.db.get_value(GROUP, group_name, "th_class_status")
     if group is None:
         raise frappe.ValidationError(f"Unknown student group: {group_name}")
-    row = active_suspension(group_name, on_date=day)
-    if row and row.get("scope") == "Class":
+    row = _class_suspension_covering(group_name, day)
+    if row:
         raise frappe.ValidationError(
             f"Class {group_name} is suspended on {day} "
             f"({row.get('from_date')} to {row.get('until_date')}): {row.get('reason')}")
@@ -131,8 +203,8 @@ def assert_attendance_allowed(group_name, day, marks):
     Absent and Leave remain allowed: the session still happened and the
     record must say so; only "Present" contradicts the suspension.
     """
-    class_suspension = active_suspension(group_name, on_date=day)
-    if class_suspension and class_suspension.get("scope") == "Class":
+    class_suspension = _class_suspension_covering(group_name, day)
+    if class_suspension:
         if any(status == "Present" for status in marks.values()):
             raise frappe.ValidationError(
                 f"Class {group_name} is suspended on {day}; no Present marks "
@@ -191,10 +263,10 @@ def _suspend(scope, group_name, student, reason, from_date, until_date,
                                          terms[limit_key], label.lower())
     if scope == "Student":
         _require_member(group_name, student)
-        if overlapping_suspension(group_name, student, "Student", start):
+        if overlapping_suspension(group_name, student, "Student", start, end):
             raise frappe.ValidationError(
                 f"Student {student} already has an active suspension on {start}")
-    elif overlapping_suspension(group_name, "", "Class", start):
+    elif overlapping_suspension(group_name, "", "Class", start, end):
         raise frappe.ValidationError(
             f"Class {group_name} already has an active suspension on {start}")
     doc = frappe.get_doc({

@@ -13,6 +13,7 @@ from toefl_house.desk import (
     LIMIT_QUEUES,
     active_cohort_rows,
     cohort_state,
+    count_or_unknown,
     guided_action,
     project_count,
     project_rows,
@@ -210,6 +211,24 @@ def work():
                  if coverage_complete else [])
     unclassed_total = len(unclassed) if coverage_complete else "—"
 
+    # The awaiting-release count is a difference of two bounded reads, so it
+    # is only exact when BOTH reads are proven complete: every finalized
+    # attempt seen, and every released decision seen. Otherwise the
+    # difference understates (finalized beyond the preview) or overstates
+    # (a release beyond the preview falsely looks awaiting) — show "—".
+    finalized_total = count_or_unknown(
+        "academic", ATTEMPT, {"status": "Finalized"},
+        preview=finalized_waiting)
+    released_total = count_or_unknown(
+        "academic", DECISION, {"status": "Released"}, preview=released)
+    awaiting_release_total = (
+        len(awaiting_release)
+        if (isinstance(finalized_total, int) and not isinstance(finalized_total, bool)
+            and isinstance(released_total, int) and not isinstance(released_total, bool)
+            and finalized_total == len(finalized_waiting)
+            and released_total == len(released))
+        else "—")
+
     attendance_facts = _attendance_window(groups)
 
     funnel_facts = [
@@ -219,8 +238,9 @@ def work():
              "status": ("in", [s for s in lifecycle.PLACEMENT_ATTEMPT_ORDER if s != "Finalized"])}),
          "owner": "Placement Invigilator"},
         {"label": "Finalized, awaiting release",
-         "definition": "Finalized attempts with no released decision yet.",
-         "value": len(awaiting_release), "owner": "Placement Releaser"},
+         "definition": "Finalized attempts with no released decision yet. "
+                        "Unavailable when either the finalized or the released preview is truncated.",
+         "value": awaiting_release_total, "owner": "Placement Releaser"},
         {"label": "Admissions drafted",
          "definition": "Admission decisions in Draft.",
          "value": project_count("academic", ADMISSION, {"status": "Draft"}),

@@ -757,6 +757,20 @@ def cashier_position(day=None, companies=None):
                     (name, day, *(row["name"] for row in drawers),
                      close["reconciled_on"], close["reconciled_on"]),
                 ))
+                # A post-close change to a GL amount moves the current
+                # ledger closing even when no new row is created. Compare
+                # the current closing total with the stored close total:
+                # a mismatch is drift even if every saved drawer row still
+                # matches its own account (e.g. the stored parent total was
+                # altered, or a drawer balance moved without a new row).
+                try:
+                    current_total = round(sum(
+                        float(row.get("closing") or 0) for row in balances), 2)
+                    stored_total = _stored_money(
+                        close.get("total_expected"), "Stored close total")
+                    drift = drift or abs(current_total - stored_total) > TOLERANCE
+                except frappe.ValidationError:
+                    drift = True
         out.append({
             "company": name,
             "date": day,

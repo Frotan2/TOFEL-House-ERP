@@ -42,6 +42,92 @@ GUARDIAN_FIELDS = {
 CONSENT_DOCTYPE = "TH Guardian Consent"
 ANNOUNCEMENT_DOCTYPE = "TH Portal Announcement"
 
+# Consent reads are paged, never capped: the pair (guardian, student) can
+# accumulate more rows than one page, and a cap that silently drops the
+# oldest rows can hide a still-Active authorization (C-04 refinement).
+_CONSENT_PAGE_LENGTH = 50
+_CONSENT_MAX_ROWS = 10000
+# A revocation re-reads the pair after each pass; if new live rows keep
+# appearing it refuses explicitly instead of reporting success.
+_REVOKE_MAX_PASSES = 3
+
+
+def _iter_consent_rows(guardian, student):
+    """Every consent row for (guardian, student), newest first, in pages.
+
+    The page cap is a fetch size, not a result limit: iteration continues
+    until a short page (or an empty one). A read path that ignores
+    ``limit_start`` returns the same page again; that is detected (no
+    new names) and iteration stops instead of looping forever. A pair
+    with more than ``_CONSENT_MAX_ROWS`` rows refuses explicitly rather
+    than deciding on a partial set. Offset paging can skip a row that
+    is inserted at the top mid-scan; revocation closes that hole by
+    re-reading the pair from offset 0 after every pass.
+    """
+    seen = set()
+    start = 0
+    total = 0
+    while True:
+        page = frappe.db.get_all(
+            CONSENT_DOCTYPE,
+            filters={"guardian": guardian, "student": student},
+            fields=["name", "status", "consent_date", "expiry_date",
+                    "evidence_type", "revoked_at", "approved_by",
+                    "approved_on"],
+            order_by="creation desc",
+            limit_start=start,
+            limit_page_length=_CONSENT_PAGE_LENGTH)
+        if not page:
+            return
+        fresh = [row for row in page if row.get("name") not in seen]
+        if not fresh:
+            return
+        for row in fresh:
+            seen.add(row.get("name"))
+            total += 1
+            if total > _CONSENT_MAX_ROWS:
+                raise frappe.ValidationError(
+                    "Too many guardian consent rows to decide safely; "
+                    "refusing to act on a partial set")
+            yield row
+        if len(page) < _CONSENT_PAGE_LENGTH:
+            return
+        start += len(page)
+
+
+def _live_consent_rows(guardian, student):
+    """Every non-Revoked consent row for (guardian, student)."""
+    return [row for row in _iter_consent_rows(guardian, student)
+            if row.get("status") != "Revoked"]
+
+
+def _locked_consent_status(name):
+    """Re-read one consent row under its row lock; None when it is gone.
+
+    The same ``for_update`` pattern ``approve_guardian_consent`` uses:
+    a concurrent approval either lands first (and this revocation then
+    sees the Active row and revokes it) or blocks until this revocation
+    commits (and then sees Revoked and refuses). A read failure returns
+    None — the row is not provably live — and the caller's
+    post-revocation re-check still refuses success while any
+    non-Revoked row remains visible, so a failure can never be mistaken
+    for a completed revocation.
+    """
+    try:
+        locked = frappe.db.get_value(
+            CONSENT_DOCTYPE, name, ["name", "status"],
+            as_dict=True, for_update=True)
+    except Exception:
+        return None
+    if locked is None:
+        return None
+    if isinstance(locked, dict):
+        return locked.get("status")
+    try:
+        return locked[1]
+    except Exception:
+        return None
+
 
 def _require_portal_enabled():
     if not portal_policy.is_portal_enabled("guardian_portal"):
@@ -131,15 +217,23 @@ def _student_age_years(student):
 
 
 def _get_consent(guardian, student):
-    """Only persistent verified consent counts; process memory is not proof."""
-    rows = frappe.db.get_all(
-        CONSENT_DOCTYPE,
-        filters={"guardian": guardian, "student": student},
-        fields=["name", "status", "consent_date", "expiry_date",
-                "evidence_type", "revoked_at", "approved_by", "approved_on"],
-        order_by="creation desc",
-        limit_page_length=1)
-    return rows[0] if rows else None
+    """Only persistent verified consent counts; process memory is not proof.
+
+    Select the Active row, not merely the newest: a newer Pending row (new
+    evidence lodged) or a newer Revoked row must never hide a still-Active
+    authorization, and revocation must not be able to "revoke" a Pending
+    row while the Active row survives. When no Active row exists, return
+    the newest row so callers still see the latest state. The scan is
+    paged across ALL rows for the pair — an Active row older than one
+    page must still be found.
+    """
+    newest = None
+    for row in _iter_consent_rows(guardian, student):
+        if newest is None:
+            newest = row
+        if row.get("status") == "Active":
+            return row
+    return newest
 
 
 def _is_consent_valid(guardian, student, policy_terms=None):
@@ -529,7 +623,31 @@ def approve_guardian_consent(request_key, consent):
 
 @frappe.whitelist(methods=["POST"])
 def revoke_consent(student, reason=""):
-    """Revoke guardian consent for a child. Revocation is immediate and audit-logged."""
+    """Revoke guardian consent for a child. Revocation is immediate and audit-logged.
+
+    Total, not first-page: every non-Revoked row for (guardian, student)
+    is revoked in pages, each row re-read under its row lock just before
+    it is mutated (the ``for_update`` pattern ``approve_guardian_consent``
+    uses, so a concurrent approval either lands first and is then
+    revoked, or sees the Revoked row and refuses). After each pass the
+    pair is re-read from the start; a consent that appeared
+    mid-revocation is revoked on the next pass. If live rows still
+    remain after ``_REVOKE_MAX_PASSES`` passes, revocation REFUSES with
+    an explicit error instead of reporting success — it never claims
+    "immediate" while an authorization may survive. Two concurrent
+    revocations are idempotent: the loser re-reads Revoked rows under
+    the lock, skips them, and the shared re-check confirms nothing
+    live remains.
+
+    Documented residual: a consent row created after the final re-check
+    is always Pending (only staff approval can make it Active), and
+    approval of a Pending row revoked here refuses because the row is
+    Revoked — so no Active authorization can appear after a successful
+    return. A row lock on the Guardian itself was not added: creation
+    and approval are already serialized per consent row by the
+    ``for_update`` re-reads above, and no other consent path locks the
+    Guardian row.
+    """
     _require_portal_enabled()
     user = frappe.session.user
     guardian = _get_guardian_for_user(user)
@@ -539,22 +657,44 @@ def revoke_consent(student, reason=""):
     if student not in verified:
         raise frappe.PermissionError("No verified guardian relationship for this student")
 
-    # Find active consent
-    consent = _get_consent(guardian, student)
-    if not consent:
+    live = _live_consent_rows(guardian, student)
+    if not live:
         raise frappe.ValidationError("No active consent found to revoke")
-    if consent.get("status") == "Revoked":
-        raise frappe.ValidationError("Consent is already revoked")
-
-    doc = frappe.get_doc(CONSENT_DOCTYPE, consent["name"])
-    if doc.status == "Revoked":
-        raise frappe.ValidationError("Consent is already revoked")
-    doc.status = "Revoked"
-    doc.revoked_at = _now()
-    doc.revoked_by = user
-    doc.revocation_reason = reason or "Guardian requested revocation"
-    doc.save(ignore_permissions=True)
-    return {"name": doc.name, "status": "Revoked", "revoked_at": doc.revoked_at}
+    primary_name = next(
+        (row["name"] for row in live if row.get("status") == "Active"),
+        live[0]["name"])
+    revoked_at = None
+    for _ in range(_REVOKE_MAX_PASSES):
+        remaining = _live_consent_rows(guardian, student)
+        if not remaining:
+            break
+        for row in remaining:
+            status = _locked_consent_status(row["name"])
+            if status is None or status == "Revoked":
+                # Lost a race to a concurrent revocation (or the row is
+                # gone); it cannot authorize anything.
+                continue
+            doc = frappe.get_doc(CONSENT_DOCTYPE, row["name"])
+            if doc.status == "Revoked":
+                continue
+            doc.status = "Revoked"
+            doc.revoked_at = _now()
+            doc.revoked_by = user
+            doc.revocation_reason = reason or "Guardian requested revocation"
+            doc.save(ignore_permissions=True)
+            revoked_at = doc.revoked_at
+    remaining = _live_consent_rows(guardian, student)
+    if remaining:
+        raise frappe.ValidationError(
+            f"Revocation incomplete: {len(remaining)} consent row(s) for "
+            "this student are still not revoked; access is refused until "
+            "revocation completes")
+    primary = _get_consent(guardian, student)
+    if primary is not None:
+        return {"name": primary.get("name"), "status": "Revoked",
+                "revoked_at": primary.get("revoked_at") or revoked_at}
+    return {"name": primary_name, "status": "Revoked",
+            "revoked_at": revoked_at}
 
 
 @frappe.whitelist()

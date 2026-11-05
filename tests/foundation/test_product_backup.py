@@ -23,6 +23,34 @@ if str(PRODUCT) not in sys.path:
 import native_gpg  # noqa: E402
 
 
+def _tar_header_bytes() -> bytes:
+    header = bytearray(512)
+    header[257:262] = b"ustar"
+    header[263:265] = b"00"
+    return bytes(header)
+
+
+class _FakeDecryptStdin:
+    def write(self, data: bytes) -> int:
+        return len(data)
+
+    def close(self) -> None:
+        pass
+
+
+class _FakeDecryptPopen:
+    """Stand-in for GPG decrypt probes: every artifact decrypts cleanly."""
+
+    def __init__(self, arguments, **kwargs):
+        self.arguments = arguments
+        self.stdin = _FakeDecryptStdin()
+        self.stdout = io.BytesIO(_tar_header_bytes())
+        self.stderr = io.BytesIO(b"")
+
+    def wait(self) -> int:
+        return 0
+
+
 def load_backup():
     spec = importlib.util.spec_from_file_location(
         "product_backup_under_test", PRODUCT / "backup.py")
@@ -261,7 +289,8 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
         try:
             with patch.dict(sys.modules, self.modules):
                 with patch.object(native_gpg.subprocess, "run", side_effect=self.fake_gpg_run):
-                    self.backup._native_backup()
+                    with patch.object(native_gpg.subprocess, "Popen", _FakeDecryptPopen):
+                        self.backup._native_backup()
         finally:
             self.assertEqual(Path.cwd(), caller_cwd)
 
@@ -297,6 +326,21 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
         self.assertEqual(json.loads(
             (self.backup_dir / (set_name + "-site_config_backup-enc.json")).read_text()
         )["backup_encryption_key"], self.key)
+
+        # Group C: a verified set is issued a hash-bound receipt beside
+        # it; the receipt carries digests only, never the key.
+        receipt = json.loads(
+            (self.backup_dir / (set_name + "-receipt.json")).read_text())
+        self.assertEqual(receipt["schema_version"], 1)
+        self.assertEqual(receipt["backup_set"], set_name)
+        self.assertTrue(receipt["encrypted"] and receipt["verified"])
+        self.assertEqual({item["role"] for item in receipt["artifacts"]},
+                         set(self.backup.BACKUP_SUFFIXES))
+        for item in receipt["artifacts"]:
+            artifact = self.backup_dir / item["name"]
+            self.assertEqual(artifact.stat().st_size, item["bytes"])
+            self.assertEqual(self.backup._sha256(artifact), item["sha256"])
+        self.assertNotIn("backup_encryption_key", json.dumps(receipt))
 
         encryption_calls = [call for call in self.gpg_calls if "-c" in call[0]]
         packet_calls = [call for call in self.gpg_calls if "--list-packets" in call[0]]

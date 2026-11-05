@@ -399,11 +399,62 @@ class EnrollmentExitCommandTests(unittest.TestCase):
 
     def test_request_refused_while_submitted_fees_bill_the_enrollment(self):
         self.fees = [{"name": "FEES-1", "program_enrollment": "PE-1",
-                      "docstatus": 1, "outstanding_amount": 0}]
+                      "docstatus": 1, "outstanding_amount": 150.0}]
         with self.assertRaises(_ValidationError) as ctx:
             self.exits.request_enrollment_dismissal(
                 "test-key-enrexit-rq03", "PE-1", "Broke the attendance covenant")
         self.assertIn("submitted Fees FEES-1", str(ctx.exception))
+
+    def test_request_proceeds_past_fully_paid_submitted_fees(self):
+        # Group 1 (C-05): only a live receivable blocks an exit. A
+        # submitted Fees with nothing outstanding is settled, not live.
+        self.fees = [{"name": "FEES-1", "program_enrollment": "PE-1",
+                      "docstatus": 1, "outstanding_amount": 0}]
+        result = self.exits.request_enrollment_dismissal(
+            "test-key-enrexit-rq03b", "PE-1", "Broke the attendance covenant")
+        self.assertEqual(result["status"], "Requested")
+        self.assertTrue(self.inserted_exits[0].inserted)
+
+    def test_approve_proceeds_past_fully_paid_submitted_fees(self):
+        self.actor_roles = {"Enrollment Officer", "Academic Manager"}
+        self._pending_doc(requested_by="requester@example.com")
+        self.fees = [{"name": "FEES-1", "program_enrollment": "PE-1",
+                      "docstatus": 1, "outstanding_amount": 0}]
+        result = self.exits.approve_enrollment_dismissal(
+            "test-key-enrexit-ap05b", "EXIT-1")
+        self.assertEqual(result["status"], "Posted")
+
+    def test_approve_refused_when_requester_is_same_actor(self):
+        # Group 1 (NEW-01): dismissal self-approval, mirroring transfers.
+        self.actor_roles = {"Enrollment Officer", "Academic Manager"}
+        self._pending_doc()
+        with self.assertRaises(_PermissionError) as ctx:
+            self.exits.approve_enrollment_dismissal(
+                "test-key-enrexit-ap-self", "EXIT-1")
+        self.assertIn("cannot be approved by the person who requested it",
+                      str(ctx.exception))
+        self.assertEqual(self.deleted_ces, [])
+
+    def test_deny_refused_when_requester_is_same_actor(self):
+        # Group 1 (C-13): the deny path carries the same self-decision
+        # bar as the approve path.
+        self.actor_roles = {"Enrollment Officer", "Academic Manager"}
+        self._pending_doc()
+        with self.assertRaises(_PermissionError) as ctx:
+            self.exits.deny_enrollment_dismissal(
+                "test-key-enrexit-dn-self", "EXIT-1")
+        self.assertIn("cannot be denied by the person who requested it",
+                      str(ctx.exception))
+        self.assertEqual(self.exit_doc.status, "Requested")
+
+    def test_collapsed_approver_role_is_refused(self):
+        # Group 1 (NEW-04): the approver role must differ from the
+        # Enrollment Officer command role and must not be administrative.
+        for bad in ("Enrollment Officer", "Administrator", "System Manager"):
+            with self.subTest(role=bad), self.assertRaises(ValueError):
+                self.exits.validate_terms(bad)
+        self.assertEqual(self.exits.validate_terms("Academic Manager"),
+                         "Academic Manager")
 
     def test_request_refused_when_one_is_pending(self):
         self.existing_exits = [{"program_enrollment": "PE-1",
@@ -417,7 +468,7 @@ class EnrollmentExitCommandTests(unittest.TestCase):
 
     def test_approve_posts_the_exit_on_the_decision_date(self):
         self.actor_roles = {"Enrollment Officer", "Academic Manager"}
-        self._pending_doc()
+        self._pending_doc(requested_by="requester@example.com")
         result = self.exits.approve_enrollment_dismissal(
             "test-key-enrexit-ap01", "EXIT-1")
         self.assertEqual(result["status"], "Posted")
@@ -467,7 +518,7 @@ class EnrollmentExitCommandTests(unittest.TestCase):
 
     def test_approve_refused_when_no_longer_submitted(self):
         self.actor_roles = {"Enrollment Officer", "Academic Manager"}
-        self._pending_doc()
+        self._pending_doc(requested_by="requester@example.com")
         self.enrollments["PE-1"]["docstatus"] = 2
         with self.assertRaises(_ValidationError) as ctx:
             self.exits.approve_enrollment_dismissal(
@@ -476,7 +527,7 @@ class EnrollmentExitCommandTests(unittest.TestCase):
 
     def test_approve_refused_when_fees_bill_after_the_request(self):
         self.actor_roles = {"Enrollment Officer", "Academic Manager"}
-        self._pending_doc()
+        self._pending_doc(requested_by="requester@example.com")
         self.fees = [{"name": "FEES-1", "program_enrollment": "PE-1",
                       "docstatus": 1, "outstanding_amount": 150.0}]
         with self.assertRaises(_ValidationError) as ctx:
@@ -488,7 +539,7 @@ class EnrollmentExitCommandTests(unittest.TestCase):
 
     def test_deny_records_the_decision_without_an_exit(self):
         self.actor_roles = {"Enrollment Officer", "Academic Manager"}
-        self._pending_doc()
+        self._pending_doc(requested_by="requester@example.com")
         result = self.exits.deny_enrollment_dismissal(
             "test-key-enrexit-dn01", "EXIT-1")
         self.assertEqual(result["status"], "Denied")

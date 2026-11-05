@@ -115,6 +115,16 @@ class ContainmentHookWiringTests(unittest.TestCase):
                             # 2026-10-18: unconditional validate-only integrity hook (Office 365 link
                             # uniqueness, toefl_house/identity_links.py). Not a command guard.
                             "User",
+                            # 2026-11-05 (U-09 refinement): payroll duplicate-payment
+                            # guard on native Salary Slip submission
+                            # (toefl_house/teaching/salary_slip_guards.py).
+                            # validate + before_submit + before_cancel +
+                            # before_update_after_submit, one submitted slip
+                            # per employee per exact period; before_cancel is
+                            # a no-op inside the guard (cancelling can only
+                            # remove a duplicate). Not a command guard:
+                            # native HRMS creates slips.
+                            "Salary Slip",
                             # Student Applicant is a pinned non-submittable
                             # native record. Its validate-only hook blocks
                             # direct production creation and immutable

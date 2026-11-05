@@ -42,6 +42,16 @@ def worked_month_payroll(slips, payments, worked_period, as_of):
         key = str(raw["name"])
         if not key or key in slips_by_id:
             raise ValueError("Duplicate native Salary Slip")
+        # A second submitted Salary Slip for the same employee in the
+        # same worked period would double-count that employee's earned
+        # wages for the month; it is a data error to be fixed at source,
+        # never silently merged or paid twice.
+        if any(slip["employee"] == str(raw["employee"])
+               for slip in slips_by_id.values()):
+            raise ValueError(
+                "A second submitted Salary Slip for the same employee "
+                "in the same worked period would double-pay that "
+                "employee; resolve the duplicate slip before reconciling")
         total = amount(raw["net_pay"])
         if total < 0:
             raise ValueError("Negative payroll needs separately authorized HRMS adjustment")

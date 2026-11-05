@@ -224,6 +224,17 @@ doc_events = {
     "User": {
         "validate": "toefl_house.identity_links.validate_office365_links",
     },
+    # Payroll duplicate-payment guard (U-09 refinement, 2026-11-05): one
+    # submitted Salary Slip per employee per exact worked period. Native
+    # HRMS owns slip submission; this is the owned boundary that refuses
+    # the second slip at submit time instead of only noticing it in
+    # worked-month reporting afterwards.
+    "Salary Slip": {
+        "validate": "toefl_house.teaching.salary_slip_guards.refuse_duplicate_worked_month_slip",
+        "before_submit": "toefl_house.teaching.salary_slip_guards.refuse_duplicate_worked_month_slip",
+        "before_cancel": "toefl_house.teaching.salary_slip_guards.refuse_duplicate_worked_month_slip",
+        "before_update_after_submit": "toefl_house.teaching.salary_slip_guards.refuse_duplicate_worked_month_slip",
+    },
     # Governance configuration: unconditional integrity hooks (the rules bind
     # on every write path, native form included). Distinct from the command
     # containment guards below; sanctioned by tests/finance/test_containment_hooks.
