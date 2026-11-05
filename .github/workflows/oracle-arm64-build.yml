@@ -14,6 +14,7 @@ on:
       - tools/native/**
       - tools/oracle/**
       - tests/foundation/test_oracle_cloud_contract.py
+      - tests/foundation/test_oracle_session_probe.py
   push:
     branches: ["**"]
     paths:
@@ -28,6 +29,7 @@ on:
       - tools/native/**
       - tools/oracle/**
       - tests/foundation/test_oracle_cloud_contract.py
+      - tests/foundation/test_oracle_session_probe.py
   workflow_dispatch:
 
 permissions:
