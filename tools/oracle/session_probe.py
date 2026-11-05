@@ -11,6 +11,17 @@ from urllib.parse import urlencode
 from urllib.request import HTTPCookieProcessor, HTTPSHandler, Request, build_opener
 
 
+
+def extract_desk_csrf_token(desk):
+    """Read one bounded session token from Frappe v16's authenticated Desk."""
+    if not isinstance(desk, bytes) or len(desk) > 2 * 1024 * 1024:
+        raise ValueError("Authenticated Desk response is invalid")
+    tokens = re.findall(rb'frappe\\.csrf_token\\s*=\\s*"([A-Za-z0-9_+/=-]{16,256})"', desk)
+    if len(tokens) != 1:
+        raise ValueError("Desk did not expose exactly one session CSRF token")
+    return tokens[0].decode("ascii")
+
+
 def probe(ca_file, credentials):
     passwords = [line.removeprefix("Password: ") for line in credentials.splitlines()
                  if line.startswith("Password: ")]
@@ -34,10 +45,7 @@ def probe(ca_file, credentials):
         desk = reply.read(2 * 1024 * 1024 + 1)
         if reply.status != 200 or len(desk) > 2 * 1024 * 1024:
             raise ValueError("Authenticated Desk response is invalid")
-    tokens = re.findall(rb'frappe\.csrf_token\s*=\s*"([A-Za-z0-9_+/=-]{16,256})"', desk)
-    if len(tokens) != 1:
-        raise ValueError("Desk did not expose exactly one session CSRF token")
-    csrf_token = tokens[0].decode("ascii")
+    csrf_token = extract_desk_csrf_token(desk)
     key = base64.b64encode(os.urandom(16)).decode("ascii")
     handshake = ("GET /socket.io/?EIO=4&transport=websocket HTTP/1.1\r\n"
                  "Host: localhost\r\nOrigin: https://localhost\r\n"
