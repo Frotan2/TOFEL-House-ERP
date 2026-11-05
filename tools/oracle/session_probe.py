@@ -3,6 +3,7 @@ import base64
 from http.cookiejar import CookieJar
 import json
 import os
+import re
 import socket
 import ssl
 import sys
@@ -26,6 +27,17 @@ def probe(ca_file, credentials):
     with browser.open(base + "/api/method/frappe.auth.get_logged_user", timeout=30) as reply:
         if json.load(reply).get("message") != "Administrator":
             raise ValueError("Unexpected logged-in identity")
+    # Frappe v16 restricts logout to POST and protects cookie-authenticated
+    # POST calls with CSRF. Obtain the token from the authenticated Desk page,
+    # exactly as a browser would; never disable CSRF or log the token.
+    with browser.open(base + "/app", timeout=30) as reply:
+        desk = reply.read(2 * 1024 * 1024 + 1)
+        if reply.status != 200 or len(desk) > 2 * 1024 * 1024:
+            raise ValueError("Authenticated Desk response is invalid")
+    tokens = re.findall(rb'frappe\.csrf_token\s*=\s*"([A-Za-z0-9_+/=-]{16,256})"', desk)
+    if len(tokens) != 1:
+        raise ValueError("Desk did not expose exactly one session CSRF token")
+    csrf_token = tokens[0].decode("ascii")
     key = base64.b64encode(os.urandom(16)).decode("ascii")
     handshake = ("GET /socket.io/?EIO=4&transport=websocket HTTP/1.1\r\n"
                  "Host: localhost\r\nOrigin: https://localhost\r\n"
@@ -37,10 +49,15 @@ def probe(ca_file, credentials):
             with tls.makefile("rb") as stream:
                 if not stream.readline().startswith(b"HTTP/1.1 101 "):
                     raise ValueError("Proxy did not upgrade the websocket connection")
-    with browser.open(base + "/api/method/logout", timeout=30) as reply:
+    logout = Request(base + "/api/method/logout", method="POST", data=b"",
+                     headers={"X-Frappe-CSRF-Token": csrf_token})
+    with browser.open(logout, timeout=30) as reply:
         if reply.status != 200:
             raise ValueError("Logout failed")
-    print("Verified TLS login, session identity, WebSocket upgrade and logout")
+    with browser.open(base + "/api/method/frappe.auth.get_logged_user", timeout=30) as reply:
+        if json.load(reply).get("message") != "Guest":
+            raise ValueError("Logout did not invalidate the authenticated session")
+    print("Verified TLS login, session identity, WebSocket upgrade and CSRF-protected logout")
 
 
 if __name__ == "__main__":
