@@ -25,6 +25,7 @@ build/
 
 # Desktop product runtime output (generated on the operator machine only)
 product/data/
+product/oracle/data/
 
 # Exported customer images are large and must never enter Git history.
 product/release/

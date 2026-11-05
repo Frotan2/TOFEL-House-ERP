@@ -2,7 +2,14 @@
 
 **Release authorization: REJECT / NO-GO**  
 **Package classification: TEST PACKAGE — NO REAL DATA**  
-**Integration candidate: `work` (draft PR #120); `main` is not a release.**
+**Current source branch: `main` (`415d0145f09b546d474853bafb33c235593441db` at the 2026-11-04 audit).**
+
+The former `work` branch and PR #120 were merged on 2026-10-31. PR #128
+(payroll company isolation and Product-image tag preservation) was merged to
+`main` on 2026-11-04. Draft-PR/`work` descriptions in older acceptance
+snapshots are historical. This remains a release candidate only; production
+authorization is **REJECT / NO-GO**, and exact-head gates must be checked for
+every later source revision.
 
 This specification describes the **current review target**, not an issued
 customer build. No version tag, Windows installer or GitHub artifact can be

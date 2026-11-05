@@ -1,0 +1,159 @@
+name: Oracle ARM64 image build
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/oracle-arm64-build.yml
+      - .dockerignore
+      - .gitattributes
+      - product/**
+      - apps/**
+      - docs/engineering/foundation-version-matrix.json
+      - docs/owner-decisions.json
+      - tools/foundation/**
+      - tools/native/**
+      - tools/oracle/**
+      - tests/foundation/test_oracle_cloud_contract.py
+      - tests/foundation/test_oracle_session_probe.py
+  push:
+    branches: ["**"]
+    paths:
+      - .github/workflows/oracle-arm64-build.yml
+      - .dockerignore
+      - .gitattributes
+      - product/**
+      - apps/**
+      - docs/engineering/foundation-version-matrix.json
+      - docs/owner-decisions.json
+      - tools/foundation/**
+      - tools/native/**
+      - tools/oracle/**
+      - tests/foundation/test_oracle_cloud_contract.py
+      - tests/foundation/test_oracle_session_probe.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracle-arm64-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  arm64-image:
+    # Native ARM execution: no QEMU emulation is accepted as ARM qualification.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify native runner and canonical architecture pins
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import urllib.request
+
+          matrix = json.loads(pathlib.Path("docs/engineering/foundation-version-matrix.json").read_text())
+          components = {item["name"]: item for item in matrix["components"]}
+          node = components["node"]
+          filename = node["tarball_arm64_filename"]
+          expected = node["tarball_sha256_arm64"]
+          if filename != f"node-v{node['selected_version']}-linux-arm64.tar.xz":
+              raise SystemExit("ARM64 Node archive name does not match the pinned Node release")
+          with urllib.request.urlopen(f"https://nodejs.org/dist/v{node['selected_version']}/SHASUMS256.txt", timeout=30) as response:
+              rows = [line.split() for line in response.read().decode().splitlines() if line.strip()]
+          matches = [row[0] for row in rows if len(row) == 2 and row[1] == filename]
+          if matches != [expected]:
+              raise SystemExit("ARM64 Node archive digest does not match nodejs.org SHASUMS256.txt and the canonical pin")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write(f"NODE_TARBALL_SHA256={expected}\n")
+              env.write(f"MARIADB_IMAGE={components['mariadb']['image_digest']}\n")
+              env.write(f"REDIS_IMAGE={components['redis']['image_digest']}\n")
+              env.write(f"PYTHON_BASE=python:{components['python']['selected_version']}-slim-bookworm\n")
+          PY
+      - name: Verify pinned database and cache manifests include ARM64
+        run: |
+          set -euo pipefail
+          for image in "$MARIADB_IMAGE" "$REDIS_IMAGE"; do
+            docker buildx imagetools inspect --raw "$image" | python3 -c 'import json,sys; doc=json.load(sys.stdin); platforms={(m.get("platform",{}).get("os"),m.get("platform",{}).get("architecture")) for m in doc.get("manifests",[])}; assert ("linux","arm64") in platforms, f"pinned image has no Linux/ARM64 manifest: {platforms}"'
+            docker pull --platform linux/arm64 "$image"
+            test "$(docker image inspect "$image" --format '{{.Os}}/{{.Architecture}}')" = linux/arm64
+          done
+          caddy_image='caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5'
+          docker buildx imagetools inspect --raw "$caddy_image" | python3 -c 'import json,sys; doc=json.load(sys.stdin); platforms={(m.get("platform",{}).get("os"),m.get("platform",{}).get("architecture")) for m in doc.get("manifests",[])}; assert ("linux","arm64") in platforms, f"pinned proxy image has no Linux/ARM64 manifest: {platforms}"'
+          docker pull --platform linux/arm64 "$caddy_image"
+          test "$(docker image inspect "$caddy_image" --format '{{.Os}}/{{.Architecture}}')" = linux/arm64
+          docker buildx imagetools inspect --raw "$PYTHON_BASE" | python3 -c 'import json,sys; doc=json.load(sys.stdin); platforms={(m.get("platform",{}).get("os"),m.get("platform",{}).get("architecture")) for m in doc.get("manifests",[])}; assert ("linux","arm64") in platforms, f"Python base has no Linux/ARM64 manifest: {platforms}"'
+      - name: Build the pinned TOEFL House application for native ARM64
+        run: |
+          set -euo pipefail
+          revision=$(git rev-parse HEAD)
+          release_version="ci-${revision:0:12}-arm64"
+          docker buildx build --platform linux/arm64 --load \
+            --build-arg NODE_TARBALL_ARCH=arm64 \
+            --build-arg NODE_TARBALL_SHA256="$NODE_TARBALL_SHA256" \
+            --build-arg TOEFL_HOUSE_SOURCE_REVISION="$revision" \
+            --build-arg TOEFL_HOUSE_RELEASE_VERSION="$release_version" \
+            -f product/app.Dockerfile -t toefl-house-erp-app:arm64 .
+      - name: Verify shipped runtime and native binaries are ARM64
+        run: |
+          set -euo pipefail
+          test "$(docker image inspect toefl-house-erp-app:arm64 --format '{{.Os}}/{{.Architecture}}')" = linux/arm64
+          python3 tools/foundation/annotated_step.py "Shipped ARM64 runtime" -- docker run --rm --platform linux/arm64 --entrypoint /bin/sh toefl-house-erp-app:arm64 -ec '
+            test "$(dpkg --print-architecture)" = arm64
+            test "$(node -p process.arch)" = arm64
+            /home/frappe/bench/env/bin/python -c "import platform; assert platform.machine() == \"aarch64\", platform.machine()"
+            cd /home/frappe/bench
+            env/bin/python -c "import frappe, erpnext, education, payments, hrms, foundation_security, toefl_house"
+            /build/tools/bin/bench --version
+            wkhtmltopdf --version
+            fc-list >/dev/null
+          '
+
+      - name: Qualify Oracle Compose services through HTTPS
+        timeout-minutes: 35
+        run: python3 tools/foundation/annotated_step.py "Oracle TLS and restart" -- bash tools/oracle/qualify.sh
+
+      - name: Export the tested image
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/oracle-arm64-staging-foundation')
+        run: |
+          set -euo pipefail
+          tag="toefl-house-erp-oracle-test:$GITHUB_SHA"
+          docker tag toefl-house-erp-app:arm64 "$tag"
+          docker builder prune --all --force
+          docker save "$tag" | zstd -T2 -3 -o "$RUNNER_TEMP/oracle-arm64-test.tar.zst"
+      - name: Retain the Oracle TEST image
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/oracle-arm64-staging-foundation')
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: oracle-arm64-test-${{ github.sha }}
+          path: ${{ runner.temp }}/oracle-arm64-test.tar.zst
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
+
+  attest-test-image:
+    needs: arm64-image
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/oracle-arm64-staging-foundation')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Retrieve tested archive from this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "oracle-arm64-test-$GITHUB_SHA" --dir "$RUNNER_TEMP/verified"
+      - name: Attest the tested ARM64 archive
+        uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
+        with:
+          subject-path: ${{ runner.temp }}/verified/oracle-arm64-test.tar.zst

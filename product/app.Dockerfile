@@ -40,14 +40,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Node at the exact pinned version, from the nodejs.org release tarball
 # (the same upstream channel the hosted workflow's actions/setup-node uses).
-# The tarball's sha256 is verified against the official nodejs.org
-# SHASUMS256.txt value: the Product image workflow resolves it live and passes
-# it as NODE_TARBALL_SHA256 (and asserts it against the matrix pin), and the
-# compose build passes the matrix pin so the owner's local build verifies too.
+# The architecture-specific tarball's sha256 is checked against the canonical
+# matrix pin by CI and again here at build time. The architecture argument is
+# matched to BuildKit's target so an amd64 binary cannot enter an arm64 image.
 ARG NODE_TARBALL_SHA256=""
+ARG NODE_TARBALL_ARCH=x64
+ARG TARGETARCH
 RUN set -eux; \
+    case "${TARGETARCH}:${NODE_TARBALL_ARCH}" in amd64:x64|arm64:arm64) ;; *) echo "unsupported or mismatched Node architecture: ${TARGETARCH}:${NODE_TARBALL_ARCH}" >&2; exit 1 ;; esac; \
     curl --fail --silent --show-error --location \
-      "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
+      "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_TARBALL_ARCH}.tar.xz" \
       -o /tmp/node.tar.xz; \
     test -n "${NODE_TARBALL_SHA256}" || { echo "NODE_TARBALL_SHA256 is required; refusing an unverified Node tarball" >&2; exit 1; }; \
     echo "${NODE_TARBALL_SHA256}  /tmp/node.tar.xz" | sha256sum -c -; \
