@@ -79,6 +79,16 @@ class ReleaseImageTriggerContract(unittest.TestCase):
                 self.assertIn("tests/foundation/test_final_hosted_acceptance.py", paths)
                 self.assertIn("tests/foundation/test_release_workflow_triggers.py", paths)
 
+    def test_local_native_authorization_changes_requalify_every_release_gate(self):
+        for workflow in ("product-image.yml", "foundation-runtime.yml", "native-lifecycle.yml"):
+            with self.subTest(workflow=workflow):
+                paths = push_paths(workflow)
+                for source in ("tools/native/acceptance_context.py", "tools/native/native_checks.py",
+                               "tools/native/tuition_refund_races.py"):
+                    self.assertTrue(source in paths or "tools/native/**" in paths)
+                self.assertIn("tests/foundation/test_local_native_acceptance.py", paths)
+                self.assertIn("tests/foundation/test_release_workflow_triggers.py", paths)
+
     def test_advisory_changes_trigger_full_release_qualification(self):
         patterns = ("docs/engineering/evidence/sec-deps-01/**", "tests/security/**")
         names = ("foundation-runtime.yml", "native-lifecycle.yml",

@@ -442,7 +442,11 @@ def configuration_http_observation(session, base, user):
 
 
 def main():
-    if os.environ.get('GITHUB_ACTIONS') != 'true':raise RuntimeError('Hosted synthetic runner only')
+    if __package__:
+        from .acceptance_context import execution_context
+    else:
+        from acceptance_context import execution_context
+    context = execution_context()
     import frappe
     import requests
     from toefl_house import api
@@ -458,8 +462,11 @@ def main():
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
     report={'scope':'Hosted synthetic placement, admission, enrollment, classes, attendance, tuition, role desks, branch access and teaching compensation; NOT final customer acceptance','status':'running','checks':[],
-            'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT',
+            'commit':context.source_revision,'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT',
             'note':'Business checks use pinned native ERPNext/Education/HRMS records and synthetic owner-policy fixtures. Live Owner Windows, staff devices, book-sale end-to-end and backup-drive recovery remain unverified'}
+    if context.local:
+        report['scope'] = 'Local Windows/Docker synthetic native ERP checks; NOT final customer or production acceptance'
+        report.update(context.metadata())
     users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
            'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
            'second_author':'synthetic-second-author@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test',
@@ -533,6 +540,7 @@ def main():
         if site not in ('placement-test.localhost','placement-second.localhost'):
             raise RuntimeError('Refusing to connect to a non-synthetic site')
         frappe.init(site=site,sites_path=str(Path.cwd()))
+        context.guard_connection(frappe, site, str(Path.cwd()))
         frappe.connect()
         frappe.set_user('Administrator')
         frappe.local.conf.throttle_user_limit=500
@@ -8853,7 +8861,8 @@ def main():
         # Run last: preserve earlier acceptance baselines and retain the new
         # synthetic Company as reproducible concurrent accounting evidence.
         from tuition_refund_races import run as qualify_refund_races
-        check('native-tuition-refund-real-concurrent-transactions', traced(qualify_refund_races))
+        check('native-tuition-refund-real-concurrent-transactions', traced(
+            lambda: qualify_refund_races(connection_guard=context.guard_connection)))
         def deferred_refund_recovery_server_gate():
             before={dt:frappe.db.count(dt) for dt in ('Journal Entry','Payment Entry','GL Entry','TH Placement Operation','TH Placement Audit Event')}
             methods=('request_tuition_refund_reversal','approve_tuition_refund_reversal',
