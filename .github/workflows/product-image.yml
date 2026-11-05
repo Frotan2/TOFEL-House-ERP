@@ -73,6 +73,7 @@ on:
       - tools/native/acceptance_context.py
       - tools/native/tuition_refund_races.py
       - tests/foundation/test_local_native_acceptance.py
+      - tests/foundation/test_native_health_privacy.py
       # Changes to finance acceptance tests must also qualify the deliverable
       # that the customer is about to receive, not only the fast Owned suite.
       - tests/finance/**

@@ -17,6 +17,7 @@ on:
       - tools/native/native_checks.py
       - tools/native/tuition_refund_races.py
       - tests/foundation/test_local_native_acceptance.py
+      - tests/foundation/test_native_health_privacy.py
       - tests/foundation/test_release_workflow_triggers.py
       - product/bootstrap.py
       - product/backup.py

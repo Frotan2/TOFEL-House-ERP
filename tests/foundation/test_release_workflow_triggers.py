@@ -87,6 +87,7 @@ class ReleaseImageTriggerContract(unittest.TestCase):
                                "tools/native/tuition_refund_races.py"):
                     self.assertTrue(source in paths or "tools/native/**" in paths)
                 self.assertIn("tests/foundation/test_local_native_acceptance.py", paths)
+                self.assertIn("tests/foundation/test_native_health_privacy.py", paths)
                 self.assertIn("tests/foundation/test_release_workflow_triggers.py", paths)
 
     def test_advisory_changes_trigger_full_release_qualification(self):

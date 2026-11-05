@@ -12,6 +12,7 @@ on:
       - tools/native/**
       - tests/foundation/test_final_hosted_acceptance.py
       - tests/foundation/test_local_native_acceptance.py
+      - tests/foundation/test_native_health_privacy.py
       - tests/foundation/test_release_workflow_triggers.py
       # Recheck native security whenever an advisory disposition changes.
       - docs/engineering/evidence/sec-deps-01/**
