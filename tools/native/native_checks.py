@@ -28,6 +28,13 @@ def validate_health_projection(items, forbidden_values=(), required_identities=(
         if (any(not isinstance(item[key], str) for key in HEALTH_ITEM_FIELDS - {"waiting_since"})
                 or not isinstance(item["waiting_since"], (str, date, type(None)))):
             raise ValueError("Native health items must contain count-and-identity text only")
+        if item["id"].startswith("condition:"):
+            definition = item["stage_definition"].lower()
+            if (item["stage"] != "Alert condition" or item["status"] != "observed"
+                    or item["next_role"] != "General Manager" or "generated" not in definition
+                    or "never delivered" not in definition
+                    or not re.search(r"\bno (?:alert )?receiver\b", definition)):
+                raise ValueError("Native alert condition does not preserve the delivery boundary")
     identities = {item["id"] for item in items}
     if not set(required_identities).issubset(identities):
         raise ValueError("Native health source identities were not observed")
@@ -44,11 +51,11 @@ def seed_health_privacy_controls(frappe):
     """Keep real private error/job controls only in this synthetic native site."""
     from rq.job import Job, JobStatus
     from rq.results import Result
-    from toefl_house.security import SYNTHETIC, site_mode
+    from toefl_house import security as health_security
     from frappe.core.doctype.rq_job.rq_job import serialize_job
     from frappe.utils.background_jobs import get_queue
 
-    if (site_mode() != SYNTHETIC or frappe.local.site not in (
+    if (health_security.site_mode() != health_security.SYNTHETIC or frappe.local.site not in (
             "placement-test.localhost", "placement-second.localhost")
             or frappe.conf.get("toefl_house_production_active")):
         raise RuntimeError("Native health controls require an isolated synthetic site")
@@ -6990,7 +6997,6 @@ def main():
                                    'next','next_role','waiting_since'},(item['id'],sorted(item))
             privacy = validate_health_projection(items, health_privacy_controls['private_values'])
             conds=[i for i in items if i['id'].startswith('condition:')]
-            assert all('no receiver' in i['stage_definition'] for i in conds),(len(conds),'condition without the receiver boundary')
             own=as_user('course_owner',own_work);frappe.set_user('Administrator')
             ofacts={f['label']:f['value'] for f in next(s for s in own['sections'] if s['id']=='health')['facts']}
             assert ofacts=={k:facts[k] for k in ofacts},('owner counts must equal the GM counts',ofacts,facts)

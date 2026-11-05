@@ -69,3 +69,17 @@ class NativeHealthPrivacyTests(unittest.TestCase):
         for bad in (None, {}, [None], [dict(health_item(), unexpected="field")]):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 validate_health_projection(copy.deepcopy(bad))
+
+    def test_generated_alert_condition_has_no_receiver_or_delivery_action(self):
+        condition = dict(health_item(), id="condition:failed_background_jobs", stage="Alert condition", status="observed",
+                         stage_definition="Conditions are generated, never delivered: no alert receiver exists.")
+        validate_health_projection([condition])
+        for key, value in (("stage_definition", "Notification delivered to the configured receiver."),
+                           ("stage_definition", "Generated, never delivered; receiver configured."),
+                           ("status", "sent"), ("stage", "Notification"), ("next_role", "receiver@example.test")):
+            changed = dict(condition, **{key: value})
+            with self.subTest(key=key, value=value), self.assertRaisesRegex(ValueError, "delivery boundary"):
+                validate_health_projection([changed])
+        for key in ("receiver", "recipient", "action", "endpoint"):
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, "private fields"):
+                validate_health_projection([dict(condition, **{key: "not-authorized"})])
