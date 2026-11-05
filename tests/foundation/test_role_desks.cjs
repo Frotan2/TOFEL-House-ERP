@@ -502,7 +502,7 @@ function payloadWith(queueItems, factValue) {
 	};
 }
 
-function runScenario({ workPayload, failFirstWork = false, failLookup = false, deferLookup = false, deferRegister = false, deferWorkAfterFirst = false, lookupReply = null, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null, readableSources = [] }) {
+function runScenario({ workPayload, deskSlug = "th-reception-desk", failFirstWork = false, failLookup = false, deferLookup = false, deferRegister = false, deferWorkAfterFirst = false, lookupReply = null, cashReply = null, cashError = null, cashCurrentReceipt = null, cashReadFails = false, attendanceReply = null, readableSources = [] }) {
 	const calls = [];
 	const dialogs = [];
 	const pendingLookups = [];
@@ -513,8 +513,10 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, d
 	const confirmations = [];
 	const body = $("body").appendTo({ children: [] });
 	let workCalls = 0;
+	let logoutCalls = 0;
 	const frappe = {
-		pages: { "th-reception-desk": { tagName: "DIV" } },
+		pages: { [deskSlug]: { tagName: "DIV" } },
+		app: { logout() { logoutCalls += 1; } },
 		provide() {},
 		require() {},
 		set_route(route) { routed.push(route); },
@@ -555,7 +557,7 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, d
 				opts.callback({ message: { desks: [{ slug: "th-finance-desk", title: "TOEFL House Finance Desk" }] } });
 				return;
 			}
-			if (opts.method === "toefl_house.desk.reception.work") {
+			if (opts.method === EXPECTED[deskSlug].endpoint) {
 				workCalls += 1;
 				if (failFirstWork && workCalls === 1) { opts.error(); return; }
 				if (deferWorkAfterFirst && workCalls > 1) {
@@ -595,8 +597,27 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false, d
 	};
 	frappe.provide = (dotted) => { let target = sandbox; for (const part of dotted.split(".")) target = target[part] ||= {}; };
 	vm.runInNewContext(fs.readFileSync(SCRIPT, "utf8"), sandbox, { filename: SCRIPT });
-	frappe.pages["th-reception-desk"].on_page_load(body);
-	return { calls, dialogs, pendingLookups, pendingWorks, pendingRegistrations, confirmations, routed, printed, body, frappe, get workCalls() { return workCalls; } };
+	frappe.pages[deskSlug].on_page_load(body);
+	return { calls, dialogs, pendingLookups, pendingWorks, pendingRegistrations, confirmations, routed, printed, body, frappe,
+		get workCalls() { return workCalls; }, get logoutCalls() { return logoutCalls; } };
+}
+
+// Every staff desk, including a failed/denied projection, must offer native
+// session termination without relying on an eligible Workspace sidebar.
+for (const deskSlug of Object.keys(EXPECTED)) {
+	for (const failFirstWork of [false, true]) {
+		const scenario = runScenario({ deskSlug, failFirstWork, workPayload: payloadWith([], "0") });
+		const signOut = findAll(scenario.body, "th-sign-out");
+		assert.strictEqual(signOut.length, 1, `${deskSlug}: one independent sign-out control`);
+		assert.strictEqual(signOut[0].tag, "button", `${deskSlug}: keyboard-accessible sign-out button`);
+		assert.strictEqual(serialize(signOut[0]), "Sign out", `${deskSlug}: clear sign-out label`);
+		if (failFirstWork) assert(findAll(scenario.body, "th-alert--danger").length, `${deskSlug}: failed view exercised`);
+		assert.strictEqual(scenario.logoutCalls, 0, `${deskSlug}: rendering must not log out`);
+		const callsBefore = scenario.calls.length;
+		signOut[0].click();
+		assert.strictEqual(scenario.logoutCalls, 1, `${deskSlug}: one click invokes native logout exactly once`);
+		assert.strictEqual(scenario.calls.length, callsBefore, `${deskSlug}: sign-out issues no business command`);
+	}
 }
 
 const hostileItem = {
