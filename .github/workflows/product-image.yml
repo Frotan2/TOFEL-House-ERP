@@ -67,6 +67,9 @@ on:
       # contract. It must trigger a fresh exact-SHA image gate after changes,
       # instead of leaving an older image build as the latest result.
       - tools/native/native_checks.py
+      # Acceptance policy changes must qualify the exact delivered image.
+      - tools/native/final_acceptance_report.py
+      - tests/foundation/test_final_hosted_acceptance.py
       # Changes to finance acceptance tests must also qualify the deliverable
       # that the customer is about to receive, not only the fast Owned suite.
       - tests/finance/**

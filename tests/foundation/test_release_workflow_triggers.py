@@ -68,6 +68,17 @@ class ReleaseImageTriggerContract(unittest.TestCase):
     def test_native_integration_separately_covers_native_checker_changes(self):
         self.assertIn("tools/native/**", push_paths("native-lifecycle.yml"))
 
+    def test_native_acceptance_policy_and_regressions_trigger_all_release_gates(self):
+        for workflow in ("product-image.yml", "foundation-runtime.yml", "native-lifecycle.yml"):
+            with self.subTest(workflow=workflow):
+                paths = push_paths(workflow)
+                self.assertTrue(
+                    "tools/native/final_acceptance_report.py" in paths or "tools/native/**" in paths,
+                    f"{workflow}: native acceptance policy cannot reach this gate",
+                )
+                self.assertIn("tests/foundation/test_final_hosted_acceptance.py", paths)
+                self.assertIn("tests/foundation/test_release_workflow_triggers.py", paths)
+
     def test_advisory_changes_trigger_full_release_qualification(self):
         patterns = ("docs/engineering/evidence/sec-deps-01/**", "tests/security/**")
         names = ("foundation-runtime.yml", "native-lifecycle.yml",
