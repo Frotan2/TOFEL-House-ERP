@@ -10,6 +10,10 @@ on:
       - docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md
       - tools/foundation/**
       - tools/native/site_setup.py
+      # Do not leave exact-SHA release prerequisites absent after policy changes.
+      - tools/native/final_acceptance_report.py
+      - tests/foundation/test_final_hosted_acceptance.py
+      - tests/foundation/test_release_workflow_triggers.py
       - product/bootstrap.py
       - product/backup.py
       - product/restore.py
