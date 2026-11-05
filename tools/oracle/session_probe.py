@@ -16,7 +16,7 @@ def extract_desk_csrf_token(desk):
     """Read one bounded session token from Frappe v16's authenticated Desk."""
     if not isinstance(desk, bytes) or len(desk) > 2 * 1024 * 1024:
         raise ValueError("Authenticated Desk response is invalid")
-    tokens = re.findall(rb'frappe\\.csrf_token\\s*=\\s*"([A-Za-z0-9_+/=-]{16,256})"', desk)
+    tokens = re.findall(rb'frappe\.csrf_token\s*=\s*"([A-Za-z0-9_+/=-]{16,256})"', desk)
     if len(tokens) != 1:
         raise ValueError("Desk did not expose exactly one session CSRF token")
     return tokens[0].decode("ascii")
