@@ -14,6 +14,80 @@ from unittest.mock import patch
 from urllib.parse import quote
 
 
+HEALTH_ITEM_FIELDS = {"id", "person", "detail", "status", "stage", "stage_definition",
+                      "next", "next_role", "waiting_since"}
+
+
+def validate_health_projection(items, forbidden_values=(), required_identities=()):
+    """Allow explanatory help, but reject private fields and native body values."""
+    if not isinstance(items, list):
+        raise ValueError("Native health items must be a list")
+    for item in items:
+        if not isinstance(item, dict) or set(item) != HEALTH_ITEM_FIELDS:
+            raise ValueError("Native health item contains unexpected or private fields")
+        if (any(not isinstance(item[key], str) for key in HEALTH_ITEM_FIELDS - {"waiting_since"})
+                or not isinstance(item["waiting_since"], (str, date, type(None)))):
+            raise ValueError("Native health items must contain count-and-identity text only")
+        if item["id"].startswith("condition:"):
+            definition = item["stage_definition"].lower()
+            if (item["stage"] != "Alert condition" or item["status"] != "observed"
+                    or item["next_role"] != "General Manager" or "generated" not in definition
+                    or "never delivered" not in definition
+                    or not re.search(r"\bno (?:alert )?receiver\b", definition)):
+                raise ValueError("Native alert condition does not preserve the delivery boundary")
+    identities = {item["id"] for item in items}
+    if not set(required_identities).issubset(identities):
+        raise ValueError("Native health source identities were not observed")
+    projected_text = [value for item in items for value in item.values() if isinstance(value, str)]
+    if any(not isinstance(value, str) or not value for value in forbidden_values):
+        raise ValueError("Native health private controls must be nonempty strings")
+    if any(private in value for private in forbidden_values for value in projected_text):
+        raise ValueError("Native health projection leaked a private native value")
+    return {"items_verified": len(items), "private_fields_absent": True,
+            "private_values_absent": True, "source_identities_observed": len(set(required_identities))}
+
+
+def seed_health_privacy_controls(frappe):
+    """Keep real private error/job controls only in this synthetic native site."""
+    from rq.job import Job, JobStatus
+    from rq.results import Result
+    from toefl_house import security as health_security
+    from frappe.core.doctype.rq_job.rq_job import serialize_job
+    from frappe.utils.background_jobs import get_queue
+
+    if (health_security.site_mode() != health_security.SYNTHETIC or frappe.local.site not in (
+            "placement-test.localhost", "placement-second.localhost")
+            or frappe.conf.get("toefl_house_production_active")):
+        raise RuntimeError("Native health controls require an isolated synthetic site")
+    token = hashlib.sha256(os.urandom(32)).hexdigest()
+    private_error = "SYN_PRIVATE_ERROR_BODY_" + token
+    private_trace = "SYN_PRIVATE_JOB_TRACE_" + token
+    private_arguments = "SYN_PRIVATE_JOB_ARGUMENTS_" + token
+    error = frappe.get_doc({"doctype": "Error Log", "method": "SYN native health privacy control",
+                            "error": private_error, "seen": 0}).insert()
+    queue = get_queue("default")
+    job = Job.create("frappe.utils.background_jobs.execute_job", connection=queue.connection,
+                     id=frappe.local.site + "||native-health-" + token, origin=queue.name,
+                     kwargs={"site": frappe.local.site, "user": "Administrator",
+                             "job_name": "SYN native health privacy control",
+                             "kwargs": {"synthetic_private_argument": private_arguments}},
+                     status=JobStatus.FAILED, timeout=60, failure_ttl=86400)
+    job.started_at = job.created_at
+    job.ended_at = job.created_at
+    assert not queue.connection.exists(job.key), "Refusing to replace a native job"
+    job.save()
+    queue.failed_job_registry.add(job, ttl=86400, exc_string=private_trace)
+    Result.create(job, Result.Type.FAILED, ttl=86400, exc_string=private_trace)
+    # Verify the native authorities actually retain the private controls.
+    # Nothing is enqueued or executed, and no existing job or row is changed.
+    assert frappe.db.get_value("Error Log", error.name, "error") == private_error
+    native_job = serialize_job(Job.fetch(job.id, connection=queue.connection))
+    assert native_job.exc_info == private_trace and private_arguments in native_job.arguments
+    frappe.db.commit()
+    return {"identities": (error.name, job.id),
+            "private_values": (private_error, private_trace, private_arguments)}
+
+
 def previous_fixture_teaching_day(reference):
     """Past attendance fixture within seven days, respecting the Friday holiday."""
     candidate = date.fromisoformat(str(reference)) - timedelta(days=1)
@@ -442,7 +516,11 @@ def configuration_http_observation(session, base, user):
 
 
 def main():
-    if os.environ.get('GITHUB_ACTIONS') != 'true':raise RuntimeError('Hosted synthetic runner only')
+    if __package__:
+        from .acceptance_context import execution_context
+    else:
+        from acceptance_context import execution_context
+    context = execution_context()
     import frappe
     import requests
     from toefl_house import api
@@ -458,8 +536,11 @@ def main():
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
     report={'scope':'Hosted synthetic placement, admission, enrollment, classes, attendance, tuition, role desks, branch access and teaching compensation; NOT final customer acceptance','status':'running','checks':[],
-            'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT',
+            'commit':context.source_revision,'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT',
             'note':'Business checks use pinned native ERPNext/Education/HRMS records and synthetic owner-policy fixtures. Live Owner Windows, staff devices, book-sale end-to-end and backup-drive recovery remain unverified'}
+    if context.local:
+        report['scope'] = 'Local Windows/Docker synthetic native ERP checks; NOT final customer or production acceptance'
+        report.update(context.metadata())
     users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
            'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
            'second_author':'synthetic-second-author@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test',
@@ -533,6 +614,7 @@ def main():
         if site not in ('placement-test.localhost','placement-second.localhost'):
             raise RuntimeError('Refusing to connect to a non-synthetic site')
         frappe.init(site=site,sites_path=str(Path.cwd()))
+        context.guard_connection(frappe, site, str(Path.cwd()))
         frappe.connect()
         frappe.set_user('Administrator')
         frappe.local.conf.throttle_user_limit=500
@@ -6145,8 +6227,10 @@ def main():
         # plain language, expose the real fee-correction target, and hand
         # OD-RD-1's fees-correction chain through the queue end to end.
         # This is qualification evidence; it is not OD-RD-1 ratification.
+        health_privacy_controls = {}
         def desk_qualification():
             frappe.set_user('Administrator')
+            health_privacy_controls.update(seed_health_privacy_controls(frappe))
             # The original desk qualification only tested JSON endpoints.
             # A real Owner reported /api/method/frappe.desk.desk_page.getpage
             # failing with FileNotFoundError, because Frappe scrubs page names
@@ -6256,8 +6340,15 @@ def main():
             assert {'Application answers','Unseen error rows','Failed background jobs',
                     'Workers observed','Stopped scheduled job types','Failed scheduled runs'}<=set(ohf),sorted(ohf)
             assert ohf['Application answers']['value']=='Yes'
-            assert 'traceback' not in json.dumps(next(s for s in ops['sections'] if s['id']=='health')['items']).lower()
+            validate_health_projection(
+                next(s for s in ops['sections'] if s['id']=='health')['items'],
+                health_privacy_controls['private_values'], health_privacy_controls['identities'])
             assert 'health' in desk_sections(own)
+            observed['native_health_privacy'] = {
+                'native_error_source':health_privacy_controls['identities'][0],
+                'native_failed_job_source':health_privacy_controls['identities'][1],
+                'private_fields_absent':True,'private_values_absent':True,
+                'static_explanatory_help_allowed':True}
             owf={f['label'] for f in next(s for s in own['sections'] if s['id']=='health')['facts']}
             assert {'Failed background jobs','Stopped scheduled job types','Failed scheduled runs'}<=owf,sorted(owf)
             # S6 academic-setup-finalization: years coverage and the grading
@@ -6904,14 +6995,13 @@ def main():
             for item in items:
                 assert set(item)=={'id','person','detail','status','stage','stage_definition',
                                    'next','next_role','waiting_since'},(item['id'],sorted(item))
-                assert 'traceback' not in json.dumps(item,default=str).lower(),(item['id'],'traceback leaked onto the desk')
+            privacy = validate_health_projection(items, health_privacy_controls['private_values'])
             conds=[i for i in items if i['id'].startswith('condition:')]
-            assert all('no receiver' in i['stage_definition'] for i in conds),(len(conds),'condition without the receiver boundary')
             own=as_user('course_owner',own_work);frappe.set_user('Administrator')
             ofacts={f['label']:f['value'] for f in next(s for s in own['sections'] if s['id']=='health')['facts']}
             assert ofacts=={k:facts[k] for k in ofacts},('owner counts must equal the GM counts',ofacts,facts)
-            return {'gm_health_items':len(items),'conditions':len(conds),
-                    'receiver_keys_present':False,'traceback_present':False,
+            return {'gm_health_items':len(items),'conditions':len(conds),'privacy':privacy,
+                    'receiver_keys_present':False,'private_trace_body_present':False,
                     'administrator_refused':True,'owner_counts_match_gm':True}
         check('role-desk-observability-hosted',traced(desk_observability))
         # --- S6 teacher-daily-use: assigned-only projection, in process ---
@@ -8853,7 +8943,8 @@ def main():
         # Run last: preserve earlier acceptance baselines and retain the new
         # synthetic Company as reproducible concurrent accounting evidence.
         from tuition_refund_races import run as qualify_refund_races
-        check('native-tuition-refund-real-concurrent-transactions', traced(qualify_refund_races))
+        check('native-tuition-refund-real-concurrent-transactions', traced(
+            lambda: qualify_refund_races(connection_guard=context.guard_connection)))
         def deferred_refund_recovery_server_gate():
             before={dt:frappe.db.count(dt) for dt in ('Journal Entry','Payment Entry','GL Entry','TH Placement Operation','TH Placement Audit Event')}
             methods=('request_tuition_refund_reversal','approve_tuition_refund_reversal',
