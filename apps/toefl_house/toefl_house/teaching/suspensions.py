@@ -57,12 +57,15 @@ def _paged_get_all(filters, fields):
     while True:
         page = frappe.get_all(
             SUSPENSION, filters=filters, fields=fields,
+            order_by="name asc",
             limit_start=start, limit_page_length=_SUSPENSION_PAGE_LENGTH)
         if not page:
             return rows
         fresh = [row for row in page if row.get("name") not in seen]
-        if not fresh:
-            return rows
+        if len(fresh) != len(page):
+            raise frappe.ValidationError(
+                "Suspension pagination is inconsistent; refusing to "
+                "make an authorization decision from incomplete results")
         for row in fresh:
             seen.add(row.get("name"))
             rows.append(row)

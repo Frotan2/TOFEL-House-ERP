@@ -22,7 +22,6 @@ class CountOrUnknownTests(unittest.TestCase):
     def setUp(self):
         self.desk = _import_desk("__init__")
         self.calls = []
-        original_count = self.desk.frappe.db.count
 
         def scripted_count(doctype, filters=None):
             self.calls.append((doctype, filters))

@@ -384,10 +384,13 @@ class CensusHashCanonicalisationTests(unittest.TestCase):
                          engine._census_digest(list(reversed(rows))))
 
     def test_equivalent_number_spellings_hash_the_same(self):
-        self.assertEqual(engine._census_row_digest(["FEE-1", "100.00", 1]),
-                         engine._census_row_digest(["FEE-1", 100, 1]))
-        self.assertEqual(engine._census_row_digest(["FEE-1", "100.00", 1]),
-                         engine._census_row_digest(["FEE-1", 100.0, 1]))
+        numeric = frozenset({1, 2})  # grand_total and docstatus, not name
+        self.assertEqual(engine._census_row_digest(
+            ["FEE-1", "100.00", 1], numeric_columns=numeric),
+            engine._census_row_digest(["FEE-1", 100, 1], numeric_columns=numeric))
+        self.assertEqual(engine._census_row_digest(
+            ["FEE-1", "100.00", 1], numeric_columns=numeric),
+            engine._census_row_digest(["FEE-1", 100.0, 1], numeric_columns=numeric))
 
     def test_one_changed_cell_changes_the_digest(self):
         before = engine._census_digest([["FEE-1", "100.00", 1],
@@ -398,6 +401,24 @@ class CensusHashCanonicalisationTests(unittest.TestCase):
         renamed = engine._census_digest([["FEE-9", "100.00", 1],
                                          ["FEE-2", "200.00", 1]])
         self.assertNotEqual(before, renamed)
+
+    def test_numeric_looking_text_identifiers_do_not_collide(self):
+        for left, right in (("007", "7"), ("1e2", "100"), (None, ""),
+                            ("a\\x1fb", "a\\x1fbc")):
+            self.assertNotEqual(engine._census_row_digest([left, "Alice"]),
+                                engine._census_row_digest([right, "Alice"]))
+
+    def test_declared_numeric_columns_still_normalise_decimal_wire_formats(self):
+        positions = frozenset({1, 2})
+        canonical = engine._census_row_digest(["FEE-007", "100.00", 1],
+                                              numeric_columns=positions)
+        self.assertEqual(canonical, engine._census_row_digest(
+            ["FEE-007", 100, "1.0"], numeric_columns=positions))
+        self.assertNotEqual(canonical, engine._census_row_digest(
+            ["FEE-7", 100, "1"], numeric_columns=positions))
+        with self.assertRaises(ValueError):
+            engine._census_row_digest(["FEE-007", "broken", 1],
+                                      numeric_columns=positions)
 
     def test_census_hashes_refuses_unreadable_answers(self):
         runner = engine.BenchRunner("bench", Path("/tmp"), timeout=60)

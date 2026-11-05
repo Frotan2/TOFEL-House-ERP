@@ -74,14 +74,17 @@ def _iter_consent_rows(guardian, student):
             fields=["name", "status", "consent_date", "expiry_date",
                     "evidence_type", "revoked_at", "approved_by",
                     "approved_on"],
-            order_by="creation desc",
+            order_by="creation desc, name desc",
             limit_start=start,
             limit_page_length=_CONSENT_PAGE_LENGTH)
         if not page:
             return
+        # An overlapping/repeated page is never proof of a complete scan.
         fresh = [row for row in page if row.get("name") not in seen]
-        if not fresh:
-            return
+        if len(fresh) != len(page):
+            raise frappe.ValidationError(
+                "Guardian consent pagination is inconsistent; refusing "
+                "an incomplete authorization or revocation check")
         for row in fresh:
             seen.add(row.get("name"))
             total += 1
@@ -118,7 +121,9 @@ def _locked_consent_status(name):
             CONSENT_DOCTYPE, name, ["name", "status"],
             as_dict=True, for_update=True)
     except Exception:
-        return None
+        raise frappe.ValidationError(
+            "Guardian consent locked read failed; revocation cannot be "
+            "verified") from None
     if locked is None:
         return None
     if isinstance(locked, dict):

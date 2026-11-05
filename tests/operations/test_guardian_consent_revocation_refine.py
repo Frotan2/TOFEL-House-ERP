@@ -285,6 +285,33 @@ class RevocationRefinementTests(unittest.TestCase):
             self.portal._is_consent_valid("GUARD-1", "STU-1", {}))
 
     # -- behaviour that must not change ------------------------------------
+    def test_repeating_full_page_fails_closed_instead_of_skipping_old_active(self):
+        self._seed_many(51)
+        original = self.portal.frappe.db.get_all
+
+        def broken_offset(*args, **kwargs):
+            kwargs["limit_start"] = 0
+            return original(*args, **kwargs)
+
+        self.portal.frappe.db.get_all = broken_offset
+        with self.assertRaisesRegex(_ValidationError, "pagination is inconsistent"):
+            self.portal._get_consent("GUARD-1", "STU-1")
+        with self.assertRaisesRegex(_ValidationError, "pagination is inconsistent"):
+            self.portal.revoke_consent(student="STU-1")
+        self.assertEqual(self.store["CONSENT-ACTIVE"]["status"], "Active")
+
+    def test_locked_read_error_is_not_equated_with_missing_consent(self):
+        original = self.portal.frappe.db.get_value
+
+        def broken_locked_read(doctype, name, *args, **kwargs):
+            if doctype == "TH Guardian Consent" and kwargs.get("for_update"):
+                raise OSError("synthetic DB outage")
+            return original(doctype, name, *args, **kwargs)
+
+        self.portal.frappe.db.get_value = broken_locked_read
+        with self.assertRaisesRegex(_ValidationError, "locked read failed"):
+            self.portal._locked_consent_status("CONSENT-ACTIVE")
+
     def test_revoke_with_nothing_live_is_still_refused(self):
         with self.lock:
             self.store.clear()

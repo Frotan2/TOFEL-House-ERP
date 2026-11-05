@@ -91,6 +91,25 @@ class SuspensionTruncationTests(unittest.TestCase):
             self.ops.suspensions.assert_scheduling_allowed("GRP-A", "2026-09-22")
         self.assertIn("is suspended on 2026-09-22", str(ctx.exception))
 
+    def test_repeated_page_does_not_silently_allow_scheduling(self):
+        from unittest.mock import patch
+        for i in range(51):
+            self._seed(f"SUSP-COVER-{i:02d}", "Class", "",
+                       "2026-09-21", "2026-09-25")
+        original = self.ops.suspensions.frappe.get_all
+
+        def ignored_offset(*args, **kwargs):
+            if args and args[0] == "TH Class Suspension":
+                kwargs["limit_start"] = 0
+            return original(*args, **kwargs)
+
+        with patch.object(self.ops.suspensions.frappe, "get_all",
+                          side_effect=ignored_offset):
+            with self.assertRaisesRegex(ValidationError,
+                                        "Suspension pagination is inconsistent"):
+                self.ops.suspensions._class_suspension_covering(
+                    "GRP-A", "2026-09-22")
+
     def test_every_same_day_student_suspension_is_enforced(self):
         # 51 different students suspended on the same day; the 51st
         # student's Present mark must still be refused.

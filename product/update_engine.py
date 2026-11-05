@@ -2348,56 +2348,51 @@ def _public_installed(installed: Mapping[str, object] | None) -> dict:
 # Apply: supported migration plus a preservation census
 # --------------------------------------------------------------------------
 
-def _canonical_census_value(value: object) -> str:
-    """Stable string form of one census cell, shared before/after.
+# These database columns have numeric semantics. Textual IDs, including
+# leading zeroes, must retain their exact value in preservation hashes.
+_CENSUS_NUMERIC_FIELDS = frozenset({
+    "docstatus", "grand_total", "outstanding_amount", "paid_amount", "net_pay",
+})
 
-    Numbers are normalised through Decimal so ``100``, ``100.0`` and
-    ``"100.00"`` hash identically: the bench JSON encoding of a DECIMAL
-    column is not stable across drivers (string vs float), and the hash
-    must compare the value, not its wire spelling. A string that parses
-    as a plain number is normalised the same way; any other string stays
-    verbatim (a numeric-looking name such as "007" would normalise to
-    "7", but identically on both sides, so it can only ever weaken the
-    hash for that one exotic shape, never cause a false mismatch).
-    NULL becomes "" and booleans become "1"/"0". The canonicalisation is
-    deterministic for the same underlying value on both sides, and any
-    genuine value change still changes the digest.
-    """
+
+def _canonical_census_value(value: object, *, numeric: bool = False) -> str:
+    """Type-preserving census cell encoding with explicit numeric columns."""
     if value is None:
-        return ""
+        return "null"
+    if numeric:
+        if isinstance(value, bool):
+            raise ValueError("Boolean in numeric census column")
+        try:
+            decimal_value = Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError):
+            raise ValueError("Non-numeric value in numeric census column") from None
+        if not decimal_value.is_finite():
+            raise ValueError("Non-finite value in numeric census column")
+        return "number:" + format(decimal_value.normalize(), "f")
+    if isinstance(value, str):
+        return "text:" + value
     if isinstance(value, bool):
-        return "1" if value else "0"
-    if isinstance(value, Decimal):
-        return format(value.normalize(), "f")
-    if isinstance(value, (int, float)):
-        try:
-            return format(Decimal(str(value)).normalize(), "f")
-        except InvalidOperation:
-            return str(value)
-    if isinstance(value, str) and _CENSUS_NUMBER.fullmatch(value):
-        try:
-            return format(Decimal(value).normalize(), "f")
-        except InvalidOperation:
-            return value
-    return str(value)
+        return "boolean:true" if value else "boolean:false"
+    return "other:" + type(value).__name__ + ":" + str(value)
 
 
-def _census_row_digest(row: Sequence[object]) -> str:
-    """SHA-256 of one census row's canonical cells, in fixed column order."""
-    canonical = "\x1f".join(_canonical_census_value(cell) for cell in row)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+def _census_row_digest(row: Sequence[object], *,
+                       numeric_columns: frozenset[int] = frozenset()) -> str:
+    """Hash typed, JSON-delimited cells; never concatenate ambiguous text."""
+    canonical = [
+        _canonical_census_value(cell, numeric=index in numeric_columns)
+        for index, cell in enumerate(row)
+    ]
+    data = json.dumps(canonical, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
-def _census_digest(rows: Sequence[Sequence[object]]) -> str:
-    """SHA-256 over the sorted per-row digests of a whole doctype.
-
-    Sorting the row digests (rather than trusting the query's row order)
-    makes the digest independent of database ordering or collation: the
-    same set of rows always hashes the same, and any added, removed,
-    renamed or edited row changes it.
-    """
+def _census_digest(rows: Sequence[Sequence[object]], *,
+                   numeric_columns: frozenset[int] = frozenset()) -> str:
+    """Order-independent digest of every row and its typed values."""
     digest = hashlib.sha256()
-    for row_digest in sorted(_census_row_digest(row) for row in rows):
+    for row_digest in sorted(_census_row_digest(row, numeric_columns=numeric_columns)
+                             for row in rows):
         digest.update(row_digest.encode("ascii"))
         digest.update(b"\n")
     return digest.hexdigest()
@@ -2585,7 +2580,14 @@ class BenchRunner:
                 for row in payload):
             raise refuse("apply.counts_unavailable",
                          f"the {doctype} census hash report is unreadable")
-        return _census_digest(payload)
+        numeric_columns = frozenset(
+            index for index, column in enumerate(columns)
+            if column in _CENSUS_NUMERIC_FIELDS)
+        try:
+            return _census_digest(payload, numeric_columns=numeric_columns)
+        except (ValueError, InvalidOperation):
+            raise refuse("apply.counts_unavailable",
+                         f"the {doctype} census hash contains invalid values") from None
 
     def migrate(self, site: str) -> None:
         result = self._run(["--site", site, "migrate"], timeout=self.timeout)
