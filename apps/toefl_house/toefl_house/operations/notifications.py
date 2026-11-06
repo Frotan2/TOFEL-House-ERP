@@ -938,9 +938,30 @@ def _attempt_delivery_locked(notification_name, provider_override=None):
     # notification delivered. A notification is delivered only when
     # every recipient succeeds; per-recipient outcomes are recorded in
     # the detail and durably in last_failure (see _persist_delivery).
-    prior = [r for r in (data.get("delivery_results") or [])
-             if isinstance(r, dict) and r.get("recipient")]
-    succeeded = {r["recipient"] for r in prior if r.get("delivered")}
+    # Corrupted durable outcome JSON must NEVER be interpreted as
+    # evidence of delivery. In particular, a string "false" is truthy
+    # in Python: the old set comprehension treated it as success and
+    # skipped that recipient permanently. Reject malformed/duplicate
+    # results before calling any external provider.
+    raw_prior = data.get("delivery_results")
+    if raw_prior is None:
+        raw_prior = []
+    if not isinstance(raw_prior, list):
+        raise frappe.ValidationError(
+            "Notification recipient delivery history is malformed")
+    prior = []
+    seen_prior = set()
+    for record in raw_prior:
+        if (not isinstance(record, dict)
+                or not isinstance(record.get("recipient"), str)
+                or not record["recipient"].strip()
+                or type(record.get("delivered")) is not bool
+                or record["recipient"] in seen_prior):
+            raise frappe.ValidationError(
+                "Notification recipient delivery history is malformed")
+        seen_prior.add(record["recipient"])
+        prior.append(record)
+    succeeded = {r["recipient"] for r in prior if r["delivered"]}
     recipients = []
     for r in (data.get("recipients") or []):
         if r and r not in recipients:
