@@ -32,6 +32,42 @@ LEVEL = "TH Program Level"
 ASSESSMENT_POLICY = "TH Assessment Policy"
 GRADING_SCALE = "Grading Scale"
 GRADING_INTERVAL = "Grading Scale Interval"
+
+
+def _assert_assessment_scale_scope(family, scale):
+    """Refuse formal/specialist scale swaps at the actual policy-link seam.
+
+    Program category comes from the existing institution preset, never
+    from the requested grading-scale description or an untrusted caller.
+    Unknown/custom program families have no approved grading mode, so
+    linking a scale is refused until their mode has been reviewed.
+    Older unmarked native scales remain usable for formal programs only.
+    """
+    if not scale:
+        return
+    from toefl_house.setup_presets.grading_rules import (
+        FORMAL_SCOPE, SPECIALIST_SCOPE, assert_grading_scale_scope_link,
+    )
+    from toefl_house.setup_presets.preset import load_preset
+
+    family_code = frappe.db.get_value(PROGRAM, family, "code")
+    configured = next(
+        (row for row in load_preset()["programs"]
+         if row.get("code") == family_code), None)
+    if configured is None:
+        raise frappe.ValidationError(
+            "This program family has no approved formal/specialist "
+            "assessment scope; configure its grading mode before linking a scale")
+    expected = (FORMAL_SCOPE if configured["progression_kind"] == "sequential"
+                else SPECIALIST_SCOPE)
+    if not frappe.db.exists(GRADING_SCALE, scale):
+        raise frappe.ValidationError(
+            f"Grading scale {scale} does not exist")
+    description = frappe.db.get_value(GRADING_SCALE, scale, "description")
+    try:
+        assert_grading_scale_scope_link(description, expected)
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
 ASSESSMENT_CRITERIA = "Assessment Criteria"
 DURATION = "TH Level Duration"
 NATIVE_PROGRAM = "Program"
@@ -979,6 +1015,8 @@ def set_assessment_policy_version(request_key, policy, effective_from,
             raise frappe.ValidationError(
                 f"Grading scale {effective_scale} does not exist; define it "
                 "natively first")
+        if effective_scale:
+            _assert_assessment_scale_scope(doc.family, effective_scale)
         carried = _carried_facets(versions)
         if initial_facets is not None:
             if versions:
@@ -1132,6 +1170,8 @@ def _append_facet_version(doc, actor, clean_from, clean_reason, scale,
     Every row is full state: the caller passes the carried facets with its
     own facet already replaced, plus the (carried) grading-scale link.
     """
+    if scale:
+        _assert_assessment_scale_scope(doc.family, scale)
     row = {"effective_from": clean_from, "grading_scale": scale,
            "reason": clean_reason, "set_by": actor,
            "set_on": frappe.utils.now_datetime()}
@@ -1703,6 +1743,8 @@ def validate_assessment_policy(request_key, policy):
                 raise frappe.ValidationError(
                     f"Grading scale {scale} no longer exists; repair the "
                     "policy version before validating")
+            if scale:
+                _assert_assessment_scale_scope(doc.family, scale)
             try:
                 facets = rules.validate_policy_facets({
                     facet: row.get(facet)
