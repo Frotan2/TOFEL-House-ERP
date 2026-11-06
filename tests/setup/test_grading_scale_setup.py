@@ -8,6 +8,7 @@ APP_ROOT = Path(__file__).resolve().parents[2] / "apps" / "toefl_house"
 sys.path.insert(0, str(APP_ROOT))
 from toefl_house.setup_presets.grading_rules import (  # noqa: E402
     normalize_intervals, assert_grading_scale_scope_link,
+    assert_linked_native_scale_thresholds,
 )
 
 
@@ -102,6 +103,20 @@ class GradingScaleValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid Owner scope"):
             assert_grading_scale_scope_link(
                 "Owner-approved scale (unknown scope). Reason: x", "formal")
+
+    def test_native_scale_link_requires_actual_zero_and_formal_sixty(self):
+        rows = [{"threshold": 90}, {"threshold": 60}, {"threshold": 0}]
+        self.assertTrue(assert_linked_native_scale_thresholds(rows, "formal"))
+        self.assertTrue(assert_linked_native_scale_thresholds(
+            [{"threshold": 90}, {"threshold": 0}], "specialist"))
+        for bad in (
+            [{"threshold": 90}, {"threshold": 0}],
+            [{"threshold": 90}, {"threshold": "NaN"}, {"threshold": 0}],
+            [{"threshold": 90}, {"threshold": 90}, {"threshold": 0}],
+            [{"threshold": 90}, {"threshold": 60}],
+        ):
+            with self.subTest(rows=bad), self.assertRaises(ValueError):
+                assert_linked_native_scale_thresholds(bad, "formal")
 
     def test_create_owner_grading_scale_carries_scope(self):
         app = APP_ROOT / "toefl_house"
