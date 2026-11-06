@@ -146,7 +146,14 @@ def _encode_delivery_outcome(detail, delivery_results):
 
 
 def _decode_delivery_outcome(last_failure):
-    """Return (detail_text, results_or_None) for a stored last_failure."""
+    """Return (detail, results_or_None); refuse malformed structured history.
+
+    Old notification rows may have a plain-text last_failure and no
+    recipient-level evidence. JSON-looking rows, however, assert they
+    contain a versioned delivery record: silently dropping malformed or
+    unknown-version JSON would cause a retry to resend recipients whose
+    prior successes can no longer be safely recovered.
+    """
     if not last_failure:
         return ("", None)
     text = str(last_failure).strip()
@@ -154,16 +161,17 @@ def _decode_delivery_outcome(last_failure):
         return (text, None)
     try:
         payload = json.loads(text)
-    except ValueError:
-        return (text, None)
-    if not isinstance(payload, dict):
-        return (text, None)
-    if payload.get("version") != _DELIVERY_OUTCOME_VERSION:
-        return (payload.get("detail") or text, None)
-    results = payload.get("results")
-    if not isinstance(results, list):
-        return (payload.get("detail") or text, None)
-    return (payload.get("detail") or text, results)
+    except (ValueError, TypeError) as exc:
+        raise frappe.ValidationError(
+            "Notification recipient delivery history is malformed") from exc
+    if (not isinstance(payload, dict)
+            or type(payload.get("version")) is not int
+            or payload.get("version") != _DELIVERY_OUTCOME_VERSION
+            or not isinstance(payload.get("results"), list)
+            or not isinstance(payload.get("detail"), str)):
+        raise frappe.ValidationError(
+            "Notification recipient delivery history is malformed or unsupported")
+    return (payload["detail"], payload["results"])
 
 
 def _live_rows(rows, cap, what):
@@ -710,13 +718,9 @@ def _load_notification(name):
             "acknowledged_by": doc.get("acknowledged_by"),
             "last_failure": doc.get("last_failure"),
         }
-        # Per-recipient outcomes are durably persisted as JSON in
-        # last_failure (see _encode_delivery_outcome). A fresh load must
-        # recover them so a retry in another process/worker still knows
-        # which recipients already succeeded (C-10).
-        _detail, _results = _decode_delivery_outcome(data["last_failure"])
-        if _results is not None:
-            data["delivery_results"] = _results
+        # Parse the saved recipient outcomes only after the broad Frappe
+        # loading try/except: malformed evidence is a validation refusal,
+        # not a "notification not found" fallback.
         # Recipients child table
         try:
             recips = [r.get("recipient") for r in (doc.get("recipients") or [])]
@@ -725,6 +729,12 @@ def _load_notification(name):
             data["recipients"] = getattr(doc, "recipients_list", [])
     except Exception:
         return None, None
+    # A failed Frappe record read returns None above. A malformed
+    # structured delivery record raises visibly here: it must never be
+    # reinterpreted as "no previously delivered recipients".
+    _detail, _results = _decode_delivery_outcome(data["last_failure"])
+    if _results is not None:
+        data["delivery_results"] = _results
     # Escalation recipients live in their own child table; once a
     # notification is escalated they are recipients too, and a fresh
     # load must still retry them — they must never exist only in
