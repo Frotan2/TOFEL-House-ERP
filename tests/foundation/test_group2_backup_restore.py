@@ -145,7 +145,7 @@ class BackupDecryptProbeTests(unittest.TestCase):
         self.key = "synthetic-backup-key"
 
     def _packet_run(self, return_value):
-        return patch.object(self.backup.subprocess, "run", return_value=return_value)
+        return patch.object(self.backup, "probe_gpg_packets", return_value=return_value)
 
     def test_packet_check_alone_no_longer_suffices(self):
         packet = types.SimpleNamespace(returncode=0, stdout=b"gpg: :symkey enc packet:\n",
