@@ -892,7 +892,7 @@ class RecoveryAuthorizationTests(UpdateEngineBase):
 
 
 FAKE_BENCH = r'''#!/usr/bin/env python3
-import json, os, sys
+import json, os, re, sys
 state_path = os.environ["TH_TEST_BENCH_STATE"]
 log_path = os.environ["TH_TEST_BENCH_LOG"]
 state = json.loads(open(state_path, encoding="utf-8").read())
@@ -917,26 +917,30 @@ if "migrate" in args:
 if "list-apps" in args:
     print(json.dumps(state.get("apps", [])))
     raise SystemExit(0)
-if "frappe.db.count" in args:
-    doctype = json.loads(args[args.index("--kwargs") + 1])["doctype"]
-    value = state.get("counts", {}).get(doctype)
-    if value is None:
-        sys.stderr.write("DoesNotExistError\n")
-        raise SystemExit(1)
-    print(value if isinstance(value, int) else json.dumps(value))
-    raise SystemExit(0)
 if "frappe.db.sql" in args:
     query = json.loads(args[args.index("--kwargs") + 1])["query"]
-    rows = []
-    for child in ("Sales Invoice Item", "Payment Entry Reference"):
-        if child in query:
-            value = state.get("orphans", {}).get(child)
-            if value is None:
-                sys.stderr.write("synthetic integrity failure\n")
-                raise SystemExit(1)
-            rows.append([child, str(value)])
-    print(json.dumps(rows))
-    raise SystemExit(0)
+    if "LEFT JOIN" in query:
+        rows = []
+        for child in ("Sales Invoice Item", "Payment Entry Reference"):
+            if child in query:
+                value = state.get("orphans", {}).get(child)
+                if value is None:
+                    sys.stderr.write("synthetic integrity failure\n")
+                    raise SystemExit(1)
+                rows.append(["TH_CENSUS", child, str(value)])
+        print(json.dumps(rows))
+        raise SystemExit(0)
+    if "COUNT(*)" in query:
+        match = re.search(r"FROM `tab(.+?)`", query)
+        doctype = match.group(1) if match else None
+        value = state.get("counts", {}).get(doctype)
+        if value is None:
+            sys.stderr.write("DoesNotExistError\n")
+            raise SystemExit(1)
+        print(json.dumps([["TH_CENSUS", str(value)]]))
+        raise SystemExit(0)
+    sys.stderr.write("unexpected synthetic bench arguments\n")
+    raise SystemExit(1)
 if "frappe.client.get_list" in args:
     if state.get("fail_pages"):
         raise SystemExit(1)

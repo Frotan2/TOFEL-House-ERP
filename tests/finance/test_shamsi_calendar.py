@@ -84,6 +84,46 @@ class AfghanShamsiTests(unittest.TestCase):
                             for d in holidays))
         self.assertFalse(any(d.weekday() in (5, 6) for d in holidays))
 
+    def test_last_supported_year_1499_is_usable(self):
+        # U-16: days_in_month(1499, 12) used to raise because
+        # is_leap_year(1499) refused the last supported year. The leap
+        # check now computes the 1500 Nowruz as a boundary only; 1500
+        # itself stays unsupported.
+        self.assertFalse(shamsi.is_leap_year(1499))
+        self.assertEqual(shamsi.days_in_month(1499, 12), 29)
+        self.assertEqual(tuple(str(x) for x in shamsi.month_bounds("1499-12")),
+                         ("2121-02-20", "2121-03-20"))
+        self.assertEqual(str(shamsi.shamsi_to_gregorian(1499, 12, 29)),
+                         "2121-03-20")
+        # Gregorian dates in early 2121 still belong to 1499 (its last
+        # day is 2121-03-20); the 1500 Nowruz is the first out-of-range day.
+        self.assertEqual(shamsi.gregorian_to_shamsi("2121-03-20"),
+                         (1499, 12, 29))
+        self.assertEqual(shamsi.gregorian_to_shamsi("2121-01-01"),
+                         (1499, 10, 11))
+        with self.assertRaises(ValueError):
+            shamsi.gregorian_to_shamsi("2121-03-21")
+        # The last supported fiscal year ends the day before the 1500
+        # Nowruz (1499-12-29, inside the supported range), so its bounds
+        # are computable with the 1500 Nowruz as a boundary only — the
+        # same defect class as days_in_month(1499, 12). Its Friday list
+        # works too.
+        self.assertEqual(tuple(str(x) for x in shamsi.fiscal_year_bounds(1499)),
+                         ("2120-03-21", "2121-03-20"))
+        holidays = shamsi.friday_holidays_for_fiscal_year(1499)
+        first, last = shamsi.fiscal_year_bounds(1499)
+        self.assertIn(len(holidays), (52, 53))
+        self.assertTrue(all(first <= d <= last and d.weekday() == 4
+                            for d in holidays))
+        # 1500 stays unsupported on every path.
+        for call in (lambda: shamsi.is_leap_year(1500),
+                     lambda: shamsi.days_in_month(1500, 1),
+                     lambda: shamsi._nowruz(1500),
+                     lambda: shamsi.fiscal_year_bounds(1500),
+                     lambda: shamsi.following_month("1499-12")):
+            with self.subTest(call=call), self.assertRaises(ValueError):
+                call()
+
     def test_invalid_dates_and_ambiguous_policy_inputs_fail_closed(self):
         for value in ("1405-8", "۱۴۰۵-۰۸", "1405-00", "1405-13", "2026-08", None):
             with self.subTest(period=value), self.assertRaises(ValueError):

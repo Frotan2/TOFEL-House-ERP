@@ -239,11 +239,66 @@ def without_activation(config: dict) -> dict:
     return {key: value for key, value in config.items() if key not in (ACTIVE_KEY, SITE_KEY)}
 
 
+def _recover_interrupted_activation(site: str, config: dict, log=print) -> dict:
+    """Roll back the exact state a kill during activate() leaves behind.
+
+    activate() writes the activation triple, then the synthetic flags, then
+    removes the flags again; a kill between the second and third writes
+    leaves ACTIVE_KEY set plus both synthetic flags. That mixed state
+    resolves REFUSED, and check_preconditions then refuses every later
+    activation, so the site could never be re-activated without manual
+    cleanup. The leftover is unmistakable -- the activation triple names
+    this site and both flags carry the values activate() itself writes --
+    so rolling it back to the pre-activation state and running the full
+    gate sequence again is safe: a failed re-attempt still ends REFUSED,
+    and a successful one re-proves every gate including the mixed-mode
+    check. Anything else (a lone flag, a flag with value 0, a triple
+    naming another site, a qualification hostname) is left untouched for
+    check_preconditions to refuse as before.
+
+    The crash window itself cannot be closed by reordering writes: the
+    mixed-mode check must write the flags to the live config and probe
+    the real resolver, so a kill can always land between the two writes.
+    What this closes is the consequence -- the mixed state is now
+    recoverable by re-running activate(), instead of terminal.
+    """
+    if site in SYNTHETIC_SITES:
+        return config
+    if config.get(ACTIVE_KEY) != 1 or config.get(SITE_KEY) != site:
+        return config
+    if any(config.get(key) != 1 for key in SYNTHETIC_KEYS):
+        return config
+    cleaned = {key: value for key, value in config.items()
+               if key not in (ACTIVE_KEY, SITE_KEY, *SYNTHETIC_KEYS)}
+    write_config(site, cleaned)
+    log("Recovered an interrupted activation: removed the activation triple "
+        "and test flags left by a previous run; re-running every gate.")
+    return cleaned
+
+
 def with_synthetic_flags(config: dict) -> dict:
     updated = dict(config)
     for key in SYNTHETIC_KEYS:
         updated[key] = 1
     return updated
+
+
+def _prove_mixed_mode_refused(site: str) -> None:
+    """Prove the mixed-mode gate: with synthetic flags added, the site
+    must resolve REFUSED, and with them removed it must return to
+    PRODUCTION. This is the same check activate() runs during
+    activation; the already-activated branch must re-prove it instead
+    of trusting the triple alone (W1). A failed re-proof raises
+    Refused and leaves the site triple-only (the flags are removed
+    before the check, exactly as in the activation path).
+    """
+    write_config(site, with_synthetic_flags(read_config(site)))
+    mixed = probe(site)["mode"]
+    write_config(site, {k: v for k, v in read_config(site).items() if k not in SYNTHETIC_KEYS})
+    if mixed != "REFUSED":
+        raise Refused(f"mixed-mode check failed: resolved {mixed}, expected REFUSED")
+    if probe(site)["mode"] != "PRODUCTION":
+        raise Refused("site did not return to PRODUCTION after the mixed-mode check")
 
 
 def validate_fee_item_code(code: str) -> str:
@@ -319,6 +374,37 @@ def backup_config(site: str) -> Path:
     return target
 
 
+def _restore_saved_config(saved: Path, site: str) -> None:
+    """Restore a saved site_config atomically (temp file + os.replace).
+
+    The rollback path must itself survive a kill: ``shutil.copy2`` writes
+    the destination in place, so a kill mid-copy leaves a truncated
+    site_config.json that no later run can even read. An atomic replace
+    leaves either the complete saved bytes or the pre-rollback bytes,
+    never a half-written file. The saved bytes are copied verbatim (not
+    re-serialized) so the restore is byte-identical to the backup.
+    """
+    path = config_path(site)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as output, saved.open("rb") as original:
+            shutil.copyfileobj(original, output)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+        os.chmod(path, 0o600)
+    except OSError as exc:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise Refused(f"could not safely restore site_config.json: {exc}") from exc
+
+
 def list_backups(site: str) -> list[tuple[str, float]]:
     folder = SITES_DIR / site / "private" / "backups"
     if not folder.is_dir():
@@ -390,10 +476,33 @@ def require_confirm(site: str, confirm: str | None) -> None:
 def activate(site: str, log=print) -> None:
     config = read_config(site)
     receipt = read_backup_receipt()
+    # Recovery writes site_config, so it needs the same fresh verified
+    # backup the activation itself requires; without one the leftover
+    # state is left exactly as found.
+    _validate_backup_receipt(site, receipt, time.time())
+    config = _recover_interrupted_activation(site, config, log)
     check_preconditions(site, config, receipt, time.time())
     baseline = probe(site)
     validate_receipt_policy(receipt, baseline.get("backup_policy"))
     if baseline["mode"] == "PRODUCTION":
+        # A kill between the activation write and the mirror/flag gates
+        # leaves exactly this state (activation triple, no flags): the
+        # gates were never proven, so "already activated" must re-prove
+        # them instead of trusting the triple. A failed re-proof refuses
+        # fail-closed -- the site stays PRODUCTION but unproven, and the
+        # Owner must deactivate and re-activate; it is never silently
+        # accepted and never implicitly (re-)activated here.
+        if baseline.get("flag") != 0 or baseline.get("mirror") is not True:
+            raise Refused(
+                "site mode is PRODUCTION but the activation gates were "
+                "never proven for this state (flag/mirror check failed); "
+                "deactivate and re-activate to re-prove every gate")
+        # Re-prove the mixed-mode gate too (W1): the triple alone never
+        # proves it, and a kill after the activation write leaves
+        # exactly this state. A failed re-proof refuses fail-closed —
+        # the site stays PRODUCTION but unproven, and the Owner must
+        # deactivate and re-activate; it is never silently accepted.
+        _prove_mixed_mode_refused(site)
         log("Already activated: site mode is PRODUCTION. Nothing changed.")
         return
     if baseline["mode"] != "REFUSED":
@@ -405,15 +514,14 @@ def activate(site: str, log=print) -> None:
         state = probe(site)
         if state["mode"] != "PRODUCTION" or state["flag"] != 0 or not state.get("mirror"):
             raise Refused(f"activation gates failed: {state}")
-        write_config(site, with_synthetic_flags(read_config(site)))
-        mixed = probe(site)["mode"]
-        write_config(site, {k: v for k, v in read_config(site).items() if k not in SYNTHETIC_KEYS})
-        if mixed != "REFUSED":
-            raise Refused(f"mixed-mode check failed: resolved {mixed}, expected REFUSED")
-        if probe(site)["mode"] != "PRODUCTION":
-            raise Refused("site did not return to PRODUCTION after the mixed-mode check")
-    except Exception:
-        shutil.copy2(saved, config_path(site))
+        _prove_mixed_mode_refused(site)
+    except BaseException:
+        # BaseException, not Exception: a Ctrl-C/SystemExit during the
+        # gate sequence must roll back exactly like a failed gate, or the
+        # site is left in the unverified triple-only state (see W1 above).
+        # The rollback itself is atomic, so a kill during the rollback
+        # cannot leave a half-written site_config behind.
+        _restore_saved_config(saved, site)
         log("Activation FAILED; previous settings restored (site stays REFUSED).")
         raise
     log("All gates passed: site mode PRODUCTION, production stamps, fixtures refused, "
@@ -424,16 +532,26 @@ def deactivate(site: str, log=print) -> None:
     saved = backup_config(site)
     log(f"Saved current settings to {saved.name}")
     try:
-        write_config(site, without_activation(read_config(site)))
+        config = read_config(site)
+        # A crash during activate() can leave synthetic flags behind; the
+        # production site never legitimately carries them, so dropping them
+        # here keeps a deactivated site re-activatable. Qualification
+        # hostnames keep their flags: deactivation must still refuse there.
+        if site not in SYNTHETIC_SITES:
+            config = {key: value for key, value in config.items()
+                      if key not in SYNTHETIC_KEYS}
+        write_config(site, without_activation(config))
         mode = probe(site)["mode"]
         if mode != "REFUSED":
             raise Refused(f"after deactivation the site resolved {mode}, expected REFUSED")
-    except Exception:
+    except BaseException:
         # Same contract as activation: a failed verification must not leave
         # the site in an ambiguous state. Restore the saved settings, so the
         # site deterministically returns to the state it had before this
-        # attempt (still ACTIVE) and the owner can inspect and retry.
-        shutil.copy2(saved, config_path(site))
+        # attempt (still ACTIVE) and the owner can inspect and retry. The
+        # restore is atomic, and a Ctrl-C rolls back exactly like a
+        # failed gate.
+        _restore_saved_config(saved, site)
         log("Deactivation FAILED verification; previous settings restored (site stays ACTIVE).")
         raise
     log("Deactivated: site mode REFUSED.")
@@ -448,10 +566,25 @@ def set_fee_item(site: str, code: str, log=print) -> None:
         raise Refused(f"Item {code} does not exist; Finance must create it in ERPNext first")
     if state.get("rate", 0) <= 0:
         raise Refused(f"Item {code} has no positive selling rate on the '{PRICE_LIST}' price list")
-    backup_config(site)
+    saved = backup_config(site)
     config = read_config(site)
     config[FEE_ITEM_KEY] = code
     write_config(site, config)
+    # Prove the key landed and the site is still PRODUCTION; a failed
+    # verification restores the pre-write settings instead of leaving a
+    # half-written fee item behind.
+    try:
+        if read_config(site).get(FEE_ITEM_KEY) != code:
+            raise Refused(f"placement fee Item {code} was not recorded in site_config")
+        if probe(site)["mode"] != "PRODUCTION":
+            raise Refused("site did not stay PRODUCTION after setting the fee item")
+    except BaseException:
+        # BaseException, not Refused: an interrupt during verification
+        # must roll back exactly like a failed gate (same contract as
+        # activate()/deactivate()), or a half-written fee item is left
+        # behind.
+        _restore_saved_config(saved, site)
+        raise
     log(f"Placement fee Item set to {code}.")
 
 

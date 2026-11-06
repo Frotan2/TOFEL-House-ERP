@@ -421,6 +421,19 @@ def build_frappe(site):
             return [(len([row for row in site.all("Student Group Student")
                           if row.get("parent") == values[0]]),)]
 
+        if "from `tabTH Capacity Approval`" in text and "count(*)" in text:
+            # _live_override_exists: one exact count, never a capped page.
+            # A row with no expiry is live; a dated row is live through
+            # its expiry date, matching usable_override.
+            today = values[2]
+            total = len([row for row in site.all("TH Capacity Approval")
+                         if row.get("student_group") == values[0]
+                         and row.get("student") == values[1]
+                         and row.get("status") == "Approved"
+                         and (not row.get("expires_on")
+                              or str(row.get("expires_on")) >= str(today))])
+            return [(total,)]
+
         if "from `tabProgram Enrollment`" in text:
             rows = [row for row in site.all("Program Enrollment")
                     if row.get("student") == values[0]
