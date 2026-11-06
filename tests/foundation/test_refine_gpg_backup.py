@@ -386,6 +386,19 @@ class ProbeRealGpgTests(unittest.TestCase):
         with self.assertRaises(native_gpg.GpgProbeError):
             native_gpg.probe_gpg_decrypt(self.cipher, "wrong-key")
 
+    def test_real_gpg_packet_listing_validates_a_synthetic_ciphertext(self):
+        # Prove that the bounded replacement produces the exact packet
+        # marker the native backup verifier relies on, using real GPG and
+        # generated disposable ciphertext (no customer data or secrets).
+        packet = native_gpg.probe_gpg_packets(
+            self.cipher, "synthetic-key", timeout=15)
+        self.assertEqual(packet.returncode, 0, packet.stderr)
+        self.assertIn(b":symkey enc packet:", packet.stdout + packet.stderr)
+        self.assertLessEqual(
+            len(packet.stdout), native_gpg.GPG_PACKET_STDOUT_MAX_BYTES)
+        self.assertLessEqual(
+            len(packet.stderr), native_gpg.GPG_PACKET_STDERR_MAX_BYTES)
+
     def test_real_gpg_corrupt_ciphertext_is_refused(self):
         data = bytearray(self.cipher.read_bytes())
         data[len(data) // 2] ^= 0xFF
