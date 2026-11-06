@@ -695,6 +695,19 @@ class ProviderTests(BaseHarness):
             # Stub always fails
             self.assertFalse(ok)
 
+    def test_external_provider_must_return_literal_true_not_truthy_text(self):
+        class NonBooleanProvider:
+            name = "nonboolean-test"
+            def send(self, _notification):
+                return "false"
+        self.provider.register_provider("sms", NonBooleanProvider())
+        result = self.provider.deliver(
+            {"channel": "SMS", "recipient": "+123",
+             "title": "T", "message": "M", "notification_id": "X"},
+            check_enabled=False)
+        self.assertIs(result[0], False)
+        self.assertIn("failure", result[2].lower())
+
     def test_custom_provider_can_be_registered(self):
         class MockSms:
             name = "Mock SMS"
