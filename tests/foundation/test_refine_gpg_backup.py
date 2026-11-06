@@ -234,6 +234,34 @@ class ProbeFailureInjectionTests(unittest.TestCase):
             with self.subTest(size=bad), self.assertRaises(ValueError):
                 native_gpg.probe_budget_for_encrypted_size(bad)
 
+    def test_packet_probe_captures_metadata_without_argv_secret(self):
+        popen = make_recording_popen(
+            stdout_bytes=b"gpg: :symkey enc packet:\n",
+            stderr_bytes=b"safe diagnostic")
+        with patch.object(native_gpg.subprocess, "Popen", popen):
+            result = native_gpg.probe_gpg_packets(
+                self.artifact, "synthetic-key", timeout=5)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn(b":symkey enc packet:", result.stdout)
+        self.assertNotIn("synthetic-key", " ".join(popen.calls[0].arguments))
+        self.assertEqual(popen.calls[0].stdin.written, [b"synthetic-key\n"])
+
+    def test_packet_probe_refuses_fast_exit_oversize(self):
+        packet_flood = b"x" * (native_gpg.GPG_PACKET_STDOUT_MAX_BYTES + 1)
+        popen = make_recording_popen(stdout_bytes=packet_flood)
+        with patch.object(native_gpg.subprocess, "Popen", popen):
+            with self.assertRaises(native_gpg.GpgProbeError) as caught:
+                native_gpg.probe_gpg_packets(
+                    self.artifact, "synthetic-key", timeout=5)
+        self.assertEqual(caught.exception.category, "output-limit-exceeded")
+
+    def test_packet_probe_refuses_and_kills_hanging_child(self):
+        with patch.object(native_gpg.subprocess, "Popen", HangingPopen):
+            with self.assertRaises(native_gpg.GpgProbeError) as caught:
+                native_gpg.probe_gpg_packets(
+                    self.artifact, "synthetic-key", timeout=1)
+        self.assertEqual(caught.exception.category, "probe-timeout")
+
     def test_killed_process_is_refused(self):
         popen = make_recording_popen(returncode=-9)
         with patch.object(native_gpg.subprocess, "Popen", popen):
@@ -435,7 +463,7 @@ class ListPacketsTimeoutTests(unittest.TestCase):
             if path == self.artifact:
                 return type("Stat", (), {"st_size": 40 * 1024 ** 3})()
             return result
-        with patch.object(self.backup.subprocess, "run", side_effect=fake_run):
+        with patch.object(self.backup, "probe_gpg_packets", side_effect=fake_run):
             with patch.object(Path, "stat", large_stat):
                 with patch.object(self.backup, "probe_gpg_decrypt"):
                     self.backup._assert_gpg_encrypted(
@@ -444,11 +472,21 @@ class ListPacketsTimeoutTests(unittest.TestCase):
         self.assertGreater(calls[0]["timeout"], 120)
         self.assertLessEqual(calls[0]["timeout"], 1800)
 
+    def test_packet_output_overflow_refuses_backup(self):
+        with patch.object(
+                self.backup, "probe_gpg_packets",
+                side_effect=native_gpg.GpgProbeError("output-limit-exceeded")):
+            with self.assertRaises(self.backup.BackupInputError) as caught:
+                self.backup._assert_gpg_encrypted(
+                    self.artifact, "database", "synthetic-key")
+        self.assertEqual(caught.exception.safe_code, "gpg-database-probe-error")
+        self.assertEqual(caught.exception.safe_category, "output-limit-exceeded")
+
     def test_list_packets_timeout_is_a_fail_closed_refusal(self):
         def hanging_run(*args, **kwargs):
-            raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs["timeout"])
+            raise native_gpg.GpgProbeError("probe-timeout")
 
-        with patch.object(self.backup.subprocess, "run", side_effect=hanging_run):
+        with patch.object(self.backup, "probe_gpg_packets", side_effect=hanging_run):
             with self.assertRaises(self.backup.BackupInputError) as caught:
                 self.backup._assert_gpg_encrypted(
                     self.artifact, "database", "synthetic-key")
