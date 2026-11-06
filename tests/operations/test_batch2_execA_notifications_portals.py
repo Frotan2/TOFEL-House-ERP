@@ -305,6 +305,28 @@ class RetryBatchTests(BaseHarness):
         with self.assertRaisesRegex(self.frappe.ValidationError, "backlog"):
             self.notifications_mod.retry_failed_notifications(limit=1)
 
+    def test_corrupt_prior_results_cannot_fake_success_or_skip_recipient(self):
+        _enable(self.notifications_mod, "overdue_tuition",
+                ["a@example.com"], channel="Dashboard")
+        n = self.notifications_mod.create_notification(
+            event_type="overdue_tuition", title="CORRUPT-OUTCOME", message="M")
+        provider = _RecordingProvider({"a@example.com"})
+        for broken in (
+                [{"recipient": "a@example.com", "delivered": "false",
+                  "provider": "fake", "detail": "bad"}],
+                [{"recipient": "a@example.com", "delivered": True},
+                 {"recipient": "a@example.com", "delivered": False}],
+                [42]):
+            with self.subTest(outcome=broken):
+                self.notifications_mod._memory_notifications[n["name"]].update(
+                    status="failed", delivery_results=broken, retry_count=0)
+                with self.assertRaisesRegex(
+                        self.frappe.ValidationError, "malformed"):
+                    self.notifications_mod.attempt_delivery(
+                        n["name"], provider_override=provider)
+                self.assertEqual(provider.calls, [],
+                                 "corrupt durable outcomes must never send or fake delivery")
+
     def test_missing_recipient_cannot_be_reported_delivered(self):
         _enable(self.notifications_mod, "overdue_tuition",
                 ["a@example.com"], channel="Dashboard")
