@@ -756,7 +756,9 @@ def _send_to_recipients(payload, recipients, provider_override=None):
         if provider_override is not None:
             # Custom provider for tests
             try:
-                sent = bool(provider_override.send(per_payload))
+                # Only a real boolean True counts as delivery.
+                # bool("false") is True and would falsely confirm a send.
+                sent = provider_override.send(per_payload) is True
                 results.append({
                     "recipient": recipient,
                     "delivered": sent,
