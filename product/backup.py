@@ -26,7 +26,8 @@ import tempfile
 from native_db import safe_mariadb_credential_transport
 from native_gpg import (GpgProbeError, probe_gpg_decrypt,
                         safe_gpg_diagnostic_category, safe_gpg_transport,
-                        GPG_LIST_PACKETS_TIMEOUT_SECONDS, gpg_spawn_options)
+                        GPG_LIST_PACKETS_TIMEOUT_SECONDS, gpg_spawn_options,
+                        probe_budget_for_encrypted_size)
 
 BENCH_DIR = Path(os.environ.get("BENCH_DIR", "/home/frappe/bench"))
 SITES_DIR = BENCH_DIR / "sites"
@@ -114,6 +115,12 @@ def _assert_gpg_encrypted(path: Path, role: str, encryption_key: str) -> None:
         "private files": "private-files",
     }.get(role, "artifact")
     try:
+        # Large ciphertext requires proportionally longer bounded packet
+        # verification. The old fixed 120-second timeout made an otherwise
+        # valid multi-GiB encrypted backup unpublishable on slower hosts.
+        packet_timeout = max(
+            GPG_LIST_PACKETS_TIMEOUT_SECONDS,
+            probe_budget_for_encrypted_size(path.stat().st_size)[0])
         result = subprocess.run(
             ["gpg", "--batch", "--passphrase-fd", "0", "--pinentry-mode", "loopback",
              "--list-packets", str(path)],
@@ -124,7 +131,7 @@ def _assert_gpg_encrypted(path: Path, role: str, encryption_key: str) -> None:
             # --list-packets output is packet metadata, linear in the
             # artifact size; the binding control is the wall-clock
             # timeout (a hung child is refused, never awaited forever).
-            timeout=GPG_LIST_PACKETS_TIMEOUT_SECONDS,
+            timeout=packet_timeout,
             **gpg_spawn_options(),
         )
     except subprocess.TimeoutExpired:
