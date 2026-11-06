@@ -305,6 +305,20 @@ class RetryBatchTests(BaseHarness):
         with self.assertRaisesRegex(self.frappe.ValidationError, "backlog"):
             self.notifications_mod.retry_failed_notifications(limit=1)
 
+    def test_override_provider_truthy_text_is_not_delivered(self):
+        _enable(self.notifications_mod, "overdue_tuition",
+                ["a@example.com"], channel="Dashboard")
+        n = self.notifications_mod.create_notification(
+            event_type="overdue_tuition", title="TRUTHY-STR", message="M")
+        class BrokenProvider:
+            name = "bad-provider"
+            def send(self, _payload):
+                return "False"
+        status, detail = self.notifications_mod.attempt_delivery(
+            n["name"], provider_override=BrokenProvider())
+        self.assertEqual(status, "failed")
+        self.assertIn("failure", detail.lower())
+
     def test_corrupt_prior_results_cannot_fake_success_or_skip_recipient(self):
         _enable(self.notifications_mod, "overdue_tuition",
                 ["a@example.com"], channel="Dashboard")
