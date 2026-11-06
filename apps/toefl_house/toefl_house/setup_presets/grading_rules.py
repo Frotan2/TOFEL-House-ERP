@@ -95,3 +95,41 @@ def normalize_intervals(value, scope="formal"):
             "threshold: no formal scale may be created without a grade at "
             "exactly 60")
     return sorted(rows, key=lambda row: (-row["threshold"], row["grade_code"]))
+
+
+def assert_grading_scale_scope_link(description, expected_scope):
+    """Guard the policy->native-scale boundary against scope confusion.
+
+    The Course Owner creation command stamps the scope in the submitted
+    native scale's description. A legacy unmarked native scale may remain
+    linked to a formal policy for backward compatibility, but unmarked
+    scales cannot become specialist progress scales: there is no evidence
+    that they were created without pass/fail semantics.
+
+    This check is *scope* validation, not a substitute for submission
+    and native interval/grade-code checks elsewhere.
+    """
+    expected = canonical_grading_scope(expected_scope)
+    if description is None:
+        description = ""
+    if not isinstance(description, str):
+        raise ValueError("Grading scale scope evidence must be text")
+    marker = re.match(
+        r"^Owner-approved scale \((formal|specialist) scope\)\.",
+        description,
+    )
+    if marker is None:
+        if description.startswith("Owner-approved scale ("):
+            raise ValueError("Grading scale has an invalid Owner scope marker")
+        if expected == SPECIALIST_SCOPE:
+            raise ValueError(
+                "A specialist progress policy requires an explicitly "
+                "Owner-approved specialist grading scale; an unmarked "
+                "legacy scale cannot establish that scope")
+        return FORMAL_SCOPE  # Legacy native scale; formal policy only.
+    actual = marker.group(1)
+    if actual != expected:
+        raise ValueError(
+            f"Grading scale scope {actual!r} conflicts with the "
+            f"assessment program scope {expected!r}")
+    return actual
