@@ -2533,6 +2533,13 @@ class BenchRunner:
         except (InvalidOperation, ValueError):
             raise refuse("apply.counts_unavailable",
                          "the Fees billing total report is malformed") from None
+        # Decimal('Infinity') otherwise passes the nonnegative check and
+        # returns a forged preservation value. Decimal('NaN') can raise an
+        # unhandled InvalidOperation during comparison instead of a safe
+        # update refusal. Every nonfinite value must fail closed.
+        if not total.is_finite():
+            raise refuse("apply.counts_unavailable",
+                         "the Fees billing total report is non-finite")
         if total < 0:
             raise refuse("apply.counts_unavailable",
                          "the Fees billing total is negative")
