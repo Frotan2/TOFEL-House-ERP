@@ -1616,6 +1616,16 @@ class CensusStrictnessTests(ApplyTests):
                 self.assertEqual(caught.exception.code, "apply.counts_unavailable")
                 self.assertIn("non-finite", str(caught.exception))
 
+    def test_finite_fees_total_keeps_exact_decimal_precision(self):
+        runner = engine.BenchRunner(str(self.bench), self.sites_dir, timeout=120)
+        for supplied, expected in (
+                ("0", "0"), ("12345.6700", "12345.67"),
+                ("1e2", "100"), ("0.0001", "0.0001")):
+            with self.subTest(value=supplied):
+                self.state["fees_total"] = supplied
+                self.write_state()
+                self.assertEqual(runner.fees_total(engine.SITE_NAME), expected)
+
     def test_nonfinite_fees_total_blocks_migration_before_any_write(self):
         self.state["fees_total"] = "Infinity"
         self.write_state()
