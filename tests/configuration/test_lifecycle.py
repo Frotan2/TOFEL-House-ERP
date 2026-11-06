@@ -1020,6 +1020,20 @@ def _foundation():
     return foundation
 
 
+def _seed_submitted_formal_scale(fake):
+    """Native-like scale fixture with real link-time interval evidence."""
+    fake.store.setdefault("Grading Scale", {})["GS-1"] = {
+        "name": "GS-1", "docstatus": 1,
+        "description": "Owner-approved scale (formal scope). Reason: fixture"}
+    intervals = fake.store.setdefault("Grading Scale Interval", {})
+    intervals["GS-1-A"] = {
+        "parent": "GS-1", "grade_code": "A", "threshold": 90}
+    intervals["GS-1-B"] = {
+        "parent": "GS-1", "grade_code": "B", "threshold": 60}
+    intervals["GS-1-F"] = {
+        "parent": "GS-1", "grade_code": "F", "threshold": 0}
+
+
 class D1LifecycleTests(unittest.TestCase):
     """Lifecycle proof for the D1 assessment-policy reference structure.
 
@@ -1033,7 +1047,7 @@ class D1LifecycleTests(unittest.TestCase):
     def _setup(self, academic, fake):
         academic.create_program("SETUP-PROGRAM-0001", "GEN-ENG",
                                 "General English", "")
-        fake.store.setdefault("Grading Scale", {})["GS-1"] = {"name": "GS-1"}
+        _seed_submitted_formal_scale(fake)
         return academic, fake
 
     def _events(self, fake):
@@ -1205,6 +1219,27 @@ class D1LifecycleTests(unittest.TestCase):
                 "SCOPE-SPECIAL-VER-0002", "ASM-TOEFL", "2026-01-01",
                 "Approve specialist progress scale", grading_scale="GS-1")
             self.assertEqual(result["version_count"], 1)
+
+    def test_native_scale_must_be_submitted_and_carry_formal_sixty(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.create_assessment_policy(
+                "NATIVE-SCALE-POL-0001", "GEN-ENG", "ASM-GEN",
+                "General assessment", "")
+            fake.store["Grading Scale"]["GS-1"]["docstatus"] = 0
+            with self.assertRaisesRegex(fake.ValidationError, "submitted"):
+                academic.set_assessment_policy_version(
+                    "NATIVE-SCALE-DRAFT-01", "ASM-GEN", "2026-01-01",
+                    "Reject draft native scale", grading_scale="GS-1")
+            fake.store["Grading Scale"]["GS-1"]["docstatus"] = 1
+            del fake.store["Grading Scale Interval"]["GS-1-B"]
+            with self.assertRaisesRegex(fake.ValidationError, "60"):
+                academic.set_assessment_policy_version(
+                    "NATIVE-SCALE-NO60-01", "ASM-GEN", "2026-01-01",
+                    "Reject scale with no sixty percent", grading_scale="GS-1")
+            self.assertEqual(
+                len(fake.store["TH Assessment Policy"]["ASM-GEN"].get("versions") or []),
+                0)
 
     def test_backdated_same_day_empty_reason_and_unknown_carrier_refuse(self):
         for academic, fake in _load_module({"Course Owner"}):
@@ -1429,8 +1464,7 @@ class CommandOnlyBoundaryTests(unittest.TestCase):
         for academic, fake in _load_module({"Course Owner"}):
             academic.create_program("SETUP-PROGRAM-0001", "GEN-ENG",
                                     "General English", "")
-            fake.store.setdefault("Grading Scale", {})["GS-1"] = {
-                "name": "GS-1"}
+            _seed_submitted_formal_scale(fake)
             for loaded in self._controllers():
                 for _hooked in self._hooked_writes(loaded):
                     academic.create_assessment_policy(
@@ -1564,10 +1598,7 @@ class D1FacetLifecycleTests(unittest.TestCase):
                               "Level One", 1, 2, "Month", "2026-01-01")
         academic.create_level("SETUP-LEVEL-000002", "GEN-ENG", "LV-2",
                               "Level Two", 2, 2, "Month", "2026-01-01")
-        fake.store.setdefault("Grading Scale", {})["GS-1"] = {"name": "GS-1"}
-        intervals = fake.store.setdefault("Grading Scale Interval", {})
-        intervals["GS-1-A"] = {"parent": "GS-1", "grade_code": "A"}
-        intervals["GS-1-B"] = {"parent": "GS-1", "grade_code": "B"}
+        _seed_submitted_formal_scale(fake)
         fake.store.setdefault("Assessment Criteria", {})["Speaking"] = {
             "name": "Speaking"}
         fake.store.setdefault("Role", {})["Academic Manager"] = {
