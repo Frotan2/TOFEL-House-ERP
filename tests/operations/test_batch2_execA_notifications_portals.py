@@ -319,6 +319,29 @@ class RetryBatchTests(BaseHarness):
         self.assertEqual(status, "failed")
         self.assertIn("failure", detail.lower())
 
+    def test_corrupt_saved_json_delivery_history_cannot_be_treated_as_legacy(self):
+        _enable(self.notifications_mod, "overdue_tuition",
+                ["a@example.com"], channel="Dashboard")
+        n = self.notifications_mod.create_notification(
+            event_type="overdue_tuition", title="BAD-JSON-HISTORY", message="M")
+        # Force the actual durable load path, not the in-memory shortcut.
+        self.notifications_mod._memory_notifications.pop(n["name"], None)
+        doc = self.frappe.get_doc("TH Notification", n["name"])
+        provider = _RecordingProvider({"a@example.com"})
+        for bad in ('{"version":1,"detail":"partial",',
+                    '{"version":999,"detail":"partial","results":[]}',
+                    '{"version":1,"detail":"partial","results":"false"}'):
+            with self.subTest(saved=bad):
+                doc.last_failure = bad
+                doc.status = "failed"
+                doc.retry_count = 0
+                doc.save(ignore_permissions=True)
+                with self.assertRaisesRegex(
+                        self.frappe.ValidationError, "malformed"):
+                    self.notifications_mod.attempt_delivery(
+                        n["name"], provider_override=provider)
+                self.assertEqual(provider.calls, [])
+
     def test_corrupt_prior_results_cannot_fake_success_or_skip_recipient(self):
         _enable(self.notifications_mod, "overdue_tuition",
                 ["a@example.com"], channel="Dashboard")
