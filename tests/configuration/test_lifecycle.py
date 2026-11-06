@@ -1220,6 +1220,65 @@ class D1LifecycleTests(unittest.TestCase):
                 "Approve specialist progress scale", grading_scale="GS-1")
             self.assertEqual(result["version_count"], 1)
 
+    def test_specialist_cannot_add_pass_fail_promotion_or_formal_retakes(self):
+        import json
+        for academic, fake in _load_module({"Course Owner"}):
+            academic.create_program(
+                "SPECIAL-FAMILY-0001", "TOEFL-PREP", "TOEFL Preparation", "")
+            academic.create_assessment_policy(
+                "SPECIAL-POLICY-0001", "TOEFL-PREP",
+                "ASM-TOEFL", "TOEFL progress", "")
+
+            # Even a full, syntactically valid initial facet payload must
+            # fail if it sneaks in an overall pass threshold.
+            bad_facets = {facet: None for facet in academic.rules.ASSESSMENT_FACETS}
+            bad_facets["pass_rules"] = {
+                "components": [],
+                "overall": {"kind": "percent", "value": 60}}
+            with self.assertRaisesRegex(fake.ValidationError, "specialist"):
+                academic.set_assessment_policy_version(
+                    "SPECIAL-BADINITIAL-01", "ASM-TOEFL", "2026-01-01",
+                    "Reject pass/fail initial template",
+                    initial_facets=bad_facets)
+
+            academic.set_assessment_policy_version(
+                "SPECIAL-VERSION-00001", "ASM-TOEFL", "2026-01-01",
+                "Approved progress-only version")
+            fake.store.setdefault("Role", {})["Academic Manager"] = {
+                "name": "Academic Manager"}
+            bad_commands = (
+                ("set_assessment_pass_rules", {
+                    "pass_rules": json.dumps({
+                        "components": [],
+                        "overall": {"kind": "percent", "value": 60}})}),
+                ("set_assessment_progression", {
+                    "progression": json.dumps({
+                        "target": "next",
+                        "requires": [{"kind": "approval",
+                                      "role": "Academic Manager"}]})}),
+                ("set_assessment_retakes", {
+                    "retakes": json.dumps({
+                        "max_attempts": 2, "wait_days": 7,
+                        "scope": "full", "governing": "best"})}),
+            )
+            for index, (command, kwargs) in enumerate(bad_commands):
+                with self.subTest(command=command), self.assertRaisesRegex(
+                        fake.ValidationError, "specialist"):
+                    getattr(academic, command)(
+                        f"SPECIAL-BAD-FACET-{index:02d}", "ASM-TOEFL",
+                        "2027-01-01", "Reject unsupported grading", **kwargs)
+            policy = fake.store["TH Assessment Policy"]["ASM-TOEFL"]
+            self.assertEqual(len(policy.get("versions") or []), 1)
+
+            # Earlier corrupted evidence must not be signed as validated
+            # merely because all three forbidden facets are well-formed.
+            row = policy.get("versions")[0]
+            row["pass_rules"] = json.dumps({
+                "components": [], "overall": {"kind": "percent", "value": 60}})
+            with self.assertRaisesRegex(fake.ValidationError, "specialist"):
+                academic.validate_assessment_policy(
+                    "SPECIAL-VALIDATE-0001", "ASM-TOEFL")
+
     def test_native_scale_must_be_submitted_and_carry_formal_sixty(self):
         for academic, fake in _load_module({"Course Owner"}):
             self._setup(academic, fake)
