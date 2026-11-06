@@ -128,6 +128,11 @@ _in_flight_deliveries = set()
 # succeeded and a retry never resends to them. Legacy plain-text
 # last_failure values decode to (text, None) — no known successes.
 _DELIVERY_OUTCOME_VERSION = 1
+# A retry batch may need to inspect more FAILED rows than it will send:
+# undeliverable/exhausted early rows must not starve actionable later ones.
+# Reading beyond this bound requires an operator-visible refusal, not a
+# silent assumption that the oldest `limit` rows are the entire queue.
+RETRY_SCAN_MAX = 5000
 
 
 def _encode_delivery_outcome(detail, delivery_results):
@@ -941,7 +946,15 @@ def _attempt_delivery_locked(notification_name, provider_override=None):
         if r and r not in recipients:
             recipients.append(r)
     if not recipients:
-        recipients = [""]
+        # A persisted notification that lost its recipients is a damaged
+        # authorization target. The old fallback [""] handed an empty
+        # recipient to DashboardProvider, which unconditionally succeeds,
+        # and the notification was falsely marked delivered.
+        _persist_delivery(doc, data, notification_name, "failed",
+                          data["retry_count"], data.get("next_retry_at"),
+                          prior, "No recipients configured; restore the "
+                          "authorized recipient list before retrying", None)
+        return ("failed", "No recipients configured")
     pending = [r for r in recipients if r not in succeeded]
     if not pending:
         # Every recipient already succeeded but the status was never
@@ -1065,20 +1078,38 @@ def retry_failed_notifications(limit=20):
         raise ValueError("limit must be a whole number") from exc
     if limit < 1 or limit > 100:
         raise ValueError("limit must be 1..100")
+    # Reading only the first `limit` failed rows starves every due
+    # notification behind `limit` permanently blocked rows (exhausted
+    # retries, future schedules, invalid timestamps). Inspect a bounded
+    # superset in stable order and stop at the requested number of
+    # actionable rows instead. A backlog above the review cap refuses
+    # explicitly: no silent truncation of the retry queue.
     rows = frappe.db.get_all(
         NOTIFICATION_DOCTYPE,
         filters={"status": "failed"},
         fields=["name"],
-        order_by="modified asc",
-        limit=limit,
+        order_by="modified asc, name asc",
+        limit_page_length=RETRY_SCAN_MAX + 1,
     )
+    if len(rows) > RETRY_SCAN_MAX:
+        raise frappe.ValidationError(
+            "Notification retry backlog exceeds %d rows; review and "
+            "reduce blocked/exhausted notifications before resuming "
+            "the retry batch" % RETRY_SCAN_MAX)
     attempted = delivered = still_failed = 0
+    processed = 0
     for row in rows:
+        if processed >= limit:
+            break
         name = row.get("name") if isinstance(row, dict) else row
         try:
             status, detail = attempt_delivery(name)
         except Exception:
+            # An attempted row that fails during load, provider send,
+            # or persistence has consumed a batch slot: otherwise a
+            # stream of such rows can bypass the caller's work limit.
             still_failed += 1
+            processed += 1
             continue
         # Rows not yet due for retry (or with retries exhausted, or
         # already being delivered) were not attempted — do not count
@@ -1091,8 +1122,10 @@ def retry_failed_notifications(limit=20):
                 or "Delivery time has not arrived" in detail
                 or "Delivery time could not be evaluated" in detail
                 or "Max retries exhausted" in detail
+                or "No recipients configured" in detail
                 or "already in progress" in detail):
             continue
+        processed += 1
         attempted += 1
         if status == "delivered":
             delivered += 1
