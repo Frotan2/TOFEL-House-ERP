@@ -296,6 +296,30 @@ class CapacityTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             self.ops.capacity.offer_waiting_list_seat("queue-full-0001", later)
 
+    def test_offer_refuses_the_fifth_entry_ahead_of_the_first(self):
+        # C-06 trace: entry #5 must never be offered ahead of entry #1.
+        self.ops.seed_class(name="GRP-QUEUE5", capacity=6, members=["STU-1"])
+        for index in range(2, 7):
+            student = f"STU-{index}"
+            self.ops.seed_student(student)
+            self.ops.seed_enrollment(student)
+        self.ops.seed_policy()
+        entries = [
+            self.ops.seed_waiting(
+                "GRP-QUEUE5", f"STU-{index}", priority=0,
+                requested_on=f"2026-09-20 0{index}:00:00")
+            for index in range(2, 7)
+        ]
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.offer_waiting_list_seat(
+                "queue-fifth-0001", entries[4])
+        self.assertIn("Earlier waiting-list entries have priority", str(ctx.exception))
+        self.assertEqual(self.site.get(
+            "TH Class Waiting List", entries[4])["status"], "Waiting")
+        result = self.ops.capacity.offer_waiting_list_seat(
+            "queue-first-0001", entries[0])
+        self.assertEqual(result["status"], "Offered")
+
     def test_waiting_board_offers_only_the_first_waiting_student(self):
         self.ops.seed_class(name="GRP-QUEUE", capacity=3, members=["STU-1"])
         high = self.ops.seed_waiting(
@@ -376,17 +400,35 @@ class CapacityTests(unittest.TestCase):
         later = self.ops.seed_waiting(
             "GRP-DIRECT", "STU-3", priority=0,
             requested_on="2026-09-20 09:00:00")
+        # A Waiting entry holds no offer: even the head of the queue cannot
+        # be admitted silently — offer the seat first, or record why not.
         with self.assertRaises(ValidationError) as ctx:
-            self.ops.capacity.admit_from_waiting_list("skip-direct-0001", later)
+            self.ops.capacity.admit_from_waiting_list("skip-direct-0001", first)
+        self.assertIn("holds no seat offer", str(ctx.exception))
+        self.assertEqual(self.ops.roster("GRP-DIRECT"), [("STU-1", 1)])
+        self.assertEqual(self.site.get("TH Class Waiting List", first)["status"],
+                         "Waiting")
+        # A reason does not buy a queue jump: the later entry is still
+        # behind the first.
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.admit_from_waiting_list(
+                "skip-direct-0002", later,
+                queue_jump_reason="head of queue is absent today")
         self.assertIn("Earlier waiting-list entries have priority", str(ctx.exception))
         self.assertEqual(self.ops.roster("GRP-DIRECT"), [("STU-1", 1)])
         self.assertEqual(self.site.get("TH Class Waiting List", later)["status"],
                          "Waiting")
-        result = self.ops.capacity.admit_from_waiting_list("first-direct-0001", first)
+        result = self.ops.capacity.admit_from_waiting_list(
+            "first-direct-0001", first,
+            queue_jump_reason="student present at reception; seat offered in person")
         self.assertEqual(result["status"], "Admitted")
+        self.assertEqual(result["queue_jump_reason"],
+                         "student present at reception; seat offered in person")
         self.assertEqual(self.ops.roster("GRP-DIRECT"),
                          [("STU-1", 1), ("STU-2", 1)])
-        result = self.ops.capacity.admit_from_waiting_list("next-direct-0001", later)
+        result = self.ops.capacity.admit_from_waiting_list(
+            "next-direct-0001", later,
+            queue_jump_reason="student present at reception; seat offered in person")
         self.assertEqual(result["status"], "Admitted")
 
     def test_admission_refuses_an_expired_offer(self):
@@ -402,12 +444,18 @@ class CapacityTests(unittest.TestCase):
         group = self._full_class()
         self.ops.seed_policy()
         entry = self.ops.seed_waiting(group, "STU-3")
+        # No seat exists to offer in a full class, so the admission needs
+        # the audited reason as well as the override.
         with self.assertRaises(ValidationError) as ctx:
-            self.ops.capacity.admit_from_waiting_list("admit-full-0001", entry)
+            self.ops.capacity.admit_from_waiting_list(
+                "admit-full-0001", entry,
+                queue_jump_reason="no seat exists to offer; override admission")
         self.assertIn("is full", str(ctx.exception))
         override = self.ops.seed_override(group, "STU-3")
         result = self.ops.capacity.admit_from_waiting_list(
-            "admit-full-0002", entry, override=override)
+            "admit-full-0002", entry, override=override,
+            queue_jump_reason="no seat exists to offer; approved override "
+                              "admits the queued learner")
         self.assertEqual(result["override"]["override"], override)
         self.assertEqual(self.site.get("TH Capacity Approval", override)["status"],
                          "Used")
@@ -463,6 +511,140 @@ class CapacityTests(unittest.TestCase):
             self.ops.capacity.create_capacity_override(
                 "override-past-0001", group, "STU-3", 1, "past", "2026-09-22")
         self.assertIn("future", str(ctx.exception))
+
+    def test_override_creation_requires_enrollment_and_no_live_duplicate(self):
+        group = self._full_class()
+        self.ops.seed_policy()
+        self.ops.login(APPROVER)
+        # No enrollment for the intake: there is no override to grant.
+        self.ops.seed_student("STU-9")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.create_capacity_override(
+                "override-noenrol-0001", group, "STU-9", 1,
+                "no enrollment", "2026-09-30")
+        self.assertIn("not enrolled", str(ctx.exception))
+        # An active member already holds a seat: nothing to override.
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.create_capacity_override(
+                "override-member-0001", group, "STU-1", 1,
+                "already seated", "2026-09-30")
+        self.assertIn("already an active member", str(ctx.exception))
+        # One live override per student per class.
+        result = self.ops.capacity.create_capacity_override(
+            "override-first-0001", group, "STU-3", 1,
+            "late admission", "2026-09-30")
+        self.assertEqual(result["status"], "Approved")
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.create_capacity_override(
+                "override-dup-0001", group, "STU-3", 1,
+                "second grant", "2026-09-30")
+        self.assertIn("already holds a live capacity override", str(ctx.exception))
+        # An expired Approved row is not live and does not block a grant.
+        self.ops.seed_student("STU-4")
+        self.ops.seed_enrollment("STU-4")
+        self.ops.seed_override(group, "STU-4", expires="2026-09-01")
+        result = self.ops.capacity.create_capacity_override(
+            "override-after-expiry-0001", group, "STU-4", 1,
+            "late admission", "2026-09-30")
+        self.assertEqual(result["status"], "Approved")
+
+    def test_override_grants_exactly_one_seat(self):
+        group = self._full_class()
+        self.ops.seed_policy(capacity_override_max_seats=2)
+        self.ops.login(APPROVER)
+        # Two seats are within the policy bound, but an override names one
+        # student: the second seat could never be used.
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.create_capacity_override(
+                "override-two-seats-0001", group, "STU-3", 2,
+                "two seats", "2026-09-30")
+        self.assertIn("exactly one seat", str(ctx.exception))
+        result = self.ops.capacity.create_capacity_override(
+            "override-one-seat-0001", group, "STU-3", 1,
+            "one seat", "2026-09-30")
+        self.assertEqual(result["status"], "Approved")
+        self.assertEqual(result["seats"], 1)
+
+    def test_live_override_hidden_behind_two_expired_rows_still_blocks(self):
+        # C-07 (Area B re-check): _live_override_exists used to read at
+        # most two Approved rows with no ordering, so a live override
+        # filed behind two expired ones was missed and a duplicate grant
+        # was allowed. The liveness test is now one exact database count.
+        group = self._full_class()
+        self.ops.seed_policy()
+        self.ops.seed_override(group, "STU-3", expires="2026-09-01")
+        self.ops.seed_override(group, "STU-3", expires="2026-09-02")
+        live = self.ops.seed_override(group, "STU-3", expires="2026-10-01")
+        self.assertEqual(self.site.get("TH Capacity Approval", live)["status"],
+                         "Approved")
+        self.ops.login(APPROVER)
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.capacity.create_capacity_override(
+                "override-hidden-0001", group, "STU-3", 1,
+                "second grant", "2026-09-30")
+        self.assertIn("already holds a live capacity override", str(ctx.exception))
+
+    def test_create_locks_the_class_row_before_checking_live_overrides(self):
+        # C-07 concurrency (Area B): the live-override check and the insert
+        # serialize per class only because the class row is locked first and
+        # held for the one request transaction. The stub harness cannot run
+        # two threads against a real row lock, so this pins the lock itself:
+        # the SELECT ... FOR UPDATE on the class must fire during creation.
+        group = self._full_class()
+        self.ops.seed_policy()
+        self.ops.login(APPROVER)
+        before = len(self.site.sql_log)
+        self.ops.capacity.create_capacity_override(
+            "override-lock-0001", group, "STU-3", 1,
+            "late admission", "2026-09-30")
+        locks = [entry for entry in self.site.sql_log[before:]
+                 if "for update" in entry[0] and "Student Group" in entry[0]]
+        self.assertTrue(
+            locks, "create must lock the class row before the live-override check")
+
+    def test_legacy_multiseat_override_remedy_is_revoke_and_reissue(self):
+        # C-07 legacy remedy (Area B): a pre-rule 5-seat Approved override
+        # is still consumable-whole, so the remedy is revoke + re-issue as
+        # a single seat — verified here end to end, not just documented.
+        group = self._full_class()
+        self.ops.seed_policy()
+        legacy = self.ops.seed_override(group, "STU-3", seats=5)
+        self.assertEqual(int(self.site.get(
+            "TH Capacity Approval", legacy)["seats"]), 5)
+        self.ops.login(APPROVER)
+        revoked = self.ops.capacity.revoke_capacity_override(
+            "revoke-legacy-0001", legacy,
+            "superseded by single-seat override")
+        self.assertEqual(revoked["status"], "Revoked")
+        fresh = self.ops.capacity.create_capacity_override(
+            "override-reissue-0001", group, "STU-3", 1,
+            "replaces revoked 5-seat grant", "2026-09-30")
+        self.assertEqual(fresh["status"], "Approved")
+        self.assertEqual(fresh["seats"], 1)
+        seat = self.ops.capacity.assert_seat_available(group, "STU-3", fresh["name"])
+        self.assertEqual(seat["override"]["seats"], 1)
+        self.assertEqual(self.site.get(
+            "TH Capacity Approval", fresh["name"])["status"], "Used")
+
+    def test_queue_jump_reason_is_recorded_on_the_waiting_entry(self):
+        # C-06 (Area B re-check): the reason used to live only in the
+        # returned result and the operation receipt. It is now also written
+        # on the waiting-list entry itself, so the queue record shows why
+        # the learner was admitted without an offer.
+        self.ops.seed_class(name="GRP-OPEN", capacity=3, members=["STU-1", "STU-2"])
+        for index in range(1, 4):
+            self.ops.seed_student(name=f"STU-{index}")
+            self.ops.seed_enrollment(student=f"STU-{index}")
+        self.ops.seed_policy()
+        entry = self.ops.seed_waiting("GRP-OPEN", "STU-3")
+        result = self.ops.capacity.admit_from_waiting_list(
+            "admit-note-0001", entry,
+            queue_jump_reason="student present at reception; seat offered in person")
+        self.assertEqual(result["queue_jump_reason"],
+                         "student present at reception; seat offered in person")
+        stored = self.site.get("TH Class Waiting List", entry)
+        self.assertEqual(stored["status"], "Admitted")
+        self.assertIn("student present at reception", stored.get("note") or "")
 
     def test_revocation_is_one_way_and_keeps_the_reason(self):
         group = self._full_class()

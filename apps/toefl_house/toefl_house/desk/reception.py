@@ -1143,6 +1143,15 @@ def lookup(query):
                            filters={"name": text},
                            order_by="creation desc", limit=1)
     seen = {row["name"] for row in matches}
+    # An exact email match is an identifier, not a fuzzy name hit. Search
+    # it before the title page fills, so it is never crowded out by
+    # LIMIT_LOOKUP title matches and then truncated away.
+    for row in project_rows("reception", APPLICANT, APPLICANT_FIELDS,
+                            filters={"student_email_id": text},
+                            order_by="creation desc", limit=LIMIT_LOOKUP):
+        if row["name"] not in seen:
+            matches.append(row)
+            seen.add(row["name"])
     for row in project_rows("reception", APPLICANT, APPLICANT_FIELDS,
                             filters={"title": ("like", like)},
                             order_by="creation desc", limit=LIMIT_LOOKUP):
@@ -1184,6 +1193,17 @@ def lookup(query):
                                 filters={"name": text, "enabled": ("in", [0, 1])},
                                 order_by="creation desc", limit=1)
     seen_students = {row["name"] for row in student_rows}
+    # Exact email first, for the same reason as the applicant search above:
+    # a full page of fuzzy name matches must not crowd out the one exact
+    # email match before truncation.
+    for row in project_rows("reception", STUDENT,
+                            ["name", "student_name", "student_email_id",
+                             "th_candidate_ref", "enabled", "creation"],
+                            filters={"student_email_id": text, "enabled": ("in", [0, 1])},
+                            order_by="creation desc", limit=LIMIT_LOOKUP):
+        if row["name"] not in seen_students:
+            student_rows.append(row)
+            seen_students.add(row["name"])
     for row in project_rows("reception", STUDENT,
                             ["name", "student_name", "student_email_id",
                              "th_candidate_ref", "enabled", "creation"],
