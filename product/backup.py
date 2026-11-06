@@ -19,15 +19,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 
 from native_db import safe_mariadb_credential_transport
 from native_gpg import (GpgProbeError, probe_gpg_decrypt,
                         safe_gpg_diagnostic_category, safe_gpg_transport,
-                        GPG_LIST_PACKETS_TIMEOUT_SECONDS, gpg_spawn_options,
-                        probe_budget_for_encrypted_size)
+                        GPG_LIST_PACKETS_TIMEOUT_SECONDS,
+                        probe_budget_for_encrypted_size, probe_gpg_packets)
 
 BENCH_DIR = Path(os.environ.get("BENCH_DIR", "/home/frappe/bench"))
 SITES_DIR = BENCH_DIR / "sites"
@@ -121,24 +120,21 @@ def _assert_gpg_encrypted(path: Path, role: str, encryption_key: str) -> None:
         packet_timeout = max(
             GPG_LIST_PACKETS_TIMEOUT_SECONDS,
             probe_budget_for_encrypted_size(path.stat().st_size)[0])
-        result = subprocess.run(
-            ["gpg", "--batch", "--passphrase-fd", "0", "--pinentry-mode", "loopback",
-             "--list-packets", str(path)],
-            input=(encryption_key + "\n").encode("ascii"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-            # --list-packets output is packet metadata, linear in the
-            # artifact size; the binding control is the wall-clock
-            # timeout (a hung child is refused, never awaited forever).
-            timeout=packet_timeout,
-            **gpg_spawn_options(),
-        )
-    except subprocess.TimeoutExpired:
+        # A full subprocess.run(..., PIPE) buffers unbounded packet text.
+        # The helper captures only bounded metadata, kills runaway children
+        # and refuses suspicious oversized output even after fast exit.
+        result = probe_gpg_packets(path, encryption_key, timeout=packet_timeout)
+    except GpgProbeError as error:
+        if error.category == "probe-timeout":
+            raise BackupInputError(
+                f"native Frappe {role} artifact could not be checked for GPG encryption",
+                safe_code=f"gpg-{role_code}-probe-timeout",
+                safe_category="probe-timeout",
+            ) from None
         raise BackupInputError(
             f"native Frappe {role} artifact could not be checked for GPG encryption",
-            safe_code=f"gpg-{role_code}-probe-timeout",
-            safe_category="probe-timeout",
+            safe_code=f"gpg-{role_code}-probe-error",
+            safe_category=error.category,
         ) from None
     except Exception:
         raise BackupInputError(
