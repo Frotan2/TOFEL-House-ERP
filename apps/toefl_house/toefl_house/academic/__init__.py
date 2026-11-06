@@ -79,6 +79,37 @@ def _assert_assessment_scale_scope(family, scale):
         assert_linked_native_scale_thresholds(native_intervals, expected)
     except ValueError as exc:
         raise frappe.ValidationError(str(exc)) from exc
+def _assert_specialist_progress_only(family, facets):
+    """Special Speaking and TOEFL Preparation are progress-only programs.
+
+    The existing institution preset is the approved source of program kind.
+    A specialist policy version must not introduce formal pass/fail, retake,
+    or automatic progression facets, even via a low-level Owner facet API.
+    Missing/withdrawn facets remain allowed, so an Owner can repair a
+    legacy version by withdrawing an invalid facet. Historical records are
+    not rewritten; the validating command refuses contaminated history.
+    """
+    from toefl_house.setup_presets.preset import load_preset
+
+    family_code = frappe.db.get_value(PROGRAM, family, "code")
+    program = next(
+        (row for row in load_preset()["programs"]
+         if row.get("code") == family_code), None)
+    if program is None or program.get("progression_kind") == "sequential":
+        return
+    for facet in ("pass_rules", "progression", "retakes"):
+        try:
+            defined = rules.parse_facet(facet, facets.get(facet))
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        if defined is not None:
+            raise frappe.ValidationError(
+                "Special Speaking and TOEFL Preparation use competency "
+                "progress and feedback only: the specialist assessment "
+                f"policy must not define {facet} (no pass/fail, promotion "
+                "or formal retake).")
+
+
 ASSESSMENT_CRITERIA = "Assessment Criteria"
 DURATION = "TH Level Duration"
 NATIVE_PROGRAM = "Program"
@@ -1110,6 +1141,7 @@ def set_assessment_policy_version(request_key, policy, effective_from,
                 rules.validate_policy_facets(carried)
             except ValueError as exc:
                 raise frappe.ValidationError(str(exc)) from exc
+        _assert_specialist_progress_only(doc.family, carried)
         before = configuration_audit.latest_after_hash(doc.name)
         row = {"effective_from": clean_from,
                "grading_scale": effective_scale or None,
@@ -1183,6 +1215,7 @@ def _append_facet_version(doc, actor, clean_from, clean_reason, scale,
     """
     if scale:
         _assert_assessment_scale_scope(doc.family, scale)
+    _assert_specialist_progress_only(doc.family, carried)
     row = {"effective_from": clean_from, "grading_scale": scale,
            "reason": clean_reason, "set_by": actor,
            "set_on": frappe.utils.now_datetime()}
@@ -1762,6 +1795,7 @@ def validate_assessment_policy(request_key, policy):
                     for facet in rules.ASSESSMENT_FACETS})
             except ValueError as exc:
                 raise frappe.ValidationError(str(exc)) from exc
+            _assert_specialist_progress_only(doc.family, facets)
             for entry in (facets.get("components") or []):
                 criteria = entry.get("criteria") or ""
                 if criteria and not frappe.db.exists(ASSESSMENT_CRITERIA,
