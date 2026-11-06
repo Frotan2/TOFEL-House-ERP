@@ -203,7 +203,10 @@ def deliver(notification, check_enabled=True):
     # External channels that are still on stub will return False — that
     # is intentional failed-delivery handling, not an exception.
     try:
-        ok = bool(provider.send(notification))
+        # Provider contract is a boolean. Strings such as "False" are
+        # truthy in Python and must not be mistaken for accepted delivery.
+        # Only an explicit True is authorization to mark the message sent.
+        ok = provider.send(notification) is True
         if ok:
             return (True, provider.name, "Delivered")
         else:

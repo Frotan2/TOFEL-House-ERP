@@ -264,6 +264,125 @@ class RetryBatchTests(BaseHarness):
         # still failed: still_failed counts both.
         self.assertEqual((attempted, delivered, still_failed), (1, 0, 2))
 
+    def test_exhausted_old_rows_cannot_starve_a_later_due_retry(self):
+        # Real Frappe applies the requested query limit. The old batch
+        # fetched only `limit=1`, always saw one exhausted row, and
+        # never reached the later due recipient.
+        for i in range(25):
+            blocked = self._failed_notification(title=f"BLOCKED-{i:02d}")
+            self.notifications_mod._memory_notifications[
+                blocked["name"]]["retry_count"] = 2
+            self.notifications[blocked["name"]]["retry_count"] = 2
+        due = self._failed_notification(title="DUE-LATER")
+        self.frappe.utils.now_datetime = lambda: "2026-10-24 12:02:00"
+        original = self.frappe.db.get_all
+
+        def bounded_get_all(doctype, filters=None, fields=None, **kwargs):
+            rows = original(doctype, filters=filters, fields=fields, **kwargs)
+            if doctype == "TH Notification":
+                bound = kwargs.get("limit_page_length") or kwargs.get("limit")
+                if bound:
+                    return rows[:bound]
+            return rows
+
+        self.frappe.db.get_all = bounded_get_all
+        result = self.notifications_mod.retry_failed_notifications(limit=1)
+        self.assertEqual(result, (1, 0, 1))
+        self.assertEqual(
+            self.notifications_mod._memory_notifications[
+                due["name"]]["retry_count"], 2)
+
+    def test_retry_scan_overflow_refuses_instead_of_silent_truncation(self):
+        original = self.frappe.db.get_all
+
+        def oversized(doctype, filters=None, fields=None, **kwargs):
+            if doctype == "TH Notification" and filters == {"status": "failed"}:
+                return [{"name": f"EXCESS-{i}"}
+                        for i in range(self.notifications_mod.RETRY_SCAN_MAX + 1)]
+            return original(doctype, filters=filters, fields=fields, **kwargs)
+
+        self.frappe.db.get_all = oversized
+        with self.assertRaisesRegex(self.frappe.ValidationError, "backlog"):
+            self.notifications_mod.retry_failed_notifications(limit=1)
+
+    def test_override_provider_truthy_text_is_not_delivered(self):
+        _enable(self.notifications_mod, "overdue_tuition",
+                ["a@example.com"], channel="Dashboard")
+        n = self.notifications_mod.create_notification(
+            event_type="overdue_tuition", title="TRUTHY-STR", message="M")
+        class BrokenProvider:
+            name = "bad-provider"
+            def send(self, _payload):
+                return "False"
+        status, detail = self.notifications_mod.attempt_delivery(
+            n["name"], provider_override=BrokenProvider())
+        self.assertEqual(status, "failed")
+        self.assertIn("failure", detail.lower())
+
+    def test_corrupt_saved_json_delivery_history_cannot_be_treated_as_legacy(self):
+        _enable(self.notifications_mod, "overdue_tuition",
+                ["a@example.com"], channel="Dashboard")
+        n = self.notifications_mod.create_notification(
+            event_type="overdue_tuition", title="BAD-JSON-HISTORY", message="M")
+        # Force the actual durable load path, not the in-memory shortcut.
+        self.notifications_mod._memory_notifications.pop(n["name"], None)
+        doc = self.frappe.get_doc("TH Notification", n["name"])
+        provider = _RecordingProvider({"a@example.com"})
+        for bad in ('{"version":1,"detail":"partial",',
+                    '{"version":999,"detail":"partial","results":[]}',
+                    '{"version":1,"detail":"partial","results":"false"}'):
+            with self.subTest(saved=bad):
+                doc.last_failure = bad
+                doc.status = "failed"
+                doc.retry_count = 0
+                doc.save(ignore_permissions=True)
+                with self.assertRaisesRegex(
+                        self.frappe.ValidationError, "malformed"):
+                    self.notifications_mod.attempt_delivery(
+                        n["name"], provider_override=provider)
+                self.assertEqual(provider.calls, [])
+
+    def test_corrupt_prior_results_cannot_fake_success_or_skip_recipient(self):
+        _enable(self.notifications_mod, "overdue_tuition",
+                ["a@example.com"], channel="Dashboard")
+        n = self.notifications_mod.create_notification(
+            event_type="overdue_tuition", title="CORRUPT-OUTCOME", message="M")
+        provider = _RecordingProvider({"a@example.com"})
+        for broken in (
+                [{"recipient": "a@example.com", "delivered": "false",
+                  "provider": "fake", "detail": "bad"}],
+                [{"recipient": "a@example.com", "delivered": True},
+                 {"recipient": "a@example.com", "delivered": False}],
+                [42]):
+            with self.subTest(outcome=broken):
+                self.notifications_mod._memory_notifications[n["name"]].update(
+                    status="failed", delivery_results=broken, retry_count=0)
+                with self.assertRaisesRegex(
+                        self.frappe.ValidationError, "malformed"):
+                    self.notifications_mod.attempt_delivery(
+                        n["name"], provider_override=provider)
+                self.assertEqual(provider.calls, [],
+                                 "corrupt durable outcomes must never send or fake delivery")
+
+    def test_missing_recipient_cannot_be_reported_delivered(self):
+        _enable(self.notifications_mod, "overdue_tuition",
+                ["a@example.com"], channel="Dashboard")
+        n = self.notifications_mod.create_notification(
+            event_type="overdue_tuition", title="MISSING-RECIPS", message="M")
+        self.notifications_mod._memory_notifications[
+            n["name"]]["recipients"] = []
+        self.notifications[n["name"]]["recipients"] = []
+        provider = _RecordingProvider({"a@example.com", ""})
+        status, detail = self.notifications_mod.attempt_delivery(
+            n["name"], provider_override=provider)
+        self.assertEqual(status, "failed")
+        self.assertIn("No recipients configured", detail)
+        self.assertEqual(provider.calls, [])
+        self.assertIn(
+            "No recipients configured",
+            self.notifications_mod._memory_notifications[
+                n["name"]]["last_failure"])
+
     def test_batch_retry_limit_is_validated(self):
         with self.assertRaises(ValueError):
             self.notifications_mod.retry_failed_notifications(limit=0)
