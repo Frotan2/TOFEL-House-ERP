@@ -198,6 +198,42 @@ class ProbeFailureInjectionTests(unittest.TestCase):
         self.assertLess(elapsed, 10)
         self.assertEqual(list(self.tmp.iterdir()), [self.artifact])
 
+    def test_fast_exiting_child_cannot_bypass_output_limit(self):
+        # The waiter can finish before the stdout reader sees overflow.
+        # A successful exit code must never overrule the final drain cap.
+        popen = make_recording_popen(
+            returncode=0, stdout_bytes=b"plaintext" * 512)
+        with patch.object(native_gpg.subprocess, "Popen", popen):
+            with self.assertRaises(native_gpg.GpgProbeError) as caught:
+                native_gpg.probe_gpg_decrypt(
+                    self.artifact, "synthetic-key",
+                    max_plaintext_bytes=1024)
+        self.assertEqual(caught.exception.category, "output-limit-exceeded")
+
+    def test_nonfinite_timeouts_are_rejected_without_starting_child(self):
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=str(bad)):
+                with patch.object(native_gpg.subprocess, "Popen") as child:
+                    with self.assertRaises(native_gpg.GpgProbeError):
+                        native_gpg.probe_gpg_decrypt(
+                            self.artifact, "synthetic-key", timeout=bad)
+                child.assert_not_called()
+
+    def test_adaptive_gpg_budget_supports_large_backup_without_unbounded_io(self):
+        gib = 1024 ** 3
+        seconds, cap = native_gpg.probe_budget_for_encrypted_size(
+            40 * gib)
+        self.assertGreater(seconds, native_gpg.PROBE_TIMEOUT_SECONDS)
+        self.assertLessEqual(
+            seconds, native_gpg.PROBE_MAX_ADAPTIVE_TIMEOUT_SECONDS)
+        self.assertGreater(cap, native_gpg.PROBE_MAX_PLAINTEXT_BYTES)
+        self.assertLessEqual(
+            cap, native_gpg.PROBE_MAX_ADAPTIVE_PLAINTEXT_BYTES)
+        # Malformed sizes do not trigger probing at all.
+        for bad in (0, -1, True, "40"):
+            with self.subTest(size=bad), self.assertRaises(ValueError):
+                native_gpg.probe_budget_for_encrypted_size(bad)
+
     def test_killed_process_is_refused(self):
         popen = make_recording_popen(returncode=-9)
         with patch.object(native_gpg.subprocess, "Popen", popen):
@@ -242,7 +278,7 @@ class ProbeFailureInjectionTests(unittest.TestCase):
                                 text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         cpu, memory = result.stdout.strip().splitlines()
-        self.assertEqual(cpu, "(600, 600)")
+        self.assertEqual(cpu, "(1800, 1800)")
         self.assertEqual(memory, "(536870912, 536870912)")
 
 
@@ -381,6 +417,32 @@ class ListPacketsTimeoutTests(unittest.TestCase):
         self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
         self.artifact = self.tmp / "artifact-enc"
         self.artifact.write_bytes(b"synthetic encrypted artifact")
+
+    def test_list_packets_uses_bounded_size_scaled_timeout(self):
+        calls = []
+        def fake_run(*args, **kwargs):
+            calls.append(kwargs)
+            return type("Result", (), {
+                "returncode": 0,
+                "stdout": b":symkey enc packet:\\n",
+                "stderr": b"",
+            })()
+        # No 40 GiB artifact is allocated: simulate its disk size at the
+        # boundary only, while recording the actual GPG process timeout.
+        original_stat = Path.stat
+        def large_stat(path, *args, **kwargs):
+            result = original_stat(path, *args, **kwargs)
+            if path == self.artifact:
+                return type("Stat", (), {"st_size": 40 * 1024 ** 3})()
+            return result
+        with patch.object(self.backup.subprocess, "run", side_effect=fake_run):
+            with patch.object(Path, "stat", large_stat):
+                with patch.object(self.backup, "probe_gpg_decrypt"):
+                    self.backup._assert_gpg_encrypted(
+                        self.artifact, "database", "synthetic-key")
+        self.assertEqual(len(calls), 1)
+        self.assertGreater(calls[0]["timeout"], 120)
+        self.assertLessEqual(calls[0]["timeout"], 1800)
 
     def test_list_packets_timeout_is_a_fail_closed_refusal(self):
         def hanging_run(*args, **kwargs):
