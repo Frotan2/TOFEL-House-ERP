@@ -1170,6 +1170,42 @@ class D1LifecycleTests(unittest.TestCase):
                              if event["target"] == "ASM-GEN"]
             self.assertEqual(foundation.verify_chain(policy_events), 4)
 
+    def test_policy_link_rejects_cross_scope_scale_even_when_it_exists(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.create_assessment_policy(
+                "SCOPE-FORMAL-POL-0001", "GEN-ENG", "ASM-GEN",
+                "General assessment", "")
+            fake.store["Grading Scale"]["GS-1"]["description"] = (
+                "Owner-approved scale (specialist scope). Reason: test")
+            with self.assertRaisesRegex(fake.ValidationError, "scope"):
+                academic.set_assessment_policy_version(
+                    "SCOPE-FORMAL-VER-0001", "ASM-GEN", "2026-01-01",
+                    "Refuse specialist scale in formal policy",
+                    grading_scale="GS-1")
+            self.assertEqual(
+                len(fake.store["TH Assessment Policy"]["ASM-GEN"].get("versions") or []),
+                0)
+
+            academic.create_program(
+                "SCOPE-PROGRAM-0001", "TOEFL-PREP", "TOEFL Preparation", "")
+            academic.create_assessment_policy(
+                "SCOPE-SPECIAL-POL-0001", "TOEFL-PREP", "ASM-TOEFL",
+                "TOEFL progress", "")
+            fake.store["Grading Scale"]["GS-1"]["description"] = (
+                "Owner-approved scale (formal scope). Reason: test")
+            with self.assertRaisesRegex(fake.ValidationError, "scope"):
+                academic.set_assessment_policy_version(
+                    "SCOPE-SPECIAL-VER-0001", "ASM-TOEFL", "2026-01-01",
+                    "Refuse formal pass/fail scale in specialist policy",
+                    grading_scale="GS-1")
+            fake.store["Grading Scale"]["GS-1"]["description"] = (
+                "Owner-approved scale (specialist scope). Reason: test")
+            result = academic.set_assessment_policy_version(
+                "SCOPE-SPECIAL-VER-0002", "ASM-TOEFL", "2026-01-01",
+                "Approve specialist progress scale", grading_scale="GS-1")
+            self.assertEqual(result["version_count"], 1)
+
     def test_backdated_same_day_empty_reason_and_unknown_carrier_refuse(self):
         for academic, fake in _load_module({"Course Owner"}):
             self._setup(academic, fake)
