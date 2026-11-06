@@ -78,6 +78,8 @@ PROBE_MAX_CPU_SECONDS = 1800
 PROBE_MAX_MEMORY_BYTES = 512 * 1024 * 1024
 GPG_TRANSPORT_TIMEOUT_SECONDS = 1800
 GPG_LIST_PACKETS_TIMEOUT_SECONDS = 120
+GPG_PACKET_STDOUT_MAX_BYTES = 4 * 1024 * 1024
+GPG_PACKET_STDERR_MAX_BYTES = 1024 * 1024
 
 
 def probe_budget_for_encrypted_size(ciphertext_bytes: int) -> tuple[int, int]:
@@ -336,6 +338,87 @@ def probe_gpg_decrypt(path, passphrase: str, *, expect_tar: bool = False,
     if expect_tar and (len(stdout_drain.head) < 512
                        or stdout_drain.head[257:262] != b"ustar"):
         raise GpgProbeError("invalid-tar-header")
+
+
+def probe_gpg_packets(path, passphrase: str, *, timeout: float):
+    """Inspect GPG packet metadata with bounded pipes and wall-clock time.
+
+    subprocess.run(capture_output=True) previously retained unbounded GPG
+    packet output in RAM. A malformed archive may produce enormous output;
+    even a child exiting successfully must not bypass the final drain cap.
+    The caller consumes the bounded packet marker and safe diagnostics only.
+    """
+    if (not isinstance(passphrase, str) or not passphrase or not passphrase.isascii()
+            or any(c in passphrase for c in "\x00\r\n")
+            or isinstance(timeout, bool) or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or not 0 < timeout <= PROBE_MAX_ADAPTIVE_TIMEOUT_SECONDS):
+        raise GpgProbeError("probe-error")
+    args = [
+        "gpg", "--batch", "--passphrase-fd", "0", "--pinentry-mode", "loopback",
+        "--list-packets", str(path)]
+    try:
+        process = subprocess.Popen(
+            args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, **gpg_spawn_options())
+    except Exception:
+        raise GpgProbeError("probe-error") from None
+    stdout_drain = _StreamDrain(
+        process.stdout, limit=GPG_PACKET_STDOUT_MAX_BYTES,
+        keep=GPG_PACKET_STDOUT_MAX_BYTES)
+    stderr_drain = _StreamDrain(
+        process.stderr, limit=GPG_PACKET_STDERR_MAX_BYTES,
+        keep=GPG_PACKET_STDERR_MAX_BYTES)
+    outcome: dict = {}
+    waiter = threading.Thread(
+        target=_wait_for_process, args=(process, outcome), daemon=True)
+    timed_out = False
+    over_limit = False
+    try:
+        try:
+            process.stdin.write((passphrase + "\n").encode("ascii"))
+            process.stdin.close()
+        except (BrokenPipeError, OSError, ValueError):
+            pass
+        stdout_drain.start()
+        stderr_drain.start()
+        waiter.start()
+        deadline = time.monotonic() + timeout
+        while waiter.is_alive():
+            waiter.join(timeout=0.2)
+            if stdout_drain.over_limit or stderr_drain.over_limit:
+                over_limit = True
+                break
+            if time.monotonic() >= deadline:
+                timed_out = True
+                break
+        if timed_out or over_limit:
+            _terminate_process(process)
+            waiter.join(timeout=5)
+        else:
+            stdout_drain.join(timeout=5)
+            stderr_drain.join(timeout=5)
+            if stdout_drain.is_alive() or stderr_drain.is_alive():
+                _terminate_process(process)
+                raise GpgProbeError("probe-error")
+            # The child may exit before the first loop iteration.
+            over_limit = stdout_drain.over_limit or stderr_drain.over_limit
+    except GpgProbeError:
+        raise
+    except Exception:
+        _terminate_process(process)
+        raise GpgProbeError("probe-error") from None
+    if over_limit:
+        raise GpgProbeError("output-limit-exceeded")
+    if timed_out:
+        raise GpgProbeError("probe-timeout")
+    if (stdout_drain.read_error or stderr_drain.read_error
+            or outcome.get("error")
+            or type(outcome.get("returncode")) is not int):
+        raise GpgProbeError("probe-error")
+    return subprocess.CompletedProcess(
+        args=["gpg", "--list-packets"], returncode=outcome["returncode"],
+        stdout=stdout_drain.kept, stderr=stderr_drain.kept)
 
 
 def _contains_passphrase_option(command) -> bool:
