@@ -103,7 +103,7 @@ def probe_budget_for_encrypted_size(ciphertext_bytes: int) -> tuple[int, int]:
     return seconds, plaintext
 
 
-
+def _gpg_child_limits():
     """POSIX resource limits applied in the GPG child before exec.
 
     Only ever used as ``preexec_fn``: CPU time, then address space. GPG
