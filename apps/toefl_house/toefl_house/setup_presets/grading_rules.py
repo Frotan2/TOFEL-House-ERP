@@ -133,3 +133,38 @@ def assert_grading_scale_scope_link(description, expected_scope):
             f"Grading scale scope {actual!r} conflicts with the "
             f"assessment program scope {expected!r}")
     return actual
+
+
+def assert_linked_native_scale_thresholds(rows, expected_scope):
+    """Verify the native intervals at the policy-link boundary, not only
+    the creator's input. Submitted legacy/native scales can be chosen in
+    the policy dialog, and their thresholds must satisfy the same limits.
+    Formal assessment requires 60 and zero; specialist progress requires
+    zero only and is not a pass/fail decision.
+    """
+    scope = canonical_grading_scope(expected_scope)
+    if not isinstance(rows, list) or not 2 <= len(rows) <= 12:
+        raise ValueError("Linked grading scale needs 2 to 12 native intervals")
+    thresholds = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("Linked native interval is malformed")
+        raw = row.get("threshold")
+        if isinstance(raw, bool) or not isinstance(raw, (str, int, float, Decimal)):
+            raise ValueError("Linked native threshold is not numeric")
+        try:
+            value = Decimal(str(raw).strip())
+        except (InvalidOperation, ValueError) as exc:
+            raise ValueError("Linked native threshold is not numeric") from exc
+        if (not value.is_finite() or value < 0 or value > 100
+                or value != value.to_integral_value()):
+            raise ValueError("Linked native threshold must be a whole percent from 0 to 100")
+        if value in thresholds:
+            raise ValueError("Linked grading scale has duplicate thresholds")
+        thresholds.add(value)
+    if Decimal("0") not in thresholds:
+        raise ValueError("Linked grading scale is missing the required zero threshold")
+    if scope == FORMAL_SCOPE and Decimal("60") not in thresholds:
+        raise ValueError(
+            "Formal grading scale link requires the approved 60% pass threshold")
+    return True
