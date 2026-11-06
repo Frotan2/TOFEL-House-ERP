@@ -47,6 +47,7 @@ def _assert_assessment_scale_scope(family, scale):
         return
     from toefl_house.setup_presets.grading_rules import (
         FORMAL_SCOPE, SPECIALIST_SCOPE, assert_grading_scale_scope_link,
+        assert_linked_native_scale_thresholds,
     )
     from toefl_house.setup_presets.preset import load_preset
 
@@ -63,9 +64,19 @@ def _assert_assessment_scale_scope(family, scale):
     if not frappe.db.exists(GRADING_SCALE, scale):
         raise frappe.ValidationError(
             f"Grading scale {scale} does not exist")
+    # The native document must be submitted and its actual child intervals
+    # inspected; merely having a name/Owner description is not enough.
+    status = frappe.db.get_value(GRADING_SCALE, scale, "docstatus")
+    if status != 1:
+        raise frappe.ValidationError(
+            "Choose a submitted native grading scale before linking a policy")
     description = frappe.db.get_value(GRADING_SCALE, scale, "description")
+    native_intervals = frappe.db.get_all(
+        GRADING_INTERVAL, filters={"parent": scale},
+        fields=["threshold"], limit_page_length=13)
     try:
         assert_grading_scale_scope_link(description, expected)
+        assert_linked_native_scale_thresholds(native_intervals, expected)
     except ValueError as exc:
         raise frappe.ValidationError(str(exc)) from exc
 ASSESSMENT_CRITERIA = "Assessment Criteria"
