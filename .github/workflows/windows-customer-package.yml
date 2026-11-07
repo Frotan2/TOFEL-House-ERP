@@ -37,6 +37,11 @@ jobs:
         run: |
           & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'tests/foundation/test_offline_runtime.ps1'
           if ($LASTEXITCODE -ne 0) { throw "Offline runtime tests failed." }
+      - name: Exercise isolated archive qualification with stock Windows tar
+        shell: powershell
+        run: |
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'tests/foundation/test_qualification_archive.ps1'
+          if ($LASTEXITCODE -ne 0) { throw "Isolated archive qualification tests failed." }
       - name: Parse all customer PowerShell launchers
         shell: pwsh
         run: |
