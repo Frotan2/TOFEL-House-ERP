@@ -133,8 +133,11 @@ class AttendanceCorrectionCommandTests(unittest.TestCase):
             if doctype == "Student Attendance":
                 return SimpleNamespace(**fake.attendance[name_or_filters])
             if doctype == "Course Schedule":
-                assert fieldname == "schedule_date"
-                return fake.schedule_date
+                if fieldname == "schedule_date":
+                    return fake.schedule_date
+                if fieldname == "student_group":
+                    return "GRP-A"
+                raise AssertionError(f"unexpected get_value {doctype} {fieldname}")
             raise AssertionError(f"unexpected get_value {doctype} {fieldname}")
 
         def get_all(doctype, fields=None, filters=None, limit=None, **kwargs):
@@ -220,6 +223,18 @@ class AttendanceCorrectionCommandTests(unittest.TestCase):
         from contextlib import nullcontext
         teaching_pkg._roster_read = nullcontext
         sys.modules["toefl_house.teaching"] = teaching_pkg
+        suspensions_stub = types.ModuleType(
+            "toefl_house.teaching.suspensions")
+
+        def assert_attendance_allowed(group, day, marks):
+            fake.suspension_calls.append((group, day, dict(marks)))
+            if fake.suspension_refusal is not None:
+                raise _ValidationError(fake.suspension_refusal)
+
+        suspensions_stub.assert_attendance_allowed = assert_attendance_allowed
+        sys.modules["toefl_house.teaching.suspensions"] = suspensions_stub
+        self.suspension_calls = []
+        self.suspension_refusal = None
         self.corrections = _load_real(
             "toefl_house.teaching.attendance_corrections",
             APP / "teaching/attendance_corrections.py")
@@ -310,6 +325,23 @@ class AttendanceCorrectionCommandTests(unittest.TestCase):
         self.assertEqual(self.request_doc.replacement_attendance, "ATT-NEW")
         self.assertEqual(self.request_doc.approved_by, ACTOR)
 
+    def test_approve_refused_when_the_replacement_mark_is_suspended(self):
+        self.actor_roles = {"Attendance Recorder", "Teaching Auditor"}
+        self._pending_doc()
+        self.suspension_refusal = (
+            "Student STU-1 is suspended; record Leave or Absent instead")
+        with self.assertRaises(_ValidationError) as ctx:
+            self.corrections.approve_attendance_correction(
+                "test-key-attcorr-app-susp01", "REQ-1")
+        self.assertIn("suspended", str(ctx.exception))
+        self.assertEqual(
+            self.suspension_calls,
+            [("GRP-A", self.schedule_date, {"STU-1": "Present"})])
+        self.assertNotIn("ATT-1", self.attendance_docs,
+                         "the original mark must not be cancelled first")
+        self.assertEqual(self.request_doc.status, "Requested")
+        self.assertEqual(self.inserted_attendance, [])
+
     def test_approve_refused_when_requester_is_same_actor(self):
         self.actor_roles = {"Attendance Recorder", "Teaching Auditor"}
         self._pending_doc(requested_by=ACTOR)
@@ -379,6 +411,27 @@ class AttendanceCorrectionCommandTests(unittest.TestCase):
             self.corrections.deny_attendance_correction(
                 "test-key-attcorr-deny02", "REQ-1")
         self.assertIn("approver role", str(ctx.exception))
+
+    def test_deny_refused_when_requester_is_same_actor(self):
+        # Group 1 (C-13): the deny path carries the same self-decision
+        # bar as the approve path.
+        self.actor_roles = {"Attendance Recorder", "Teaching Auditor"}
+        self._pending_doc(requested_by=ACTOR)
+        with self.assertRaises(_PermissionError) as ctx:
+            self.corrections.deny_attendance_correction(
+                "test-key-attcorr-deny-self", "REQ-1")
+        self.assertIn("cannot deny their own attendance change",
+                      str(ctx.exception))
+        self.assertEqual(self.request_doc.status, "Requested")
+
+    def test_collapsed_approver_role_is_refused(self):
+        # Group 1 (NEW-04): the approver role must differ from the
+        # Attendance Recorder command role and must not be administrative.
+        for bad in ("Attendance Recorder", "Administrator", "System Manager"):
+            with self.subTest(role=bad), self.assertRaises(ValueError):
+                self.corrections.validate_terms(bad, 7)
+        self.assertEqual(self.corrections.validate_terms("Teaching Auditor", 7),
+                         ("Teaching Auditor", 7))
 
 
 if __name__ == "__main__":

@@ -187,6 +187,26 @@ class AttendanceCorrectionPolicyTests(unittest.TestCase):
                           role="No Such Role")
         self.assertIn("Unknown approver role", str(ctx.exception))
 
+    def test_collapsed_approver_role_version_is_refused(self):
+        # Group 1 (NEW-04): appending a version whose approver role
+        # equals the Attendance Recorder command role (or is
+        # administrative) collapses the dual key and is refused.
+        self._existing_policy()
+        for bad in ("Attendance Recorder", "Administrator", "System Manager"):
+            with self.subTest(role=bad), self.assertRaises(_ValidationError):
+                self._version("test-key-attcorr-versn-collapsed",
+                              "2026-09-23", role=bad)
+
+    def test_collapsed_pre_guard_version_governs_nothing_new(self):
+        # Group 1 (NEW-04 flag): a version pinned before the guard
+        # existed is not rewritten, but it governs nothing new.
+        self._existing_policy(versions=[{
+            "effective_from": "2026-09-20", "approver_role": "Attendance Recorder",
+            "correction_window_days": 7,
+            "reason": "Pre-guard collapsed version",
+            "set_by": ACTOR, "set_on": "2026-09-19 12:00:00"}])
+        self.assertEqual(self.corrections.governing_correction_terms(), {})
+
     def test_bad_window_is_refused(self):
         self._existing_policy()
         with self.assertRaises(_ValidationError) as ctx:

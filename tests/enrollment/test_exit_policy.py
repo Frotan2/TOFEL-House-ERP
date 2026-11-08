@@ -217,6 +217,16 @@ class EnrollmentExitPolicyTests(unittest.TestCase):
                           role="No Such Role")
         self.assertIn("Unknown approver role", str(ctx.exception))
 
+    def test_collapsed_approver_role_version_is_refused(self):
+        # Group 1 (NEW-04): appending a version whose approver role
+        # equals the Enrollment Officer command role (or is
+        # administrative) collapses the dual key and is refused.
+        self._existing_policy()
+        for bad in ("Enrollment Officer", "Administrator", "System Manager"):
+            with self.subTest(role=bad), self.assertRaises(_ValidationError):
+                self._version("test-key-enrexit-versn-collapsed",
+                              "2026-09-23", role=bad)
+
     def test_version_requires_a_structured_d5_supersession_reference(self):
         self._existing_policy()
         for reference in ("", "D5", "D5-SUPERSESSION:TBD", "not a decision id"):

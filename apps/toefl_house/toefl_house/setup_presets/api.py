@@ -107,8 +107,18 @@ def _snapshot():
             duration = duration_rows[0]
             if str(duration.duration_unit).lower() in (
                     "month", "months", "solar hijri month"):
-                value = float(duration.duration_value)
-                months = int(value) if value.is_integer() else None
+                # A malformed duration row (empty/non-numeric value) is an
+                # unmeasurable level, not a preview crash: leave months
+                # None so preview_catalog flags the level "review". The
+                # same holds for a non-positive duration: the preset
+                # itself requires duration_months >= 1, so 0 or a negative
+                # value can never be a real level length.
+                try:
+                    value = float(duration.duration_value)
+                except (TypeError, ValueError):
+                    value = None
+                months = (int(value) if value is not None and value.is_integer() and value >= 1
+                          else None)
         levels[row.code] = {
             "title": row.title,
             "family": program_codes.get(row.family) or "",

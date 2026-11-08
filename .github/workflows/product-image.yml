@@ -14,6 +14,8 @@ on:
       # Release-critical fixes must qualify before integration, not first
       # discover image/runtime failures after reaching main.
       - 'fix/**'
+      # Exact-SHA qualification for held non-Oracle release candidates.
+      - 'integration/erp-non-oracle-audit-*'
     tags:
       - "v*"
     paths:

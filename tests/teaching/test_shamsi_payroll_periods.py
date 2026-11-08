@@ -83,6 +83,28 @@ class WorkedShamsiMonthPayroll(unittest.TestCase):
             self.p.worked_month_payroll(self.slips, [
                 dict(base, salary_slip="WRONG-SLIP")], "1405-07", "2026-11-15")
 
+    def test_second_submitted_slip_for_same_employee_is_refused(self):
+        # Group 1 (U-09): two submitted slips for one employee in the
+        # same worked month would double-count earned wages.
+        slips = self.slips + [
+            {"name": "SAL-1405-07-B", "employee": "TEACHER-1",
+             "docstatus": 1, "start_date": "2026-09-23",
+             "end_date": "2026-10-22", "net_pay": 500},
+        ]
+        with self.assertRaises(ValueError) as ctx:
+            self.p.worked_month_payroll(slips, [], "1405-07", "2026-11-05")
+        self.assertIn("second submitted Salary Slip", str(ctx.exception))
+
+    def test_two_employees_in_the_same_month_still_reconcile(self):
+        slips = self.slips + [
+            {"name": "SAL-1405-07-OTHER", "employee": "TEACHER-2",
+             "docstatus": 1, "start_date": "2026-09-23",
+             "end_date": "2026-10-22", "net_pay": 500},
+        ]
+        result = self.p.worked_month_payroll(slips, [], "1405-07", "2026-11-05")
+        self.assertEqual(result["earned_net"], Decimal("1500.00"))
+        self.assertEqual(len(result["salary_slips"]), 2)
+
     def test_gregorian_salary_slip_overlap_cannot_mislabel_shamsi_pay(self):
         wrong = dict(self.slips[0], start_date="2026-10-01", end_date="2026-10-31")
         with self.assertRaisesRegex(ValueError, "overlaps"):

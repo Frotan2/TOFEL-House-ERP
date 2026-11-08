@@ -183,6 +183,19 @@ class CalendarCommandTests(unittest.TestCase):
                 "calendar-create-0002", "CAL-2026", "Again", "", "", "")
         self.assertIn("already exists", str(ctx.exception))
 
+    def test_create_refuses_a_code_already_used_under_another_name(self):
+        # The duplicate check looks the code FIELD up, not the document
+        # name: a calendar whose name differs from its code still blocks
+        # a second calendar with the same code.
+        self.site.add("TH Academic Calendar", name="CAL-RENAMED",
+                      code="CAL-DUP", title="Renamed", status="Active",
+                      academic_year="2026-27", branch=None, description="",
+                      days=[])
+        with self.assertRaises(ValidationError) as ctx:
+            self.calendars.create_academic_calendar(
+                "calendar-create-dup01", "CAL-DUP", "Again", "", "", "")
+        self.assertIn("already exists", str(ctx.exception))
+
     def test_create_refuses_unknown_references(self):
         with self.assertRaises(ValidationError) as ctx:
             self.calendars.create_academic_calendar(

@@ -370,6 +370,24 @@ class CloseDriftTests(unittest.TestCase):
         self.assertEqual(len(positions), 1)
         return positions[0]
 
+    def test_stored_parent_total_diverging_from_current_closing_is_drift(self):
+        # Drawer rows still match their accounts, but the stored close
+        # total no longer equals the current ledger closing total: the
+        # close cannot be presented as balanced.
+        original_get_all = self.module.frappe.db.get_all
+
+        def get_all(doctype, **kwargs):
+            rows = original_get_all(doctype, **kwargs)
+            if doctype == self.module.DAY and rows:
+                rows = [dict(rows[0], total_expected=160.0)]
+            return rows
+
+        self.module.frappe.db.get_all = get_all
+        try:
+            self.assertTrue(self.position()["drift"])
+        finally:
+            self.module.frappe.db.get_all = original_get_all
+
     def test_exact_match_is_not_drift(self):
         self.assertFalse(self.position()["drift"])
 
@@ -1075,6 +1093,40 @@ class CommandContractTests(unittest.TestCase):
             if "naming_series" not in names:
                 broken.append(doctype.get("name") or path.parent.name)
         self.assertEqual(broken, [])
+
+
+class ResolveCompaniesScopeTests(unittest.TestCase):
+    """C-16: the default "all companies" read must not silently drop a
+    51st company from cashier_position / cashier_history."""
+
+    def companies(self, count):
+        module = load_cashier()
+        seen_limits = {}
+
+        def fake_get_all(doctype, **kwargs):
+            seen_limits[doctype] = kwargs.get("limit_page_length")
+            if doctype == "Company":
+                return [{"name": f"Company-{i:02d}"} for i in range(count)]
+            return []
+
+        module.frappe.db.get_all = fake_get_all
+        return module, seen_limits
+
+    def test_more_than_fifty_companies_raise(self):
+        module, seen_limits = self.companies(51)
+        with self.assertRaisesRegex(module.frappe.ValidationError,
+                                    "supported limit of 50"):
+            module._resolve_companies(None)
+        self.assertEqual(seen_limits["Company"], 51)
+
+    def test_fifty_companies_are_all_resolved(self):
+        module, _ = self.companies(50)
+        self.assertEqual(len(module._resolve_companies(None)), 50)
+
+    def test_explicit_company_list_is_unchanged(self):
+        module, _ = self.companies(51)
+        self.assertEqual(module._resolve_companies(["Company-00", "Company-01"]),
+                         ["Company-00", "Company-01"])
 
 
 def tearDownModule():

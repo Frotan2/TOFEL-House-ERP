@@ -16,6 +16,7 @@ from toefl_house.desk import (
     DESKS,
     LIMIT_QUEUES,
     LIMIT_TODAY,
+    count_or_unknown,
     guided_action,
     issuable_plans,
     plan_with_components,
@@ -598,17 +599,28 @@ def work():
          "owner": None},
         {"label": "Outstanding invoices",
          "definition": "Invoices posted and still owing money.",
-         "value": len(outstanding_invoices), "owner": "Finance Officer"},
+         "value": count_or_unknown(
+             "finance", INVOICE,
+             {"docstatus": 1, "outstanding_amount": (">", 0)},
+             preview=outstanding_invoices), "owner": "Finance Officer"},
         {"label": "Outstanding tuition fees",
          "definition": "Issued tuition fees still owing money.",
-         "value": len(outstanding_fees), "owner": "Finance Officer"},
+         "value": count_or_unknown(
+             "finance", FEES,
+             {"docstatus": 1, "outstanding_amount": (">", 0)},
+             preview=outstanding_fees), "owner": "Finance Officer"},
         {"label": "Corrections pending",
          "definition": "Correction requests (invoice or tuition fee) in Requested status.",
-         "value": sum(1 for row in corrections if row["status"] == "Requested"),
+         "value": count_or_unknown(
+             "finance", CORRECTION, {"status": "Requested"},
+             preview=[row for row in corrections
+                      if row["status"] == "Requested"]),
          "owner": "Finance Officer"},
         {"label": "Enrollments awaiting billing",
-         "definition": "Confirmed enrollments that no issued bill covers; cancelled bills do not count.",
-         "value": len(awaiting_billing), "owner": "Finance Officer"},
+         "definition": "Confirmed enrollments that no issued bill covers; cancelled bills do not count. "
+                        "Unavailable when the scoped billing register exceeds the bounded read.",
+         "value": len(awaiting_billing) if billing_read_complete else "—",
+         "owner": "Finance Officer"},
         {"label": "Installments",
          "definition": ("The governing billing policy's installment terms. The "
                         "Course Owner decides whether a configured price may be "
@@ -617,7 +629,8 @@ def work():
          "owner": "Course Owner"},
         {"label": "Teaching assignments on file",
          "definition": "Instructor skill assignments. The contract determines one-off or monthly earnings in native payroll; this desk does not calculate pay.",
-         "value": len(assignments), "owner": "Finance Officer"},
+         "value": count_or_unknown("finance", ASSIGNMENT, preview=assignments),
+         "owner": "Finance Officer"},
     ]
 
     def money_item(row, kind):

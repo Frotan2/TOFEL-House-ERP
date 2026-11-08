@@ -287,6 +287,18 @@ class DesktopContract(unittest.TestCase):
         self.assertIn("private-files-enc.tar", body)
         self.assertIn("Get-BackupFileHash", body)
         self.assertIn("SHA256", body)
+        # Windows emits the same authenticated payload schema as Python and
+        # verifies it before trusting a previously written receipt.
+        self.assertIn("function Get-BackupReceiptAuthentication", body)
+        self.assertIn("function Assert-BackupReceiptAuthentication", body)
+        self.assertIn("PBKDF2-HMAC-SHA256", body)
+        self.assertIn("HMAC-SHA256", body)
+        self.assertIn("$existingBackupKey = Get-SiteBackupEncryptionKey", body)
+        existing_auth_check = body.index("Assert-BackupReceiptAuthentication -Receipt $receipt -BackupKey $existingBackupKey")
+        existing_receipt_policy_check = body.index("if ($receipt.schema_version -ne 1", existing_auth_check)
+        self.assertLess(existing_auth_check, existing_receipt_policy_check)
+        self.assertIn("$different = $different -bor ($expectedBytes[$i] -bxor $actualBytes[$i])", body)
+        self.assertIn("if ($different -ne 0)", body)
         self.assertIn("manifest.json", body)
         self.assertIn("$manifest.source_site -ne $site", body)
         self.assertIn("function Test-ExactBackupSetFiles", body)
@@ -455,7 +467,8 @@ class LineEndingContract(unittest.TestCase):
             "apps/toefl_house", "apps/foundation_security",
             "docs/owner-decisions.json",
             "product/bootstrap.py", "product/activate.py", "product/restore.py",
-            "product/backup.py", "product/native_gpg.py", "product/native_db.py",
+            "product/backup.py",
+            "product/native_gpg.py", "product/native_db.py",
             "product/wsgi.py", "product/entrypoint.sh", "product/perf_baseline.py",
             "product/web.cjs", "product/realtime.cjs",
             # Signed update engine + its container entrypoint (Issue #40).
@@ -1204,6 +1217,19 @@ class BootstrapLogicContract(unittest.TestCase):
         body = text[text.index("def bootstrap("):]
         self.assertLess(body.index("seed_sites()"), body.index("run_bench("))
         self.assertIn("/build/sites-seed/", (PRODUCT / "app.Dockerfile").read_text())
+
+    def test_seed_file_is_atomic_when_host_lacks_fchmod(self):
+        # Windows Python does not expose os.fchmod. Exercise the same
+        # supported fallback on Linux without changing production behavior.
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "apps.txt"
+            with patch.object(bootstrap.os, "fchmod", None, create=True):
+                bootstrap._seed_file(target, b"synthetic apps", mode=0o644)
+            self.assertEqual(target.read_bytes(), b"synthetic apps")
+            self.assertEqual(list(Path(tmp).glob("*.tmp")), [])
+            self.assertEqual(list(Path(tmp).glob(".*.tmp")), [])
 
     def test_readiness_waits_require_a_successful_page(self):
         # Readiness must never accept an HTTP error page. Install uses a

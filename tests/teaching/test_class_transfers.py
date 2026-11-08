@@ -345,6 +345,24 @@ class ApprovalTests(TransferTestBase):
         self.assertEqual(result["preserved"]["attendance_in_source_class"][
                              "count_total_for_student"], 1)
 
+    def test_source_class_count_excludes_other_classes_attendance(self):
+        # A second mark in a different class must not inflate the
+        # source-class count, while the honest per-student total grows.
+        self.ops.seed_session(name="CS-OTHER", group="GRP-OTHER",
+                              date="2026-09-15")
+        self.site.add("Student Attendance", student="STU-1",
+                      course_schedule="CS-OTHER", status="Present",
+                      docstatus=1)
+        result = self.request()
+        self.assertEqual(result["preserved"]["attendance_in_source_class"], 1)
+        stored = self.site.get("TH Class Transfer", result["name"])
+        preserved = json.loads(stored["preserved_json"])
+        self.assertEqual(
+            preserved["attendance_in_source_class"]["count"], 1)
+        self.assertEqual(
+            preserved["attendance_in_source_class"]["count_total_for_student"],
+            2)
+
     def test_approving_twice_or_after_a_denial_is_refused(self):
         transfer = self.request()["name"]
         self.ops.login(APPROVER)

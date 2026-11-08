@@ -855,7 +855,7 @@ class D3LifecycleTests(unittest.TestCase):
     ROLES = {"Finance Officer", "Finance Manager"}
 
     def _seed_roles(self, fake):
-        for role in ("Finance Officer", "Finance Manager"):
+        for role in ("Finance Officer", "Finance Manager", "Accounts User"):
             fake.store.setdefault("Role", {})[role] = {"name": role}
 
     def _fee(self, fake, name, total, posting):
@@ -867,6 +867,12 @@ class D3LifecycleTests(unittest.TestCase):
             "name": "TOEFL House",
         }
         fee = _Doc(fake, "Fees", {"name": name, "grand_total": total,
+                                  # Group 1 (C-01): model a genuinely unpaid
+                                  # native Fees — outstanding equals the
+                                  # total — instead of the insert default
+                                  # (components sum, 0 here), which would
+                                  # describe a fully-paid fee.
+                                  "outstanding_amount": total,
                                   "company": "TOEFL House",
                                   "posting_date": posting})
         fee.insert()
@@ -919,8 +925,11 @@ class D3LifecycleTests(unittest.TestCase):
                     "Window beyond the guard")
             # The second version supersedes: the predecessor is closed,
             # never rewritten.
+            # Group 1 (NEW-04): the second version's approver role must
+            # differ from the Finance Officer command role; the old test
+            # used the collapsed role itself.
             v2 = corrections.configure_correction_policy(
-                "V" * 23 + "8", "Finance Officer", 0, "2026-09-17",
+                "V" * 23 + "8", "Accounts User", 0, "2026-09-17",
                 "Same-day window from today")
             v1_after = fake.store["TH Correction Policy"][v1["name"]]
             self.assertEqual(v1_after.get("status"), "Retired")
@@ -945,7 +954,7 @@ class D3LifecycleTests(unittest.TestCase):
                 "N" * 23 + "2", fee_old.name, "Stale fee under v1", 200.0)
             self.assertEqual(req_old["correction_policy"], v1["name"])
             corrections.configure_correction_policy(
-                "N" * 23 + "3", "Finance Officer", 0, "2026-09-17",
+                "N" * 23 + "3", "Accounts User", 0, "2026-09-17",
                 "Same-day window from today")
             req_new = corrections.request_fees_correction(
                 "N" * 23 + "4", fee_new.name, "Fresh fee under v2", 300.0)
@@ -1011,6 +1020,20 @@ def _foundation():
     return foundation
 
 
+def _seed_submitted_formal_scale(fake):
+    """Native-like scale fixture with real link-time interval evidence."""
+    fake.store.setdefault("Grading Scale", {})["GS-1"] = {
+        "name": "GS-1", "docstatus": 1,
+        "description": "Owner-approved scale (formal scope). Reason: fixture"}
+    intervals = fake.store.setdefault("Grading Scale Interval", {})
+    intervals["GS-1-A"] = {
+        "parent": "GS-1", "grade_code": "A", "threshold": 90}
+    intervals["GS-1-B"] = {
+        "parent": "GS-1", "grade_code": "B", "threshold": 60}
+    intervals["GS-1-F"] = {
+        "parent": "GS-1", "grade_code": "F", "threshold": 0}
+
+
 class D1LifecycleTests(unittest.TestCase):
     """Lifecycle proof for the D1 assessment-policy reference structure.
 
@@ -1024,7 +1047,7 @@ class D1LifecycleTests(unittest.TestCase):
     def _setup(self, academic, fake):
         academic.create_program("SETUP-PROGRAM-0001", "GEN-ENG",
                                 "General English", "")
-        fake.store.setdefault("Grading Scale", {})["GS-1"] = {"name": "GS-1"}
+        _seed_submitted_formal_scale(fake)
         return academic, fake
 
     def _events(self, fake):
@@ -1160,6 +1183,122 @@ class D1LifecycleTests(unittest.TestCase):
             policy_events = [event for event in self._events(fake)
                              if event["target"] == "ASM-GEN"]
             self.assertEqual(foundation.verify_chain(policy_events), 4)
+
+    def test_policy_link_rejects_cross_scope_scale_even_when_it_exists(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.create_assessment_policy(
+                "SCOPE-FORMAL-POL-0001", "GEN-ENG", "ASM-GEN",
+                "General assessment", "")
+            fake.store["Grading Scale"]["GS-1"]["description"] = (
+                "Owner-approved scale (specialist scope). Reason: test")
+            with self.assertRaisesRegex(fake.ValidationError, "scope"):
+                academic.set_assessment_policy_version(
+                    "SCOPE-FORMAL-VER-0001", "ASM-GEN", "2026-01-01",
+                    "Refuse specialist scale in formal policy",
+                    grading_scale="GS-1")
+            self.assertEqual(
+                len(fake.store["TH Assessment Policy"]["ASM-GEN"].get("versions") or []),
+                0)
+
+            academic.create_program(
+                "SCOPE-PROGRAM-0001", "TOEFL-PREP", "TOEFL Preparation", "")
+            academic.create_assessment_policy(
+                "SCOPE-SPECIAL-POL-0001", "TOEFL-PREP", "ASM-TOEFL",
+                "TOEFL progress", "")
+            fake.store["Grading Scale"]["GS-1"]["description"] = (
+                "Owner-approved scale (formal scope). Reason: test")
+            with self.assertRaisesRegex(fake.ValidationError, "scope"):
+                academic.set_assessment_policy_version(
+                    "SCOPE-SPECIAL-VER-0001", "ASM-TOEFL", "2026-01-01",
+                    "Refuse formal pass/fail scale in specialist policy",
+                    grading_scale="GS-1")
+            fake.store["Grading Scale"]["GS-1"]["description"] = (
+                "Owner-approved scale (specialist scope). Reason: test")
+            result = academic.set_assessment_policy_version(
+                "SCOPE-SPECIAL-VER-0002", "ASM-TOEFL", "2026-01-01",
+                "Approve specialist progress scale", grading_scale="GS-1")
+            self.assertEqual(result["version_count"], 1)
+
+    def test_specialist_cannot_add_pass_fail_promotion_or_formal_retakes(self):
+        import json
+        for academic, fake in _load_module({"Course Owner"}):
+            academic.create_program(
+                "SPECIAL-FAMILY-0001", "TOEFL-PREP", "TOEFL Preparation", "")
+            academic.create_assessment_policy(
+                "SPECIAL-POLICY-0001", "TOEFL-PREP",
+                "ASM-TOEFL", "TOEFL progress", "")
+
+            # Even a full, syntactically valid initial facet payload must
+            # fail if it sneaks in an overall pass threshold.
+            bad_facets = {facet: None for facet in academic.rules.ASSESSMENT_FACETS}
+            bad_facets["pass_rules"] = {
+                "components": [],
+                "overall": {"kind": "percent", "value": 60}}
+            with self.assertRaisesRegex(fake.ValidationError, "specialist"):
+                academic.set_assessment_policy_version(
+                    "SPECIAL-BADINITIAL-01", "ASM-TOEFL", "2026-01-01",
+                    "Reject pass/fail initial template",
+                    initial_facets=bad_facets)
+
+            academic.set_assessment_policy_version(
+                "SPECIAL-VERSION-00001", "ASM-TOEFL", "2026-01-01",
+                "Approved progress-only version")
+            fake.store.setdefault("Role", {})["Academic Manager"] = {
+                "name": "Academic Manager"}
+            bad_commands = (
+                ("set_assessment_pass_rules", {
+                    "pass_rules": json.dumps({
+                        "components": [],
+                        "overall": {"kind": "percent", "value": 60}})}),
+                ("set_assessment_progression", {
+                    "progression": json.dumps({
+                        "target": "next",
+                        "requires": [{"kind": "approval",
+                                      "role": "Academic Manager"}]})}),
+                ("set_assessment_retakes", {
+                    "retakes": json.dumps({
+                        "max_attempts": 2, "wait_days": 7,
+                        "scope": "full", "governing": "best"})}),
+            )
+            for index, (command, kwargs) in enumerate(bad_commands):
+                with self.subTest(command=command), self.assertRaisesRegex(
+                        fake.ValidationError, "specialist"):
+                    getattr(academic, command)(
+                        f"SPECIAL-BAD-FACET-{index:02d}", "ASM-TOEFL",
+                        "2027-01-01", "Reject unsupported grading", **kwargs)
+            policy = fake.store["TH Assessment Policy"]["ASM-TOEFL"]
+            self.assertEqual(len(policy.get("versions") or []), 1)
+
+            # Earlier corrupted evidence must not be signed as validated
+            # merely because all three forbidden facets are well-formed.
+            row = policy.get("versions")[0]
+            row["pass_rules"] = json.dumps({
+                "components": [], "overall": {"kind": "percent", "value": 60}})
+            with self.assertRaisesRegex(fake.ValidationError, "specialist"):
+                academic.validate_assessment_policy(
+                    "SPECIAL-VALIDATE-0001", "ASM-TOEFL")
+
+    def test_native_scale_must_be_submitted_and_carry_formal_sixty(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.create_assessment_policy(
+                "NATIVE-SCALE-POL-0001", "GEN-ENG", "ASM-GEN",
+                "General assessment", "")
+            fake.store["Grading Scale"]["GS-1"]["docstatus"] = 0
+            with self.assertRaisesRegex(fake.ValidationError, "submitted"):
+                academic.set_assessment_policy_version(
+                    "NATIVE-SCALE-DRAFT-01", "ASM-GEN", "2026-01-01",
+                    "Reject draft native scale", grading_scale="GS-1")
+            fake.store["Grading Scale"]["GS-1"]["docstatus"] = 1
+            del fake.store["Grading Scale Interval"]["GS-1-B"]
+            with self.assertRaisesRegex(fake.ValidationError, "60"):
+                academic.set_assessment_policy_version(
+                    "NATIVE-SCALE-NO60-01", "ASM-GEN", "2026-01-01",
+                    "Reject scale with no sixty percent", grading_scale="GS-1")
+            self.assertEqual(
+                len(fake.store["TH Assessment Policy"]["ASM-GEN"].get("versions") or []),
+                0)
 
     def test_backdated_same_day_empty_reason_and_unknown_carrier_refuse(self):
         for academic, fake in _load_module({"Course Owner"}):
@@ -1384,8 +1523,7 @@ class CommandOnlyBoundaryTests(unittest.TestCase):
         for academic, fake in _load_module({"Course Owner"}):
             academic.create_program("SETUP-PROGRAM-0001", "GEN-ENG",
                                     "General English", "")
-            fake.store.setdefault("Grading Scale", {})["GS-1"] = {
-                "name": "GS-1"}
+            _seed_submitted_formal_scale(fake)
             for loaded in self._controllers():
                 for _hooked in self._hooked_writes(loaded):
                     academic.create_assessment_policy(
@@ -1519,10 +1657,7 @@ class D1FacetLifecycleTests(unittest.TestCase):
                               "Level One", 1, 2, "Month", "2026-01-01")
         academic.create_level("SETUP-LEVEL-000002", "GEN-ENG", "LV-2",
                               "Level Two", 2, 2, "Month", "2026-01-01")
-        fake.store.setdefault("Grading Scale", {})["GS-1"] = {"name": "GS-1"}
-        intervals = fake.store.setdefault("Grading Scale Interval", {})
-        intervals["GS-1-A"] = {"parent": "GS-1", "grade_code": "A"}
-        intervals["GS-1-B"] = {"parent": "GS-1", "grade_code": "B"}
+        _seed_submitted_formal_scale(fake)
         fake.store.setdefault("Assessment Criteria", {})["Speaking"] = {
             "name": "Speaking"}
         fake.store.setdefault("Role", {})["Academic Manager"] = {

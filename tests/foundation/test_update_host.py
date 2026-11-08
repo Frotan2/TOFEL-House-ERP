@@ -182,7 +182,9 @@ class LiveHostTests(unittest.TestCase):
     def test_changed_site_configuration_is_not_authorized(self):
         transaction = self.prepare()
         path = self.fixture.product_root / "data/sites" / host.SITE / "site_config.json"
-        path.write_text('{"db_name":"different-test-database"}')
+        config = json.loads(path.read_text(encoding="utf-8"))
+        config["db_name"] = "different-test-database"
+        path.write_text(json.dumps(config), encoding="utf-8")
         self.assert_refused_without_migration(transaction, "apply.host_unsafe")
 
     def test_missing_volume_or_docker_failure_does_not_fall_back_to_request(self):

@@ -266,6 +266,41 @@ class InvoiceDiscountBoundaryTests(unittest.TestCase):
                          discount_amount=20.0)))
 
 
+class WarehouseCoverSeamTests(unittest.TestCase):
+    """NEW CHECK (Area B): the sale seam must count only the selling
+    warehouse's bin. The pure stock_cover_ok rule is already pinned per
+    warehouse; this pins the seam that builds its inputs from Bin rows."""
+
+    def setUp(self):
+        db = FakeDB()
+        db.add("Item", name="SYN-BOOK", stock_uom="Nos")
+        db.add("Item Price", item_code="SYN-BOOK",
+               price_list="Standard Selling", selling=1, currency="AFN",
+               price_list_rate=300.0, customer=None, uom="Nos")
+        # The selling warehouse is empty; another warehouse is well stocked.
+        db.add("Bin", item_code="SYN-BOOK", warehouse="SYN-WH-A",
+               actual_qty=0.0)
+        db.add("Bin", item_code="SYN-BOOK", warehouse="SYN-WH-B",
+               actual_qty=20.0)
+        self.books, _, _ = load_modules(db)
+
+    def _invoice(self, warehouse):
+        return Doc(
+            selling_price_list="Standard Selling", currency="AFN",
+            customer="SYN-STUDENT", discount_amount=0.0,
+            additional_discount_percentage=0.0, posting_date="2026-10-27",
+            items=[Doc(item_code="SYN-BOOK", warehouse=warehouse,
+                       qty=2.0, rate=300.0, pricing_rules="[]",
+                       conversion_factor=1.0)],
+        )
+
+    def test_stock_in_another_warehouse_never_covers_this_sale(self):
+        self.assertFalse(self.books.book_sale_terms_ok(self._invoice("SYN-WH-A")))
+
+    def test_stock_in_the_selling_warehouse_covers_the_sale(self):
+        self.assertTrue(self.books.book_sale_terms_ok(self._invoice("SYN-WH-B")))
+
+
 def invoice_db():
     """SYN-SALE: 2 books @300 from WH-A, 1 book @300 from WH-B (=900)."""
     db = FakeDB()

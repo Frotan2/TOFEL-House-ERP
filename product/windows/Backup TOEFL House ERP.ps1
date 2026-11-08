@@ -213,6 +213,135 @@ function Get-ManifestSha256 {
     return (Get-BackupFileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Get-SiteBackupEncryptionKey {
+    # Read the existing native Frappe key through an ephemeral container command.
+    # It is captured in memory only; it is never placed in args, transcript,
+    # receipt or diagnostic output.
+    $code = "import json; p='/home/frappe/bench/sites/$site/site_config.json'; f=open(p, encoding='utf-8'); print(json.load(f).get('backup_encryption_key',''))"
+    $captured = Invoke-ComposeCapture @("exec", "-T", "web",
+        "/home/frappe/bench/env/bin/python", "-c", $code)
+    $lines = @($captured.Output | Where-Object { $_ -ne "" })
+    if ($captured.ExitCode -ne 0 -or $lines.Count -ne 1) {
+        throw "The native backup key is unavailable for receipt authentication."
+    }
+    $key = [string]$lines[0]
+    if ($key.Length -lt 1 -or $key.Length -gt 4096 -or
+        $key -match "[^\x20-\x7E]" -or $key -match "^\s|\s$|\r|\n") {
+        throw "The native backup key is invalid for receipt authentication."
+    }
+    return $key
+}
+
+function Get-BackupReceiptAuthentication {
+    param([System.Collections.IDictionary]$Payload, [string]$BackupKey)
+    $payloadJson = ConvertTo-Json -InputObject ([pscustomobject]$Payload) -Depth 10 -Compress
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    $payloadBytes = $utf8.GetBytes($payloadJson)
+    if ($payloadBytes.Length -gt 48KB) {
+        throw "The backup receipt payload is unexpectedly large."
+    }
+    $salt = New-Object byte[] 16
+    $secretBytes = $utf8.GetBytes($BackupKey)
+    $derivedKey = $null
+    $derive = $null
+    $hmac = $null
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($salt)
+        $derive = [Security.Cryptography.Rfc2898DeriveBytes]::new(
+            $secretBytes, $salt, 600000,
+            [Security.Cryptography.HashAlgorithmName]::SHA256)
+        $derivedKey = $derive.GetBytes(32)
+        $hmac = New-Object System.Security.Cryptography.HMACSHA256(,$derivedKey)
+        $mac = $hmac.ComputeHash($payloadBytes)
+        return [ordered]@{
+            schema = 1
+            algorithm = "HMAC-SHA256"
+            kdf = "PBKDF2-HMAC-SHA256"
+            iterations = 600000
+            salt_b64 = [Convert]::ToBase64String($salt)
+            payload_b64 = [Convert]::ToBase64String($payloadBytes)
+            mac_hex = [BitConverter]::ToString($mac).Replace("-", "").ToLowerInvariant()
+        }
+    }
+    finally {
+        if ($hmac) { $hmac.Dispose() }
+        if ($derive) { $derive.Dispose() }
+        if ($rng) { $rng.Dispose() }
+        if ($secretBytes) { [Array]::Clear($secretBytes, 0, $secretBytes.Length) }
+        if ($derivedKey) { [Array]::Clear($derivedKey, 0, $derivedKey.Length) }
+        if ($payloadBytes) { [Array]::Clear($payloadBytes, 0, $payloadBytes.Length) }
+    }
+}
+
+function Assert-BackupReceiptAuthentication {
+    param($Receipt, [string]$BackupKey)
+    $auth = $Receipt.authentication
+    if (-not $auth -or $auth.schema -ne 1 -or
+        [string]$auth.algorithm -cne "HMAC-SHA256" -or
+        [string]$auth.kdf -cne "PBKDF2-HMAC-SHA256" -or
+        $auth.iterations -ne 600000 -or
+        -not [regex]::IsMatch([string]$auth.mac_hex, "^[a-f0-9]{64}$")) {
+        throw "The backup receipt has no supported cryptographic authenticator."
+    }
+    try {
+        $salt = [Convert]::FromBase64String([string]$auth.salt_b64)
+        $payloadBytes = [Convert]::FromBase64String([string]$auth.payload_b64)
+        if ($salt.Length -ne 16 -or $payloadBytes.Length -le 0 -or
+            $payloadBytes.Length -gt 48KB) { throw "invalid receipt authenticator" }
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+        $secretBytes = $utf8.GetBytes($BackupKey)
+        $derive = [Security.Cryptography.Rfc2898DeriveBytes]::new(
+            $secretBytes, $salt, 600000,
+            [Security.Cryptography.HashAlgorithmName]::SHA256)
+        $derivedKey = $derive.GetBytes(32)
+        $hmac = New-Object System.Security.Cryptography.HMACSHA256(,$derivedKey)
+        $actual = [BitConverter]::ToString($hmac.ComputeHash($payloadBytes)).Replace("-", "").ToLowerInvariant()
+        $expectedBytes = [Text.Encoding]::ASCII.GetBytes([string]$auth.mac_hex)
+        $actualBytes = [Text.Encoding]::ASCII.GetBytes($actual)
+        $different = $expectedBytes.Length -bxor $actualBytes.Length
+        for ($i = 0; $i -lt [Math]::Min($expectedBytes.Length, $actualBytes.Length); $i++) {
+            $different = $different -bor ($expectedBytes[$i] -bxor $actualBytes[$i])
+        }
+        if ($different -ne 0) { throw "receipt authentication mismatch" }
+
+        $payloadJson = $utf8.GetString($payloadBytes)
+        $signed = $payloadJson | ConvertFrom-Json -ErrorAction Stop
+        $receiptFields = [ordered]@{}
+        foreach ($property in $Receipt.PSObject.Properties) {
+            if ($property.Name -cne "authentication") {
+                $receiptFields[$property.Name] = $property.Value
+            }
+        }
+        $signedNames = @($signed.PSObject.Properties.Name | Sort-Object)
+        $receiptNames = @($receiptFields.Keys | Sort-Object)
+        if (($signedNames -join "|") -cne ($receiptNames -join "|")) {
+            throw "receipt fields differ from authenticated payload"
+        }
+        foreach ($name in $receiptNames) {
+            if ($name -ceq "created_utc") {
+                $left = [DateTimeOffset]::Parse([string]$signed.$name).UtcTicks
+                $right = [DateTimeOffset]::Parse([string]$receiptFields[$name]).UtcTicks
+                if ($left -ne $right) { throw "receipt timestamp differs from authenticated payload" }
+            } else {
+                $left = ConvertTo-Json -InputObject $signed.$name -Depth 10 -Compress
+                $right = ConvertTo-Json -InputObject $receiptFields[$name] -Depth 10 -Compress
+                if ($left -cne $right) { throw "receipt data differs from authenticated payload" }
+            }
+        }
+    }
+    catch {
+        throw "The backup receipt authenticity could not be verified."
+    }
+    finally {
+        if ($hmac) { $hmac.Dispose() }
+        if ($derive) { $derive.Dispose() }
+        if ($secretBytes) { [Array]::Clear($secretBytes, 0, $secretBytes.Length) }
+        if ($derivedKey) { [Array]::Clear($derivedKey, 0, $derivedKey.Length) }
+        if ($payloadBytes) { [Array]::Clear($payloadBytes, 0, $payloadBytes.Length) }
+    }
+}
+
 function Test-ExactBackupSetFiles {
     param([System.IO.DirectoryInfo]$Directory, [string[]]$ArtifactNames)
     if (($Directory.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
@@ -327,6 +456,9 @@ function Verify-ExistingBackup {
         throw "No verified backup receipt exists. Run Backup TOEFL House ERP.cmd first."
     }
     $receipt = Get-Content -LiteralPath $receiptPath -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
+    $existingBackupKey = Get-SiteBackupEncryptionKey
+    Assert-BackupReceiptAuthentication -Receipt $receipt -BackupKey $existingBackupKey
+    $existingBackupKey = $null
     if ($receipt.schema_version -ne 1 -or
         $receipt.source_site -ne $site -or
         $receipt.encrypted -ne $true -or
@@ -605,6 +737,10 @@ try {
         if (-not $siteConfigObject.backup_encryption_key) {
             throw "Backup refused: the site-config recovery artifact has no native Frappe backup_encryption_key."
         }
+        $backupEncryptionKey = [string]$siteConfigObject.backup_encryption_key
+        if ($backupEncryptionKey.Length -gt 4096 -or $backupEncryptionKey -match "[^\x20-\x7E]") {
+            throw "Backup refused: the native Frappe backup key cannot authenticate the receipt safely."
+        }
         $siteConfigObject = $null
         $siteConfigText = $null
 
@@ -826,7 +962,7 @@ try {
 
         $manifestPath = Join-Path $setRoot "manifest.json"
         $manifestHash = Get-ManifestSha256 $manifestPath
-        $receipt = [pscustomobject]@{
+        $receiptPayload = [ordered]@{
             schema_version = 1
             source_site = $site
             source_drive = $sourceDrive
@@ -847,6 +983,10 @@ try {
             manifest_sha256 = $manifestHash
             artifacts = $artifacts
         }
+        $receipt = [pscustomobject]$receiptPayload
+        $authentication = Get-BackupReceiptAuthentication `
+            -Payload $receiptPayload -BackupKey $backupEncryptionKey
+        $receipt | Add-Member -NotePropertyName authentication -NotePropertyValue $authentication
         Write-BackupReceipt $receipt
         $backupCompleted = $true
         Write-Host ""
@@ -893,6 +1033,8 @@ finally {
     if ($mutexHeld) {
         try { $mutex.ReleaseMutex() } catch { }
     }
+    $backupEncryptionKey = $null
+    $existingBackupKey = $null
     $mutex.Dispose()
 }
 exit $exitCode

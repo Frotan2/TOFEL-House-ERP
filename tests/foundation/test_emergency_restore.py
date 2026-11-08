@@ -8,7 +8,9 @@ production site. All tests use synthetic data in disposable directories and
 mock the native Frappe restore itself; no live site is touched.
 """
 import base64
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 import importlib.util
 import io
 import json
@@ -28,6 +30,40 @@ if str(PRODUCT_PATH) not in sys.path:
 
 OPENSSL = shutil.which("openssl")
 SECRET_KEY = "synthetic-native-backup-key"
+
+
+def _tar_header_bytes() -> bytes:
+    """A minimal 512-byte tar header carrying the ustar magic."""
+    header = bytearray(512)
+    header[257:262] = b"ustar"
+    header[263:265] = b"00"
+    return bytes(header)
+
+
+class _FakeDecryptStdin:
+    def write(self, data: bytes) -> int:
+        return len(data)
+
+    def close(self) -> None:
+        pass
+
+
+class _FakeDecryptPopen:
+    """Stand-in for GPG decrypt probes: key and tar header always verify.
+
+    The product probe streams plaintext and discards it, so the fake only
+    needs a plausible first block; failure modes are covered by dedicated
+    probe tests, not by this authorization harness.
+    """
+
+    def __init__(self, arguments, **kwargs):
+        self.arguments = arguments
+        self.stdin = _FakeDecryptStdin()
+        self.stdout = io.BytesIO(_tar_header_bytes())
+        self.stderr = io.BytesIO(b"")
+
+    def wait(self) -> int:
+        return 0
 SECRET_DB = "synthetic-mariadb-root-password"
 SECRET_ADMIN = "synthetic-owner-admin-password"
 
@@ -128,6 +164,28 @@ class EmergencyRestoreTests(unittest.TestCase):
             for role, suffix in self.restore.BACKUP_SUFFIXES.items():
                 (backup_dir / f"{backup_set}{suffix}").write_bytes(
                     f"synthetic {backup_set} {role}".encode())
+        # The pre-restore set carries a fresh, hash-bound receipt: the
+        # production restore gate trusts the receipt, never the files'
+        # mtimes (Group C refinement of the 24h recency check).
+        self._write_receipt(self.current_set)
+
+    def _write_receipt(self, backup_set, *, created_utc=None):
+        backup_dir = self.sites / self.site / "private" / "backups"
+        paths = self.restore._verified_backup_paths(self.site, backup_set)
+        hashes = self.restore._artifact_hashes(paths)
+        created = created_utc or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        receipt = {
+            "schema_version": 2, "backup_set": backup_set,
+            "created_utc": created, "encrypted": True, "verified": True,
+            "artifacts": [
+                {"role": role, "name": paths[role].name,
+                 "sha256": hashes[role], "bytes": paths[role].stat().st_size}
+                for role in self.restore.BACKUP_SUFFIXES],
+        }
+        from native_gpg import authenticate_backup_receipt
+        authenticate_backup_receipt(receipt, SECRET_KEY)
+        (backup_dir / f"{backup_set}-receipt.json").write_text(
+            json.dumps(receipt), encoding="utf-8")
 
     def _hashes(self, backup_set):
         paths = self.restore._verified_backup_paths(self.site, backup_set)
@@ -135,10 +193,14 @@ class EmergencyRestoreTests(unittest.TestCase):
 
     def _authorization(self, *, request_id="a" * 32, approvals=None,
                        hashes=None, site=None, backup_set=None,
+                       pre_restore_backup_set=None, schema_version=2,
                        issued="2026-10-28T00:00:00Z",
                        expires="2026-11-28T00:00:00Z", signers=None):
+        pre_restore_paths = self.restore._verified_backup_paths(
+            self.site, self.current_set)
+        receipt = self.restore._backup_receipt_path(pre_restore_paths, self.current_set)
         document = {
-            "schema_version": 1, "document_type": "emergency-restore",
+            "schema_version": schema_version, "document_type": "emergency-restore",
             "site": site or self.site, "target": "production",
             "backup_set": backup_set or self.target_set,
             "backup_sha256": hashes if hashes is not None
@@ -153,6 +215,10 @@ class EmergencyRestoreTests(unittest.TestCase):
                  "approver_role": "general-manager"},
             ],
         }
+        if schema_version == 2:
+            document["pre_restore_backup_set"] = pre_restore_backup_set or self.current_set
+            document["pre_restore_backup_receipt_sha256"] = hashlib.sha256(
+                receipt.read_bytes()).hexdigest()
         raw = self.restore._canonical_document_bytes(document)
         signers = signers if signers is not None else (self.owner, self.manager)
         signatures = [base64.b64encode(key.sign(raw)).decode("ascii")
@@ -163,16 +229,22 @@ class EmergencyRestoreTests(unittest.TestCase):
                         pre_restore_backup_set=None, target="production"):
         document, sig1, sig2 = self._authorization(
             **(authorization_kwargs or {}))
-        with patch.object(self.restore, "_run_native_restore") as native:
-            if mock is not None:
-                native.side_effect = mock
-            self.restore._native_restore(
-                self.site, self.target_set, SECRET_KEY, SECRET_DB, SECRET_ADMIN,
-                target=target,
-                pre_restore_backup_set=self.current_set
-                if pre_restore_backup_set is None else pre_restore_backup_set,
-                authorization=document, signature_1=sig1, signature_2=sig2)
-            return native
+        import native_gpg
+        # Scope the decrypt-probe patch to the restore call only: the
+        # shared subprocess.Popen attribute is also what subprocess.run
+        # uses, and later openssl signing in the same test must keep the
+        # real Popen.
+        with patch.object(native_gpg.subprocess, "Popen", _FakeDecryptPopen):
+            with patch.object(self.restore, "_run_native_restore") as native:
+                if mock is not None:
+                    native.side_effect = mock
+                self.restore._native_restore(
+                    self.site, self.target_set, SECRET_KEY, SECRET_DB, SECRET_ADMIN,
+                    target=target,
+                    pre_restore_backup_set=self.current_set
+                    if pre_restore_backup_set is None else pre_restore_backup_set,
+                    authorization=document, signature_1=sig1, signature_2=sig2)
+                return native
 
     def _state_dir(self):
         return self.state / self.site
@@ -339,6 +411,32 @@ class EmergencyRestoreTests(unittest.TestCase):
                     pre_restore_backup_set=self.current_set,
                     authorization=document, signature_1=sig1, signature_2=sig2)
         native.assert_not_called()
+
+    def test_rewritten_preservation_timestamp_invalidates_the_authorization(self):
+        document, sig1, sig2 = self._authorization()
+        created = datetime.now(timezone.utc) - timedelta(hours=1)
+        self._write_receipt(self.current_set, created_utc=created.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        with patch.object(self.restore, "_run_native_restore") as native:
+            with self.assertRaisesRegex(
+                    self.restore.RestoreInputError, "receipt does not match the signed authorization"):
+                self.restore._native_restore(
+                    self.site, self.target_set, SECRET_KEY, SECRET_DB, SECRET_ADMIN,
+                    pre_restore_backup_set=self.current_set,
+                    authorization=document, signature_1=sig1, signature_2=sig2)
+        native.assert_not_called()
+        self.assertTrue((self._state_dir() / ("a" * 32 + ".json")).exists())
+        self.assertFalse((self._state_dir() / "in-progress.json").exists())
+        self.assertFalse((self._state_dir() / "audit.jsonl").exists())
+
+    def test_authorization_for_another_preservation_set_is_refused(self):
+        with self.assertRaisesRegex(
+                self.restore.RestoreInputError, "does not match the pre-restore backup set"):
+            self._run_authorized(authorization_kwargs={
+                "pre_restore_backup_set": "20261028-other"})
+
+    def test_old_authorization_without_signed_preservation_receipt_is_refused(self):
+        with self.assertRaises(self.restore.RestoreInputError):
+            self._run_authorized(authorization_kwargs={"schema_version": 1})
 
     def test_altered_authorization_document_invalidates_signatures(self):
         document, sig1, sig2 = self._authorization()

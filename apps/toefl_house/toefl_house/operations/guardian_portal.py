@@ -36,11 +36,165 @@ GUARDIAN_FIELDS = {
     "Assessment Result": ["name", "student", "assessment_plan", "grade", "posting_date"],
     "Fees": ["name", "student", "program", "academic_year", "grand_total", "outstanding_amount", "due_date"],
     "Sales Invoice": ["name", "customer", "grand_total", "outstanding_amount", "due_date", "status"],
-    "TH Portal Announcement": ["name", "title", "message", "publish_date"],
+    "TH Portal Announcement": ["name", "title", "message", "publish_date", "audience"],
 }
 
 CONSENT_DOCTYPE = "TH Guardian Consent"
 ANNOUNCEMENT_DOCTYPE = "TH Portal Announcement"
+
+# Bounded portal record pagination. Consent authorization retains its stronger
+# independent full-history pagination and row-lock verification below.
+PORTAL_FETCH_MAX = 5000
+PORTAL_PAGE_MAX = 200
+VERIFIED_CHILDREN_MAX = 200
+
+def _page_params(limit, offset, default, maximum=PORTAL_PAGE_MAX):
+    """Validate paging arguments. Returns (limit, offset) as ints."""
+    if limit is None:
+        limit = default
+    if isinstance(limit, bool):
+        raise frappe.ValidationError("limit must be a whole number")
+    if isinstance(limit, float):
+        if not limit.is_integer():
+            raise frappe.ValidationError("limit must be a whole number")
+        limit = int(limit)
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError) as exc:
+        raise frappe.ValidationError("limit must be a whole number") from exc
+    if limit < 1 or limit > maximum:
+        raise frappe.ValidationError(
+            "limit must be between 1 and %d" % maximum)
+    if offset is None:
+        offset = 0
+    if isinstance(offset, bool):
+        raise frappe.ValidationError("offset must be a whole number")
+    if isinstance(offset, float):
+        if not offset.is_integer():
+            raise frappe.ValidationError("offset must be a whole number")
+        offset = int(offset)
+    try:
+        offset = int(offset)
+    except (TypeError, ValueError) as exc:
+        raise frappe.ValidationError("offset must be a whole number") from exc
+    if offset < 0:
+        raise frappe.ValidationError("offset must not be negative")
+    return (limit, offset)
+
+
+def _fetch_scoped(doctype, filters, fields, order_by=None):
+    """Fetch a scoped portal read, bounded but never silently truncated.
+
+    Requests PORTAL_FETCH_MAX + 1 rows and raises when more exist; the
+    caller pages through the returned rows with limit/offset. A failed
+    read raises (fail-closed) — callers never turn it into [].
+    """
+    rows = frappe.get_all(doctype, filters=filters, fields=fields,
+                          order_by=order_by,
+                          limit_page_length=PORTAL_FETCH_MAX + 1)
+    if len(rows) > PORTAL_FETCH_MAX:
+        raise frappe.ValidationError(
+            "%s exceeds the supported total of %d records; narrow the "
+            "scope or contact an administrator" % (doctype, PORTAL_FETCH_MAX))
+    return rows
+
+
+def _page(rows, limit, offset):
+    return list(rows)[offset:offset + limit]
+
+
+
+
+# Consent reads are paged, never capped: the pair (guardian, student) can
+# accumulate more rows than one page, and a cap that silently drops the
+# oldest rows can hide a still-Active authorization (C-04 refinement).
+_CONSENT_PAGE_LENGTH = 50
+_CONSENT_MAX_ROWS = 10000
+# A revocation re-reads the pair after each pass; if new live rows keep
+# appearing it refuses explicitly instead of reporting success.
+_REVOKE_MAX_PASSES = 3
+
+
+def _iter_consent_rows(guardian, student):
+    """Every consent row for (guardian, student), newest first, in pages.
+
+    The page cap is a fetch size, not a result limit: iteration continues
+    until a short page (or an empty one). A read path that ignores
+    ``limit_start`` returns the same page again; that is detected (no
+    new names) and iteration stops instead of looping forever. A pair
+    with more than ``_CONSENT_MAX_ROWS`` rows refuses explicitly rather
+    than deciding on a partial set. Offset paging can skip a row that
+    is inserted at the top mid-scan; revocation closes that hole by
+    re-reading the pair from offset 0 after every pass.
+    """
+    seen = set()
+    start = 0
+    total = 0
+    while True:
+        page = frappe.db.get_all(
+            CONSENT_DOCTYPE,
+            filters={"guardian": guardian, "student": student},
+            fields=["name", "status", "consent_date", "expiry_date",
+                    "evidence_type", "revoked_at", "approved_by",
+                    "approved_on"],
+            order_by="creation desc, name desc",
+            limit_start=start,
+            limit_page_length=_CONSENT_PAGE_LENGTH)
+        if not page:
+            return
+        # An overlapping/repeated page is never proof of a complete scan.
+        fresh = [row for row in page if row.get("name") not in seen]
+        if len(fresh) != len(page):
+            raise frappe.ValidationError(
+                "Guardian consent pagination is inconsistent; refusing "
+                "an incomplete authorization or revocation check")
+        for row in fresh:
+            seen.add(row.get("name"))
+            total += 1
+            if total > _CONSENT_MAX_ROWS:
+                raise frappe.ValidationError(
+                    "Too many guardian consent rows to decide safely; "
+                    "refusing to act on a partial set")
+            yield row
+        if len(page) < _CONSENT_PAGE_LENGTH:
+            return
+        start += len(page)
+
+
+def _live_consent_rows(guardian, student):
+    """Every non-Revoked consent row for (guardian, student)."""
+    return [row for row in _iter_consent_rows(guardian, student)
+            if row.get("status") != "Revoked"]
+
+
+def _locked_consent_status(name):
+    """Re-read one consent row under its row lock; None when it is gone.
+
+    The same ``for_update`` pattern ``approve_guardian_consent`` uses:
+    a concurrent approval either lands first (and this revocation then
+    sees the Active row and revokes it) or blocks until this revocation
+    commits (and then sees Revoked and refuses). A read failure returns
+    None — the row is not provably live — and the caller's
+    post-revocation re-check still refuses success while any
+    non-Revoked row remains visible, so a failure can never be mistaken
+    for a completed revocation.
+    """
+    try:
+        locked = frappe.db.get_value(
+            CONSENT_DOCTYPE, name, ["name", "status"],
+            as_dict=True, for_update=True)
+    except Exception:
+        raise frappe.ValidationError(
+            "Guardian consent locked read failed; revocation cannot be "
+            "verified") from None
+    if locked is None:
+        return None
+    if isinstance(locked, dict):
+        return locked.get("status")
+    try:
+        return locked[1]
+    except Exception:
+        return None
 
 
 def _require_portal_enabled():
@@ -79,34 +233,41 @@ def _get_guardian_for_user(user):
 
 
 def _get_verified_children(guardian):
-    """Return verified student names for a guardian via Student Guardian links."""
-    try:
-        links = frappe.get_all(
-            "Student Guardian",
-            filters={"guardian": guardian, "parenttype": "Student", "parentfield": "guardians"},
-            fields=["parent"],
-            limit_page_length=200,
-        )
-        names = []
-        for l in links:
-            p = l.get("parent")
-            if p:
-                names.append(p)
-        # Deduplicate, verify each Student still exists and has customer
-        verified = []
-        for s in set(names):
-            try:
-                st = frappe.db.get_value("Student", s, ["name", "customer"], as_dict=True)
-                if st and st.get("customer"):
-                    verified.append(st["name"])
-                elif st and not st.get("customer"):
-                    # Without customer, guardian scope is incomplete per SEC-GUARDIAN-01
-                    continue
-            except Exception:
-                continue
-        return verified
-    except Exception:
-        return []
+    """Return verified student names for a guardian via Student Guardian links.
+
+    A failed read of the links raises (fail-closed). A failed per-student
+    verification read also raises: silently dropping that child would
+    hide an outage as "no such child". A student row that no longer
+    exists, or has no customer, is still skipped — that is genuinely
+    no verifiable membership, not a read failure. More than
+    VERIFIED_CHILDREN_MAX links raises instead of silently truncating
+    the guardian's children.
+    """
+    links = frappe.get_all(
+        "Student Guardian",
+        filters={"guardian": guardian, "parenttype": "Student", "parentfield": "guardians"},
+        fields=["parent"],
+        limit_page_length=VERIFIED_CHILDREN_MAX + 1,
+    )
+    if len(links) > VERIFIED_CHILDREN_MAX:
+        raise frappe.ValidationError(
+            "Guardian has more than %d verified child links; narrow the "
+            "scope or contact an administrator" % VERIFIED_CHILDREN_MAX)
+    names = []
+    for l in links:
+        p = l.get("parent")
+        if p:
+            names.append(p)
+    # Deduplicate, verify each Student still exists and has customer
+    verified = []
+    for s in set(names):
+        st = frappe.db.get_value("Student", s, ["name", "customer"], as_dict=True)
+        if st and st.get("customer"):
+            verified.append(st["name"])
+        elif st and not st.get("customer"):
+            # Without customer, guardian scope is incomplete per SEC-GUARDIAN-01
+            continue
+    return verified
 
 
 def _student_age_years(student):
@@ -131,15 +292,23 @@ def _student_age_years(student):
 
 
 def _get_consent(guardian, student):
-    """Only persistent verified consent counts; process memory is not proof."""
-    rows = frappe.db.get_all(
-        CONSENT_DOCTYPE,
-        filters={"guardian": guardian, "student": student},
-        fields=["name", "status", "consent_date", "expiry_date",
-                "evidence_type", "revoked_at", "approved_by", "approved_on"],
-        order_by="creation desc",
-        limit_page_length=1)
-    return rows[0] if rows else None
+    """Only persistent verified consent counts; process memory is not proof.
+
+    Select the Active row, not merely the newest: a newer Pending row (new
+    evidence lodged) or a newer Revoked row must never hide a still-Active
+    authorization, and revocation must not be able to "revoke" a Pending
+    row while the Active row survives. When no Active row exists, return
+    the newest row so callers still see the latest state. The scan is
+    paged across ALL rows for the pair — an Active row older than one
+    page must still be found.
+    """
+    newest = None
+    for row in _iter_consent_rows(guardian, student):
+        if newest is None:
+            newest = row
+        if row.get("status") == "Active":
+            return row
+    return newest
 
 
 def _is_consent_valid(guardian, student, policy_terms=None):
@@ -201,11 +370,13 @@ def _is_consent_valid(guardian, student, policy_terms=None):
 
 
 def _governing_guardian_terms():
-    try:
-        from toefl_house.operations.guardian_lifecycle import governing_guardian_lifecycle
-        return governing_guardian_lifecycle()
-    except Exception:
-        return {}
+    # A policy-read failure raises (fail-closed, C-12): swallowing it
+    # to {} silently drops the evidence-type and delegation-window
+    # checks in _is_consent_valid. "No governing policy" is not an
+    # error — governing_guardian_lifecycle() itself returns {} then —
+    # so only a genuinely raised error reaches the caller.
+    from toefl_house.operations.guardian_lifecycle import governing_guardian_lifecycle
+    return governing_guardian_lifecycle()
 
 
 def _can_access(guardian, student):
@@ -273,135 +444,130 @@ def get_my_children():
     guardian, children = _assert_guardian_scope(user)
     result = []
     for s in children:
-        try:
-            row = frappe.db.get_value("Student", s, ["name", "student_name"], as_dict=True)
-            result.append({"name": row["name"], "student_name": row.get("student_name") or ""})
-        except Exception:
-            result.append({"name": s, "student_name": ""})
+        # A failed read must raise, never degrade to an empty student_name
+        # that masquerades as a nameless child (C-12). A missing row
+        # (deleted between the scope check and this read) raises
+        # explicitly instead of failing later with a bare TypeError.
+        row = frappe.db.get_value("Student", s, ["name", "student_name"], as_dict=True)
+        if not row:
+            raise RuntimeError(f"Student record {s} could not be read")
+        result.append({"name": row["name"], "student_name": row.get("student_name") or ""})
     return result
 
 
 @frappe.whitelist()
-def get_child_schedule(student=None):
+def get_child_schedule(student=None, limit=100, offset=0):
     _require_portal_enabled()
     user = frappe.session.user
     student = _require_authorized_child(user, student)
-    # Resolve child's enrolled groups
-    try:
-        roster = frappe.get_all(
-            "Student Group Student",
-            filters={"student": student, "active": 1},
-            fields=["parent"],
-            limit_page_length=100,
-        )
-        group_names = [r["parent"] for r in roster if r.get("parent")]
-        if not group_names:
-            return []
-        schedules = frappe.get_all(
-            "Course Schedule",
-            filters={"student_group": ["in", group_names]},
-            fields=GUARDIAN_FIELDS["Course Schedule"],
-            order_by="schedule_date asc",
-            limit_page_length=100,
-        )
-    except Exception:
+    limit, offset = _page_params(limit, offset, 100)
+    # Resolve child's enrolled groups. A failed read must raise, never
+    # return [] masquerading as "no classes" (C-12). An empty roster is
+    # genuinely no data and still returns [].
+    roster = _fetch_scoped(
+        "Student Group Student",
+        filters={"student": student, "active": 1},
+        fields=["parent"],
+    )
+    group_names = [r["parent"] for r in roster if r.get("parent")]
+    if not group_names:
         return []
-    return with_solar_date(schedules, "schedule_date", "schedule_date_shamsi")
+    schedules = _fetch_scoped(
+        "Course Schedule",
+        filters={"student_group": ["in", group_names]},
+        fields=GUARDIAN_FIELDS["Course Schedule"],
+        order_by="schedule_date asc",
+    )
+    return with_solar_date(_page(schedules, limit, offset), "schedule_date", "schedule_date_shamsi")
 
 
 @frappe.whitelist()
-def get_child_attendance(student=None):
+def get_child_attendance(student=None, limit=100, offset=0):
     _require_portal_enabled()
     user = frappe.session.user
     student = _require_authorized_child(user, student)
-    try:
-        rows = frappe.get_all(
-            "Student Attendance",
-            filters={"student": student, "docstatus": 1},
-            fields=GUARDIAN_FIELDS["Student Attendance"],
-            order_by="date desc",
-            limit_page_length=100,
-        )
-    except Exception:
-        return []
-    return with_solar_date(rows, "date", "date_shamsi")
+    limit, offset = _page_params(limit, offset, 100)
+    # A failed read must raise, never return [] masquerading as
+    # "no attendance" (C-12).
+    rows = _fetch_scoped(
+        "Student Attendance",
+        filters={"student": student, "docstatus": 1},
+        fields=GUARDIAN_FIELDS["Student Attendance"],
+        order_by="date desc",
+    )
+    return with_solar_date(_page(rows, limit, offset), "date", "date_shamsi")
 
 
 @frappe.whitelist()
-def get_child_grades(student=None):
+def get_child_grades(student=None, limit=100, offset=0):
     """Approved grades only. Still requires valid consent."""
     _require_portal_enabled()
     user = frappe.session.user
     student = _require_authorized_child(user, student)
-    try:
-        rows = frappe.get_all(
-            "Assessment Result",
-            filters={"student": student, "docstatus": 1},
-            fields=GUARDIAN_FIELDS["Assessment Result"],
-            order_by="posting_date desc",
-            limit_page_length=100,
-        )
-        return rows
-    except Exception:
-        return []
+    limit, offset = _page_params(limit, offset, 100)
+    # A failed read must raise, never return [] masquerading as
+    # "no grades" (C-12).
+    rows = _fetch_scoped(
+        "Assessment Result",
+        filters={"student": student, "docstatus": 1},
+        fields=GUARDIAN_FIELDS["Assessment Result"],
+        order_by="posting_date desc",
+    )
+    return _page(rows, limit, offset)
 
 
 @frappe.whitelist()
-def get_child_fees(student=None):
+def get_child_fees(student=None, limit=50, offset=0):
     """Fee balances — only for verified child with valid consent."""
     _require_portal_enabled()
     user = frappe.session.user
     student = _require_authorized_child(user, student)
-    try:
-        fees = frappe.get_all(
-            "Fees",
-            filters={"student": student, "docstatus": 1},
-            fields=GUARDIAN_FIELDS["Fees"],
-            limit_page_length=50,
-        )
-        # A Customer is often shared by siblings or the same guardian.
-        # Invoice access is permitted ONLY when the native invoice has a
-        # direct Student link and that link matches this verified child.
-        invoices = []
-        try:
-            if frappe.get_meta("Sales Invoice").has_field("student"):
-                customer = frappe.db.get_value("Student", student, "customer")
-                if customer:
-                    invoices = frappe.get_all(
-                        "Sales Invoice",
-                        filters={"customer": customer, "student": student,
-                                 "docstatus": 1},
-                        fields=GUARDIAN_FIELDS["Sales Invoice"],
-                        limit_page_length=50)
-        except Exception:
-            # Do not broaden to a Customer-only query on schema mismatch.
-            invoices = []
-        return {"fees": fees, "invoices": invoices}
-    except Exception:
-        return {"fees": [], "invoices": []}
+    limit, offset = _page_params(limit, offset, 50)
+    # A failed read must raise, never return empty fees/invoices
+    # masquerading as "nothing owed" (C-12).
+    fees = _fetch_scoped(
+        "Fees",
+        filters={"student": student, "docstatus": 1},
+        fields=GUARDIAN_FIELDS["Fees"],
+    )
+    # A Customer is often shared by siblings or the same guardian.
+    # Invoice access is permitted ONLY when the native invoice has a
+    # direct Student link and that link matches this verified child.
+    # When the Sales Invoice doctype has no student field there is
+    # simply nothing to show; any other read failure raises.
+    invoices = []
+    if frappe.get_meta("Sales Invoice").has_field("student"):
+        customer = frappe.db.get_value("Student", student, "customer")
+        if customer:
+            invoices = _fetch_scoped(
+                "Sales Invoice",
+                filters={"customer": customer, "student": student,
+                         "docstatus": 1},
+                fields=GUARDIAN_FIELDS["Sales Invoice"])
+    return {"fees": _page(fees, limit, offset),
+            "invoices": _page(invoices, limit, offset)}
 
 
 @frappe.whitelist()
-def get_announcements_for_guardian():
+def get_announcements_for_guardian(limit=50, offset=0):
     _require_portal_enabled()
     user = frappe.session.user
     _assert_guardian_scope(user)
-    try:
-        rows = frappe.get_all(
-            ANNOUNCEMENT_DOCTYPE,
-            filters={"status": "Published"},
-            fields=GUARDIAN_FIELDS[ANNOUNCEMENT_DOCTYPE],
-            order_by="publish_date desc",
-            limit_page_length=50,
-        )
-        allowed = []
-        for r in rows:
-            aud = (r.get("audience") or "All").strip().lower()
-            if aud in ("all", "guardians", "guardian", "family"):
-                allowed.append(r)
-        return allowed
-    except Exception:
-        return []
+    limit, offset = _page_params(limit, offset, 50)
+    # A failed read raises (C-12): an outage must never render as
+    # "no announcements".
+    rows = _fetch_scoped(
+        ANNOUNCEMENT_DOCTYPE,
+        filters={"status": "Published"},
+        fields=GUARDIAN_FIELDS[ANNOUNCEMENT_DOCTYPE],
+        order_by="publish_date desc",
+    )
+    allowed = []
+    for r in rows:
+        aud = (r.get("audience") or "All").strip().lower()
+        if aud in ("all", "guardians", "guardian", "family"):
+            allowed.append(r)
+    return _page(allowed, limit, offset)
 
 
 # ---- Consent management ----
@@ -529,7 +695,31 @@ def approve_guardian_consent(request_key, consent):
 
 @frappe.whitelist(methods=["POST"])
 def revoke_consent(student, reason=""):
-    """Revoke guardian consent for a child. Revocation is immediate and audit-logged."""
+    """Revoke guardian consent for a child. Revocation is immediate and audit-logged.
+
+    Total, not first-page: every non-Revoked row for (guardian, student)
+    is revoked in pages, each row re-read under its row lock just before
+    it is mutated (the ``for_update`` pattern ``approve_guardian_consent``
+    uses, so a concurrent approval either lands first and is then
+    revoked, or sees the Revoked row and refuses). After each pass the
+    pair is re-read from the start; a consent that appeared
+    mid-revocation is revoked on the next pass. If live rows still
+    remain after ``_REVOKE_MAX_PASSES`` passes, revocation REFUSES with
+    an explicit error instead of reporting success — it never claims
+    "immediate" while an authorization may survive. Two concurrent
+    revocations are idempotent: the loser re-reads Revoked rows under
+    the lock, skips them, and the shared re-check confirms nothing
+    live remains.
+
+    Documented residual: a consent row created after the final re-check
+    is always Pending (only staff approval can make it Active), and
+    approval of a Pending row revoked here refuses because the row is
+    Revoked — so no Active authorization can appear after a successful
+    return. A row lock on the Guardian itself was not added: creation
+    and approval are already serialized per consent row by the
+    ``for_update`` re-reads above, and no other consent path locks the
+    Guardian row.
+    """
     _require_portal_enabled()
     user = frappe.session.user
     guardian = _get_guardian_for_user(user)
@@ -539,22 +729,46 @@ def revoke_consent(student, reason=""):
     if student not in verified:
         raise frappe.PermissionError("No verified guardian relationship for this student")
 
-    # Find active consent
-    consent = _get_consent(guardian, student)
-    if not consent:
+    live = _live_consent_rows(guardian, student)
+    if not live:
         raise frappe.ValidationError("No active consent found to revoke")
-    if consent.get("status") == "Revoked":
-        raise frappe.ValidationError("Consent is already revoked")
-
-    doc = frappe.get_doc(CONSENT_DOCTYPE, consent["name"])
-    if doc.status == "Revoked":
-        raise frappe.ValidationError("Consent is already revoked")
-    doc.status = "Revoked"
-    doc.revoked_at = _now()
-    doc.revoked_by = user
-    doc.revocation_reason = reason or "Guardian requested revocation"
-    doc.save(ignore_permissions=True)
-    return {"name": doc.name, "status": "Revoked", "revoked_at": doc.revoked_at}
+    primary_name = next(
+        (row["name"] for row in live if row.get("status") == "Active"),
+        live[0]["name"])
+    revoked_at = None
+    primary_revoked_at = None
+    for _ in range(_REVOKE_MAX_PASSES):
+        remaining = _live_consent_rows(guardian, student)
+        if not remaining:
+            break
+        for row in remaining:
+            status = _locked_consent_status(row["name"])
+            if status is None or status == "Revoked":
+                # Lost a race to a concurrent revocation (or the row is
+                # gone); it cannot authorize anything.
+                continue
+            doc = frappe.get_doc(CONSENT_DOCTYPE, row["name"])
+            if doc.status == "Revoked":
+                continue
+            doc.status = "Revoked"
+            doc.revoked_at = _now()
+            doc.revoked_by = user
+            doc.revocation_reason = reason or "Guardian requested revocation"
+            doc.save(ignore_permissions=True)
+            revoked_at = doc.revoked_at
+            if row["name"] == primary_name:
+                primary_revoked_at = doc.revoked_at
+    remaining = _live_consent_rows(guardian, student)
+    if remaining:
+        raise frappe.ValidationError(
+            f"Revocation incomplete: {len(remaining)} consent row(s) for "
+            "this student are still not revoked; access is refused until "
+            "revocation completes")
+    # Keep the name of the originally Active consent as the receipt target.
+    # Re-reading _get_consent after revocation selects the newest Revoked
+    # row instead, which can be a different Pending row from this batch.
+    return {"name": primary_name, "status": "Revoked",
+            "revoked_at": primary_revoked_at or revoked_at}
 
 
 @frappe.whitelist()

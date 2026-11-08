@@ -245,7 +245,7 @@ def create_academic_calendar(request_key, code, title, academic_year="",
             clean_branch = _bounded_name(branch, "Branch")
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
-        if frappe.db.exists(CALENDAR, clean_code):
+        if frappe.db.exists(CALENDAR, {"code": clean_code}):
             raise frappe.ValidationError(
                 f"Academic calendar {clean_code} already exists")
         if clean_year and not frappe.db.exists("Academic Year", clean_year):
