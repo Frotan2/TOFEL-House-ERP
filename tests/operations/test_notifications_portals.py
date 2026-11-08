@@ -140,9 +140,17 @@ class BaseHarness(unittest.TestCase):
                 # order_by consent_date desc
                 if order_by and "consent_date desc" in order_by:
                     rows = sorted(rows, key=lambda x: str(x.get("consent_date") or ""), reverse=True)
+                # The real Frappe query uses limit_start to fetch every
+                # consent page. Ignoring it repeats page 1 and falsely
+                # trips the production fail-closed duplicate-page guard.
+                offset = kw.get("limit_start", 0)
+                if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+                    raise ValueError("Invalid synthetic consent page offset")
                 lim = limit or limit_page_length
-                if lim:
-                    rows = rows[:lim]
+                if lim is not None:
+                    rows = rows[offset:offset + lim]
+                else:
+                    rows = rows[offset:]
                 return apply(rows)
             if doctype == "User Permission":
                 rows = [r for r in fake.user_permissions if match(r, filters)]
