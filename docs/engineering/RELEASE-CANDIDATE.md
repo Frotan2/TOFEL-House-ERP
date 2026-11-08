@@ -2,16 +2,17 @@
 
 **Release authorization: REJECT / NO-GO**  
 **Package classification: TEST PACKAGE — NO REAL DATA**  
-**Integration route: PR #150 from `arena/c52e5d60-tofel-house-erp` into `main`; repository integration is not release approval.**
+**Integration record: PR #150 merged into `main`; repository integration is not release approval.**
 
-This specification describes the **current integration/review route**, not an
-issued customer build. PR #150's live head SHA, review state and exact-head CI
-receipts are authoritative in GitHub; this document intentionally does not
-snapshot mutable check results. No version tag, Windows installer or GitHub
-artifact can be called accepted merely because it exists. A qualifying source
-revision is the full Git SHA of the final, independently reviewed source tree,
-with matching native integration, foundation security, product image and
-Windows gate receipts. Results from older commits are not transferable.
+This specification describes the engineering candidate, not an issued customer
+build. PR #150 records the non-Oracle code integration; the live `main` SHA and
+its exact-commit CI receipts are authoritative for current repository state.
+This document intentionally does not snapshot mutable check results. No version
+tag, Windows installer or GitHub artifact can be called accepted merely
+because it exists. A qualifying source revision is the full Git SHA of the
+final, independently reviewed source tree, with matching native integration,
+foundation security, product image and Windows gate receipts. Results from
+older commits are not transferable.
 The CI-built single-file offline installer is an engineering **TEST** artifact,
 not publisher-signed customer acceptance or evidence of a clean Windows install.
 

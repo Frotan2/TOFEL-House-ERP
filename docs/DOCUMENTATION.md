@@ -7,12 +7,11 @@ script can remain in the Owner's restricted decision record; they must not
 be mistaken for user-interface language.
 
 **Current release state:** **REJECT / NO-GO — TEST PACKAGE, NO REAL DATA.**
-PR #150 from `arena/c52e5d60-tofel-house-erp` is the authorized repository
-integration route into `main`; use its live GitHub head, review and exact-SHA
-checks for the current integration state. Merging code into `main` is not
-production approval. `main` is not an independently approved release. Branch
-names, CI results for older commits, old screenshots, and source-level tests do
-not authorize live use.
+PR #150 is the merged non-Oracle code integration into `main`; use the live
+`main` SHA and its CI receipts for current repository state. Merging code into
+`main` is not production approval. `main` is not an independently approved
+release. Branch names, CI results for older commits, old screenshots, and
+source-level tests do not authorize live use.
 
 ## Sources of truth (in precedence order)
 
