@@ -1205,6 +1205,19 @@ class BootstrapLogicContract(unittest.TestCase):
         self.assertLess(body.index("seed_sites()"), body.index("run_bench("))
         self.assertIn("/build/sites-seed/", (PRODUCT / "app.Dockerfile").read_text())
 
+    def test_seed_file_is_atomic_when_host_lacks_fchmod(self):
+        # Windows Python does not expose os.fchmod. Exercise the same
+        # supported fallback on Linux without changing production behavior.
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "apps.txt"
+            with patch.object(bootstrap.os, "fchmod", None, create=True):
+                bootstrap._seed_file(target, b"synthetic apps", mode=0o644)
+            self.assertEqual(target.read_bytes(), b"synthetic apps")
+            self.assertEqual(list(Path(tmp).glob("*.tmp")), [])
+            self.assertEqual(list(Path(tmp).glob(".*.tmp")), [])
+
     def test_readiness_waits_require_a_successful_page(self):
         # Readiness must never accept an HTTP error page. Install uses a
         # fail-closed curl probe; all launchers also use one structured,

@@ -85,8 +85,16 @@ def _seed_file(target: Path, payload: bytes, *, mode: int) -> None:
         prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
     temporary = Path(temporary_name)
     try:
-        os.fchmod(fd, mode)
+        # The actual customer bootstrap runs inside Linux, where fchmod
+        # applies the required POSIX mode to the open temporary file.
+        # Windows-hosted package tests have no os.fchmod: use chmod there
+        # without changing Linux secret-file permissions or atomicity.
         with os.fdopen(fd, "wb") as handle:
+            fd_chmod = getattr(os, "fchmod", None)
+            if callable(fd_chmod):
+                fd_chmod(handle.fileno(), mode)
+            else:
+                os.chmod(temporary, mode)
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
