@@ -1605,6 +1605,35 @@ class CensusStrictnessTests(ApplyTests):
         self.assertIn("apply.counts_unavailable", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
+    def test_nonfinite_fees_billing_total_is_refused_by_bench_census(self):
+        runner = engine.BenchRunner(str(self.bench), self.sites_dir, timeout=120)
+        for malformed in ("NaN", "sNaN", "Infinity", "-Infinity"):
+            with self.subTest(value=malformed):
+                self.state["fees_total"] = malformed
+                self.write_state()
+                with self.assertRaises(engine.UpdateError) as caught:
+                    runner.fees_total(engine.SITE_NAME)
+                self.assertEqual(caught.exception.code, "apply.counts_unavailable")
+                self.assertIn("non-finite", str(caught.exception))
+
+    def test_finite_fees_total_keeps_exact_decimal_precision(self):
+        runner = engine.BenchRunner(str(self.bench), self.sites_dir, timeout=120)
+        for supplied, expected in (
+                ("0", "0"), ("12345.6700", "12345.67"),
+                ("1e2", "100"), ("0.0001", "0.0001")):
+            with self.subTest(value=supplied):
+                self.state["fees_total"] = supplied
+                self.write_state()
+                self.assertEqual(runner.fees_total(engine.SITE_NAME), expected)
+
+    def test_nonfinite_fees_total_blocks_migration_before_any_write(self):
+        self.state["fees_total"] = "Infinity"
+        self.write_state()
+        report = self.apply()
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.counts_unavailable", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
     def test_a_disappearing_application_fails_the_update(self):
         self.state["apps"] = [app for app in engine.REQUIRED_APPS if app != "payments"]
         self.write_state()
