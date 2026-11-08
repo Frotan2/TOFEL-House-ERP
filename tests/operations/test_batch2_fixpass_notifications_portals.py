@@ -377,6 +377,12 @@ class ConsentActiveRowTests(_GuardianHarness):
         self.assertEqual(remaining, [])
 
     def test_consent_history_past_cap_raises_not_silent(self):
+        # The consolidated guardian implementation enforces a stronger
+        # paginated full-history census with a configurable fail-closed cap.
+        # Set the test cap to 500 without weakening the real 10,000-row bound.
+        original_cap = self.guardian_portal._CONSENT_MAX_ROWS
+        self.guardian_portal._CONSENT_MAX_ROWS = 500
+        self.addCleanup(setattr, self.guardian_portal, "_CONSENT_MAX_ROWS", original_cap)
         for i in range(501):
             self.guardian_consents.append({
                 "name": "CONSENT-%03d" % i, "guardian": "GUARD-1",
