@@ -108,16 +108,15 @@ def _to_naive_kabul(value):
         return value.replace(tzinfo=None)
 
 
-# In-flight delivery claims (same-process duplicate suppression).
-# A second attempt for the same notification while one is running
-# returns "already in progress" without sending. This bounds
-# same-process races; cross-process races are bounded by the
-# per-recipient skip below (a duplicate worker can at worst re-send
-# to a recipient with no persisted success yet). A fully atomic
-# cross-process claim would need a DB row-lock transaction, which
-# this frappe-light layer does not have — see the report.
+# Same-process suppression also covers the offline test harness. Live
+# workers additionally claim the database row in the caller's transaction.
 _delivery_lock = threading.Lock()
 _in_flight_deliveries = set()
+
+
+class _NotificationBusy(Exception):
+    pass
+
 
 # Versioned per-recipient outcome record, persisted in the existing
 # TH Notification.last_failure Small Text field (no doctype schema
@@ -668,10 +667,14 @@ def create_notification(event_type, title, message, severity=None,
         return result
 
 
-def _load_notification(name):
+def _load_notification(name, *, claim=False):
     """Load a notification doc/dict by name."""
+    if not isinstance(name, str):
+        return None, None
+    isolated = _isolated_test()
+    lock = claim and not isolated
     # In-memory fallback store first (offline harness)
-    if _isolated_test() and isinstance(name, str) and name in _memory_notifications:
+    if isolated and name in _memory_notifications:
         data = dict(_memory_notifications[name])
         class _MemDoc(dict):
             def get(self, k, d=None):
@@ -692,8 +695,17 @@ def _load_notification(name):
         # Expose mutations on doc proxy back to data
         # We will keep data as single source; doc forwards to data on save
         return doc, data
+    if lock:
+        # Do not wait behind another delivery worker. A locking document
+        # read below also bypasses any earlier snapshot in the caller.
+        if not frappe.db.get_value(NOTIFICATION_DOCTYPE, name,
+                                   for_update=True, skip_locked=True):
+            if frappe.db.exists(NOTIFICATION_DOCTYPE, name):
+                raise _NotificationBusy
+            return None, None
     try:
-        doc = frappe.get_doc(NOTIFICATION_DOCTYPE, name)
+        doc = (frappe.get_doc(NOTIFICATION_DOCTYPE, name, for_update=True)
+               if lock else frappe.get_doc(NOTIFICATION_DOCTYPE, name))
         # Convert to dict with key fields
         data = {
             "name": doc.name,
@@ -728,6 +740,8 @@ def _load_notification(name):
         except Exception:
             data["recipients"] = getattr(doc, "recipients_list", [])
     except Exception:
+        if lock:
+            raise
         return None, None
     # A failed Frappe record read returns None above. A malformed
     # structured delivery record raises visibly here: it must never be
@@ -744,7 +758,7 @@ def _load_notification(name):
     esc_rows = doc.get("escalation_recipients") or []
     esc_recips = []
     for r in esc_rows:
-        v = r.get("recipient") if isinstance(r, dict) else r
+        v = r if isinstance(r, str) else r.get("recipient")
         if v and v not in data["recipients"] and v not in esc_recips:
             esc_recips.append(v)
     if esc_recips:
@@ -756,8 +770,8 @@ def _send_to_recipients(payload, recipients, provider_override=None):
     """Send the payload to each recipient in turn.
 
     Returns a list of per-recipient outcome dicts
-    {recipient, delivered, provider, detail}. A provider exception for
-    one recipient fails only that recipient, never the whole attempt.
+    {recipient, delivered, provider, detail}. A native queue write error
+    propagates so the caller can roll back the delivery transaction.
     """
     results = []
     for recipient in recipients:
@@ -858,9 +872,12 @@ def attempt_delivery(notification_name, provider_override=None):
     Never fakes a delivered status: if any recipient fails, status is
     failed. Retries NEVER resend to recipients with a persisted success
     (C-10): outcomes are recovered from the durable record on load.
-    Concurrent duplicate attempts in this process are refused without
-    sending (see _in_flight_deliveries).
+    Concurrent duplicate attempts are refused without sending. Native
+    callers retain ownership of the transaction and its commit/rollback.
     """
+    if not _isolated_test() and (provider_override is not None
+                                 or not isinstance(notification_name, str)):
+        raise frappe.ValidationError("Delivery overrides require an isolated test")
     if isinstance(notification_name, str):
         with _delivery_lock:
             if notification_name in _in_flight_deliveries:
@@ -870,6 +887,8 @@ def attempt_delivery(notification_name, provider_override=None):
             _in_flight_deliveries.add(notification_name)
         try:
             return _attempt_delivery_locked(notification_name, provider_override)
+        except _NotificationBusy:
+            return ("failed", "Delivery already in progress")
         finally:
             with _delivery_lock:
                 _in_flight_deliveries.discard(notification_name)
@@ -878,7 +897,7 @@ def attempt_delivery(notification_name, provider_override=None):
 
 def _attempt_delivery_locked(notification_name, provider_override=None):
     """attempt_delivery body; the in-flight claim is held by the caller."""
-    doc, data = _load_notification(notification_name)
+    doc, data = _load_notification(notification_name, claim=True)
     if data is None:
         # Might be a dict passed directly (offline harness)
         if isinstance(notification_name, dict):
@@ -1006,8 +1025,9 @@ def _attempt_delivery_locked(notification_name, provider_override=None):
     # the next retry resent to recipients who already received it.
     # The intermediate record stays failed with the original
     # retry_count and no next_retry_at: it is a partial attempt, not
-    # a completed failure. A crash after recipient N leaves N's
-    # outcome durable; the retry reconciles from it and skips N.
+    # a completed failure. In a native transaction the outcome and local
+    # enqueue commit together; a remote adapter must deduplicate a resend
+    # even if this transaction rolls back before the outcome commits.
     new_results = []
     for recipient in pending:
         new_results.extend(
@@ -1060,7 +1080,10 @@ def acknowledge_notification(notification_name, actor=None):
     Only delivered notifications can be acknowledged. Returns new status.
     """
     actor = actor or frappe.session.user if hasattr(frappe, "session") else "System"
-    doc, data = _load_notification(notification_name)
+    try:
+        doc, data = _load_notification(notification_name, claim=True)
+    except _NotificationBusy as exc:
+        raise frappe.ValidationError("Delivery already in progress") from exc
     if data is None:
         if isinstance(notification_name, dict):
             data = notification_name
@@ -1093,11 +1116,9 @@ def retry_failed_notifications(limit=20):
 
     Returns (attempted, delivered, still_failed). A failed read of the
     failed list is a failure, never a silent (0, 0, 0) (C-10/C-12: a DB
-    outage must not masquerade as "nothing to retry"). A single bad row
-    (deleted between list and load, save failure, ...) counts as
-    still_failed and never aborts the rest of the batch. Rows not yet
-    due for retry (or with retries exhausted, or already being
-    delivered) are not attempts and are not counted.
+    outage must not masquerade as "nothing to retry"). Unexpected live
+    errors propagate to roll back both local enqueues and delivery status.
+    Rows not yet due, exhausted, or already being delivered are not counted.
     """
     if isinstance(limit, bool):
         raise ValueError("limit must be a whole number")
@@ -1138,9 +1159,9 @@ def retry_failed_notifications(limit=20):
         try:
             status, detail = attempt_delivery(name)
         except Exception:
-            # An attempted row that fails during load, provider send,
-            # or persistence has consumed a batch slot: otherwise a
-            # stream of such rows can bypass the caller's work limit.
+            if not _isolated_test():
+                raise
+            # Preserve the offline harness's bounded partial-batch behavior.
             still_failed += 1
             processed += 1
             continue
@@ -1190,7 +1211,13 @@ def escalate_if_needed(notification_name, provider_override=None):
     notifications; until then escalation only happens on explicit call.
     Returns (escalated: bool, detail).
     """
-    doc, data = _load_notification(notification_name)
+    if not _isolated_test() and (provider_override is not None
+                                 or not isinstance(notification_name, str)):
+        raise frappe.ValidationError("Delivery overrides require an isolated test")
+    try:
+        doc, data = _load_notification(notification_name, claim=True)
+    except _NotificationBusy:
+        return (False, "Delivery already in progress")
     if data is None:
         if isinstance(notification_name, dict):
             data = notification_name
@@ -1231,12 +1258,14 @@ def escalate_if_needed(notification_name, provider_override=None):
         "channel": data["channel"],
         "recipients": data.get("recipients") or [],
     }
-    esc_results = _send_to_recipients(payload, esc, provider_override)
-    prior = [r for r in (data.get("delivery_results") or [])
-             if isinstance(r, dict) and r.get("recipient")]
-    attempted = {r["recipient"] for r in esc_results}
-    merged = [r for r in prior if r["recipient"] not in attempted]
-    merged.extend(esc_results)
+    esc_results = _send_to_recipients(payload, new_esc, provider_override)
+    # A freshly loaded delivered row has no last_failure. Rebuild its
+    # original successes before transitioning to failed for escalation.
+    merged = [
+        {"recipient": recipient, "delivered": True, "provider": None,
+         "detail": "Previously delivered"}
+        for recipient in dict.fromkeys(data.get("recipients") or [])
+    ] + esc_results
     esc_ok = all(r["delivered"] for r in esc_results)
 
     # Persist escalation (recipients + flag) together with the outcome.
@@ -1256,7 +1285,8 @@ def escalate_if_needed(notification_name, provider_override=None):
                 raise
 
     if esc_ok:
-        detail = f"Escalated to {', '.join(esc)}"
+        detail = (f"Escalated to {', '.join(new_esc)}" if new_esc
+                  else "Escalation recipients already notified")
         _persist_delivery(doc, data, notification_name, "delivered",
                           data["retry_count"], None, merged, detail,
                           None, touch_delivered_at=False)

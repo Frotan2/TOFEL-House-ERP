@@ -8,8 +8,9 @@ production site. All tests use synthetic data in disposable directories and
 mock the native Frappe restore itself; no live site is touched.
 """
 import base64
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import importlib.util
 import io
 import json
@@ -190,10 +191,14 @@ class EmergencyRestoreTests(unittest.TestCase):
 
     def _authorization(self, *, request_id="a" * 32, approvals=None,
                        hashes=None, site=None, backup_set=None,
+                       pre_restore_backup_set=None, schema_version=2,
                        issued="2026-10-28T00:00:00Z",
                        expires="2026-11-28T00:00:00Z", signers=None):
+        pre_restore_paths = self.restore._verified_backup_paths(
+            self.site, self.current_set)
+        receipt = self.restore._backup_receipt_path(pre_restore_paths, self.current_set)
         document = {
-            "schema_version": 1, "document_type": "emergency-restore",
+            "schema_version": schema_version, "document_type": "emergency-restore",
             "site": site or self.site, "target": "production",
             "backup_set": backup_set or self.target_set,
             "backup_sha256": hashes if hashes is not None
@@ -208,6 +213,10 @@ class EmergencyRestoreTests(unittest.TestCase):
                  "approver_role": "general-manager"},
             ],
         }
+        if schema_version == 2:
+            document["pre_restore_backup_set"] = pre_restore_backup_set or self.current_set
+            document["pre_restore_backup_receipt_sha256"] = hashlib.sha256(
+                receipt.read_bytes()).hexdigest()
         raw = self.restore._canonical_document_bytes(document)
         signers = signers if signers is not None else (self.owner, self.manager)
         signatures = [base64.b64encode(key.sign(raw)).decode("ascii")
@@ -400,6 +409,32 @@ class EmergencyRestoreTests(unittest.TestCase):
                     pre_restore_backup_set=self.current_set,
                     authorization=document, signature_1=sig1, signature_2=sig2)
         native.assert_not_called()
+
+    def test_rewritten_preservation_timestamp_invalidates_the_authorization(self):
+        document, sig1, sig2 = self._authorization()
+        created = datetime.now(timezone.utc) - timedelta(hours=1)
+        self._write_receipt(self.current_set, created_utc=created.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        with patch.object(self.restore, "_run_native_restore") as native:
+            with self.assertRaisesRegex(
+                    self.restore.RestoreInputError, "receipt does not match the signed authorization"):
+                self.restore._native_restore(
+                    self.site, self.target_set, SECRET_KEY, SECRET_DB, SECRET_ADMIN,
+                    pre_restore_backup_set=self.current_set,
+                    authorization=document, signature_1=sig1, signature_2=sig2)
+        native.assert_not_called()
+        self.assertTrue((self._state_dir() / ("a" * 32 + ".json")).exists())
+        self.assertFalse((self._state_dir() / "in-progress.json").exists())
+        self.assertFalse((self._state_dir() / "audit.jsonl").exists())
+
+    def test_authorization_for_another_preservation_set_is_refused(self):
+        with self.assertRaisesRegex(
+                self.restore.RestoreInputError, "does not match the pre-restore backup set"):
+            self._run_authorized(authorization_kwargs={
+                "pre_restore_backup_set": "20261028-other"})
+
+    def test_old_authorization_without_signed_preservation_receipt_is_refused(self):
+        with self.assertRaises(self.restore.RestoreInputError):
+            self._run_authorized(authorization_kwargs={"schema_version": 1})
 
     def test_altered_authorization_document_invalidates_signatures(self):
         document, sig1, sig2 = self._authorization()

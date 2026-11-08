@@ -25,10 +25,17 @@ Usage:
     ext.deliver(notification)  # routes by notification.channel
 """
 from abc import ABC, abstractmethod
+from hashlib import sha256
+import json
 
 
 class NotificationProvider(ABC):
     """Abstract provider: implement send() and expose name."""
+
+    # A live custom adapter may opt in only when its downstream system
+    # durably deduplicates the supplied idempotency_key across retries,
+    # including timeouts and worker restarts.
+    supports_idempotent_delivery = False
 
     @property
     @abstractmethod
@@ -67,11 +74,8 @@ class EmailProvider(NotificationProvider):
 
     Success means the message was accepted into the Frappe email queue
     (the queue, not this provider, owns SMTP delivery and retries).
-    When no mail transport is available — offline harness, unconfigured
-    site — nothing is enqueued and the provider reports failure: the
-    old implementation returned True for any well-formed address
-    without sending anything, which marked notifications delivered
-    that nobody received.
+    An empty queue result is a delivery failure. Queue write errors
+    propagate so the caller can roll back any partial enqueue.
     """
 
     @property
@@ -89,15 +93,13 @@ class EmailProvider(NotificationProvider):
         sendmail = getattr(frappe, "sendmail", None)
         if not callable(sendmail):
             return False
-        try:
-            sendmail(
-                recipients=[recipient],
-                subject=notification.get("title") or "Notification",
-                message=notification.get("message") or "",
-            )
-            return True
-        except Exception:
-            return False
+        queued = sendmail(
+            recipients=[recipient],
+            subject=notification.get("title") or "Notification",
+            message=notification.get("message") or "",
+            delayed=True,
+        )
+        return bool(queued)
 
 
 class SmsStubProvider(NotificationProvider):
@@ -128,14 +130,15 @@ class WhatsappStubProvider(NotificationProvider):
         return False
 
 
-# Registry: channel lower-case → provider instance
-_registry = {}
-
-# Install defaults on import
-_registry["dashboard"] = DashboardProvider()
-_registry["email"] = EmailProvider()
-_registry["sms"] = SmsStubProvider()
-_registry["whatsapp"] = WhatsappStubProvider()
+# Built-in local providers have no direct external side effects. The SMS
+# and WhatsApp defaults are inert. Any replacement must be retry-safe.
+_DEFAULT_PROVIDERS = {
+    "dashboard": DashboardProvider(),
+    "email": EmailProvider(),
+    "sms": SmsStubProvider(),
+    "whatsapp": WhatsappStubProvider(),
+}
+_registry = dict(_DEFAULT_PROVIDERS)
 
 # Human-readable channel labels for UI/config
 CHANNEL_LABELS = {
@@ -146,7 +149,7 @@ CHANNEL_LABELS = {
 }
 
 EXTERNAL_CHANNELS = ("sms", "whatsapp")
-ALL_CHANNELS = ("dashboard", "email", "sms", "whatsapp")
+ALL_CHANNELS = tuple(_DEFAULT_PROVIDERS)
 
 
 def register_provider(channel, provider):
@@ -173,8 +176,8 @@ def deliver(notification, check_enabled=True):
     """Deliver via the notification's channel provider.
 
     Returns (delivered: bool, provider_name: str, reason: str).
-    Checks portal_policy channel enablement when check_enabled is True.
-    Never raises — failures are returned for durable record update.
+    Live delivery always checks portal_policy. A native queue write error
+    propagates so the caller can roll back the queue and notification together.
     """
     channel = (notification.get("channel") or "").lower()
     if not channel:
@@ -182,11 +185,17 @@ def deliver(notification, check_enabled=True):
     if channel not in ALL_CHANNELS:
         return (False, "unknown", f"Unknown channel: {channel}")
 
-    # Channel must be enabled (unless caller bypasses for synthetic tests).
+    try:
+        import frappe
+    except ImportError:
+        return (False, CHANNEL_LABELS[channel], "Notification framework unavailable")
+    isolated = bool(getattr(getattr(frappe, "flags", None), "in_test", False))
+
+    # Channel must be enabled (unless caller bypasses in a synthetic test).
     # A failure to evaluate enablement fails closed: the old code
     # swallowed the exception and delivered anyway, so a config/DB
     # outage silently re-enabled every channel.
-    if check_enabled:
+    if check_enabled or not isolated:
         try:
             from toefl_house.operations import portal_policy
             if not portal_policy.is_channel_enabled(channel):
@@ -199,6 +208,16 @@ def deliver(notification, check_enabled=True):
     provider = get_provider(channel)
     if provider is None:
         return (False, "none", f"No provider registered for {channel}")
+
+    if provider is not _DEFAULT_PROVIDERS[channel] and not isolated:
+        if getattr(provider, "supports_idempotent_delivery", False) is not True:
+            return (False, provider.name, "Provider lacks retry-safe delivery")
+        identity = (getattr(frappe.local, "site", None), channel,
+                    notification.get("notification_id"), notification.get("recipient"))
+        if any(not isinstance(value, str) or not value.strip() for value in identity):
+            return (False, provider.name, "Retry-safe delivery identity is incomplete")
+        key = sha256(json.dumps(identity, ensure_ascii=False).encode("utf-8")).hexdigest()
+        notification = {**notification, "idempotency_key": key}
 
     # External channels that are still on stub will return False — that
     # is intentional failed-delivery handling, not an exception.
@@ -216,6 +235,8 @@ def deliver(notification, check_enabled=True):
                         "External provider not configured — Owner approval and credentials required")
             return (False, provider.name, "Provider reported failure")
     except Exception as exc:
+        if provider is _DEFAULT_PROVIDERS["email"]:
+            raise
         return (False, provider.name, f"Provider exception: {type(exc).__name__}")
 
 
@@ -243,7 +264,4 @@ def list_channels():
 def reset_registry():
     """Test helper: restore default stub providers."""
     _registry.clear()
-    _registry["dashboard"] = DashboardProvider()
-    _registry["email"] = EmailProvider()
-    _registry["sms"] = SmsStubProvider()
-    _registry["whatsapp"] = WhatsappStubProvider()
+    _registry.update(_DEFAULT_PROVIDERS)

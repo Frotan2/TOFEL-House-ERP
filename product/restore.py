@@ -15,8 +15,8 @@ production restore is refused before any mutation unless it names a distinct
 pre-restore backup set preserving the live site, and carries a
 two-approver emergency authorization (one Course Owner + one General Manager
 or recovery authority, distinct keys, bound to the exact backup artifact
-hashes, single-use request_id) verified against the installation-provisioned
-trust store. Every restore, disposable or production, is recorded in a
+hashes and preservation receipt, single-use request_id) verified against
+the installation-provisioned trust store. Every restore is recorded in a
 hash-chained audit log that never contains secrets. A fully privileged
 operating-system/container administrator can still bypass this adapter with
 a direct Bench/MariaDB restore; that path is outside application control and
@@ -67,7 +67,7 @@ BACKUP_SUFFIXES = {
 # _check_pre_restore_recency, removed 2026-11-05): mtimes are trivially
 # forgeable with utime, a fresh mtime proves nothing about the bytes,
 # and a stale mtime says nothing about a set whose receipt was issued
-# later. The receipt's created_utc plus the decrypt probe are the
+# later. The approved receipt's created_utc plus the decrypt probe are the
 # authoritative evidence. (st_mtime_ns still appears in
 # _same_file_state, but only as a staging change detector, never as
 # freshness.)
@@ -84,7 +84,7 @@ BACKUP_RECEIPT_MAX_BYTES = 64 * 1024
 # separate document_type, a separate key purpose ("emergency-restore"), and
 # its own single-use request record, so update authority never implicitly
 # grants restore authority.
-EMERGENCY_RESTORE_SCHEMA_VERSION = 1
+EMERGENCY_RESTORE_SCHEMA_VERSION = 2
 EMERGENCY_RESTORE_DOCUMENT_TYPE = "emergency-restore"
 EMERGENCY_RESTORE_TRUST_DOCUMENT_TYPE = "toefl-house-erp-update-trust-store"
 EMERGENCY_RESTORE_KEY_PURPOSE = "emergency-restore"
@@ -93,7 +93,9 @@ EMERGENCY_REQUEST_ID = re.compile(r"[0-9a-f]{32}\Z")
 EMERGENCY_APPROVAL_KEYS = ("key_id", "approver_identity", "approver_role")
 EMERGENCY_DOCUMENT_KEYS = (
     "schema_version", "document_type", "site", "target", "backup_set",
-    "backup_sha256", "request_id", "issued_utc", "expires_utc", "approvals")
+    "backup_sha256", "pre_restore_backup_set",
+    "pre_restore_backup_receipt_sha256", "request_id", "issued_utc",
+    "expires_utc", "approvals")
 KEY_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 
 
@@ -576,7 +578,7 @@ def _parse_receipt_utc(value, label: str) -> datetime:
 
 
 def _validate_pre_restore_receipt(paths: dict[str, Path], backup_set: str,
-                                  *, now: datetime | None = None) -> dict:
+                                  *, now: datetime | None = None) -> tuple[dict, str]:
     """Validate the hash-bound receipt for a pre-restore set.
 
     The receipt must exist beside the artifacts, name this set, state
@@ -584,15 +586,19 @@ def _validate_pre_restore_receipt(paths: dict[str, Path], backup_set: str,
     (300s future tolerance for clock skew), and bind every artifact by
     name, size and SHA-256 to the bytes on disk. A missing, stale,
     corrupt, or mismatched receipt refuses the restore before any
-    mutation — no matter what the files' mtimes say. Returns the receipt.
+    mutation — no matter what the files' mtimes say. Returns the receipt
+    and the digest of the exact bytes parsed, for comparison with the
+    signed authorization.
     """
     receipt_path = _backup_receipt_path(paths, backup_set)
     try:
         if receipt_path.is_symlink() or not receipt_path.is_file():
             raise OSError
-        if receipt_path.stat().st_size > BACKUP_RECEIPT_MAX_BYTES:
+        with receipt_path.open("rb") as stream:
+            raw_receipt = stream.read(BACKUP_RECEIPT_MAX_BYTES + 1)
+        if len(raw_receipt) > BACKUP_RECEIPT_MAX_BYTES:
             raise RestoreInputError("pre-restore backup receipt is unexpectedly large")
-        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt = json.loads(raw_receipt.decode("utf-8"))
     except RestoreInputError:
         raise
     except (OSError, UnicodeError, json.JSONDecodeError):
@@ -657,7 +663,7 @@ def _validate_pre_restore_receipt(paths: dict[str, Path], backup_set: str,
                 f"pre-restore backup artifact changed after receipt: {role}")
     if seen != set(BACKUP_SUFFIXES):
         raise RestoreInputError("pre-restore backup receipt is missing a backup artifact")
-    return receipt
+    return receipt, hashlib.sha256(raw_receipt).hexdigest()
 
 
 def _verify_staged_restore_hashes(staged_paths: dict[str, Path],
@@ -683,12 +689,13 @@ def _verify_staged_restore_hashes(staged_paths: dict[str, Path],
 
 def validate_emergency_authorization(document, signature_1_b64, signature_2_b64,
                                      *, site: str, backup_set: str,
+                                     pre_restore_backup_set: str,
                                      artifact_hashes: dict, now: datetime,
                                      trust_store_path: Path,
-                                     state_dir: Path) -> tuple[str, list]:
+                                     state_dir: Path) -> tuple[str, list, str]:
     """Verify a production emergency-restore authorization before any data
-    mutation. Returns (request_id, approvals). Raises RestoreInputError on
-    every refusal; no secret or signature value is ever in a message."""
+    mutation. Return the request id, approvals and approved preservation
+    receipt digest. No secret or signature value is ever in a refusal."""
     if not isinstance(document, dict) or tuple(sorted(document)) != tuple(
             sorted(EMERGENCY_DOCUMENT_KEYS)):
         raise RestoreInputError("emergency restore authorization is invalid")
@@ -705,6 +712,14 @@ def validate_emergency_authorization(document, signature_1_b64, signature_2_b64,
     if document["backup_sha256"] != artifact_hashes:
         raise RestoreInputError(
             "emergency restore authorization does not match the backup artifacts")
+    if document["pre_restore_backup_set"] != pre_restore_backup_set:
+        raise RestoreInputError(
+            "emergency restore authorization does not match the pre-restore backup set")
+    pre_receipt_sha256 = document["pre_restore_backup_receipt_sha256"]
+    if (not isinstance(pre_receipt_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", pre_receipt_sha256)):
+        raise RestoreInputError(
+            "emergency restore authorization has an invalid pre-restore receipt digest")
     request_id = document["request_id"]
     if not isinstance(request_id, str) or not EMERGENCY_REQUEST_ID.fullmatch(request_id):
         raise RestoreInputError("emergency restore authorization is invalid")
@@ -769,7 +784,7 @@ def validate_emergency_authorization(document, signature_1_b64, signature_2_b64,
         raise RestoreInputError(
             "a previous emergency restore did not complete; resolve it per the "
             "recovery procedure before starting another production restore")
-    return request_id, approvals
+    return request_id, approvals, pre_receipt_sha256
 
 
 def _read_payload(stdin) -> dict:
@@ -950,9 +965,10 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
                     context_writer=None) -> None:
     """Gate, then run, a restore. All production checks happen here, before
     _run_native_restore mutates anything: pre-restore preservation, the
-    two-approver authorization bound to the exact artifact hashes, single-use
-    consumption, and the in-progress marker. Disposable restores skip
-    authorization/consumption but are still audit-logged, without secrets."""
+    two-approver authorization bound to the exact artifact hashes and
+    preservation receipt, single-use consumption, and the in-progress marker.
+    Disposable restores skip authorization and consumption but are still
+    audit-logged, without secrets."""
     paths = _verified_backup_paths(site, backup_set)
     hashes = _artifact_hashes(paths)
     state_dir = _ensure_state_dir(site)
@@ -969,15 +985,15 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
                 "set preserving the live site's current data")
         pre_paths = _verified_backup_paths(site, pre_restore_backup_set)
         audit_base["pre_restore_backup_set"] = pre_restore_backup_set
-        audit_base["pre_restore_backup_sha256"] = _artifact_hashes(pre_paths)
         trust_store_value = os.environ.get("RESTORE_TRUST_STORE")
         if not trust_store_value:
             raise RestoreInputError(
                 "a production restore requires a provisioned emergency restore "
                 "trust store; no trust store is configured")
-        request_id, approvals = validate_emergency_authorization(
+        request_id, approvals, approved_pre_receipt_sha256 = validate_emergency_authorization(
             authorization, signature_1, signature_2, site=site,
-            backup_set=backup_set, artifact_hashes=hashes,
+            backup_set=backup_set, pre_restore_backup_set=pre_restore_backup_set,
+            artifact_hashes=hashes,
             now=datetime.now(timezone.utc),
             trust_store_path=Path(trust_store_value), state_dir=state_dir)
         audit_base["request_id"] = request_id
@@ -1001,10 +1017,16 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
         # rollback left after the live site is overwritten, and a failed
         # check leaves no marker behind to block the next, freshly
         # approved restore.
-        pre_receipt = _validate_pre_restore_receipt(pre_paths, pre_restore_backup_set)
+        pre_receipt, pre_receipt_sha256 = _validate_pre_restore_receipt(
+            pre_paths, pre_restore_backup_set)
+        if not hmac.compare_digest(pre_receipt_sha256, approved_pre_receipt_sha256):
+            raise RestoreInputError(
+                "pre-restore backup receipt does not match the signed authorization")
         audit_base["pre_restore_backup_receipt_created_utc"] = pre_receipt["created_utc"]
-        with _backup_receipt_path(pre_paths, pre_restore_backup_set).open("rb") as stream:
-            audit_base["pre_restore_backup_receipt_sha256"] = _sha256_stream(stream)
+        audit_base["pre_restore_backup_receipt_sha256"] = pre_receipt_sha256
+        audit_base["pre_restore_backup_sha256"] = {
+            item["role"]: item["sha256"] for item in pre_receipt["artifacts"]
+        }
         _probe_restore_artifacts(pre_paths, encryption_key)
         marker_path = state_dir / "in-progress.json"
         # Exclusive creation closes the check-then-create race: a second

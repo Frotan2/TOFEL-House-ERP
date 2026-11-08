@@ -23,6 +23,7 @@ live site):
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -236,8 +237,11 @@ class PreRestorePreservationTests(unittest.TestCase):
         self.addCleanup(self.env.stop)
 
     def _run_production(self, *, popen):
+        receipt = self.backup_dir / f"{self.current_set}-receipt.json"
+        digest = (hashlib.sha256(receipt.read_bytes()).hexdigest()
+                  if receipt.exists() else "0" * 64)
         with patch.object(self.restore, "validate_emergency_authorization",
-                          return_value=("a" * 32, [])):
+                          return_value=("a" * 32, [], digest)):
             with patch.object(native_gpg.subprocess, "Popen", popen):
                 with patch.object(self.restore, "_run_native_restore") as native:
                     self.restore._native_restore(

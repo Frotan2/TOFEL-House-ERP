@@ -30,6 +30,7 @@ import threading
 import types
 import unittest
 from datetime import datetime
+from unittest.mock import Mock, patch
 
 from tests.operations.test_notifications_portals import BaseHarness
 
@@ -110,6 +111,49 @@ def _enable(mod, event_type, recipients, channel="Dashboard", **extra):
 
 
 class DeliveryPersistenceTests(BaseHarness):
+    def test_live_delivery_claim_precedes_load_and_skips_locked_notification(self):
+        _enable(self.notifications_mod, "overdue_tuition", ["a@example.com"])
+        n = self.notifications_mod.create_notification(
+            event_type="overdue_tuition", title="T", message="M")
+        self.frappe.flags.in_test = False
+        calls = Mock()
+        calls.claim.side_effect = [None, n["name"]]
+        calls.load.side_effect = self.frappe.get_doc
+        calls.send.return_value = (True, "Dashboard", "Delivered")
+        with (patch.object(self.frappe.db, "get_value", calls.claim),
+              patch.object(self.frappe.db, "exists", return_value=n["name"]),
+              patch.object(self.frappe, "get_doc", calls.load),
+              patch.object(self.provider, "deliver", calls.send)):
+            status, detail = self.notifications_mod.attempt_delivery(n["name"])
+            self.assertEqual((status, detail), ("failed", "Delivery already in progress"))
+            calls.load.assert_not_called()
+            calls.send.assert_not_called()
+            status, _ = self.notifications_mod.attempt_delivery(n["name"])
+        self.assertEqual(status, "delivered")
+        self.assertEqual(calls.claim.call_count, 2)
+        calls.claim.assert_called_with(
+            "TH Notification", n["name"], for_update=True, skip_locked=True)
+        calls.load.assert_called_once_with("TH Notification", n["name"], for_update=True)
+        self.assertEqual([call[0] for call in calls.mock_calls],
+                         ["claim", "claim", "load", "send"])
+
+    def test_live_retry_propagates_status_save_failure_after_native_enqueue(self):
+        _enable(self.notifications_mod, "overdue_tuition", ["a@example.com"], channel="Email")
+        n = self.notifications_mod.create_notification(
+            event_type="overdue_tuition", title="T", message="M")
+        doc = self.frappe.get_doc("TH Notification", n["name"])
+        doc.status = "failed"
+        doc.save()
+        self.frappe.flags.in_test = False
+        self.frappe.sendmail = Mock(return_value=object())
+        with (patch.object(self.frappe.db, "get_value", return_value=n["name"]),
+              patch.object(self.frappe, "get_doc", return_value=doc),
+              patch.object(doc, "save", side_effect=RuntimeError("status save failed")),
+              patch.object(self.portal_policy, "is_channel_enabled", return_value=True)):
+            with self.assertRaisesRegex(RuntimeError, "status save failed"):
+                self.notifications_mod.retry_failed_notifications()
+        self.frappe.sendmail.assert_called_once()
+
     def test_partial_delivery_results_are_persisted_to_the_doc(self):
         _enable(self.notifications_mod, "overdue_tuition",
                 ["a@example.com", "b@example.com"])
@@ -440,6 +484,20 @@ class EscalationDeliveryTests(BaseHarness):
         self.assertEqual(rec.calls.count("a@example.com"), 1)
         self.assertEqual(rec.calls.count("boss@example.com"), 2)
 
+    def test_fresh_doc_escalation_keeps_original_delivery_evidence_for_retry(self):
+        n = self._delivered_notification()
+        self.notifications_mod._memory_notifications.pop(n["name"], None)
+        rec = _RecordingProvider(ok_for={"a@example.com"})
+        self.notifications_mod.attempt_delivery(n["name"], provider_override=rec)
+        self.frappe.utils.now_datetime = lambda: "2026-10-24 14:30:00"
+        ok, _ = self.notifications_mod.escalate_if_needed(n["name"], provider_override=rec)
+        self.assertFalse(ok)
+        rec.ok_for.add("boss@example.com")
+        self.frappe.utils.now_datetime = lambda: "2026-10-24 14:32:00"
+        status, _ = self.notifications_mod.attempt_delivery(n["name"], provider_override=rec)
+        self.assertEqual(status, "delivered")
+        self.assertEqual(rec.calls, ["a@example.com", "boss@example.com", "boss@example.com"])
+
 
 class ThresholdTests(BaseHarness):
     def test_low_book_stock_zero_qty_is_not_critical(self):
@@ -569,6 +627,47 @@ class TimezoneTests(BaseHarness):
 
 
 class ProviderSafetyTests(BaseHarness):
+    def test_live_custom_provider_requires_a_stable_idempotency_key(self):
+        payload = {"channel": "SMS", "notification_id": "NOTIF-1", "recipient": "+123"}
+        self.frappe.flags.in_test = False
+        adapter = types.SimpleNamespace(
+            name="Remote adapter", send=Mock(side_effect=[TimeoutError, True, True]))
+        self.provider.register_provider("sms", adapter)
+        with patch.object(self.portal_policy, "is_channel_enabled", return_value=False):
+            self.assertIn("disabled", self.provider.deliver(payload, check_enabled=False)[2])
+            adapter.send.assert_not_called()
+        with patch.object(self.portal_policy, "is_channel_enabled", return_value=True):
+            self.assertIn("retry-safe", self.provider.deliver(payload)[2])
+            adapter.send.assert_not_called()
+
+            adapter.supports_idempotent_delivery = True
+            self.assertIs(self.provider.deliver(payload)[0], False)
+            self.assertIs(self.provider.deliver(payload)[0], True)
+            other = {**payload, "recipient": "+456"}
+            self.assertIs(self.provider.deliver(other)[0], True)
+        first, second, third = [c.args[0]["idempotency_key"] for c in adapter.send.call_args_list]
+        self.assertEqual(first, second)
+        self.assertNotEqual(first, third)
+        self.assertNotIn("idempotency_key", payload)
+
+    def test_email_success_requires_an_actual_native_queue_entry(self):
+        payload = {"recipient": "a@example.com", "title": "T", "message": "M"}
+        self.frappe.sendmail = Mock(side_effect=[None, [], object()])
+        provider = self.provider.EmailProvider()
+        self.assertIs(provider.send(payload), False)
+        self.assertIs(provider.send(payload), False)
+        self.assertIs(provider.send(payload), True)
+        self.frappe.sendmail.assert_called_with(
+            recipients=["a@example.com"], subject="T", message="M", delayed=True)
+
+    def test_native_queue_exception_is_available_to_transaction_owner(self):
+        payload = {"channel": "Email", "recipient": "a@example.com"}
+        self.frappe.flags.in_test = False
+        self.frappe.sendmail = Mock(side_effect=RuntimeError("native queue write failed"))
+        with (patch.object(self.portal_policy, "is_channel_enabled", return_value=True),
+              self.assertRaisesRegex(RuntimeError, "native queue write failed")):
+            self.provider.deliver(payload)
+
     def test_email_provider_does_not_claim_delivery_without_sending(self):
         # The stub frappe harness has no sendmail: nothing is enqueued,
         # so the provider must report failure, never success.

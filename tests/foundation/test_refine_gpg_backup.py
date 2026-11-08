@@ -546,7 +546,7 @@ class BackupReceiptTests(unittest.TestCase):
     def test_issued_receipt_validates(self):
         self.backup.issue_backup_receipt(self.backup_dir, self.backup_set,
                                          self.paths)
-        receipt = self.restore._validate_pre_restore_receipt(
+        receipt, _ = self.restore._validate_pre_restore_receipt(
             self.paths, self.backup_set)
         self.assertEqual(receipt["backup_set"], self.backup_set)
         self.assertTrue(receipt["encrypted"] and receipt["verified"])
@@ -587,7 +587,7 @@ class BackupReceiptTests(unittest.TestCase):
         stale = NOW_UTC - timedelta(hours=25)
         for path in self.paths.values():
             os.utime(path, (stale.timestamp(), stale.timestamp()))
-        receipt = self.restore._validate_pre_restore_receipt(
+        receipt, _ = self.restore._validate_pre_restore_receipt(
             self.paths, self.backup_set)
         self.assertEqual(receipt["backup_set"], self.backup_set)
 
