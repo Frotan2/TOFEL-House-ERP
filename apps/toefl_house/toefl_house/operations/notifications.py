@@ -375,7 +375,8 @@ def get_dispatch_rule(event_type):
             "channel": row.get("channel") or "Dashboard",
             "timing_delay_minutes": row.get("timing_delay_minutes") or 0,
             "max_retries": row.get("max_retries") if row.get("max_retries") is not None else 3,
-            "retry_delay_minutes": row.get("retry_delay_minutes") or 30,
+            "retry_delay_minutes": (row.get("retry_delay_minutes")
+                                    if row.get("retry_delay_minutes") is not None else 30),
             "escalate_after_minutes": row.get("escalate_after_minutes"),
             "escalation_recipients": [],
         }
@@ -718,8 +719,10 @@ def _load_notification(name, *, claim=False):
             "related_doctype": doc.get("related_doctype"),
             "related_name": doc.get("related_name"),
             "retry_count": doc.get("retry_count") or 0,
-            "max_retries": doc.get("max_retries") or 3,
-            "retry_delay_minutes": doc.get("retry_delay_minutes") or 30,
+            "max_retries": (doc.get("max_retries")
+                            if doc.get("max_retries") is not None else 3),
+            "retry_delay_minutes": (doc.get("retry_delay_minutes")
+                                    if doc.get("retry_delay_minutes") is not None else 30),
             "escalate_after_minutes": doc.get("escalate_after_minutes"),
             "next_retry_at": doc.get("next_retry_at"),
             "escalated": bool(doc.get("escalated")),
@@ -1065,7 +1068,7 @@ def _attempt_delivery_locked(notification_name, provider_override=None):
     next_retry_at = None
     if not ok and new_retry < data["max_retries"]:
         next_retry_at = (_now_dt() + timedelta(
-            minutes=data["retry_delay_minutes"] or 30)).isoformat(
+            minutes=data["retry_delay_minutes"])).isoformat(
                 sep=" ", timespec="seconds")
 
     _persist_delivery(doc, data, notification_name, new_status, new_retry,
@@ -1301,7 +1304,7 @@ def escalate_if_needed(notification_name, provider_override=None):
     next_retry_at = None
     if new_retry < data["max_retries"]:
         next_retry_at = (_now_dt() + timedelta(
-            minutes=data["retry_delay_minutes"] or 30)).isoformat(
+            minutes=data["retry_delay_minutes"])).isoformat(
                 sep=" ", timespec="seconds")
     _persist_delivery(doc, data, notification_name, "failed", new_retry,
                       next_retry_at, merged, detail,
