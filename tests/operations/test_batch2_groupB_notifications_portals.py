@@ -115,6 +115,65 @@ class NotificationDeliveryTests(BaseHarness):
         self.assertEqual((attempted, delivered, still_failed), (1, 0, 1))
 
 
+class _SequencedProvider:
+    """Synthetic provider for exact retry-count and delay assertions."""
+    name = "sequenced-test-provider"
+
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = []
+
+    def send(self, notification):
+        self.calls.append(notification.get("recipient"))
+        index = len(self.calls) - 1
+        return self.responses[min(index, len(self.responses) - 1)]
+
+
+class NotificationZeroRetryPolicyTests(BaseHarness):
+    """Persisted zero values must not turn into permissive defaults."""
+
+    def test_zero_max_retries_survives_reload_and_prevents_resend(self):
+        _enable(self.notifications_mod, "overdue_tuition",
+                ["a@example.com"], max_retries=0, retry_delay_minutes=0)
+        notification = self.notifications_mod.create_notification(
+            event_type="overdue_tuition", title="Zero retry limit",
+            message="Synthetic test")
+        # Force the actual persisted-doc reload, not the in-memory fallback.
+        self.notifications_mod._memory_notifications.pop(notification["name"], None)
+        _doc, loaded = self.notifications_mod._load_notification(notification["name"])
+        self.assertEqual(loaded["max_retries"], 0)
+        self.assertEqual(loaded["retry_delay_minutes"], 0)
+
+        provider = _SequencedProvider([False, True])
+        status, _ = self.notifications_mod.attempt_delivery(
+            notification["name"], provider_override=provider)
+        self.assertEqual(status, "failed")
+        status, detail = self.notifications_mod.attempt_delivery(
+            notification["name"], provider_override=provider)
+        self.assertEqual((status, detail), ("failed", "Max retries exhausted"))
+        self.assertEqual(provider.calls, ["a@example.com"],
+                         "a zero-retry rule must never send twice")
+
+    def test_zero_delay_allows_immediate_retry_after_persisted_reload(self):
+        _enable(self.notifications_mod, "overdue_tuition",
+                ["a@example.com"], max_retries=2, retry_delay_minutes=0)
+        notification = self.notifications_mod.create_notification(
+            event_type="overdue_tuition", title="Immediate retry",
+            message="Synthetic test")
+        self.notifications_mod._memory_notifications.pop(notification["name"], None)
+        _doc, loaded = self.notifications_mod._load_notification(notification["name"])
+        self.assertEqual(loaded["retry_delay_minutes"], 0)
+
+        provider = _SequencedProvider([False, True])
+        first_status, _ = self.notifications_mod.attempt_delivery(
+            notification["name"], provider_override=provider)
+        self.assertEqual(first_status, "failed")
+        second_status, _ = self.notifications_mod.attempt_delivery(
+            notification["name"], provider_override=provider)
+        self.assertEqual(second_status, "delivered")
+        self.assertEqual(provider.calls, ["a@example.com", "a@example.com"])
+
+
 class NotificationThresholdTests(BaseHarness):
     def test_overdue_tuition_has_no_amount_severity_cutoff(self):
         snap = {"fees": [{"name": "F-1", "student": "STU-1",
