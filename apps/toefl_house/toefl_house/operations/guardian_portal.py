@@ -233,34 +233,41 @@ def _get_guardian_for_user(user):
 
 
 def _get_verified_children(guardian):
-    """Return verified student names for a guardian via Student Guardian links."""
-    try:
-        links = frappe.get_all(
-            "Student Guardian",
-            filters={"guardian": guardian, "parenttype": "Student", "parentfield": "guardians"},
-            fields=["parent"],
-            limit_page_length=200,
-        )
-        names = []
-        for l in links:
-            p = l.get("parent")
-            if p:
-                names.append(p)
-        # Deduplicate, verify each Student still exists and has customer
-        verified = []
-        for s in set(names):
-            try:
-                st = frappe.db.get_value("Student", s, ["name", "customer"], as_dict=True)
-                if st and st.get("customer"):
-                    verified.append(st["name"])
-                elif st and not st.get("customer"):
-                    # Without customer, guardian scope is incomplete per SEC-GUARDIAN-01
-                    continue
-            except Exception:
-                continue
-        return verified
-    except Exception:
-        return []
+    """Return verified student names for a guardian via Student Guardian links.
+
+    A failed read of the links raises (fail-closed). A failed per-student
+    verification read also raises: silently dropping that child would
+    hide an outage as "no such child". A student row that no longer
+    exists, or has no customer, is still skipped — that is genuinely
+    no verifiable membership, not a read failure. More than
+    VERIFIED_CHILDREN_MAX links raises instead of silently truncating
+    the guardian's children.
+    """
+    links = frappe.get_all(
+        "Student Guardian",
+        filters={"guardian": guardian, "parenttype": "Student", "parentfield": "guardians"},
+        fields=["parent"],
+        limit_page_length=VERIFIED_CHILDREN_MAX + 1,
+    )
+    if len(links) > VERIFIED_CHILDREN_MAX:
+        raise frappe.ValidationError(
+            "Guardian has more than %d verified child links; narrow the "
+            "scope or contact an administrator" % VERIFIED_CHILDREN_MAX)
+    names = []
+    for l in links:
+        p = l.get("parent")
+        if p:
+            names.append(p)
+    # Deduplicate, verify each Student still exists and has customer
+    verified = []
+    for s in set(names):
+        st = frappe.db.get_value("Student", s, ["name", "customer"], as_dict=True)
+        if st and st.get("customer"):
+            verified.append(st["name"])
+        elif st and not st.get("customer"):
+            # Without customer, guardian scope is incomplete per SEC-GUARDIAN-01
+            continue
+    return verified
 
 
 def _student_age_years(student):
@@ -363,11 +370,13 @@ def _is_consent_valid(guardian, student, policy_terms=None):
 
 
 def _governing_guardian_terms():
-    try:
-        from toefl_house.operations.guardian_lifecycle import governing_guardian_lifecycle
-        return governing_guardian_lifecycle()
-    except Exception:
-        return {}
+    # A policy-read failure raises (fail-closed, C-12): swallowing it
+    # to {} silently drops the evidence-type and delegation-window
+    # checks in _is_consent_valid. "No governing policy" is not an
+    # error — governing_guardian_lifecycle() itself returns {} then —
+    # so only a genuinely raised error reaches the caller.
+    from toefl_house.operations.guardian_lifecycle import governing_guardian_lifecycle
+    return governing_guardian_lifecycle()
 
 
 def _can_access(guardian, student):
@@ -435,135 +444,130 @@ def get_my_children():
     guardian, children = _assert_guardian_scope(user)
     result = []
     for s in children:
-        try:
-            row = frappe.db.get_value("Student", s, ["name", "student_name"], as_dict=True)
-            result.append({"name": row["name"], "student_name": row.get("student_name") or ""})
-        except Exception:
-            result.append({"name": s, "student_name": ""})
+        # A failed read must raise, never degrade to an empty student_name
+        # that masquerades as a nameless child (C-12). A missing row
+        # (deleted between the scope check and this read) raises
+        # explicitly instead of failing later with a bare TypeError.
+        row = frappe.db.get_value("Student", s, ["name", "student_name"], as_dict=True)
+        if not row:
+            raise RuntimeError(f"Student record {s} could not be read")
+        result.append({"name": row["name"], "student_name": row.get("student_name") or ""})
     return result
 
 
 @frappe.whitelist()
-def get_child_schedule(student=None):
+def get_child_schedule(student=None, limit=100, offset=0):
     _require_portal_enabled()
     user = frappe.session.user
     student = _require_authorized_child(user, student)
-    # Resolve child's enrolled groups
-    try:
-        roster = frappe.get_all(
-            "Student Group Student",
-            filters={"student": student, "active": 1},
-            fields=["parent"],
-            limit_page_length=100,
-        )
-        group_names = [r["parent"] for r in roster if r.get("parent")]
-        if not group_names:
-            return []
-        schedules = frappe.get_all(
-            "Course Schedule",
-            filters={"student_group": ["in", group_names]},
-            fields=GUARDIAN_FIELDS["Course Schedule"],
-            order_by="schedule_date asc",
-            limit_page_length=100,
-        )
-    except Exception:
+    limit, offset = _page_params(limit, offset, 100)
+    # Resolve child's enrolled groups. A failed read must raise, never
+    # return [] masquerading as "no classes" (C-12). An empty roster is
+    # genuinely no data and still returns [].
+    roster = _fetch_scoped(
+        "Student Group Student",
+        filters={"student": student, "active": 1},
+        fields=["parent"],
+    )
+    group_names = [r["parent"] for r in roster if r.get("parent")]
+    if not group_names:
         return []
-    return with_solar_date(schedules, "schedule_date", "schedule_date_shamsi")
+    schedules = _fetch_scoped(
+        "Course Schedule",
+        filters={"student_group": ["in", group_names]},
+        fields=GUARDIAN_FIELDS["Course Schedule"],
+        order_by="schedule_date asc",
+    )
+    return with_solar_date(_page(schedules, limit, offset), "schedule_date", "schedule_date_shamsi")
 
 
 @frappe.whitelist()
-def get_child_attendance(student=None):
+def get_child_attendance(student=None, limit=100, offset=0):
     _require_portal_enabled()
     user = frappe.session.user
     student = _require_authorized_child(user, student)
-    try:
-        rows = frappe.get_all(
-            "Student Attendance",
-            filters={"student": student, "docstatus": 1},
-            fields=GUARDIAN_FIELDS["Student Attendance"],
-            order_by="date desc",
-            limit_page_length=100,
-        )
-    except Exception:
-        return []
-    return with_solar_date(rows, "date", "date_shamsi")
+    limit, offset = _page_params(limit, offset, 100)
+    # A failed read must raise, never return [] masquerading as
+    # "no attendance" (C-12).
+    rows = _fetch_scoped(
+        "Student Attendance",
+        filters={"student": student, "docstatus": 1},
+        fields=GUARDIAN_FIELDS["Student Attendance"],
+        order_by="date desc",
+    )
+    return with_solar_date(_page(rows, limit, offset), "date", "date_shamsi")
 
 
 @frappe.whitelist()
-def get_child_grades(student=None):
+def get_child_grades(student=None, limit=100, offset=0):
     """Approved grades only. Still requires valid consent."""
     _require_portal_enabled()
     user = frappe.session.user
     student = _require_authorized_child(user, student)
-    try:
-        rows = frappe.get_all(
-            "Assessment Result",
-            filters={"student": student, "docstatus": 1},
-            fields=GUARDIAN_FIELDS["Assessment Result"],
-            order_by="posting_date desc",
-            limit_page_length=100,
-        )
-        return rows
-    except Exception:
-        return []
+    limit, offset = _page_params(limit, offset, 100)
+    # A failed read must raise, never return [] masquerading as
+    # "no grades" (C-12).
+    rows = _fetch_scoped(
+        "Assessment Result",
+        filters={"student": student, "docstatus": 1},
+        fields=GUARDIAN_FIELDS["Assessment Result"],
+        order_by="posting_date desc",
+    )
+    return _page(rows, limit, offset)
 
 
 @frappe.whitelist()
-def get_child_fees(student=None):
+def get_child_fees(student=None, limit=50, offset=0):
     """Fee balances — only for verified child with valid consent."""
     _require_portal_enabled()
     user = frappe.session.user
     student = _require_authorized_child(user, student)
-    try:
-        fees = frappe.get_all(
-            "Fees",
-            filters={"student": student, "docstatus": 1},
-            fields=GUARDIAN_FIELDS["Fees"],
-            limit_page_length=50,
-        )
-        # A Customer is often shared by siblings or the same guardian.
-        # Invoice access is permitted ONLY when the native invoice has a
-        # direct Student link and that link matches this verified child.
-        invoices = []
-        try:
-            if frappe.get_meta("Sales Invoice").has_field("student"):
-                customer = frappe.db.get_value("Student", student, "customer")
-                if customer:
-                    invoices = frappe.get_all(
-                        "Sales Invoice",
-                        filters={"customer": customer, "student": student,
-                                 "docstatus": 1},
-                        fields=GUARDIAN_FIELDS["Sales Invoice"],
-                        limit_page_length=50)
-        except Exception:
-            # Do not broaden to a Customer-only query on schema mismatch.
-            invoices = []
-        return {"fees": fees, "invoices": invoices}
-    except Exception:
-        return {"fees": [], "invoices": []}
+    limit, offset = _page_params(limit, offset, 50)
+    # A failed read must raise, never return empty fees/invoices
+    # masquerading as "nothing owed" (C-12).
+    fees = _fetch_scoped(
+        "Fees",
+        filters={"student": student, "docstatus": 1},
+        fields=GUARDIAN_FIELDS["Fees"],
+    )
+    # A Customer is often shared by siblings or the same guardian.
+    # Invoice access is permitted ONLY when the native invoice has a
+    # direct Student link and that link matches this verified child.
+    # When the Sales Invoice doctype has no student field there is
+    # simply nothing to show; any other read failure raises.
+    invoices = []
+    if frappe.get_meta("Sales Invoice").has_field("student"):
+        customer = frappe.db.get_value("Student", student, "customer")
+        if customer:
+            invoices = _fetch_scoped(
+                "Sales Invoice",
+                filters={"customer": customer, "student": student,
+                         "docstatus": 1},
+                fields=GUARDIAN_FIELDS["Sales Invoice"])
+    return {"fees": _page(fees, limit, offset),
+            "invoices": _page(invoices, limit, offset)}
 
 
 @frappe.whitelist()
-def get_announcements_for_guardian():
+def get_announcements_for_guardian(limit=50, offset=0):
     _require_portal_enabled()
     user = frappe.session.user
     _assert_guardian_scope(user)
-    try:
-        rows = frappe.get_all(
-            ANNOUNCEMENT_DOCTYPE,
-            filters={"status": "Published"},
-            fields=GUARDIAN_FIELDS[ANNOUNCEMENT_DOCTYPE],
-            order_by="publish_date desc",
-            limit_page_length=50,
-        )
-        allowed = []
-        for r in rows:
-            aud = (r.get("audience") or "All").strip().lower()
-            if aud in ("all", "guardians", "guardian", "family"):
-                allowed.append(r)
-        return allowed
-    except Exception:
-        return []
+    limit, offset = _page_params(limit, offset, 50)
+    # A failed read raises (C-12): an outage must never render as
+    # "no announcements".
+    rows = _fetch_scoped(
+        ANNOUNCEMENT_DOCTYPE,
+        filters={"status": "Published"},
+        fields=GUARDIAN_FIELDS[ANNOUNCEMENT_DOCTYPE],
+        order_by="publish_date desc",
+    )
+    allowed = []
+    for r in rows:
+        aud = (r.get("audience") or "All").strip().lower()
+        if aud in ("all", "guardians", "guardian", "family"):
+            allowed.append(r)
+    return _page(allowed, limit, offset)
 
 
 # ---- Consent management ----
