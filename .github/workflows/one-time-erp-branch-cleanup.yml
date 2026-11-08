@@ -11,7 +11,9 @@ permissions:
 
 jobs:
   delete-only-proven-merged-branches:
-    if: github.repository == 'Frotan2/TOFEL-House-ERP' && startsWith(github.event.head_commit.message, 'chore(cleanup): one-time')
+    if: >-
+      github.repository == 'Frotan2/TOFEL-House-ERP' &&
+      startsWith(github.event.head_commit.message, 'chore(cleanup): one-time')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
