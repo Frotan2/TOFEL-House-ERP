@@ -1095,6 +1095,40 @@ class CommandContractTests(unittest.TestCase):
         self.assertEqual(broken, [])
 
 
+class ResolveCompaniesScopeTests(unittest.TestCase):
+    """C-16: the default "all companies" read must not silently drop a
+    51st company from cashier_position / cashier_history."""
+
+    def companies(self, count):
+        module = load_cashier()
+        seen_limits = {}
+
+        def fake_get_all(doctype, **kwargs):
+            seen_limits[doctype] = kwargs.get("limit_page_length")
+            if doctype == "Company":
+                return [{"name": f"Company-{i:02d}"} for i in range(count)]
+            return []
+
+        module.frappe.db.get_all = fake_get_all
+        return module, seen_limits
+
+    def test_more_than_fifty_companies_raise(self):
+        module, seen_limits = self.companies(51)
+        with self.assertRaisesRegex(module.frappe.ValidationError,
+                                    "supported limit of 50"):
+            module._resolve_companies(None)
+        self.assertEqual(seen_limits["Company"], 51)
+
+    def test_fifty_companies_are_all_resolved(self):
+        module, _ = self.companies(50)
+        self.assertEqual(len(module._resolve_companies(None)), 50)
+
+    def test_explicit_company_list_is_unchanged(self):
+        module, _ = self.companies(51)
+        self.assertEqual(module._resolve_companies(["Company-00", "Company-01"]),
+                         ["Company-00", "Company-01"])
+
+
 def tearDownModule():
     """Drop the stubs this module installed so later suites load fresh."""
     for name in ("frappe", "toefl_house", "toefl_house.policy", "toefl_house.api", "toefl_house.security", "toefl_house.finance", "toefl_house.finance.policies", "toefl_house.finance.cashier", "toefl_house.finance.taxes", "toefl_house.finance.refunds", "toefl_house.finance.installments",):
