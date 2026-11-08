@@ -946,10 +946,10 @@ if "frappe.db.count" in args:
 if "frappe.db.sql" in args:
     query = json.loads(args[args.index("--kwargs") + 1])["query"]
     if "SUM(grand_total)" in query and "tabFees" in query:
-        print(json.dumps([[str(state.get("fees_total", "0"))]]))
+        print(json.dumps([["TH_CENSUS", str(state.get("fees_total", "0"))]]))
         raise SystemExit(0)
     if "ORDER BY name" in query:
-        # Per-record census hash query: SELECT name, <fields> FROM `tabX`
+        # Per-record census hash query: SELECT marker, name, <fields> FROM `tabX`
         # ORDER BY name. Answer from explicit state rows when present, else
         # synthesize deterministic rows from the count so clean applies keep
         # identical before/after hashes.
@@ -960,6 +960,9 @@ if "frappe.db.sql" in args:
         if select_part.upper().startswith("SELECT "):
             select_part = select_part[len("SELECT "):]
         columns = [column.strip() for column in select_part.split(",")]
+        if not columns or columns[0] != "\'TH_CENSUS\' AS marker":
+            raise SystemExit("missing census marker")
+        columns = columns[1:]
         rows = state.get("rows", {}).get(doctype)
         if rows is None:
             count = state.get("counts", {}).get(doctype) or 0
@@ -975,7 +978,7 @@ if "frappe.db.sql" in args:
                 return f"{column}-{index}"
             rows = [[_cell(column, index) for column in columns]
                     for index in range(count)]
-        print(json.dumps(rows))
+        print(json.dumps([["TH_CENSUS", *row] for row in rows]))
         raise SystemExit(0)
     if "LEFT JOIN" in query:
         rows = []
