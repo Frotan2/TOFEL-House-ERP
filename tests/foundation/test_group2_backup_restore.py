@@ -350,9 +350,18 @@ class StagedRestoreProbeTests(unittest.TestCase):
                 with patch.object(self.restore, "safe_mariadb_credential_transport",
                                   _null_transport):
                     with patch.object(self.restore, "safe_gpg_transport", _null_transport):
+                        # Use the actual verified backup bytes as the
+                        # gate-time digest source; never bypass the mandatory
+                        # post-stage content verification in restore.py.
+                        source = self.restore.SITES_DIR / self.site / "private" / "backups"
+                        hashes = self.restore._artifact_hashes({
+                            role: source / (self.backup_set + suffix)
+                            for role, suffix in self.restore.BACKUP_SUFFIXES.items()
+                        })
                         self.restore._run_native_restore(
                             self.site, self.backup_set, "synthetic-key",
-                            "synthetic-db-password", "synthetic-admin-password")
+                            "synthetic-db-password", "synthetic-admin-password",
+                            expected_hashes=hashes)
 
     def test_probe_failure_blocks_native_restore(self):
         popen = make_popen(returncode=2, stderr_bytes=b"gpg: bad passphrase\n")
