@@ -2545,27 +2545,21 @@ class BenchRunner:
         """
         result = self._run(["--site", site, "execute", "frappe.db.sql",
                             "--kwargs", json.dumps({"query":
-                                "SELECT CAST(COALESCE(SUM(grand_total), 0) AS CHAR) "
+                                "SELECT 'TH_CENSUS' AS marker, CAST(COALESCE(SUM(grand_total), 0) AS CHAR) "
                                 "FROM `tabFees`"})], timeout=300)
         if result.returncode != 0:
             raise refuse("apply.counts_unavailable",
                          "the Fees billing total could not be verified")
-        payload = None
-        for line in reversed((result.stdout or "").splitlines()):
-            line = line.strip()
-            if line.startswith("["):
-                try:
-                    payload = json.loads(line)
-                except json.JSONDecodeError:
-                    payload = None
-                if payload is not None:
-                    break
-        if (not isinstance(payload, list) or len(payload) != 1
-                or not isinstance(payload[0], list) or len(payload[0]) != 1):
+        rows = self._marked_rows(result.stdout)
+        if rows is None or len(rows) != 1 or len(rows[0]) != 1:
             raise refuse("apply.counts_unavailable",
                          "the Fees billing total report is unreadable")
+        raw_total = rows[0][0]
+        if not isinstance(raw_total, str) or not raw_total.strip():
+            raise refuse("apply.counts_unavailable",
+                         "the Fees billing total report is malformed")
         try:
-            total = Decimal(str(payload[0][0]))
+            total = Decimal(raw_total)
         except (InvalidOperation, ValueError):
             raise refuse("apply.counts_unavailable",
                          "the Fees billing total report is malformed") from None
@@ -2601,33 +2595,22 @@ class BenchRunner:
             if not _CENSUS_COLUMN.fullmatch(column):
                 raise refuse("apply.counts_unavailable",
                              f"the census hash for {doctype} is misconfigured")
-        query = ("SELECT " + ", ".join(columns) + f" FROM `tab{doctype}` "
-                 "ORDER BY name")
+        query = ("SELECT 'TH_CENSUS' AS marker, " + ", ".join(columns)
+                 + f" FROM `tab{doctype}` ORDER BY name")
         result = self._run(["--site", site, "execute", "frappe.db.sql",
                             "--kwargs", json.dumps({"query": query})], timeout=600)
         if result.returncode != 0:
             raise refuse("apply.counts_unavailable",
                          f"the {doctype} census hash could not be verified")
-        payload = None
-        for line in reversed((result.stdout or "").splitlines()):
-            line = line.strip()
-            if line.startswith("["):
-                try:
-                    payload = json.loads(line)
-                except json.JSONDecodeError:
-                    payload = None
-                if payload is not None:
-                    break
-        if not isinstance(payload, list) or not all(
-                isinstance(row, list) and len(row) == len(columns)
-                for row in payload):
+        rows = self._marked_rows(result.stdout)
+        if rows is None or not all(len(row) == len(columns) for row in rows):
             raise refuse("apply.counts_unavailable",
                          f"the {doctype} census hash report is unreadable")
         numeric_columns = frozenset(
             index for index, column in enumerate(columns)
             if column in _CENSUS_NUMERIC_FIELDS)
         try:
-            return _census_digest(payload, numeric_columns=numeric_columns)
+            return _census_digest(rows, numeric_columns=numeric_columns)
         except (ValueError, InvalidOperation):
             raise refuse("apply.counts_unavailable",
                          f"the {doctype} census hash contains invalid values") from None
