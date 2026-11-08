@@ -65,6 +65,16 @@ class ReleaseImageTriggerContract(unittest.TestCase):
         self.assertIn("/probe.py:ro", workflow)
         self.assertIn("target=/run/th-update-docker.sock,readonly", workflow)
 
+    def test_held_non_oracle_candidate_still_triggers_image_and_windows_gates(self):
+        # A draft release candidate is not authorized for production, but it
+        # MUST earn exact-head Windows and Product image qualification before
+        # it can be reviewed for promotion into main.
+        pattern = "- 'integration/erp-non-oracle-audit-*'"
+        for workflow_name in ("product-image.yml", "windows-customer-package.yml"):
+            with self.subTest(workflow_name=workflow_name):
+                workflow = (WORKFLOWS / workflow_name).read_text(encoding="utf-8")
+                self.assertIn(pattern, workflow)
+
     def test_native_integration_separately_covers_native_checker_changes(self):
         self.assertIn("tools/native/**", push_paths("native-lifecycle.yml"))
 

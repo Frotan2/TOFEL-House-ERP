@@ -9,6 +9,8 @@ on:
       - main
       - work
       - 'fix/**'
+      # Exact-SHA qualification for held non-Oracle release candidates.
+      - 'integration/erp-non-oracle-audit-*'
   workflow_dispatch:
 
 permissions:
