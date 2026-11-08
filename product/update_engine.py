@@ -1308,8 +1308,8 @@ def validate_backup_receipt(path: Path, *, site: str, backup_dir: Path,
                             product_root: Path, now: datetime,
                             max_age_hours: int) -> dict:
     activate = _load_activate_module()
-    from backup_receipt_auth import (ReceiptAuthenticationError,
-                                     read_backup_secret_from_site_config)
+    from native_gpg import (ReceiptAuthenticationError,
+                            read_backup_secret_from_site_config)
     try:
         backup_secret = read_backup_secret_from_site_config(
             product_root / "data" / "sites" / site / "site_config.json")

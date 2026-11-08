@@ -467,7 +467,7 @@ class LineEndingContract(unittest.TestCase):
             "apps/toefl_house", "apps/foundation_security",
             "docs/owner-decisions.json",
             "product/bootstrap.py", "product/activate.py", "product/restore.py",
-            "product/backup.py", "product/backup_receipt_auth.py",
+            "product/backup.py",
             "product/native_gpg.py", "product/native_db.py",
             "product/wsgi.py", "product/entrypoint.sh", "product/perf_baseline.py",
             "product/web.cjs", "product/realtime.cjs",

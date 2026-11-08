@@ -204,7 +204,7 @@ def _write_receipt(restore, backup_dir: Path, backup_set: str, *,
     receipt = {"schema_version": 2, "backup_set": backup_set,
                "created_utc": created, "encrypted": True, "verified": True,
                "artifacts": artifacts}
-    from backup_receipt_auth import authenticate_backup_receipt
+    from native_gpg import authenticate_backup_receipt
     authenticate_backup_receipt(receipt, "synthetic-key")
     (backup_dir / f"{backup_set}-receipt.json").write_text(
         json.dumps(receipt), encoding="utf-8")

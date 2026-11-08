@@ -23,9 +23,9 @@ import sys
 import tempfile
 
 from native_db import safe_mariadb_credential_transport
-from backup_receipt_auth import authenticate_backup_receipt
 from native_gpg import (GpgProbeError, probe_gpg_decrypt,
                         safe_gpg_diagnostic_category, safe_gpg_transport,
+                        authenticate_backup_receipt,
                         GPG_LIST_PACKETS_TIMEOUT_SECONDS,
                         probe_budget_for_encrypted_size, probe_gpg_packets)
 

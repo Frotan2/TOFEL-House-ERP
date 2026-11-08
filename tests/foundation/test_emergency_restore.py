@@ -182,7 +182,7 @@ class EmergencyRestoreTests(unittest.TestCase):
                  "sha256": hashes[role], "bytes": paths[role].stat().st_size}
                 for role in self.restore.BACKUP_SUFFIXES],
         }
-        from backup_receipt_auth import authenticate_backup_receipt
+        from native_gpg import authenticate_backup_receipt
         authenticate_backup_receipt(receipt, SECRET_KEY)
         (backup_dir / f"{backup_set}-receipt.json").write_text(
             json.dumps(receipt), encoding="utf-8")

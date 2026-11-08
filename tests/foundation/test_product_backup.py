@@ -21,7 +21,7 @@ if str(PRODUCT) not in sys.path:
     sys.path.insert(0, str(PRODUCT))
 
 import native_gpg  # noqa: E402
-from backup_receipt_auth import verify_backup_receipt_authentication  # noqa: E402
+from native_gpg import verify_backup_receipt_authentication  # noqa: E402
 
 
 def _tar_header_bytes() -> bytes:

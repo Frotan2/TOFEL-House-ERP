@@ -36,9 +36,9 @@ import tempfile
 _PRODUCT_DIR = Path(__file__).resolve().parent
 if str(_PRODUCT_DIR) not in sys.path:
     sys.path.insert(0, str(_PRODUCT_DIR))
-from backup_receipt_auth import (ReceiptAuthenticationError,
-                                 read_backup_secret_from_site_config,
-                                 verify_backup_receipt_authentication)
+from native_gpg import (ReceiptAuthenticationError,
+                        read_backup_secret_from_site_config,
+                        verify_backup_receipt_authentication)
 import time
 from datetime import datetime, timezone
 

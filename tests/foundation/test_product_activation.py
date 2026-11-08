@@ -23,7 +23,7 @@ from tests.foundation.test_production_activation import load_policy, load_securi
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "product"))
-from backup_receipt_auth import authenticate_backup_receipt  # noqa: E402
+from native_gpg import authenticate_backup_receipt  # noqa: E402
 SITE = "toeflhouse.localhost"
 BACKUP_SET = "20261007-120000-toeflhouse_localhost"
 POLICY = {

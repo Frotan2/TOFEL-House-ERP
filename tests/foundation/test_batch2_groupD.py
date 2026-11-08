@@ -46,7 +46,7 @@ sys.path.insert(0, str(PRODUCT))
 sys.path.insert(0, str(ROOT / "tests" / "foundation"))
 
 import native_gpg  # noqa: E402
-from backup_receipt_auth import authenticate_backup_receipt  # noqa: E402
+from native_gpg import authenticate_backup_receipt  # noqa: E402
 import update_engine as engine  # noqa: E402
 from test_product_activation import BACKUP_SET, POLICY, SITE, load_activate  # noqa: E402
 from test_production_activation import load_policy, load_security  # noqa: E402

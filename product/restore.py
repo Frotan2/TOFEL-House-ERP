@@ -43,10 +43,10 @@ import time
 import traceback
 
 from native_db import safe_mariadb_credential_transport
-from backup_receipt_auth import (ReceiptAuthenticationError,
-                                 verify_backup_receipt_authentication)
 from native_gpg import (GpgProbeError, probe_gpg_decrypt,
-                        safe_gpg_diagnostic_category, safe_gpg_transport)
+                        safe_gpg_diagnostic_category, safe_gpg_transport,
+                        ReceiptAuthenticationError,
+                        verify_backup_receipt_authentication)
 
 BENCH_DIR = Path(os.environ.get("BENCH_DIR", "/home/frappe/bench"))
 SITES_DIR = BENCH_DIR / "sites"

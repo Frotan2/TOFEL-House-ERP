@@ -31,7 +31,7 @@ PRODUCT = ROOT / "product"
 sys.path.insert(0, str(PRODUCT))
 
 import update_engine as engine  # noqa: E402
-from backup_receipt_auth import authenticate_backup_receipt  # noqa: E402
+from native_gpg import authenticate_backup_receipt  # noqa: E402
 
 # Build fresh disposable, signed fixtures against the runner clock. A frozen
 # October 24 timestamp made CLI subprocesses correctly reject expired backups
