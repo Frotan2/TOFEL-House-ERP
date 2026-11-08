@@ -33,10 +33,10 @@ their own key. If only one approver is available, the restore waits.
   three files, so nobody can silently substitute a different or older backup.
 - A backup of the live system as it is now, taken immediately before the
   restore, so the current data can be brought back if the restore is wrong.
-  **Important:** the program currently verifies that a distinct complete
-  pre-restore backup set exists, but cannot itself prove that it was just
-  created or faithfully captures the current live database. The Owner and
-  support must independently verify its creation and restoration rehearsal.
+  The approvers independently verify this backup before signing and bind
+  its set name and receipt fingerprint to the request. The program checks
+  receipt freshness, artifact hashes and decryption. The approvers must
+  still verify that the backup faithfully captures the current live database.
 - That the restore was first rehearsed on a disposable test site, where
   possible, using the same backup.
 - That no earlier restore is still unfinished (the system refuses a new
@@ -98,14 +98,22 @@ Fields: `site`, `backup_set`, `encryption_key`, `db_root_password`,
 
 ### Emergency authorization document
 
-Exact keys, no extras: `schema_version` (1), `document_type`
+Exact keys, no extras: `schema_version` (2), `document_type`
 (`"emergency-restore"`), `site`, `target` (`"production"`), `backup_set`,
 `backup_sha256` (per-artifact SHA-256 for `database`, `public_files`,
-`private_files`, computed from the files actually present), `request_id`
+`private_files`, computed from the files actually present),
+`pre_restore_backup_set` (the name of the distinct preservation set),
+`pre_restore_backup_receipt_sha256` (SHA-256 of the exact
+`<pre_restore_backup_set>-receipt.json` bytes), `request_id`
 (32 lowercase hex characters, single-use), `issued_utc`, `expires_utc`
 (`YYYY-MM-DDTHH:MM:SSZ`), `approvals` (exactly two: one `course-owner`
 and one `general-manager` or `recovery-authority`, distinct identities,
 roles and key_ids).
+
+Create and independently verify the preservation backup before signing.
+Do not rewrite the receipt, including its timestamps or formatting.
+Schema 1 requests lack this binding and require fresh approval from both
+approvers using schema 2. No change to the approvers or trust store is needed.
 
 ### Trust store
 
@@ -130,12 +138,15 @@ by design.
 4. Production only: distinct pre-restore backup set present and complete.
 5. Production only: authorization document, window, approvals, trust-store
    bindings, key purposes and validity, both signatures over the
-   canonical document, artifact hashes matching the files present.
+   canonical document, target artifact hashes and preservation set name
+   matching the request.
 6. Production only: request_id not already consumed; no in-progress
    marker from an unfinished restore.
-7. Only then: consume the request_id (exclusive file), write the
-   in-progress marker and the `started` audit record, stage artifacts
-   (hash-verified copies in a 0700 temporary directory; originals are
+7. Consume the request_id (exclusive file), then verify the preservation
+   receipt matches the signed fingerprint, was issued within 24 hours,
+   and matches the decryptable preservation artifacts.
+8. Only then: write the in-progress marker and the `started` audit record,
+   stage artifacts (hash-verified copies in a 0700 temporary directory; originals are
    never mutated by native decrypt), run native Frappe restore with
    `force=True` on the declared target only, then remove the marker and
    write `completed` or `failed`.

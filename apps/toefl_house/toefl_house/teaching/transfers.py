@@ -241,7 +241,16 @@ def preserved_evidence(student, from_group):
         "where a.student=%s and s.student_group=%s and a.docstatus=1 "
         "order by a.name limit %s", (student, from_group, EVIDENCE_SAMPLE),
         as_dict=True)
-    attendance_count = frappe.db.count(
+    # The source-class count uses the SAME join/filter as the sample above.
+    # The unfiltered per-student count is kept only under its honest name;
+    # it must never be presented as source-class attendance.
+    source_rows = frappe.db.sql(
+        "select count(*) as total from `tabStudent Attendance` a "
+        "join `tabCourse Schedule` s on s.name = a.course_schedule "
+        "where a.student=%s and s.student_group=%s and a.docstatus=1",
+        (student, from_group), as_dict=True)
+    attendance_in_source = int((source_rows[0] or {}).get("total") or 0)
+    attendance_total = frappe.db.count(
         "Student Attendance", {"student": student, "docstatus": 1})
     assessments = frappe.get_all(
         "Assessment Result", filters={"student": student, "docstatus": 1},
@@ -259,8 +268,8 @@ def preserved_evidence(student, from_group):
     return {
         "source_class": from_group,
         "attendance_in_source_class": {
-            "count": int(attendance_count),
-            "count_total_for_student": int(attendance_count),
+            "count": int(attendance_in_source),
+            "count_total_for_student": int(attendance_total),
             "sample": [row.get("name") for row in attendance],
         },
         "assessment_results": {

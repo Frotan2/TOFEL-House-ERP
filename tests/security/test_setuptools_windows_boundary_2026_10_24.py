@@ -61,7 +61,12 @@ class SetuptoolsWindowsBoundaryTests(unittest.TestCase):
                     'Invoke-Compose @("run", "--rm", "--no-deps", "--entrypoint",\n'
                     '            "/home/frappe/bench/env/bin/python", "web", "/product/backup.py")'
                 )
+                container_key_reader = (
+                    '$captured = Invoke-ComposeCapture @("exec", "-T", "web",\n'
+                    '        "/home/frappe/bench/env/bin/python", "-c", $code)'
+                )
                 body = body.replace(container_backup, "Invoke-Compose container-backup")
+                body = body.replace(container_key_reader, "Invoke-ComposeCapture container-key-reader")
                 self.assertNotRegex(body, prohibited)
 
     def test_customer_allowlist_contains_no_windows_python_payload(self):

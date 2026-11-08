@@ -12,9 +12,47 @@ import re
 
 _CODE = re.compile(r"[A-Z][A-Z0-9-]{0,11}")
 
+# The approved 60% pass threshold applies ONLY to formal graded programs.
+# Specialist programs (Special Speaking, TOEFL Preparation) are progress +
+# teacher feedback only, with no automatic pass/fail or promotion, so
+# their scales must not be forced to carry a 60 threshold. Scope is
+# explicit at creation and defaults to formal: any caller that does not
+# name a scope is treated as a formal graded program and stays
+# fail-closed on the 60% rule. Scope is a technical enum only -- program
+# names are Owner data (see the preset) and are never hard-coded here.
+FORMAL_SCOPE = "formal"
+SPECIALIST_SCOPE = "specialist"
 
-def normalize_intervals(value):
-    """Return validated native Grading Scale Interval rows, descending."""
+
+def canonical_grading_scope(scope):
+    """Map a scope name to ``"formal"`` or ``"specialist"``.
+
+    Accepts ``"formal"`` / ``"specialist"`` (case-insensitive, surrounding
+    whitespace ignored). Anything else -- including ``None``, an empty
+    string, or an unknown word -- is refused fail-closed instead of
+    guessing a scope.
+    """
+    if not isinstance(scope, str):
+        raise ValueError(
+            "Grading scale scope must be 'formal' or 'specialist'")
+    clean = scope.strip().lower()
+    if clean in (FORMAL_SCOPE, SPECIALIST_SCOPE):
+        return clean
+    raise ValueError(
+        f"Unknown grading scale scope {scope!r}: use 'formal' or 'specialist'")
+
+
+def normalize_intervals(value, scope="formal"):
+    """Return validated native Grading Scale Interval rows, descending.
+
+    The approved 60% pass threshold is required only for formal graded
+    programs (the default scope). Specialist-program scales (Special
+    Speaking, TOEFL Preparation) are exempt from the 60 requirement: they
+    record progress only and must never imply a pass/fail boundary. The
+    zero threshold is still required for every scope -- native Education
+    requires a grade at threshold zero.
+    """
+    canonical_scope = canonical_grading_scope(scope)
     if isinstance(value, str):
         if len(value) > 8192:
             raise ValueError("Grading interval payload is too large")
@@ -51,4 +89,82 @@ def normalize_intervals(value):
         rows.append({"grade_code": code, "threshold": float(percent)})
     if Decimal("0") not in thresholds:
         raise ValueError("Native Education requires a grade at threshold zero")
+    if canonical_scope == FORMAL_SCOPE and Decimal("60") not in thresholds:
+        raise ValueError(
+            "A formal grading scale requires the approved 60% pass "
+            "threshold: no formal scale may be created without a grade at "
+            "exactly 60")
     return sorted(rows, key=lambda row: (-row["threshold"], row["grade_code"]))
+
+
+def assert_grading_scale_scope_link(description, expected_scope):
+    """Guard the policy->native-scale boundary against scope confusion.
+
+    The Course Owner creation command stamps the scope in the submitted
+    native scale's description. A legacy unmarked native scale may remain
+    linked to a formal policy for backward compatibility, but unmarked
+    scales cannot become specialist progress scales: there is no evidence
+    that they were created without pass/fail semantics.
+
+    This check is *scope* validation, not a substitute for submission
+    and native interval/grade-code checks elsewhere.
+    """
+    expected = canonical_grading_scope(expected_scope)
+    if description is None:
+        description = ""
+    if not isinstance(description, str):
+        raise ValueError("Grading scale scope evidence must be text")
+    marker = re.match(
+        r"^Owner-approved scale \((formal|specialist) scope\)\.",
+        description,
+    )
+    if marker is None:
+        if description.startswith("Owner-approved scale ("):
+            raise ValueError("Grading scale has an invalid Owner scope marker")
+        if expected == SPECIALIST_SCOPE:
+            raise ValueError(
+                "A specialist progress policy requires an explicitly "
+                "Owner-approved specialist grading scale; an unmarked "
+                "legacy scale cannot establish that scope")
+        return FORMAL_SCOPE  # Legacy native scale; formal policy only.
+    actual = marker.group(1)
+    if actual != expected:
+        raise ValueError(
+            f"Grading scale scope {actual!r} conflicts with the "
+            f"assessment program scope {expected!r}")
+    return actual
+
+
+def assert_linked_native_scale_thresholds(rows, expected_scope):
+    """Verify the native intervals at the policy-link boundary, not only
+    the creator's input. Submitted legacy/native scales can be chosen in
+    the policy dialog, and their thresholds must satisfy the same limits.
+    Formal assessment requires 60 and zero; specialist progress requires
+    zero only and is not a pass/fail decision.
+    """
+    scope = canonical_grading_scope(expected_scope)
+    if not isinstance(rows, list) or not 2 <= len(rows) <= 12:
+        raise ValueError("Linked grading scale needs 2 to 12 native intervals")
+    thresholds = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("Linked native interval is malformed")
+        raw = row.get("threshold")
+        if isinstance(raw, bool) or not isinstance(raw, (str, int, float, Decimal)):
+            raise ValueError("Linked native threshold is not numeric")
+        try:
+            value = Decimal(str(raw).strip())
+        except (InvalidOperation, ValueError) as exc:
+            raise ValueError("Linked native threshold is not numeric") from exc
+        if (not value.is_finite() or value < 0 or value > 100
+                or value != value.to_integral_value()):
+            raise ValueError("Linked native threshold must be a whole percent from 0 to 100")
+        if value in thresholds:
+            raise ValueError("Linked grading scale has duplicate thresholds")
+        thresholds.add(value)
+    if Decimal("0") not in thresholds:
+        raise ValueError("Linked grading scale is missing the required zero threshold")
+    if scope == FORMAL_SCOPE and Decimal("60") not in thresholds:
+        raise ValueError(
+            "Formal grading scale link requires the approved 60% pass threshold")
+    return True

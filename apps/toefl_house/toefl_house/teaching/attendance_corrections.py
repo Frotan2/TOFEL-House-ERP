@@ -41,11 +41,29 @@ def _name(value, label):
     return value
 
 
+# Separation-of-duties guard (Group 1): the command role for every
+# attendance-correction command is Attendance Recorder, so an approver
+# role equal to it would let one actor satisfy both keys of the dual
+# key. Administrator and System Manager are likewise never legitimate
+# approver roles here. Refused at version-append time (and by the
+# doctype controller, which calls this validator on save); a version
+# pinned before this guard existed fails closed again at decision time
+# in _require_approver instead of being silently rewritten.
+_COLLAPSED_APPROVER_ROLES = frozenset(
+    {"Attendance Recorder", "Administrator", "System Manager"})
+
+
 def validate_terms(approver_role, window_days):
     """Shape-check one policy version's terms (command + controller)."""
     if not isinstance(approver_role, str) or not approver_role \
             or len(approver_role) > 140:
         raise ValueError("Approver role required")
+    if approver_role in _COLLAPSED_APPROVER_ROLES:
+        raise ValueError(
+            "Approver role must differ from the Attendance Recorder "
+            "command role and must not be an administrative role; a "
+            "collapsed approver role would let one actor satisfy both "
+            "keys of the attendance-correction dual key")
     days = validate_correction_window_days(window_days)
     return approver_role, days
 
@@ -106,6 +124,10 @@ def governing_correction_terms(on_date=None):
     governing = configuration_rules.resolve_governing(
         versions, on_date or frappe.utils.today())
     if not governing:
+        return {}
+    if governing.get("approver_role") in _COLLAPSED_APPROVER_ROLES:
+        # A pre-guard collapsed version governs nothing new until the
+        # owner appends a version with a distinct approver role.
         return {}
     return {
         "effective_from": str(governing.get("effective_from") or ""),
@@ -259,6 +281,12 @@ def _pending_request(req_name):
 
 
 def _require_approver(pinned_role, actor):
+    if pinned_role in _COLLAPSED_APPROVER_ROLES:
+        raise frappe.PermissionError(
+            "The pinned approver role collapses the attendance-correction "
+            "dual key (it equals the Attendance Recorder command role or "
+            "is an administrative role); repair the policy with a distinct "
+            "approver role and raise a new request")
     if pinned_role not in frappe.get_roles(actor):
         raise frappe.PermissionError(
             "Actor does not hold the policy-configured approver role")
@@ -373,6 +401,20 @@ def approve_attendance_correction(request_key, request):
         if date.fromisoformat(frappe.utils.today()) > limit:  # site clock, as the term resolution above
             raise frappe.ValidationError(
                 "Correction window for this session has closed")
+        # A correction must not evade a suspension: re-prove, against the
+        # live suspension state, that the requested replacement mark is
+        # allowed for this student on this session date, BEFORE the
+        # original mark is cancelled. (The live recording path already
+        # enforces this; approvals previously did not.)
+        group = frappe.db.get_value(SCHEDULE, facts.course_schedule,
+                                    "student_group")
+        if not group:
+            raise frappe.ValidationError(
+                "The session's class cannot be resolved; the correction "
+                "cannot be proven suspension-free")
+        from toefl_house.teaching import suspensions as suspension_rules
+        suspension_rules.assert_attendance_allowed(
+            group, str(session_date), {facts.student: req.requested_status})
         original = frappe.get_doc(ATTENDANCE, req.attendance)
         original.flags.ignore_permissions = True
         original.cancel()
@@ -422,6 +464,8 @@ def deny_attendance_correction(request_key, request):
     def work(actor):
         req = _pending_request(_name(request, "Attendance-correction request"))
         _require_approver(req.pinned_approver_role, actor)
+        if actor == getattr(req, "requested_by", None):
+            raise frappe.PermissionError("The requester cannot deny their own attendance change")
         req.flags.ignore_permissions = True
         req.status = "Denied"
         req.approved_by = actor

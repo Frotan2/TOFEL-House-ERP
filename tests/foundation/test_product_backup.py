@@ -21,6 +21,35 @@ if str(PRODUCT) not in sys.path:
     sys.path.insert(0, str(PRODUCT))
 
 import native_gpg  # noqa: E402
+from backup_receipt_auth import verify_backup_receipt_authentication  # noqa: E402
+
+
+def _tar_header_bytes() -> bytes:
+    header = bytearray(512)
+    header[257:262] = b"ustar"
+    header[263:265] = b"00"
+    return bytes(header)
+
+
+class _FakeDecryptStdin:
+    def write(self, data: bytes) -> int:
+        return len(data)
+
+    def close(self) -> None:
+        pass
+
+
+class _FakeDecryptPopen:
+    """Stand-in for GPG decrypt probes: every artifact decrypts cleanly."""
+
+    def __init__(self, arguments, **kwargs):
+        self.arguments = arguments
+        self.stdin = _FakeDecryptStdin()
+        self.stdout = io.BytesIO(_tar_header_bytes())
+        self.stderr = io.BytesIO(b"")
+
+    def wait(self) -> int:
+        return 0
 
 
 def load_backup():
@@ -256,12 +285,25 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
             return types.SimpleNamespace(returncode=0, stdout=output, stderr=b"")
         self.fail("unexpected child process invocation")
 
+    def fake_gpg_popen(self, arguments, **kwargs):
+        # Exercise the actual bounded GPG packet-inspection code, not a
+        # stub of subprocess.run (which is no longer used for packet output).
+        process = _FakeDecryptPopen(arguments, **kwargs)
+        if "--list-packets" in arguments:
+            process.stdout = io.BytesIO(
+                b"gpg: :compressed packet:\n" if self.fail_packet_verification
+                else b"gpg: :symkey enc packet:\n")
+            self.gpg_calls.append((arguments, {
+                "input": (self.key + "\n").encode("ascii")}))
+        return process
+
     def _run_adapter(self):
         caller_cwd = Path.cwd()
         try:
             with patch.dict(sys.modules, self.modules):
                 with patch.object(native_gpg.subprocess, "run", side_effect=self.fake_gpg_run):
-                    self.backup._native_backup()
+                    with patch.object(native_gpg.subprocess, "Popen", self.fake_gpg_popen):
+                        self.backup._native_backup()
         finally:
             self.assertEqual(Path.cwd(), caller_cwd)
 
@@ -298,6 +340,22 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
             (self.backup_dir / (set_name + "-site_config_backup-enc.json")).read_text()
         )["backup_encryption_key"], self.key)
 
+        # Group C: a verified set is issued a hash-bound receipt beside
+        # it; the receipt carries digests only, never the key.
+        receipt = json.loads(
+            (self.backup_dir / (set_name + "-receipt.json")).read_text())
+        self.assertEqual(receipt["schema_version"], self.backup.BACKUP_RECEIPT_SCHEMA_VERSION)
+        self.assertEqual(receipt["backup_set"], set_name)
+        self.assertTrue(receipt["encrypted"] and receipt["verified"])
+        verify_backup_receipt_authentication(receipt, self.key)
+        self.assertEqual({item["role"] for item in receipt["artifacts"]},
+                         set(self.backup.BACKUP_SUFFIXES))
+        for item in receipt["artifacts"]:
+            artifact = self.backup_dir / item["name"]
+            self.assertEqual(artifact.stat().st_size, item["bytes"])
+            self.assertEqual(self.backup._sha256(artifact), item["sha256"])
+        self.assertNotIn("backup_encryption_key", json.dumps(receipt))
+
         encryption_calls = [call for call in self.gpg_calls if "-c" in call[0]]
         packet_calls = [call for call in self.gpg_calls if "--list-packets" in call[0]]
         self.assertEqual(len(encryption_calls), 3)
@@ -313,16 +371,16 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
             self.assertEqual(kwargs["input"], (self.key + "\n").encode("ascii"))
 
     def test_gpg_packet_error_category_is_safe_and_does_not_retain_raw_output(self):
-        with patch.object(self.backup.subprocess, "run", return_value=types.SimpleNamespace(
+        with patch.object(self.backup, "probe_gpg_packets", return_value=types.SimpleNamespace(
                 returncode=2,
                 stdout=b"gpg: no valid OpenPGP data found for /private/synthetic-secret",
-                stderr=b"")) as gpg_run:
+                stderr=b"")) as packet_probe:
             with self.assertRaises(self.backup.BackupInputError) as caught:
                 self.backup._assert_gpg_encrypted(self.old_database, "database", self.key)
-        self.assertIn("--batch", gpg_run.call_args.args[0])
-        self.assertIn("--passphrase-fd", gpg_run.call_args.args[0])
-        self.assertEqual(gpg_run.call_args.kwargs["input"],
-                         (self.key + "\n").encode("ascii"))
+        packet_probe.assert_called_once()
+        self.assertEqual(packet_probe.call_args.args[0], self.old_database)
+        self.assertEqual(packet_probe.call_args.args[1], self.key)
+        self.assertGreater(packet_probe.call_args.kwargs["timeout"], 0)
         self.assertEqual(caught.exception.safe_code, "gpg-database-check-exit-2")
         self.assertEqual(caught.exception.safe_category, "no-valid-openpgp-data")
         self.assertNotIn("synthetic-secret", str(caught.exception))

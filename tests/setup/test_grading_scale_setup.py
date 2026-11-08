@@ -6,7 +6,10 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[2] / "apps" / "toefl_house"
 sys.path.insert(0, str(APP_ROOT))
-from toefl_house.setup_presets.grading_rules import normalize_intervals  # noqa: E402
+from toefl_house.setup_presets.grading_rules import (  # noqa: E402
+    normalize_intervals, assert_grading_scale_scope_link,
+    assert_linked_native_scale_thresholds,
+)
 
 
 class GradingScaleValidationTests(unittest.TestCase):
@@ -15,7 +18,7 @@ class GradingScaleValidationTests(unittest.TestCase):
                 {"grade_code": "C", "threshold": 70},
                 {"grade_code": "A", "threshold": 90},
                 {"grade_code": "B", "threshold": 80},
-                {"grade_code": "D", "threshold": 65}]
+                {"grade_code": "D", "threshold": 60}]
         expected = normalize_intervals(rows)
         self.assertEqual([row["grade_code"] for row in expected],
                          ["A", "B", "C", "D", "F"])
@@ -37,6 +40,105 @@ class GradingScaleValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "threshold zero"):
             normalize_intervals([{"grade_code": "A", "threshold": 90},
                                  {"grade_code": "B", "threshold": 80}])
+
+    def test_specialist_scale_without_sixty_succeeds(self):
+        # Special Speaking / TOEFL Preparation are progress + teacher
+        # feedback only: no automatic pass/fail, so no 60 threshold.
+        rows = [{"grade_code": "EXCELLENT", "threshold": 90},
+                {"grade_code": "GOOD", "threshold": 70},
+                {"grade_code": "DEVELOPING", "threshold": 40},
+                {"grade_code": "SUPPORT", "threshold": 0}]
+        for scope in ("specialist", "Specialist", "specialist "):
+            with self.subTest(scope=scope):
+                valid = normalize_intervals(rows, scope=scope)
+                self.assertEqual([row["grade_code"] for row in valid],
+                                 ["EXCELLENT", "GOOD", "DEVELOPING", "SUPPORT"])
+                self.assertNotIn(60, [row["threshold"] for row in valid])
+        # The native zero threshold is still required for specialist scales.
+        with self.assertRaisesRegex(ValueError, "threshold zero"):
+            normalize_intervals(rows[:-1], scope="specialist")
+
+    def test_formal_scale_without_sixty_is_still_refused(self):
+        rows = [{"grade_code": "A", "threshold": 90},
+                {"grade_code": "B", "threshold": 80},
+                {"grade_code": "C", "threshold": 70},
+                {"grade_code": "F", "threshold": 0}]
+        for scope in ("formal", "Formal"):
+            with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, "60"):
+                normalize_intervals(rows, scope=scope)
+
+    def test_default_scope_still_enforces_sixty(self):
+        # No scope given: the caller is treated as a formal graded program.
+        with self.assertRaisesRegex(ValueError, "60"):
+            normalize_intervals([{"grade_code": "A", "threshold": 90},
+                                 {"grade_code": "B", "threshold": 80},
+                                 {"grade_code": "C", "threshold": 70},
+                                 {"grade_code": "F", "threshold": 0}])
+
+    def test_unknown_scope_is_refused_fail_closed(self):
+        rows = [{"grade_code": "EXCELLENT", "threshold": 90},
+                {"grade_code": "SUPPORT", "threshold": 0}]
+        for scope in ("other", "", None, 123, "graded"):
+            with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, "scope"):
+                normalize_intervals(rows, scope=scope)
+
+    def test_specialist_and_formal_scale_linking_cannot_be_swapped(self):
+        formal = "Owner-approved scale (formal scope). Reason: test"
+        specialist = "Owner-approved scale (specialist scope). Reason: test"
+        self.assertEqual(assert_grading_scale_scope_link(formal, "formal"), "formal")
+        self.assertEqual(
+            assert_grading_scale_scope_link(specialist, "specialist"),
+            "specialist")
+        for description, expected in (
+                (specialist, "formal"),
+                (formal, "specialist")):
+            with self.subTest(expected=expected), self.assertRaisesRegex(
+                    ValueError, "scope"):
+                assert_grading_scale_scope_link(description, expected)
+
+    def test_unmarked_legacy_scale_is_formal_only(self):
+        self.assertEqual(assert_grading_scale_scope_link(None, "formal"), "formal")
+        with self.assertRaisesRegex(ValueError, "requires"):
+            assert_grading_scale_scope_link(None, "specialist")
+        with self.assertRaisesRegex(ValueError, "invalid Owner scope"):
+            assert_grading_scale_scope_link(
+                "Owner-approved scale (unknown scope). Reason: x", "formal")
+
+    def test_native_scale_link_requires_actual_zero_and_formal_sixty(self):
+        rows = [{"threshold": 90}, {"threshold": 60}, {"threshold": 0}]
+        self.assertTrue(assert_linked_native_scale_thresholds(rows, "formal"))
+        self.assertTrue(assert_linked_native_scale_thresholds(
+            [{"threshold": 90}, {"threshold": 0}], "specialist"))
+        for bad in (
+            [{"threshold": 90}, {"threshold": 0}],
+            [{"threshold": 90}, {"threshold": "NaN"}, {"threshold": 0}],
+            [{"threshold": 90}, {"threshold": 90}, {"threshold": 0}],
+            [{"threshold": 90}, {"threshold": 60}],
+        ):
+            with self.subTest(rows=bad), self.assertRaises(ValueError):
+                assert_linked_native_scale_thresholds(bad, "formal")
+
+    def test_create_owner_grading_scale_carries_scope(self):
+        app = APP_ROOT / "toefl_house"
+        source = (app / "setup_presets/native_grading_scale.py").read_text(encoding="utf-8")
+        self.assertIn('scope="formal"', source)
+        self.assertIn("canonical_grading_scope(scope)", source)
+        self.assertIn("normalize_intervals(intervals, scope=clean_scope)", source)
+        self.assertIn('"scope": clean_scope', source)
+        self.assertIn('"scope": scope', source)
+        self.assertIn("Specialist progress scale", source)
+        self.assertIn("no automatic pass/fail or promotion", source)
+
+    def test_refuse_scale_without_the_sixty_percent_pass_threshold(self):
+        with self.assertRaisesRegex(ValueError, "60"):
+            normalize_intervals([{"grade_code": "A", "threshold": 90},
+                                 {"grade_code": "B", "threshold": 80},
+                                 {"grade_code": "C", "threshold": 70},
+                                 {"grade_code": "F", "threshold": 0}])
+        valid = normalize_intervals([{"grade_code": "A", "threshold": 90},
+                                     {"grade_code": "D", "threshold": 60},
+                                     {"grade_code": "F", "threshold": 0}])
+        self.assertIn(60, [row["threshold"] for row in valid])
 
     def test_refuse_nan_infinity_bool_and_invalid_percent(self):
         for number in ("NaN", "Infinity", -1, 65.5, 100.1, True, "not a score"):

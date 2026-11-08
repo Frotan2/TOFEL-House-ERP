@@ -291,6 +291,80 @@ class SnapshotSafetyTests(unittest.TestCase):
         state = actual_snapshot_functions(db)["_snapshot"]()
         self.assertIsNone(state["tuition"]["PRE-STARTER"]["1405"])
 
+    def test_malformed_duration_row_is_unmeasurable_not_a_preview_crash(self):
+        # U-18: an empty/non-numeric duration_value used to raise
+        # TypeError/ValueError out of the whitelisted preview endpoint
+        # (HTTP 500). It is now an unmeasurable level (months=None),
+        # which preview_catalog flags "review". The same holds for
+        # non-positive durations (the preset requires >= 1 month) and
+        # for non-finite floats ("nan"/"inf"/"1e400" parse but are not
+        # integer month counts).
+        for bad in ("", "six", None, "  ", "2.5x", "-3", "0", "0.0",
+                    "nan", "inf", "1e400"):
+            with self.subTest(duration_value=bad):
+                db = FakeDB({
+                    "TH Academic Program": [Row(name="F-1", code="GE",
+                                                title="GE", status="Active")],
+                    "TH Program Level": [Row(name="L-1", code="PRE-STARTER",
+                                             title="Pre Starter", family="F-1",
+                                             native_program="N-1", next_level="",
+                                             status="Active")],
+                    "TH Level Duration": [Row(
+                        parent="L-1", duration_value=bad,
+                        duration_unit="Month", effective_from="2026-03-21")],
+                })
+                state = actual_snapshot_functions(db)["_snapshot"]()
+                self.assertIsNone(
+                    state["levels"]["PRE-STARTER"]["duration_months"])
+        # Well-formed values are unchanged by the guard.
+        for value, expected in (("3", 3), (2, 2), (2.5, None), (" 3 ", 3),
+                                ("4", 4)):
+            with self.subTest(duration_value=value):
+                db = FakeDB({
+                    "TH Program Level": [Row(name="L-1", code="PRE-STARTER",
+                                             title="Pre Starter", family="F-1",
+                                             native_program="N-1", next_level="",
+                                             status="Active")],
+                    "TH Level Duration": [Row(
+                        parent="L-1", duration_value=value,
+                        duration_unit="Month", effective_from="2026-03-21")],
+                })
+                state = actual_snapshot_functions(db)["_snapshot"]()
+                self.assertEqual(
+                    state["levels"]["PRE-STARTER"]["duration_months"],
+                    expected)
+
+    def test_unmeasurable_level_is_flagged_review_by_preview_catalog(self):
+        import importlib.util
+        preset_path = (Path(__file__).resolve().parents[2] / "apps" /
+                       "toefl_house" / "toefl_house" / "setup_presets" /
+                       "preset.py")
+        spec = importlib.util.spec_from_file_location(
+            "_preset_under_test", preset_path)
+        preset = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(preset)
+        loaded = preset.load_preset()
+        family = loaded["programs"][0]
+        level = family["levels"][0]
+        snapshot = {
+            "programs": {family["code"]: {"title": family["title"],
+                                           "status": "Active"}},
+            "levels": {level["code"]: {
+                "family": family["code"], "title": level["title"],
+                "duration_months": None, "status": "Active",
+                "native_program": "N-1", "curriculum_ready": True,
+                "next_level": ""}},
+            "years": {}, "fee_categories": [], "fee_category_items": {},
+            "tuition": {}, "native_program_titles": [],
+            "native_program_abbreviations": [], "native_course_titles": [],
+        }
+        preview = preset.preview_catalog(snapshot)
+        actions = [a for a in preview["actions"]
+                   if a["kind"] == "level" and a["code"] == level["code"]]
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(actions[0]["status"], "review")
+        self.assertGreaterEqual(preview["counts"]["review"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

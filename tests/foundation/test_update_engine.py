@@ -31,6 +31,7 @@ PRODUCT = ROOT / "product"
 sys.path.insert(0, str(PRODUCT))
 
 import update_engine as engine  # noqa: E402
+from backup_receipt_auth import authenticate_backup_receipt  # noqa: E402
 
 # Build fresh disposable, signed fixtures against the runner clock. A frozen
 # October 24 timestamp made CLI subprocesses correctly reject expired backups
@@ -158,7 +159,9 @@ class UpdateFixture:
                           self.staging, self.evidence):
             directory.mkdir(parents=True, exist_ok=True)
         (self.data / "secrets" / "db.env").write_text("MARIADB_ROOT_PASSWORD=test\n", encoding="utf-8")
-        (self.site / "site_config.json").write_text('{"db_name": "test"}\n', encoding="utf-8")
+        (self.site / "site_config.json").write_text(
+            '{"db_name":"test","backup_encryption_key":"synthetic-backup-key-for-tests"}\n',
+            encoding="utf-8")
         self.version = version
         self.sequence = sequence
         self.previous_version = previous_version
@@ -324,6 +327,8 @@ class UpdateFixture:
         }
         if mutate:
             receipt.update(mutate)
+        authenticate_backup_receipt(
+            receipt, "synthetic-backup-key-for-tests")
         self.receipt_rel = "data/update/evidence/backup-receipt.json"
         payload = json.dumps(receipt, indent=2).encode()
         (self.product_root / self.receipt_rel).write_bytes(payload)
@@ -906,6 +911,24 @@ if "migrate" in args:
     state["migrate_calls"] = state.get("migrate_calls", 0) + 1
     for doctype, delta in state.get("mutations", {}).items():
         state["counts"][doctype] = (state["counts"].get(doctype) or 0) + delta
+    if state.get("fees_total_delta") is not None:
+        from decimal import Decimal
+        state["fees_total"] = format(
+            Decimal(str(state.get("fees_total", "0"))) + Decimal(str(state["fees_total_delta"])), "f")
+    if not state.get("row_swaps_applied"):
+        # Tamper once, on the first migrate replay only: a swap applied on
+        # every replay would swap the values back and hide the tamper.
+        for swap in state.get("row_swaps", []):
+            rows = state.setdefault("rows", {}).get(swap["doctype"])
+            if not rows:
+                continue
+            by_name = {row[0]: row for row in rows}
+            first, second = by_name.get(swap["a"]), by_name.get(swap["b"])
+            if first is None or second is None:
+                continue
+            column = swap["column"]
+            first[column], second[column] = second[column], first[column]
+        state["row_swaps_applied"] = True
     for doctype in state.get("drop_after_migrate", []):
         state["counts"].pop(doctype, None)
     for doctype, delta in state.get("orphan_mutations", {}).items():
@@ -927,16 +950,64 @@ if "frappe.db.count" in args:
     raise SystemExit(0)
 if "frappe.db.sql" in args:
     query = json.loads(args[args.index("--kwargs") + 1])["query"]
-    rows = []
-    for child in ("Sales Invoice Item", "Payment Entry Reference"):
-        if child in query:
-            value = state.get("orphans", {}).get(child)
-            if value is None:
-                sys.stderr.write("synthetic integrity failure\n")
-                raise SystemExit(1)
-            rows.append([child, str(value)])
-    print(json.dumps(rows))
-    raise SystemExit(0)
+    if "SUM(grand_total)" in query and "tabFees" in query:
+        print(json.dumps([["TH_CENSUS", str(state.get("fees_total", "0"))]]))
+        raise SystemExit(0)
+    if "ORDER BY name" in query:
+        # Per-record census hash query: SELECT marker, name, <fields> FROM `tabX`
+        # ORDER BY name. Answer from explicit state rows when present, else
+        # synthesize deterministic rows from the count so clean applies keep
+        # identical before/after hashes.
+        import re as _re
+        match = _re.search(r"FROM `tab([^`]+)`", query)
+        doctype = match.group(1) if match else ""
+        select_part = query.split("FROM")[0].strip()
+        if select_part.upper().startswith("SELECT "):
+            select_part = select_part[len("SELECT "):]
+        columns = [column.strip() for column in select_part.split(",")]
+        if not columns or columns[0] != "\'TH_CENSUS\' AS marker":
+            raise SystemExit("missing census marker")
+        columns = columns[1:]
+        rows = state.get("rows", {}).get(doctype)
+        if rows is None:
+            count = state.get("counts", {}).get(doctype) or 0
+            def _cell(column, index):
+                if column == "name":
+                    return f"{doctype}-{index:03d}"
+                if column == "docstatus":
+                    return 1
+                if column in ("posting_date", "start_date", "end_date"):
+                    return "2026-01-01"
+                if "amount" in column or "total" in column or column == "net_pay":
+                    return f"{100 + index}.00"
+                return f"{column}-{index}"
+            rows = [[_cell(column, index) for column in columns]
+                    for index in range(count)]
+        print(json.dumps([["TH_CENSUS", *row] for row in rows]))
+        raise SystemExit(0)
+    if "LEFT JOIN" in query:
+        rows = []
+        for child in ("Sales Invoice Item", "Payment Entry Reference"):
+            if child in query:
+                value = state.get("orphans", {}).get(child)
+                if value is None:
+                    sys.stderr.write("synthetic integrity failure\n")
+                    raise SystemExit(1)
+                rows.append(["TH_CENSUS", child, str(value)])
+        print(json.dumps(rows))
+        raise SystemExit(0)
+    if "COUNT(*)" in query:
+        import re as _re
+        match = _re.search(r"FROM `tab([^`]+)`", query)
+        doctype = match.group(1) if match else None
+        value = state.get("counts", {}).get(doctype)
+        if value is None:
+            sys.stderr.write("DoesNotExistError\n")
+            raise SystemExit(1)
+        print(json.dumps([["TH_CENSUS", str(value)]]))
+        raise SystemExit(0)
+    sys.stderr.write("unexpected synthetic bench arguments\n")
+    raise SystemExit(1)
 if "frappe.client.get_list" in args:
     if state.get("fail_pages"):
         raise SystemExit(1)
@@ -960,7 +1031,13 @@ class ApplyTests(UpdateEngineBase):
             "migrate_calls": 0,
             "counts": {"Student": 12, "Student Group": 3, "Course": 4, "Program": 2,
                        "Sales Invoice": 20, "Payment Entry": 18, "Attendance": 200,
-                       "Salary Slip": 5, "Employee": 6, "User": 4, "Role": 9},
+                       "Salary Slip": 5, "Employee": 6, "User": 4, "Role": 9,
+                       "Fees": 7, "Program Enrollment": 11, "Student Applicant": 5,
+                       "TH Billing Policy": 2, "TH Program Level": 6,
+                       "TH Assessment Policy": 3, "TH Discount Rule": 4,
+                       "TH Level Duration": 6, "TH Enrollment Exit Policy": 1,
+                       "TH Correction Policy": 2},
+            "fees_total": "12345.67",
             "apps": list(engine.REQUIRED_APPS),
             "pages": list(engine.ROLE_DESK_PAGES),
             "orphans": {"Sales Invoice Item": 0, "Payment Entry Reference": 0},
@@ -1549,6 +1626,35 @@ class CensusStrictnessTests(ApplyTests):
         self.assertIn("apply.counts_unavailable", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
+    def test_nonfinite_fees_billing_total_is_refused_by_bench_census(self):
+        runner = engine.BenchRunner(str(self.bench), self.sites_dir, timeout=120)
+        for malformed in ("NaN", "sNaN", "Infinity", "-Infinity"):
+            with self.subTest(value=malformed):
+                self.state["fees_total"] = malformed
+                self.write_state()
+                with self.assertRaises(engine.UpdateError) as caught:
+                    runner.fees_total(engine.SITE_NAME)
+                self.assertEqual(caught.exception.code, "apply.counts_unavailable")
+                self.assertIn("non-finite", str(caught.exception))
+
+    def test_finite_fees_total_keeps_exact_decimal_precision(self):
+        runner = engine.BenchRunner(str(self.bench), self.sites_dir, timeout=120)
+        for supplied, expected in (
+                ("0", "0"), ("12345.6700", "12345.67"),
+                ("1e2", "100"), ("0.0001", "0.0001")):
+            with self.subTest(value=supplied):
+                self.state["fees_total"] = supplied
+                self.write_state()
+                self.assertEqual(runner.fees_total(engine.SITE_NAME), expected)
+
+    def test_nonfinite_fees_total_blocks_migration_before_any_write(self):
+        self.state["fees_total"] = "Infinity"
+        self.write_state()
+        report = self.apply()
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.counts_unavailable", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
     def test_a_disappearing_application_fails_the_update(self):
         self.state["apps"] = [app for app in engine.REQUIRED_APPS if app != "payments"]
         self.write_state()
@@ -1570,3 +1676,76 @@ class CensusStrictnessTests(ApplyTests):
         self.assertEqual(report["status"], "failed")
         self.assertIn("apply.counts_unavailable", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
+
+
+class PrivateStateFileTests(UpdateEngineBase):
+    """Group 3: engine-auth key, transaction and use-marker files are private,
+    exclusive and durable, and one preflight mints at most one authorization."""
+
+    def test_key_transaction_and_marker_files_are_private_and_exclusive(self):
+        state_dir = self.tmp / "private-state"
+        key = engine._authentication_key(state_dir)
+        self.assertEqual(key, engine._authentication_key(state_dir))
+        key_path = state_dir / engine.ENGINE_AUTH_KEY_NAME
+        self.assertEqual(key_path.stat().st_mode & 0o777, 0o600)
+        record = engine._persist_transaction(
+            state_dir, {"transaction_id": "a" * 32, "phase": "manifest"})
+        record_path = (state_dir / engine.TRANSACTION_RECORDS_DIR
+                       / ("a" * 32 + ".json"))
+        self.assertEqual(record_path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(record["auth_mac"], engine._transaction_mac(key, {
+            "transaction_id": "a" * 32, "phase": "manifest"}))
+        with self.assertRaises(engine.UpdateError):
+            engine._persist_transaction(
+                state_dir, {"transaction_id": "a" * 32, "phase": "manifest"})
+        transaction = {"transaction_id": "b" * 32,
+                       "target": {"version": "2026.11.01"},
+                       "evidence": {"recovery_request_id": "c" * 32}}
+        engine._consume_transaction(state_dir, transaction)
+        marker = (state_dir / engine.TRANSACTION_CONSUMED_DIR
+                  / ("b" * 32 + ".json"))
+        recovery_marker = (state_dir / engine.RECOVERY_CONSUMED_DIR
+                           / ("c" * 32 + ".json"))
+        self.assertEqual(marker.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(recovery_marker.stat().st_mode & 0o777, 0o600)
+        with self.assertRaises(engine.UpdateError):
+            engine._consume_transaction(state_dir, transaction)
+
+    def test_exclusive_creation_never_overwrites_an_existing_file(self):
+        state_dir = self.tmp / "exclusive-state"
+        state_dir.mkdir(parents=True)
+        target = state_dir / "existing.json"
+        target.write_bytes(b"original\n")
+        with self.assertRaises(FileExistsError):
+            engine._write_private_file_exclusive(target, b"replacement\n")
+        self.assertEqual(target.read_bytes(), b"original\n")
+
+    def test_authorize_invalidates_the_manifest_record(self):
+        fixture = self.fixture()
+        decision = fixture.preflight()
+        self.assertEqual(decision["decision"], "allow", decision["blockers"])
+        manifest_id = decision["transaction"]["transaction_id"]
+        manifest_path = (fixture.state_dir / engine.TRANSACTION_RECORDS_DIR
+                         / (manifest_id + ".json"))
+        self.assertTrue(manifest_path.is_file())
+        response = fixture.authorize(decision["transaction"])
+        self.assertEqual(response["decision"], "allow", response["blockers"])
+        self.assertEqual(response["transaction"]["phase"], "authorized")
+        self.assertFalse(manifest_path.exists())
+        authorized_path = (fixture.state_dir / engine.TRANSACTION_RECORDS_DIR
+                           / (response["transaction"]["transaction_id"] + ".json"))
+        self.assertTrue(authorized_path.is_file())
+        second = fixture.authorize(decision["transaction"])
+        self.assertEqual(second["decision"], "refuse")
+        self.assertIn("transaction.unknown", codes(second))
+
+    def test_refused_authorize_keeps_the_manifest_record(self):
+        fixture = self.fixture()
+        decision = fixture.preflight()
+        self.assertEqual(decision["decision"], "allow", decision["blockers"])
+        (fixture.staging / "toefl-house-erp-app.tar").unlink()
+        response = fixture.authorize(decision["transaction"])
+        self.assertEqual(response["decision"], "refuse")
+        manifest_path = (fixture.state_dir / engine.TRANSACTION_RECORDS_DIR
+                         / (decision["transaction"]["transaction_id"] + ".json"))
+        self.assertTrue(manifest_path.is_file())

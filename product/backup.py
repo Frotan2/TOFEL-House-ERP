@@ -15,15 +15,19 @@ import hashlib
 import io
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 
 from native_db import safe_mariadb_credential_transport
-from native_gpg import safe_gpg_diagnostic_category, safe_gpg_transport
+from backup_receipt_auth import authenticate_backup_receipt
+from native_gpg import (GpgProbeError, probe_gpg_decrypt,
+                        safe_gpg_diagnostic_category, safe_gpg_transport,
+                        GPG_LIST_PACKETS_TIMEOUT_SECONDS,
+                        probe_budget_for_encrypted_size, probe_gpg_packets)
 
 BENCH_DIR = Path(os.environ.get("BENCH_DIR", "/home/frappe/bench"))
 SITES_DIR = BENCH_DIR / "sites"
@@ -35,6 +39,15 @@ BACKUP_SUFFIXES = {
     "private_files": "-private-files-enc.tar",
 }
 CONFIG_MARKER = "-site_config_backup"
+# Backup receipt (Group C refinement): after a set is verified and
+# published, backup.py issues a hash-bound receipt beside it. Restore
+# trusts the receipt — never a filesystem mtime — for freshness, so the
+# receipt's schema, filename suffix and size cap must match
+# product/restore.py exactly; the cross-module test in
+# tests/foundation/test_refine_gpg_backup.py pins that agreement.
+BACKUP_RECEIPT_SUFFIX = "-receipt.json"
+BACKUP_RECEIPT_SCHEMA_VERSION = 2
+BACKUP_RECEIPT_MAX_BYTES = 64 * 1024
 # Must equal apps/toefl_house/.../owner_configuration.py; tests compare the two.
 RETENTION_PRESERVE_ALL = "Preserve all valid backup sets"
 RETENTION_DELETE_BEYOND_KEEP = "Delete valid older sets beyond keep count"
@@ -102,14 +115,28 @@ def _assert_gpg_encrypted(path: Path, role: str, encryption_key: str) -> None:
         "private files": "private-files",
     }.get(role, "artifact")
     try:
-        result = subprocess.run(
-            ["gpg", "--batch", "--passphrase-fd", "0", "--pinentry-mode", "loopback",
-             "--list-packets", str(path)],
-            input=(encryption_key + "\n").encode("ascii"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
+        # Large ciphertext requires proportionally longer bounded packet
+        # verification. The old fixed 120-second timeout made an otherwise
+        # valid multi-GiB encrypted backup unpublishable on slower hosts.
+        packet_timeout = max(
+            GPG_LIST_PACKETS_TIMEOUT_SECONDS,
+            probe_budget_for_encrypted_size(path.stat().st_size)[0])
+        # A full subprocess.run(..., PIPE) buffers unbounded packet text.
+        # The helper captures only bounded metadata, kills runaway children
+        # and refuses suspicious oversized output even after fast exit.
+        result = probe_gpg_packets(path, encryption_key, timeout=packet_timeout)
+    except GpgProbeError as error:
+        if error.category == "probe-timeout":
+            raise BackupInputError(
+                f"native Frappe {role} artifact could not be checked for GPG encryption",
+                safe_code=f"gpg-{role_code}-probe-timeout",
+                safe_category="probe-timeout",
+            ) from None
+        raise BackupInputError(
+            f"native Frappe {role} artifact could not be checked for GPG encryption",
+            safe_code=f"gpg-{role_code}-probe-error",
+            safe_category=error.category,
+        ) from None
     except Exception:
         raise BackupInputError(
             f"native Frappe {role} artifact could not be checked for GPG encryption",
@@ -132,6 +159,17 @@ def _assert_gpg_encrypted(path: Path, role: str, encryption_key: str) -> None:
             safe_code=f"gpg-{role_code}-symmetric-packet-missing",
             safe_category=safe_gpg_diagnostic_category(output),
         )
+    # A symkey packet alone does not prove this key decrypts the artifact:
+    # a wrong-key backup passes the packet check. Decrypt the whole artifact
+    # and discard the plaintext before anything is published.
+    try:
+        probe_gpg_decrypt(path, encryption_key)
+    except GpgProbeError as error:
+        raise BackupInputError(
+            f"native Frappe {role} artifact could not be decrypted with the backup key",
+            safe_code=f"gpg-{role_code}-decrypt-failed",
+            safe_category=error.category,
+        ) from None
 
 
 def _publish_without_overwrite(source: Path, destination: Path) -> None:
@@ -173,6 +211,93 @@ def _publish_without_overwrite(source: Path, destination: Path) -> None:
                 # This name was created exclusively by this process. Do not
                 # risk replacing or removing any native/pre-existing backup.
                 pass
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def build_backup_receipt(backup_set: str, destinations: dict[str, Path],
+                         encryption_key: str) -> dict:
+    """Build an authenticated receipt for a verified, published set.
+
+    The receipt binds each encrypted artifact by name, size and SHA-256
+    to the bytes actually on disk, records the verification time, and
+    authenticates the complete document with a salted HMAC derived from
+    Frappe's existing backup encryption key. No key material is written
+    to the receipt. Restore must verify both this authenticator and each
+    artifact digest before accepting the receipt.
+    """
+    artifacts = []
+    for role in ("database", "public_files", "private_files"):
+        path = destinations[role]
+        artifacts.append({
+            "role": role,
+            "name": path.name,
+            "sha256": _sha256(path),
+            "bytes": path.stat().st_size,
+        })
+    receipt = {
+        "schema_version": BACKUP_RECEIPT_SCHEMA_VERSION,
+        "backup_set": backup_set,
+        "created_utc": _utc_now_iso(),
+        "encrypted": True,
+        "verified": True,
+        "artifacts": artifacts,
+    }
+    try:
+        return authenticate_backup_receipt(receipt, encryption_key)
+    except ValueError:
+        raise BackupInputError(
+            "verified native Frappe backup receipt could not be authenticated") from None
+
+
+def issue_backup_receipt(destination_dir: Path, backup_set: str,
+                         destinations: dict[str, Path],
+                         encryption_key: str) -> Path:
+    """Atomically publish the receipt for a verified set; refuse overwrite.
+
+    The receipt is written beside the set only after every artifact and
+    the site-config sidecar are published. Like artifact publication, a
+    hard link refuses to overwrite an existing file, so a concurrent
+    backup can never replace another set's receipt.
+    """
+    receipt = build_backup_receipt(backup_set, destinations, encryption_key)
+    final = destination_dir / f"{backup_set}{BACKUP_RECEIPT_SUFFIX}"
+    payload = (json.dumps(receipt, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    if len(payload) > BACKUP_RECEIPT_MAX_BYTES:
+        raise BackupInputError("verified native Frappe backup receipt is unexpectedly large")
+    descriptor = None
+    temporary = None
+    try:
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=".toefl-house-backup-receipt-", dir=destination_dir)
+        temporary = Path(temporary_name)
+        with os.fdopen(descriptor, "wb") as output:
+            descriptor = None
+            output.write(payload)
+            output.flush()
+            os.fsync(output.fileno())
+        os.link(temporary, final, follow_symlinks=False)
+    except FileExistsError:
+        raise BackupInputError(
+            "refusing to overwrite a pre-existing native Frappe backup receipt") from None
+    except BackupInputError:
+        raise
+    except Exception:
+        raise BackupInputError(
+            "verified native Frappe backup receipt could not be published safely") from None
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        if temporary is not None:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
+    return final
 
 
 def _verify_and_publish(backup_result, staging_dir: Path, destination_dir: Path,
@@ -242,6 +367,16 @@ def _verify_and_publish(backup_result, staging_dir: Path, destination_dir: Path,
             "artifact(s) were published without the site-config sidecar and were left in "
             "the native backup folder for owner cleanup; no sets were deleted",
             safe_code="native-publish-incomplete") from None
+    # Receipt last: the set is complete and verified. A receipt that
+    # cannot be issued refuses the backup (fail closed) without deleting
+    # the published set, which stays for owner cleanup.
+    try:
+        issue_backup_receipt(destination_dir, backup_set, destinations, encryption_key)
+    except BackupInputError as exc:
+        raise BackupInputError(
+            f"native backup set {backup_set} was published without its receipt and "
+            "was left in the native backup folder for owner cleanup; no sets were deleted",
+            safe_code="native-receipt-issue-failed") from exc
     return backup_set
 
 
@@ -263,7 +398,11 @@ def _complete_native_sets(native_dir: Path) -> dict:
         artifacts = [native_dir / f"{name}{suffix}" for suffix in BACKUP_SUFFIXES.values()]
         sidecars = [p for p in native_dir.iterdir()
                     if p.name.startswith(f"{name}{CONFIG_MARKER}") and p.name.endswith(".json")]
-        every = artifacts + sidecars
+        # A receipt, when present, belongs to the set and is removed with
+        # it; sets created before receipts existed have none, and stay
+        # rotatable. The receipt is never what makes a set complete.
+        receipt = native_dir / f"{name}{BACKUP_RECEIPT_SUFFIX}"
+        every = artifacts + sidecars + ([receipt] if receipt.exists() else [])
         regular = all(p.is_file() and not p.is_symlink() for p in every) and bool(sidecars)
         sets[name] = {
             "complete": regular,
@@ -301,8 +440,11 @@ def rotate_native_sets(native_dir: Path, *, keep_count, protect_set: str) -> dic
     removed = []
     for name in doomed:
         info = sets[name]
-        sidecars = [p for p in info["files"] if CONFIG_MARKER in p.name]
-        artifacts = [p for p in info["files"] if CONFIG_MARKER not in p.name]
+        sidecars = [p for p in info["files"]
+                    if CONFIG_MARKER in p.name or p.name.endswith(BACKUP_RECEIPT_SUFFIX)]
+        artifacts = [p for p in info["files"]
+                     if CONFIG_MARKER not in p.name
+                     and not p.name.endswith(BACKUP_RECEIPT_SUFFIX)]
         try:
             for path in sidecars + artifacts:
                 if path.is_symlink() or not path.is_file():

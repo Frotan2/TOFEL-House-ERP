@@ -901,6 +901,166 @@ class ReceptionLookupTests(unittest.TestCase):
         self.assertEqual(calls, [],
                          "silently truncating a precise lookup can return the wrong person")
 
+    def test_exact_applicant_email_survives_a_full_title_page(self):
+        # C-18: ten title matches must not crowd out the one exact email
+        # match before the LIMIT_LOOKUP truncation.
+        reception = _import_desk("reception", roles={"Reception"})
+        reception.reception_sections = lambda **kwargs: []
+        query = "exact@example.com"
+        exact = {"name": "APP-EXACT", "title": "Exact Applicant",
+                 "student_email_id": query, "th_candidate_ref": "THV-EXACT",
+                 "program": "GE", "academic_year": "2026",
+                 "application_status": "Applied", "creation": "2026-09-01"}
+        titles = [{"name": f"APP-TITLE-{i}", "title": f"{query} similar {i}",
+                   "student_email_id": f"other-{i}@example.com",
+                   "th_candidate_ref": f"THV-TITLE-{i}", "program": "GE",
+                   "academic_year": "2026", "application_status": "Applied",
+                   "creation": "2026-09-02"} for i in range(10)]
+        calls = []
+
+        def fake_project_rows(desk, doctype, fields, filters=None, order_by=None, limit=0):
+            filters = filters or {}
+            calls.append((doctype, dict(filters)))
+            if doctype == "Student Applicant":
+                if filters.get("name") == query:
+                    return []
+                if filters.get("student_email_id") == query:
+                    return [dict(exact)]
+                if "title" in filters:
+                    return [dict(row) for row in titles[:limit]]
+                if "student_email_id" in filters:
+                    return [dict(exact)]
+                return []
+            return []
+
+        original = reception.project_rows
+        reception.project_rows = fake_project_rows
+        try:
+            view = reception.lookup(query)
+        finally:
+            reception.project_rows = original
+        ids = [item["id"] for item in view["items"]]
+        self.assertIn("APP-EXACT", ids)
+        self.assertEqual(ids[0], "APP-EXACT")
+        self.assertLessEqual(len(ids), reception.LIMIT_LOOKUP)
+        self.assertEqual(len([i for i in ids if i == "APP-EXACT"]), 1,
+                         "an exact match found twice must still appear once")
+        exact_call = ("Student Applicant", {"student_email_id": query})
+        title_call = ("Student Applicant",
+                      {"title": ("like", f"%{query}%")})
+        self.assertLess(calls.index(exact_call), calls.index(title_call),
+                        "the exact email search must run before the title page fills")
+
+    def test_exact_student_email_survives_a_full_name_page(self):
+        # C-18, student side: ten fuzzy name matches must not crowd out
+        # the one exact email match before truncation.
+        reception = _import_desk("reception", roles={"Reception"})
+        reception.reception_sections = lambda **kwargs: []
+        query = "student@example.com"
+        exact = {"name": "STU-EXACT", "student_name": "Exact Student",
+                 "student_email_id": query, "th_candidate_ref": "THV-EXACT",
+                 "enabled": 1, "creation": "2026-09-01"}
+        names = [{"name": f"STU-NAME-{i}", "student_name": f"{query} similar {i}",
+                  "student_email_id": f"other-{i}@example.com",
+                  "th_candidate_ref": f"THV-NAME-{i}", "enabled": 1,
+                  "creation": "2026-09-02"} for i in range(10)]
+        calls = []
+
+        def fake_project_rows(desk, doctype, fields, filters=None, order_by=None, limit=0):
+            filters = filters or {}
+            calls.append((doctype, dict(filters)))
+            if doctype == "Student":
+                if filters.get("name") == query:
+                    return []
+                if filters.get("student_email_id") == query:
+                    return [dict(exact)]
+                if "student_name" in filters:
+                    return [dict(row) for row in names[:limit]]
+                if "student_email_id" in filters:
+                    return [dict(exact)]
+                return []
+            return []
+
+        original = reception.project_rows
+        reception.project_rows = fake_project_rows
+        try:
+            view = reception.lookup(query)
+        finally:
+            reception.project_rows = original
+        ids = [item["id"] for item in view["students"]]
+        self.assertIn("STU-EXACT", ids)
+        self.assertEqual(ids[0], "STU-EXACT")
+        self.assertLessEqual(len(ids), reception.LIMIT_LOOKUP)
+        self.assertEqual(len([i for i in ids if i == "STU-EXACT"]), 1,
+                         "an exact match found twice must still appear once")
+        exact_call = ("Student", {"student_email_id": query,
+                                  "enabled": ("in", [0, 1])})
+        name_call = ("Student", {"student_name": ("like", f"%{query}%"),
+                                 "enabled": ("in", [0, 1])})
+        self.assertLess(calls.index(exact_call), calls.index(name_call),
+                        "the exact email search must run before the name page fills")
+
+    def test_lookup_with_no_match_returns_empty_sections(self):
+        # C-18 edge case: no match anywhere is an empty answer, not an
+        # error and not a neighbouring record.
+        reception = _import_desk("reception", roles={"Reception"})
+        reception.reception_sections = lambda **kwargs: []
+        original = reception.project_rows
+        reception.project_rows = lambda *args, **kwargs: []
+        try:
+            view = reception.lookup("nobody@example.com")
+        finally:
+            reception.project_rows = original
+        self.assertEqual(view["query"], "nobody@example.com")
+        self.assertEqual(view["items"], [])
+        self.assertEqual(view["students"], [])
+        self.assertEqual(view["inquiries"], [])
+
+    def test_exact_applicant_id_survives_a_full_title_page(self):
+        # C-18 edge case, same crowding shape as email: the exact-ID query
+        # runs first, so ten title matches cannot push the identified
+        # applicant out of the page.
+        reception = _import_desk("reception", roles={"Reception"})
+        reception.reception_sections = lambda **kwargs: []
+        query = "APP-EXACT"
+        exact = {"name": query, "title": "Exact Applicant",
+                 "student_email_id": "exact@example.com",
+                 "th_candidate_ref": "THV-EXACT", "program": "GE",
+                 "academic_year": "2026", "application_status": "Applied",
+                 "creation": "2026-09-01"}
+        titles = [{"name": f"APP-TITLE-{i}", "title": f"{query} similar {i}",
+                   "student_email_id": f"other-{i}@example.com",
+                   "th_candidate_ref": f"THV-TITLE-{i}", "program": "GE",
+                   "academic_year": "2026", "application_status": "Applied",
+                   "creation": "2026-09-02"} for i in range(10)]
+        calls = []
+
+        def fake_project_rows(desk, doctype, fields, filters=None, order_by=None, limit=0):
+            filters = filters or {}
+            calls.append((doctype, dict(filters)))
+            if doctype == "Student Applicant":
+                if filters.get("name") == query:
+                    return [dict(exact)]
+                if "title" in filters:
+                    return [dict(row) for row in titles[:limit]]
+                return []
+            return []
+
+        original = reception.project_rows
+        reception.project_rows = fake_project_rows
+        try:
+            view = reception.lookup(query)
+        finally:
+            reception.project_rows = original
+        ids = [item["id"] for item in view["items"]]
+        self.assertIn(query, ids)
+        self.assertEqual(ids[0], query)
+        id_call = ("Student Applicant", {"name": query})
+        title_call = ("Student Applicant",
+                      {"title": ("like", f"%{query}%")})
+        self.assertLess(calls.index(id_call), calls.index(title_call),
+                        "the exact ID search must run before the title page fills")
+
 
 class DeskPlainLanguageTests(unittest.TestCase):
     """U5/U1-class guard: staff-visible desk text names business things.
@@ -2141,6 +2301,11 @@ class FinanceAssignmentFactsTests(unittest.TestCase):
         module = _import_desk("finance", roles={"Finance Manager"})
         module.frappe.get_all = world_get_all
         module.frappe.db.get_all = world_get_all
+        # The count tile resolves through the desk package's project_count,
+        # so the stub ledger must report the one assignment on file.
+        module.frappe.db.count = (
+            lambda doctype, filters=None:
+            1 if doctype == "TH Teaching Assignment" else 0)
         return module.work()
 
     def test_assignments_are_listed_without_pay_figures(self):
@@ -3023,6 +3188,9 @@ class FinanceOutstandingWorldTests(unittest.TestCase):
         module.frappe.db.get_all = getter
         if count is not None:
             module.project_count = lambda *args, **kwargs: count
+            # count_or_unknown resolves through the desk package's own
+            # project_count, so the stub ledger count must agree too.
+            module.frappe.db.count = lambda doctype, filters=None: count
         return module.work()
 
     @staticmethod
@@ -3042,7 +3210,7 @@ class FinanceOutstandingWorldTests(unittest.TestCase):
         self.assertNotIn("INV-SETTLED", items)
 
     def test_money_facts_count_the_native_queues(self):
-        payload = self._payload()
+        payload = self._payload(count=1)
         facts = {fact["label"]: fact["value"]
                  for fact in self._section(payload, "facts")["facts"]}
         self.assertEqual(facts["Outstanding invoices"], 1)

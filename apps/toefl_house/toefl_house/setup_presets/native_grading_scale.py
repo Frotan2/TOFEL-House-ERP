@@ -12,32 +12,50 @@ from toefl_house.academic import rules as academic_rules
 from toefl_house.configuration import audit as configuration_audit
 from toefl_house.configuration import rules as configuration_rules
 from toefl_house.policy import digest, validate_request_key
-from toefl_house.setup_presets.grading_rules import normalize_intervals
+from toefl_house.setup_presets.grading_rules import (
+    SPECIALIST_SCOPE,
+    canonical_grading_scope,
+    normalize_intervals,
+)
 
 
 @frappe.whitelist(methods=["POST"])
-def create_owner_grading_scale(request_key, grading_scale_name, intervals, reason):
+def create_owner_grading_scale(request_key, grading_scale_name, intervals, reason,
+                               scope="formal"):
     """Create and submit a new immutable, native scale under Owner authority.
 
     A replacement requires a different name and a new effective-dated
     assessment policy version. No direct native Role or Page permissions change.
+
+    ``scope`` names whether the scale is for a formal graded program or
+    for a specialist progress program, and defaults to ``"formal"``, so
+    every existing caller stays fail-closed on the approved 60% pass
+    threshold. Pass ``"specialist"`` only for a specialist progress scale,
+    which carries no 60 threshold and must never be read as a pass/fail
+    boundary. The role-desk dialog does not send a scope, so scales
+    created through it remain formal.
     """
     def work(actor):
         try:
             validate_request_key(request_key)
             name = academic_rules.validate_title(grading_scale_name, "Grading scale name")
             clean_reason = configuration_rules.validate_change_reason(reason)
-            rows = normalize_intervals(intervals)
+            clean_scope = canonical_grading_scope(scope)
+            rows = normalize_intervals(intervals, scope=clean_scope)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         if frappe.db.exists("Grading Scale", name):
             raise frappe.ValidationError(
                 "A grading scale with this name already exists. "
                 "Create a NEW named version instead of changing historical grades")
+        description = f"Owner-approved scale ({clean_scope} scope). Reason: {clean_reason}"
+        if clean_scope == SPECIALIST_SCOPE:
+            description += (" Specialist progress scale: progress and teacher "
+                            "feedback only; no automatic pass/fail or promotion.")
         doc = frappe.get_doc({
             "doctype": "Grading Scale",
             "grading_scale_name": name,
-            "description": f"Owner-approved scale. Reason: {clean_reason}",
+            "description": description,
             "intervals": rows,
         })
         # The business command's explicit Course Owner authority is narrow.
@@ -52,7 +70,7 @@ def create_owner_grading_scale(request_key, grading_scale_name, intervals, reaso
                 "no policy version may link to this draft")
         result = {
             "name": doc.name, "status": "Submitted",
-            "intervals": rows, "reason": clean_reason,
+            "intervals": rows, "reason": clean_reason, "scope": clean_scope,
             "next_step": "Link the new scale in a separately reviewed assessment policy version",
         }
         return result, {
@@ -65,4 +83,4 @@ def create_owner_grading_scale(request_key, grading_scale_name, intervals, reaso
     return configuration_audit.execute(
         "create_owner_grading_scale", request_key,
         {"grading_scale_name": grading_scale_name, "intervals": intervals,
-         "reason": reason}, work)
+         "reason": reason, "scope": scope}, work)

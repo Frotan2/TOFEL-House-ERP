@@ -140,9 +140,17 @@ class BaseHarness(unittest.TestCase):
                 # order_by consent_date desc
                 if order_by and "consent_date desc" in order_by:
                     rows = sorted(rows, key=lambda x: str(x.get("consent_date") or ""), reverse=True)
+                # The real Frappe query uses limit_start to fetch every
+                # consent page. Ignoring it repeats page 1 and falsely
+                # trips the production fail-closed duplicate-page guard.
+                offset = kw.get("limit_start", 0)
+                if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+                    raise ValueError("Invalid synthetic consent page offset")
                 lim = limit or limit_page_length
-                if lim:
-                    rows = rows[:lim]
+                if lim is not None:
+                    rows = rows[offset:offset + lim]
+                else:
+                    rows = rows[offset:]
                 return apply(rows)
             if doctype == "User Permission":
                 rows = [r for r in fake.user_permissions if match(r, filters)]
@@ -444,6 +452,15 @@ class BaseHarness(unittest.TestCase):
         audit.execute = execute
         audit.latest_after_hash = lambda t: ""
         sys.modules["toefl_house.configuration.audit"] = audit
+        # The real guardian lifecycle policy module is not importable
+        # under this harness's package shims; install the production
+        # "no governing policy" value (governing_guardian_lifecycle
+        # returns {} with no policy row) so _governing_guardian_terms
+        # reads {} instead of failing the import. Tests that need an
+        # active policy install their own stub over this one.
+        gl = types.ModuleType("toefl_house.operations.guardian_lifecycle")
+        gl.governing_guardian_lifecycle = lambda on_date=None: {}
+        sys.modules["toefl_house.operations.guardian_lifecycle"] = gl
         # Load observable if exists
         try_load("toefl_house.observability", APP / "observability.py")
         # Load target modules under test
@@ -617,10 +634,17 @@ class NotificationLifecycleTests(BaseHarness):
         # First fail
         s1, _ = self.notifications_mod.attempt_delivery(n["name"])
         self.assertEqual(s1, "failed")
-        # Retry — still fails (stub)
+        # Immediate retry is gated by next_retry_at (retry_delay 1 min):
+        # it must NOT attempt delivery before the retry time arrives.
+        s_gated, detail_gated = self.notifications_mod.attempt_delivery(n["name"])
+        self.assertEqual(s_gated, "failed")
+        self.assertIn("retry time", detail_gated.lower())
+        # Fast-forward past next_retry_at, then retry — still fails (stub)
+        self.frappe.utils.now_datetime = lambda: "2026-10-24 12:02:00"
         s2, _ = self.notifications_mod.attempt_delivery(n["name"])
         self.assertEqual(s2, "failed")
         # After max_retries exhausted, stays failed
+        self.frappe.utils.now_datetime = lambda: "2026-10-24 12:04:00"
         s3, detail = self.notifications_mod.attempt_delivery(n["name"])
         self.assertEqual(s3, "failed")
         self.assertIn("max retries", detail.lower())
@@ -678,6 +702,19 @@ class ProviderTests(BaseHarness):
             ok, _, detail = self.provider.deliver(payload, check_enabled=False)
             # Stub always fails
             self.assertFalse(ok)
+
+    def test_external_provider_must_return_literal_true_not_truthy_text(self):
+        class NonBooleanProvider:
+            name = "nonboolean-test"
+            def send(self, _notification):
+                return "false"
+        self.provider.register_provider("sms", NonBooleanProvider())
+        result = self.provider.deliver(
+            {"channel": "SMS", "recipient": "+123",
+             "title": "T", "message": "M", "notification_id": "X"},
+            check_enabled=False)
+        self.assertIs(result[0], False)
+        self.assertIn("failure", result[2].lower())
 
     def test_custom_provider_can_be_registered(self):
         class MockSms:

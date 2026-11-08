@@ -114,6 +114,12 @@ def _governing_policy(rows, on_date):
         raise frappe.ValidationError(
             "No correction policy version is effective yet; the latest "
             "version is scheduled for the future")
+    if governing.get("approver_role") in _COLLAPSED_APPROVER_ROLES:
+        raise frappe.ValidationError(
+            "The governing correction policy version carries a collapsed "
+            "approver role (equal to the Finance Officer command role or "
+            "an administrative role); it governs nothing new until the "
+            "owner appends a version with a distinct approver role")
     return governing
 
 
@@ -146,8 +152,28 @@ def _stream_after_hash():
     return rows[-1]["after_hash"] if rows else ""
 
 
+# Separation-of-duties guard (Group 1): the command role for every
+# correction command is Finance Officer, so an approver role equal to it
+# would let one actor satisfy both keys of the dual key. Administrator
+# and System Manager are likewise never legitimate approver roles here:
+# the command gate rejects the Administrator user outright, so such a
+# policy could never be decided by a legitimate actor. Collapsed roles
+# are refused at configuration time and, for policies pinned before this
+# guard existed, fail closed again at decision time instead of being
+# silently rewritten.
+_COLLAPSED_APPROVER_ROLES = frozenset(
+    {"Finance Officer", "Administrator", "System Manager"})
+
+
 def _require_approver(policy, actor):
-    if policy.get("approver_role") not in frappe.get_roles(actor):
+    role = policy.get("approver_role")
+    if role in _COLLAPSED_APPROVER_ROLES:
+        raise frappe.PermissionError(
+            "The policy-configured approver role collapses the "
+            "correction dual key (it equals the Finance Officer command "
+            "role or is an administrative role); repair the policy with "
+            "a distinct approver role and raise a new request")
+    if role not in frappe.get_roles(actor):
         raise frappe.PermissionError("Actor does not hold the policy-configured approver role")
 
 
@@ -185,6 +211,12 @@ def configure_correction_policy(request_key, approver_role,
             raise frappe.ValidationError(str(exc)) from exc
         if not frappe.db.exists("Role", role):
             raise frappe.ValidationError("Unknown role")
+        if role in _COLLAPSED_APPROVER_ROLES:
+            raise frappe.ValidationError(
+                "Approver role must differ from the Finance Officer "
+                "command role and must not be an administrative role; "
+                "a collapsed approver role would let one actor satisfy "
+                "both keys of the correction dual key")
         rows = _policy_rows()
         for row in rows:
             frappe.db.sql("select name from `tabTH Correction Policy` where name=%s for update",
@@ -304,6 +336,13 @@ def validate_correction_policy(request_key):
                 raise frappe.ValidationError(
                     f"Role {role} no longer exists; repair the policy "
                     "version before validating")
+            if role in _COLLAPSED_APPROVER_ROLES:
+                raise frappe.ValidationError(
+                    f"Correction policy version effective "
+                    f"{row.get('effective_from')} carries a collapsed "
+                    f"approver role {role!r} (equal to the Finance "
+                    "Officer command role or an administrative role); "
+                    "repair the policy version before validating")
             try:
                 validate_correction_window_days(
                     row.get("correction_window_days"))
@@ -418,7 +457,8 @@ def approve_invoice_correction(request_key, request):
                       (req.sales_invoice,))
         si = frappe.db.get_value(INVOICE, req.sales_invoice,
                                  ["docstatus", "is_return", "th_placement_case",
-                                  "grand_total", "posting_date"], as_dict=True)
+                                  "grand_total", "outstanding_amount",
+                                  "posting_date"], as_dict=True)
         if not si:
             raise frappe.ValidationError(
                 "The invoice behind this correction request no longer exists")
@@ -433,6 +473,16 @@ def approve_invoice_correction(request_key, request):
             raise frappe.ValidationError(
                 "The invoice total changed after this request was raised; v1 corrects "
                 "the full invoice amount, so raise a new request for the current total")
+        # v1 is a FULL reversal: the native credit note returns the whole
+        # invoice. Re-reading outstanding under the row lock above, a
+        # partially-paid invoice must not be fully reversed — the credit
+        # would exceed the live receivable. 0.005 is the codebase's
+        # existing currency-rounding tolerance (finance/refunds.py).
+        if abs(float(getattr(si, "outstanding_amount", None) or 0) - float(si.grand_total)) > 0.005:
+            raise frappe.ValidationError(
+                "The invoice is partially paid; v1 corrects only a fully "
+                "unpaid invoice, so settle or part-reverse it through "
+                "finance before raising a new correction request")
         limit = date.fromisoformat(str(si.posting_date)) + timedelta(
             days=int(terms.correction_window_days))
         if date.fromisoformat(frappe.utils.today()) > limit:  # site clock, as the policy resolution above
@@ -480,6 +530,8 @@ def deny_invoice_correction(request_key, request):
         _require_target_company(INVOICE, req.sales_invoice)
         terms = _pinned_policy(req)
         _require_approver(terms, actor)
+        if actor == getattr(req, "owner", None):
+            raise frappe.PermissionError("A requester cannot deny their own financial correction")
         req.flags.ignore_permissions = True
         req.status = "Denied"
         req.approved_by = actor
@@ -578,7 +630,8 @@ def approve_fees_correction(request_key, request):
         # checks the request performed; nothing new is being decided here.
         frappe.db.sql("select name from `tabFees` where name=%s for update", (req.fees,))
         fee_row = frappe.db.get_value(FEES, req.fees,
-                                      ["docstatus", "grand_total", "posting_date"],
+                                      ["docstatus", "grand_total",
+                                       "outstanding_amount", "posting_date"],
                                       as_dict=True)
         if not fee_row:
             raise frappe.ValidationError("The fee behind this correction request no longer exists")
@@ -589,6 +642,15 @@ def approve_fees_correction(request_key, request):
             raise frappe.ValidationError(
                 "The fee total changed after this request was raised; v1 corrects the full fee "
                 "amount, so raise a new request for the current total")
+        # v1 is a FULL reversal: native Fees cancellation reverses the
+        # whole fee. Re-reading outstanding under the row lock above, a
+        # partially-paid fee must not be fully reversed. 0.005 is the
+        # codebase's existing currency-rounding tolerance.
+        if abs(float(getattr(fee_row, "outstanding_amount", None) or 0) - float(fee_row.grand_total)) > 0.005:
+            raise frappe.ValidationError(
+                "The fee is partially paid; v1 corrects only a fully "
+                "unpaid fee, so settle it through finance before raising "
+                "a new correction request")
         limit = date.fromisoformat(str(fee_row.posting_date)) + timedelta(
             days=int(terms.correction_window_days))
         if date.fromisoformat(frappe.utils.today()) > limit:  # site clock, as the policy resolution above
@@ -623,6 +685,8 @@ def deny_fees_correction(request_key, request):
         _require_target_company(FEES, req.fees)
         terms = _pinned_policy(req)
         _require_approver(terms, actor)
+        if actor == getattr(req, "owner", None):
+            raise frappe.PermissionError("A requester cannot deny their own financial correction")
         req.flags.ignore_permissions = True
         req.status = "Denied"
         req.approved_by = actor

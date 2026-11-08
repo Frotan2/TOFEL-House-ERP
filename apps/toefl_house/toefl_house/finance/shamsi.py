@@ -26,11 +26,13 @@ def _integer(value, what):
     return value
 
 
-def _nowruz(year):
-    """Gregorian start of a Solar Hijri year, calculated without locale."""
-    jy = _integer(year, "Solar Hijri year")
-    if not MIN_YEAR <= jy <= MAX_YEAR:
-        raise ValueError(f"Solar Hijri year outside supported {MIN_YEAR}-{MAX_YEAR} range")
+def _nowruz_unchecked(jy):
+    """Gregorian start of a Solar Hijri year, without the supported-range check.
+
+    Only the leap boundary of the last supported year (1499) needs the
+    following Nowruz (1500) as a boundary value; 1500 itself stays
+    unsupported. Callers must validate the year they expose.
+    """
     gy = jy + 621
     leap_j = -14
     jp = _BREAKS[0]
@@ -49,11 +51,22 @@ def _nowruz(year):
     return date(gy, 3, 20 + leap_j - leap_g)
 
 
+def _nowruz(year):
+    """Gregorian start of a Solar Hijri year, calculated without locale."""
+    jy = _integer(year, "Solar Hijri year")
+    if not MIN_YEAR <= jy <= MAX_YEAR:
+        raise ValueError(f"Solar Hijri year outside supported {MIN_YEAR}-{MAX_YEAR} range")
+    return _nowruz_unchecked(jy)
+
+
 def is_leap_year(year):
     year = _integer(year, "Solar Hijri year")
-    if year >= MAX_YEAR:
-        raise ValueError("Cannot check last supported year's leap boundary")
-    return (_nowruz(year + 1) - _nowruz(year)).days == 366
+    if not MIN_YEAR <= year <= MAX_YEAR:
+        raise ValueError(f"Solar Hijri year outside supported {MIN_YEAR}-{MAX_YEAR} range")
+    # The last supported year (1499) is leap-checked against its following
+    # Nowruz (1500) as a boundary only; 1500 itself stays unsupported.
+    following = _nowruz(year + 1) if year < MAX_YEAR else _nowruz_unchecked(year + 1)
+    return (following - _nowruz(year)).days == 366
 
 
 def days_in_month(year, month):
@@ -81,8 +94,16 @@ def gregorian_to_shamsi(value):
     jy = day.year - 621
     if jy < MIN_YEAR:
         jy = MIN_YEAR
-    if jy > MAX_YEAR:
+    if jy > MAX_YEAR + 1:
         raise ValueError("Date outside supported Solar Hijri range")
+    if jy == MAX_YEAR + 1:
+        # Gregorian January-March before the 1500 Nowruz still belongs to
+        # the last supported year (1499); the 1500 Nowruz is a boundary
+        # only, as in is_leap_year. On or after it the date is in 1500.
+        if day < _nowruz_unchecked(jy):
+            jy -= 1
+        else:
+            raise ValueError("Date outside supported Solar Hijri range")
     if day < _nowruz(jy):
         jy -= 1
     if not MIN_YEAR <= jy <= MAX_YEAR:
@@ -140,8 +161,15 @@ def semester_bounds(start_iso, months=2):
         raise ValueError("Semester length must be 1-24 Solar Hijri months")
     year, month, day = gregorian_to_shamsi(start_iso)
     next_y, next_m = add_months(year, month, months)
-    end_boundary = shamsi_to_gregorian(
-        next_y, next_m, min(day, days_in_month(next_y, next_m)))
+    target_days = days_in_month(next_y, next_m)
+    # A clamped day (start day beyond the target month's length) ends ON
+    # the target month's last day: subtracting one more day would lose the
+    # final teaching day (Sonbola 31 + 1 month ends Mehr 30, not 21 Mehr).
+    # An unclamped day ends the day before the same day next month.
+    if day > target_days:
+        return date.fromisoformat(str(start_iso)), shamsi_to_gregorian(
+            next_y, next_m, target_days)
+    end_boundary = shamsi_to_gregorian(next_y, next_m, day)
     return date.fromisoformat(str(start_iso)), end_boundary - timedelta(days=1)
 
 
@@ -204,7 +232,11 @@ def payroll_following_month_end(worked_period):
 def fiscal_year_bounds(year):
     _nowruz(year)
     if year >= MAX_YEAR:
-        raise ValueError("Cannot compute unsupported following fiscal year")
+        # The last supported fiscal year (1499) ends the day before the
+        # 1500 Nowruz, which is 1499-12-29 — inside the supported range.
+        # The 1500 Nowruz is used as a boundary only, exactly as
+        # is_leap_year does for 1499; 1500 itself stays unsupported.
+        return _nowruz(year), _nowruz_unchecked(year + 1) - timedelta(days=1)
     return _nowruz(year), _nowruz(year + 1) - timedelta(days=1)
 
 

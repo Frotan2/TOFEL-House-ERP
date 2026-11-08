@@ -278,7 +278,10 @@ for (const [method, fields] of Object.entries(actionFields)) {
 	if (method === "toefl_house.setup_presets.native_grading_scale.create_owner_grading_scale") {
 		assert.deepStrictEqual(Array.from(fields, (field) => field.fieldname),
 			["grading_scale_name", "grade_a", "grade_b", "grade_c", "grade_d", "reason"]);
-		assert.deepStrictEqual(signature.slice(1), ["grading_scale_name", "intervals", "reason"]);
+		// The desk dialog builds A-F formal intervals and sends no scope,
+		// so UI-created scales keep the server default ("formal", 60% enforced).
+		// Specialist scales are created only by a direct Owner call with scope.
+		assert.deepStrictEqual(signature.slice(1), ["grading_scale_name", "intervals", "reason", "scope"]);
 		continue;
 	}
 	// Calls use named arguments; related UI fields may have a different display order.

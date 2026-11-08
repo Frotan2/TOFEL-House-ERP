@@ -104,6 +104,7 @@ COPY product/bootstrap.py /product/bootstrap.py
 COPY product/activate.py /product/activate.py
 COPY product/restore.py /product/restore.py
 COPY product/backup.py /product/backup.py
+COPY product/backup_receipt_auth.py /product/backup_receipt_auth.py
 COPY product/native_gpg.py /product/native_gpg.py
 COPY product/native_db.py /product/native_db.py
 COPY product/wsgi.py /product/wsgi.py
