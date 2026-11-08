@@ -53,6 +53,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 
 BENCH_DIR = Path(os.environ.get("BENCH_DIR", "/home/frappe/bench"))
@@ -75,17 +76,56 @@ SEED_REFRESHED = ("apps.txt", "apps.json")
 SEED_ONCE = ("common_site_config.json",)
 
 
+def _seed_file(target: Path, payload: bytes, *, mode: int) -> None:
+    """Atomically replace one seeded file; never follow a symlink."""
+    if target.is_symlink():
+        raise RuntimeError(
+            f"seed target is a symbolic link and will not be followed: {target.name}")
+    fd, temporary_name = tempfile.mkstemp(
+        prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
+    temporary = Path(temporary_name)
+    try:
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+        os.chmod(target, mode)
+    except OSError as exc:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise RuntimeError(f"could not safely seed {target.name}: {exc}") from exc
+
+
 def seed_sites(sites_dir: Path | None = None, seed_dir: Path | None = None) -> list[str]:
-    """Restore the bench's sites/ files hidden by the empty host bind mount."""
+    """Restore the bench's sites/ files hidden by the empty host bind mount.
+
+    A pre-planted symlink at a seed target is refused, never followed: the
+    sites volume is host-controlled, and following the link would overwrite
+    whatever it points at on every boot. Files land atomically (temp file
+    in the same directory + os.replace) so a crash cannot leave a
+    half-written registry behind.
+    """
     sites_dir = sites_dir or SITES_DIR
     seed_dir = seed_dir or SITES_SEED
     sites_dir.mkdir(parents=True, exist_ok=True)
     written = []
     for name in SEED_REFRESHED + SEED_ONCE:
         target = sites_dir / name
+        # Checked before the seed-once skip: a dangling symlink reports
+        # exists() == False, so the skip must never be what saves it.
+        if target.is_symlink():
+            raise RuntimeError(
+                f"seed target is a symbolic link and will not be followed: {name}")
         if name in SEED_ONCE and target.exists():
             continue
-        target.write_bytes((seed_dir / name).read_bytes())
+        # common_site_config.json can hold runtime secrets; the app
+        # registry files are plain data read by bench.
+        mode = 0o600 if name in SEED_ONCE else 0o644
+        _seed_file(target, (seed_dir / name).read_bytes(), mode=mode)
         written.append(name)
     return written
 
