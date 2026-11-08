@@ -453,7 +453,7 @@ class CensusAndFeesTotalTests(unittest.TestCase):
         runner = engine.BenchRunner("bench", Path("/tmp"), timeout=60)
 
         def ok(arguments, *, timeout=None):
-            return types.SimpleNamespace(returncode=0, stdout='[["12345.67"]]\n')
+            return types.SimpleNamespace(returncode=0, stdout='[["TH_CENSUS", "12345.67"]]\n')
 
         with patch.object(runner, "_run", side_effect=ok):
             self.assertEqual(runner.fees_total("toeflhouse.localhost"), "12345.67")
