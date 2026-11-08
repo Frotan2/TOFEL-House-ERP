@@ -10,6 +10,7 @@ native execution path.
 from __future__ import annotations
 
 from contextlib import contextmanager
+import math
 import os
 import shlex
 import signal
@@ -62,12 +63,46 @@ _SAFE_GPG_PREFIX = [
 # own session with a wall-clock timeout, POSIX resource limits where safe,
 # and a cap on what the parent retains or reads.
 PROBE_TIMEOUT_SECONDS = 120
+# Minimum budget for small artifacts. The former fixed 2 GiB output cap
+# refused legitimate full-site archives above 2 GiB even while streaming
+# securely; a fixed 120 s deadline likewise penalized large native backups.
+# Larger archives receive a *bounded* allowance based on their encrypted
+# byte count, never an unlimited stdout stream or an unlimited wait.
 PROBE_MAX_PLAINTEXT_BYTES = 2 * 1024 * 1024 * 1024
+PROBE_MAX_ADAPTIVE_PLAINTEXT_BYTES = 512 * 1024 * 1024 * 1024
+PROBE_MAX_ADAPTIVE_TIMEOUT_SECONDS = 1800
+PROBE_PLAINTEXT_EXPANSION = 16
+PROBE_ASSUMED_INPUT_BYTES_PER_SECOND = 24 * 1024 * 1024
 PROBE_MAX_DIAGNOSTIC_BYTES = 1024 * 1024
-PROBE_MAX_CPU_SECONDS = 600
+PROBE_MAX_CPU_SECONDS = 1800
 PROBE_MAX_MEMORY_BYTES = 512 * 1024 * 1024
 GPG_TRANSPORT_TIMEOUT_SECONDS = 1800
 GPG_LIST_PACKETS_TIMEOUT_SECONDS = 120
+GPG_PACKET_STDOUT_MAX_BYTES = 4 * 1024 * 1024
+GPG_PACKET_STDERR_MAX_BYTES = 1024 * 1024
+
+
+def probe_budget_for_encrypted_size(ciphertext_bytes: int) -> tuple[int, int]:
+    """Compute a bounded (seconds, plaintext bytes) GPG verify budget.
+
+    Decryption writes plaintext only to a bounded streaming/discard pipe.
+    Ciphertext size is NOT proof of the plaintext's size (GPG compression
+    can expand it), so a generous expansion allowance is combined with a
+    hard cap and a strict wall-clock cap. The caller still verifies the
+    entire decryption; an over-limit result is never accepted as success.
+    """
+    if (type(ciphertext_bytes) is not int or ciphertext_bytes <= 0):
+        raise ValueError("encrypted artifact size must be a positive integer")
+    seconds = min(
+        PROBE_MAX_ADAPTIVE_TIMEOUT_SECONDS,
+        max(PROBE_TIMEOUT_SECONDS,
+            (ciphertext_bytes + PROBE_ASSUMED_INPUT_BYTES_PER_SECOND - 1)
+            // PROBE_ASSUMED_INPUT_BYTES_PER_SECOND))
+    plaintext = min(
+        PROBE_MAX_ADAPTIVE_PLAINTEXT_BYTES,
+        max(PROBE_MAX_PLAINTEXT_BYTES,
+            ciphertext_bytes * PROBE_PLAINTEXT_EXPANSION))
+    return seconds, plaintext
 
 
 def _gpg_child_limits():
@@ -185,8 +220,8 @@ class GpgProbeError(ValueError):
 
 
 def probe_gpg_decrypt(path, passphrase: str, *, expect_tar: bool = False,
-                      timeout: float = PROBE_TIMEOUT_SECONDS,
-                      max_plaintext_bytes: int = PROBE_MAX_PLAINTEXT_BYTES) -> None:
+                      timeout: float | None = None,
+                      max_plaintext_bytes: int | None = None) -> None:
     """Decrypt ``path`` with ``passphrase`` over stdin and discard the output.
 
     The plaintext is streamed and discarded in bounded chunks, never stored
@@ -209,9 +244,21 @@ def probe_gpg_decrypt(path, passphrase: str, *, expect_tar: bool = False,
     if (not isinstance(passphrase, str) or not passphrase or not passphrase.isascii()
             or any(char in passphrase for char in "\x00\r\n")):
         raise GpgProbeError("probe-error")
+    try:
+        ciphertext_bytes = os.stat(path).st_size
+        default_timeout, default_limit = probe_budget_for_encrypted_size(
+            ciphertext_bytes)
+    except (OSError, ValueError, TypeError):
+        raise GpgProbeError("probe-error") from None
+    if timeout is None:
+        timeout = default_timeout
+    if max_plaintext_bytes is None:
+        max_plaintext_bytes = default_limit
     if (not isinstance(timeout, (int, float)) or isinstance(timeout, bool)
-            or timeout <= 0 or not isinstance(max_plaintext_bytes, int)
-            or isinstance(max_plaintext_bytes, bool) or max_plaintext_bytes <= 0):
+            or not math.isfinite(timeout) or timeout <= 0
+            or timeout > PROBE_MAX_ADAPTIVE_TIMEOUT_SECONDS
+            or type(max_plaintext_bytes) is not int
+            or not 0 < max_plaintext_bytes <= PROBE_MAX_ADAPTIVE_PLAINTEXT_BYTES):
         raise GpgProbeError("probe-error")
     arguments = [
         "gpg", "--batch", "--yes", "--passphrase-fd", "0",
@@ -266,6 +313,13 @@ def probe_gpg_decrypt(path, passphrase: str, *, expect_tar: bool = False,
             if stdout_drain.is_alive() or stderr_drain.is_alive():
                 _terminate_process(process)
                 raise GpgProbeError("probe-error")
+            # A fast child may exit *before* the first waiter-loop
+            # iteration. Its drain threads may then discover an output
+            # overflow after the loop has ended. Always inspect their
+            # final status after the bounded joins, or a fast-exit
+            # oversized decrypted stream is falsely accepted.
+            if stdout_drain.over_limit or stderr_drain.over_limit:
+                over_limit = True
     except GpgProbeError:
         raise
     except Exception:
@@ -284,6 +338,87 @@ def probe_gpg_decrypt(path, passphrase: str, *, expect_tar: bool = False,
     if expect_tar and (len(stdout_drain.head) < 512
                        or stdout_drain.head[257:262] != b"ustar"):
         raise GpgProbeError("invalid-tar-header")
+
+
+def probe_gpg_packets(path, passphrase: str, *, timeout: float):
+    """Inspect GPG packet metadata with bounded pipes and wall-clock time.
+
+    subprocess.run(capture_output=True) previously retained unbounded GPG
+    packet output in RAM. A malformed archive may produce enormous output;
+    even a child exiting successfully must not bypass the final drain cap.
+    The caller consumes the bounded packet marker and safe diagnostics only.
+    """
+    if (not isinstance(passphrase, str) or not passphrase or not passphrase.isascii()
+            or any(c in passphrase for c in "\x00\r\n")
+            or isinstance(timeout, bool) or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or not 0 < timeout <= PROBE_MAX_ADAPTIVE_TIMEOUT_SECONDS):
+        raise GpgProbeError("probe-error")
+    args = [
+        "gpg", "--batch", "--passphrase-fd", "0", "--pinentry-mode", "loopback",
+        "--list-packets", str(path)]
+    try:
+        process = subprocess.Popen(
+            args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, **gpg_spawn_options())
+    except Exception:
+        raise GpgProbeError("probe-error") from None
+    stdout_drain = _StreamDrain(
+        process.stdout, limit=GPG_PACKET_STDOUT_MAX_BYTES,
+        keep=GPG_PACKET_STDOUT_MAX_BYTES)
+    stderr_drain = _StreamDrain(
+        process.stderr, limit=GPG_PACKET_STDERR_MAX_BYTES,
+        keep=GPG_PACKET_STDERR_MAX_BYTES)
+    outcome: dict = {}
+    waiter = threading.Thread(
+        target=_wait_for_process, args=(process, outcome), daemon=True)
+    timed_out = False
+    over_limit = False
+    try:
+        try:
+            process.stdin.write((passphrase + "\n").encode("ascii"))
+            process.stdin.close()
+        except (BrokenPipeError, OSError, ValueError):
+            pass
+        stdout_drain.start()
+        stderr_drain.start()
+        waiter.start()
+        deadline = time.monotonic() + timeout
+        while waiter.is_alive():
+            waiter.join(timeout=0.2)
+            if stdout_drain.over_limit or stderr_drain.over_limit:
+                over_limit = True
+                break
+            if time.monotonic() >= deadline:
+                timed_out = True
+                break
+        if timed_out or over_limit:
+            _terminate_process(process)
+            waiter.join(timeout=5)
+        else:
+            stdout_drain.join(timeout=5)
+            stderr_drain.join(timeout=5)
+            if stdout_drain.is_alive() or stderr_drain.is_alive():
+                _terminate_process(process)
+                raise GpgProbeError("probe-error")
+            # The child may exit before the first loop iteration.
+            over_limit = stdout_drain.over_limit or stderr_drain.over_limit
+    except GpgProbeError:
+        raise
+    except Exception:
+        _terminate_process(process)
+        raise GpgProbeError("probe-error") from None
+    if over_limit:
+        raise GpgProbeError("output-limit-exceeded")
+    if timed_out:
+        raise GpgProbeError("probe-timeout")
+    if (stdout_drain.read_error or stderr_drain.read_error
+            or outcome.get("error")
+            or type(outcome.get("returncode")) is not int):
+        raise GpgProbeError("probe-error")
+    return subprocess.CompletedProcess(
+        args=["gpg", "--list-packets"], returncode=outcome["returncode"],
+        stdout=stdout_drain.kept, stderr=stderr_drain.kept)
 
 
 def _contains_passphrase_option(command) -> bool:
