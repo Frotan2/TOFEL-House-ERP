@@ -36,11 +36,74 @@ GUARDIAN_FIELDS = {
     "Assessment Result": ["name", "student", "assessment_plan", "grade", "posting_date"],
     "Fees": ["name", "student", "program", "academic_year", "grand_total", "outstanding_amount", "due_date"],
     "Sales Invoice": ["name", "customer", "grand_total", "outstanding_amount", "due_date", "status"],
-    "TH Portal Announcement": ["name", "title", "message", "publish_date"],
+    "TH Portal Announcement": ["name", "title", "message", "publish_date", "audience"],
 }
 
 CONSENT_DOCTYPE = "TH Guardian Consent"
 ANNOUNCEMENT_DOCTYPE = "TH Portal Announcement"
+
+# Bounded portal record pagination. Consent authorization retains its stronger
+# independent full-history pagination and row-lock verification below.
+PORTAL_FETCH_MAX = 5000
+PORTAL_PAGE_MAX = 200
+VERIFIED_CHILDREN_MAX = 200
+
+def _page_params(limit, offset, default, maximum=PORTAL_PAGE_MAX):
+    """Validate paging arguments. Returns (limit, offset) as ints."""
+    if limit is None:
+        limit = default
+    if isinstance(limit, bool):
+        raise frappe.ValidationError("limit must be a whole number")
+    if isinstance(limit, float):
+        if not limit.is_integer():
+            raise frappe.ValidationError("limit must be a whole number")
+        limit = int(limit)
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError) as exc:
+        raise frappe.ValidationError("limit must be a whole number") from exc
+    if limit < 1 or limit > maximum:
+        raise frappe.ValidationError(
+            "limit must be between 1 and %d" % maximum)
+    if offset is None:
+        offset = 0
+    if isinstance(offset, bool):
+        raise frappe.ValidationError("offset must be a whole number")
+    if isinstance(offset, float):
+        if not offset.is_integer():
+            raise frappe.ValidationError("offset must be a whole number")
+        offset = int(offset)
+    try:
+        offset = int(offset)
+    except (TypeError, ValueError) as exc:
+        raise frappe.ValidationError("offset must be a whole number") from exc
+    if offset < 0:
+        raise frappe.ValidationError("offset must not be negative")
+    return (limit, offset)
+
+
+def _fetch_scoped(doctype, filters, fields, order_by=None):
+    """Fetch a scoped portal read, bounded but never silently truncated.
+
+    Requests PORTAL_FETCH_MAX + 1 rows and raises when more exist; the
+    caller pages through the returned rows with limit/offset. A failed
+    read raises (fail-closed) — callers never turn it into [].
+    """
+    rows = frappe.get_all(doctype, filters=filters, fields=fields,
+                          order_by=order_by,
+                          limit_page_length=PORTAL_FETCH_MAX + 1)
+    if len(rows) > PORTAL_FETCH_MAX:
+        raise frappe.ValidationError(
+            "%s exceeds the supported total of %d records; narrow the "
+            "scope or contact an administrator" % (doctype, PORTAL_FETCH_MAX))
+    return rows
+
+
+def _page(rows, limit, offset):
+    return list(rows)[offset:offset + limit]
+
+
+
 
 # Consent reads are paged, never capped: the pair (guardian, student) can
 # accumulate more rows than one page, and a cap that silently drops the
