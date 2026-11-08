@@ -374,7 +374,11 @@ class RetryBatchTests(BaseHarness):
         provider = _RecordingProvider({"a@example.com"})
         for bad in ('{"version":1,"detail":"partial",',
                     '{"version":999,"detail":"partial","results":[]}',
-                    '{"version":1,"detail":"partial","results":"false"}'):
+                    '{"version":1,"detail":"partial","results":"false"}',
+                    # Default json.loads keeps the last duplicate member;
+                    # this could erase persisted successes and resend them.
+                    '{"version":1,"detail":"partial","results":['
+                    '{"recipient":"a@example.com","delivered":true}],"results":[]}'):
             with self.subTest(saved=bad):
                 doc.last_failure = bad
                 doc.status = "failed"

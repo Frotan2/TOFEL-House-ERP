@@ -144,6 +144,16 @@ def _encode_delivery_outcome(detail, delivery_results):
                       sort_keys=True)
 
 
+def _unique_json_object(pairs):
+    """Reject duplicate JSON keys in durable delivery evidence."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
 def _decode_delivery_outcome(last_failure):
     """Return (detail, results_or_None); refuse malformed structured history.
 
@@ -159,7 +169,7 @@ def _decode_delivery_outcome(last_failure):
     if not text.startswith("{"):
         return (text, None)
     try:
-        payload = json.loads(text)
+        payload = json.loads(text, object_pairs_hook=_unique_json_object)
     except (ValueError, TypeError) as exc:
         raise frappe.ValidationError(
             "Notification recipient delivery history is malformed") from exc
