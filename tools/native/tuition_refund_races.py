@@ -13,13 +13,26 @@ import time
 import frappe
 
 
-def run():
+def _connect_worker(worker_frappe, site, sites_path, connection_guard):
+    worker_frappe.init(site=site, sites_path=sites_path)
+    try:
+        if connection_guard is not None:
+            connection_guard(worker_frappe, site, sites_path)
+        worker_frappe.connect()
+    except Exception:
+        worker_frappe.destroy()
+        raise
+
+
+def run(connection_guard=None):
     from toefl_house.security import SYNTHETIC, command, site_mode
     from toefl_house.finance import tuition_refund_commands as commands
 
+    site, sites_path = frappe.local.site, str(frappe.local.sites_path)
+    if connection_guard is not None:
+        connection_guard(frappe, site, sites_path)
     assert site_mode() == SYNTHETIC and not frappe.conf.get("toefl_house_production_active")
     assert frappe.get_meta("TH Tuition Refund Request").has_field("voided_on")
-    site, sites_path = frappe.local.site, str(frappe.local.sites_path)
     suffix = secrets.token_hex(4)
     prefix = "SYN Refund Race " + suffix
     company_name = prefix
@@ -146,8 +159,7 @@ def run():
 
         def worker(spec):
             import frappe as worker_frappe
-            worker_frappe.init(site=site, sites_path=sites_path)
-            worker_frappe.connect()
+            _connect_worker(worker_frappe, site, sites_path, connection_guard)
             worker_frappe.local.doc_events_hooks = worker_frappe._load_app_hooks()["doc_events"]
             try:
                 assert site_mode() == SYNTHETIC and not worker_frappe.conf.get("toefl_house_production_active")

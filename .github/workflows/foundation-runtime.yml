@@ -13,6 +13,11 @@ on:
       # Do not leave exact-SHA release prerequisites absent after policy changes.
       - tools/native/final_acceptance_report.py
       - tests/foundation/test_final_hosted_acceptance.py
+      - tools/native/acceptance_context.py
+      - tools/native/native_checks.py
+      - tools/native/tuition_refund_races.py
+      - tests/foundation/test_local_native_acceptance.py
+      - tests/foundation/test_native_health_privacy.py
       - tests/foundation/test_release_workflow_triggers.py
       - product/bootstrap.py
       - product/backup.py
