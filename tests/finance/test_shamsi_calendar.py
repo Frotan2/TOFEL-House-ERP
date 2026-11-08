@@ -52,6 +52,15 @@ class AfghanShamsiTests(unittest.TestCase):
         self.assertEqual(tuple(str(x) for x in shamsi.month_bounds("1404-12")),
                          ("2026-02-20", "2026-03-20"))
 
+    def test_semester_bounds_clamped_month_ends_on_the_last_day(self):
+        # Sonbola 31 + 1 month ends Mehr 30, not 21 Mehr; Bahman 30 + 1
+        # month ends Hoot 29, not 19 Hoot: a clamped day must not lose a
+        # second day to the day-before rule.
+        a, b = shamsi.semester_bounds("2026-09-22", 1)
+        self.assertEqual((str(a), str(b)), ("2026-09-22", "2026-10-22"))
+        a, b = shamsi.semester_bounds("2027-02-19", 1)
+        self.assertEqual((str(a), str(b)), ("2027-02-19", "2027-03-20"))
+
     def test_two_solar_month_semester_not_sixty_gregorian_days(self):
         a, b = shamsi.semester_bounds("2026-09-23")
         self.assertEqual((str(a), str(b)), ("2026-09-23", "2026-11-21"))

@@ -42,7 +42,8 @@ import tempfile
 import traceback
 
 from native_db import safe_mariadb_credential_transport
-from native_gpg import safe_gpg_diagnostic_category, safe_gpg_transport
+from native_gpg import (GpgProbeError, probe_gpg_decrypt,
+                        safe_gpg_diagnostic_category, safe_gpg_transport)
 
 BENCH_DIR = Path(os.environ.get("BENCH_DIR", "/home/frappe/bench"))
 SITES_DIR = BENCH_DIR / "sites"
@@ -58,6 +59,24 @@ BACKUP_SUFFIXES = {
     "public_files": "-files-enc.tar",
     "private_files": "-private-files-enc.tar",
 }
+# A pre-restore preservation set is fresh only if a validated backup
+# receipt says so: hash-bound to the exact artifacts, issued within the
+# last 24 hours. Filesystem mtimes are NOT a freshness input anywhere
+# in this module's restore gate anymore (the whole previous decision in
+# _check_pre_restore_recency, removed 2026-11-05): mtimes are trivially
+# forgeable with utime, a fresh mtime proves nothing about the bytes,
+# and a stale mtime says nothing about a set whose receipt was issued
+# later. The receipt's created_utc plus the decrypt probe are the
+# authoritative evidence. (st_mtime_ns still appears in
+# _same_file_state, but only as a staging change detector, never as
+# freshness.)
+PRE_RESTORE_RECEIPT_MAX_AGE_SECONDS = 24 * 3600
+PRE_RESTORE_RECEIPT_FUTURE_TOLERANCE_SECONDS = 300
+# Receipt identity must match product/backup.py exactly; the
+# cross-module test in tests/foundation/test_refine_gpg_backup.py pins it.
+BACKUP_RECEIPT_SUFFIX = "-receipt.json"
+BACKUP_RECEIPT_SCHEMA_VERSION = 1
+BACKUP_RECEIPT_MAX_BYTES = 64 * 1024
 # Emergency-restore authorization (production restores only). This is a
 # restore-specific document, distinct from the update engine's recovery
 # authorization: same approver roles and trust-store key format, but a
@@ -523,6 +542,123 @@ def _artifact_hashes(paths: dict[str, Path]) -> dict[str, str]:
             hashes[role] = _sha256_stream(stream)
     return hashes
 
+def _probe_restore_artifacts(paths: dict[str, Path], encryption_key: str) -> None:
+    """Decrypt-probe every artifact of a backup set with the restore key.
+
+    The database artifact is fully decrypted and discarded; each file
+    archive must additionally decrypt to a valid tar header. A wrong key, a
+    corrupt or truncated artifact, or a decryptable non-tar payload is
+    refused here, before any live data is touched. Plaintext is never
+    stored: the probe streams and discards it.
+    """
+    for role, path in paths.items():
+        try:
+            probe_gpg_decrypt(path, encryption_key,
+                              expect_tar=role in ("public_files", "private_files"))
+        except GpgProbeError:
+            raise RestoreInputError(
+                f"restore artifact failed its pre-restore decrypt check: {role}") from None
+
+
+def _backup_receipt_path(paths: dict[str, Path], backup_set: str) -> Path:
+    return paths["database"].parent / f"{backup_set}{BACKUP_RECEIPT_SUFFIX}"
+
+
+def _parse_receipt_utc(value, label: str) -> datetime:
+    if not isinstance(value, str):
+        raise RestoreInputError(f"backup receipt {label} is invalid")
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        raise RestoreInputError(f"backup receipt {label} is invalid") from None
+    return parsed.replace(tzinfo=timezone.utc)
+
+
+def _validate_pre_restore_receipt(paths: dict[str, Path], backup_set: str,
+                                  *, now: datetime | None = None) -> dict:
+    """Validate the hash-bound receipt for a pre-restore set.
+
+    The receipt must exist beside the artifacts, name this set, state
+    encrypted+verified, carry a created_utc within the last 24 hours
+    (300s future tolerance for clock skew), and bind every artifact by
+    name, size and SHA-256 to the bytes on disk. A missing, stale,
+    corrupt, or mismatched receipt refuses the restore before any
+    mutation — no matter what the files' mtimes say. Returns the receipt.
+    """
+    receipt_path = _backup_receipt_path(paths, backup_set)
+    try:
+        if receipt_path.is_symlink() or not receipt_path.is_file():
+            raise OSError
+        if receipt_path.stat().st_size > BACKUP_RECEIPT_MAX_BYTES:
+            raise RestoreInputError("pre-restore backup receipt is unexpectedly large")
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except RestoreInputError:
+        raise
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise RestoreInputError(
+            "pre-restore backup set has no verifiable backup receipt") from None
+    if not isinstance(receipt, dict):
+        raise RestoreInputError("pre-restore backup receipt is invalid")
+    if receipt.get("schema_version") != BACKUP_RECEIPT_SCHEMA_VERSION:
+        raise RestoreInputError("pre-restore backup receipt is invalid")
+    if receipt.get("backup_set") != backup_set:
+        raise RestoreInputError(
+            "pre-restore backup receipt belongs to a different backup set")
+    if receipt.get("encrypted") is not True or receipt.get("verified") is not True:
+        raise RestoreInputError(
+            "pre-restore backup receipt does not prove encryption and verification")
+    created = _parse_receipt_utc(receipt.get("created_utc"), "creation time")
+    current = datetime.now(timezone.utc) if now is None else now
+    age = (current - created).total_seconds()
+    if age < -PRE_RESTORE_RECEIPT_FUTURE_TOLERANCE_SECONDS:
+        raise RestoreInputError("pre-restore backup receipt is timestamped in the future")
+    if age > PRE_RESTORE_RECEIPT_MAX_AGE_SECONDS:
+        raise RestoreInputError(
+            "pre-restore backup set is stale: its backup receipt is older than 24 hours")
+    artifacts = receipt.get("artifacts")
+    if not isinstance(artifacts, list) or len(artifacts) != len(BACKUP_SUFFIXES):
+        raise RestoreInputError(
+            "pre-restore backup receipt does not contain the complete backup set")
+    seen = set()
+    try:
+        hashes = _artifact_hashes(paths)
+    except OSError:
+        raise RestoreInputError(
+            "pre-restore backup artifact is unavailable") from None
+    for item in artifacts:
+        if not isinstance(item, dict):
+            raise RestoreInputError(
+                "pre-restore backup receipt contains an invalid artifact entry")
+        role = item.get("role")
+        if role not in BACKUP_SUFFIXES or role in seen:
+            raise RestoreInputError(
+                "pre-restore backup receipt contains an unexpected or duplicate artifact")
+        seen.add(role)
+        path = paths[role]
+        if item.get("name") != path.name:
+            raise RestoreInputError(
+                "pre-restore backup receipt artifact name does not match its role")
+        expected_hash = item.get("sha256")
+        if not isinstance(expected_hash, str) or not re.fullmatch(r"[a-f0-9]{64}", expected_hash):
+            raise RestoreInputError(
+                f"pre-restore backup receipt has no valid SHA-256 digest for {role}")
+        size = item.get("bytes")
+        if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+            raise RestoreInputError(
+                f"pre-restore backup receipt has an invalid size for {role}")
+        try:
+            actual_size = path.stat().st_size
+        except OSError:
+            raise RestoreInputError(
+                f"pre-restore backup artifact is unavailable: {role}") from None
+        if actual_size != size or hashes[role] != expected_hash:
+            raise RestoreInputError(
+                f"pre-restore backup artifact changed after receipt: {role}")
+    if seen != set(BACKUP_SUFFIXES):
+        raise RestoreInputError("pre-restore backup receipt is missing a backup artifact")
+    return receipt
+
+
 def _verify_staged_restore_hashes(staged_paths: dict[str, Path],
                                   expected_hashes: dict[str, str] | None) -> None:
     """Compare staged files with the signed pre-restore artifact digests.
@@ -817,6 +953,22 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
         except FileExistsError:
             raise RestoreInputError(
                 "emergency restore request was already used") from None
+        # The preservation set is verified here: after authorization and
+        # single-use consumption (a refused request stays spent, by design),
+        # but before the in-progress marker, any audit "started" record, or
+        # any live-data mutation. Freshness follows the validated backup
+        # receipt — hash-bound to the exact artifacts, issued within 24
+        # hours — never a filesystem mtime; the receipt's identity is
+        # recorded in the audit trail. A stale, unreceipted, wrong-key,
+        # corrupt, or non-tar pre-restore set must never be the only
+        # rollback left after the live site is overwritten, and a failed
+        # check leaves no marker behind to block the next, freshly
+        # approved restore.
+        pre_receipt = _validate_pre_restore_receipt(pre_paths, pre_restore_backup_set)
+        audit_base["pre_restore_backup_receipt_created_utc"] = pre_receipt["created_utc"]
+        with _backup_receipt_path(pre_paths, pre_restore_backup_set).open("rb") as stream:
+            audit_base["pre_restore_backup_receipt_sha256"] = _sha256_stream(stream)
+        _probe_restore_artifacts(pre_paths, encryption_key)
         marker_path = state_dir / "in-progress.json"
         # Exclusive creation closes the check-then-create race: a second
         # signed request can never overwrite another active restore marker.
@@ -916,6 +1068,12 @@ def _run_native_restore(site: str, backup_set: str, encryption_key: str,
             working_dir = Path(working_name)
             staged_paths = _stage_restore_artifacts(paths, working_dir)
             _verify_staged_restore_hashes(staged_paths, expected_hashes)
+            # Decrypt-probe the staged database artifact and validate the
+            # tar headers of both staged file archives before native
+            # _restore(force=True) may overwrite the live database. The
+            # staged copies are disposable, so a probe failure here costs
+            # nothing and a native failure after mutation could cost the site.
+            _probe_restore_artifacts(staged_paths, encryption_key)
             with safe_mariadb_credential_transport(frappe, working_dir):
                 with safe_gpg_transport(frappe, encryption_key):
                     if context_writer is not None:

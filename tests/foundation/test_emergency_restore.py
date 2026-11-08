@@ -9,6 +9,7 @@ mock the native Frappe restore itself; no live site is touched.
 """
 import base64
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 import importlib.util
 import io
 import json
@@ -28,6 +29,40 @@ if str(PRODUCT_PATH) not in sys.path:
 
 OPENSSL = shutil.which("openssl")
 SECRET_KEY = "synthetic-native-backup-key"
+
+
+def _tar_header_bytes() -> bytes:
+    """A minimal 512-byte tar header carrying the ustar magic."""
+    header = bytearray(512)
+    header[257:262] = b"ustar"
+    header[263:265] = b"00"
+    return bytes(header)
+
+
+class _FakeDecryptStdin:
+    def write(self, data: bytes) -> int:
+        return len(data)
+
+    def close(self) -> None:
+        pass
+
+
+class _FakeDecryptPopen:
+    """Stand-in for GPG decrypt probes: key and tar header always verify.
+
+    The product probe streams plaintext and discards it, so the fake only
+    needs a plausible first block; failure modes are covered by dedicated
+    probe tests, not by this authorization harness.
+    """
+
+    def __init__(self, arguments, **kwargs):
+        self.arguments = arguments
+        self.stdin = _FakeDecryptStdin()
+        self.stdout = io.BytesIO(_tar_header_bytes())
+        self.stderr = io.BytesIO(b"")
+
+    def wait(self) -> int:
+        return 0
 SECRET_DB = "synthetic-mariadb-root-password"
 SECRET_ADMIN = "synthetic-owner-admin-password"
 
@@ -128,6 +163,26 @@ class EmergencyRestoreTests(unittest.TestCase):
             for role, suffix in self.restore.BACKUP_SUFFIXES.items():
                 (backup_dir / f"{backup_set}{suffix}").write_bytes(
                     f"synthetic {backup_set} {role}".encode())
+        # The pre-restore set carries a fresh, hash-bound receipt: the
+        # production restore gate trusts the receipt, never the files'
+        # mtimes (Group C refinement of the 24h recency check).
+        self._write_receipt(self.current_set)
+
+    def _write_receipt(self, backup_set, *, created_utc=None):
+        backup_dir = self.sites / self.site / "private" / "backups"
+        paths = self.restore._verified_backup_paths(self.site, backup_set)
+        hashes = self.restore._artifact_hashes(paths)
+        created = created_utc or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        receipt = {
+            "schema_version": 1, "backup_set": backup_set,
+            "created_utc": created, "encrypted": True, "verified": True,
+            "artifacts": [
+                {"role": role, "name": paths[role].name,
+                 "sha256": hashes[role], "bytes": paths[role].stat().st_size}
+                for role in self.restore.BACKUP_SUFFIXES],
+        }
+        (backup_dir / f"{backup_set}-receipt.json").write_text(
+            json.dumps(receipt), encoding="utf-8")
 
     def _hashes(self, backup_set):
         paths = self.restore._verified_backup_paths(self.site, backup_set)
@@ -163,16 +218,22 @@ class EmergencyRestoreTests(unittest.TestCase):
                         pre_restore_backup_set=None, target="production"):
         document, sig1, sig2 = self._authorization(
             **(authorization_kwargs or {}))
-        with patch.object(self.restore, "_run_native_restore") as native:
-            if mock is not None:
-                native.side_effect = mock
-            self.restore._native_restore(
-                self.site, self.target_set, SECRET_KEY, SECRET_DB, SECRET_ADMIN,
-                target=target,
-                pre_restore_backup_set=self.current_set
-                if pre_restore_backup_set is None else pre_restore_backup_set,
-                authorization=document, signature_1=sig1, signature_2=sig2)
-            return native
+        import native_gpg
+        # Scope the decrypt-probe patch to the restore call only: the
+        # shared subprocess.Popen attribute is also what subprocess.run
+        # uses, and later openssl signing in the same test must keep the
+        # real Popen.
+        with patch.object(native_gpg.subprocess, "Popen", _FakeDecryptPopen):
+            with patch.object(self.restore, "_run_native_restore") as native:
+                if mock is not None:
+                    native.side_effect = mock
+                self.restore._native_restore(
+                    self.site, self.target_set, SECRET_KEY, SECRET_DB, SECRET_ADMIN,
+                    target=target,
+                    pre_restore_backup_set=self.current_set
+                    if pre_restore_backup_set is None else pre_restore_backup_set,
+                    authorization=document, signature_1=sig1, signature_2=sig2)
+                return native
 
     def _state_dir(self):
         return self.state / self.site

@@ -1026,6 +1026,24 @@ def project_count(desk, doctype, filters=None):
     return frappe.db.count(doctype, filters)
 
 
+def count_or_unknown(desk, doctype, filters=None, *, preview=None):
+    """A full scoped count, or "—" when it cannot be proven from the preview.
+
+    A bounded preview list is never an exact count: when the authoritative
+    count is smaller than the preview already read, the sources disagree
+    and the honest value is unknown, not the preview length. A denied,
+    missing or inconsistent source is likewise unknown, never zero.
+    """
+    try:
+        total = project_count(desk, doctype, filters=filters)
+        if (not isinstance(total, int) or isinstance(total, bool) or total < 0
+                or (preview is not None and total < len(preview))):
+            return "—"
+        return total
+    except Exception:
+        return "—"
+
+
 def section(sid, title, kind, *, items=None, facts=None, empty_title="", empty_body="", notes=None, actions=None):
     """A desk section envelope. The client renders these uniformly."""
     payload = {"id": sid, "title": title, "kind": kind}

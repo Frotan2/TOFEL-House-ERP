@@ -140,8 +140,15 @@ def semester_bounds(start_iso, months=2):
         raise ValueError("Semester length must be 1-24 Solar Hijri months")
     year, month, day = gregorian_to_shamsi(start_iso)
     next_y, next_m = add_months(year, month, months)
-    end_boundary = shamsi_to_gregorian(
-        next_y, next_m, min(day, days_in_month(next_y, next_m)))
+    target_days = days_in_month(next_y, next_m)
+    # A clamped day (start day beyond the target month's length) ends ON
+    # the target month's last day: subtracting one more day would lose the
+    # final teaching day (Sonbola 31 + 1 month ends Mehr 30, not 21 Mehr).
+    # An unclamped day ends the day before the same day next month.
+    if day > target_days:
+        return date.fromisoformat(str(start_iso)), shamsi_to_gregorian(
+            next_y, next_m, target_days)
+    end_boundary = shamsi_to_gregorian(next_y, next_m, day)
     return date.fromisoformat(str(start_iso)), end_boundary - timedelta(days=1)
 
 

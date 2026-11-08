@@ -111,11 +111,27 @@ class StudentEligibilityTests(unittest.TestCase):
         self.assertEqual(rules.resolve_charge_discount(
             [rule], program="GE", student="STU-1")["rule_code"], "FULL")
 
-    def test_legacy_global_waiver_and_75_percent_cannot_bill(self):
+    def test_legacy_global_waiver_and_75_percent_raise_for_owner_correction(self):
+        # Group 1 (NEW-07): a guard-violating otherwise-eligible Active
+        # rule must RAISE, not be silently skipped — skipping would bill
+        # full price while the Owner believes a discount is in force.
         for pct in (75, 100):
             rule = dict(code="OLD", status="Active", discount_percentage=pct,
                         precedence=10)
-            self.assertIsNone(rules.resolve_charge_discount([rule], student="STU-1"))
+            with self.subTest(pct=pct), self.assertRaises(ValueError) as ctx:
+                rules.resolve_charge_discount([rule], student="STU-1")
+            self.assertIn("Owner must correct", str(ctx.exception))
+        # The guard still binds only to otherwise-eligible rules: a
+        # violating rule scoped to another student never blocks billing.
+        scoped = dict(code="OLD", status="Active", discount_percentage=75,
+                      precedence=10, student="STU-9")
+        self.assertIsNone(rules.resolve_charge_discount([scoped], student="STU-1"))
+        # And a legitimate rule still wins after the guard passes.
+        good = dict(code="TEN", status="Active", discount_percentage=10,
+                    precedence=10)
+        self.assertEqual(
+            rules.resolve_charge_discount([good], student="STU-1")["rule_code"],
+            "TEN")
 
     def test_unresolved_family_never_matches_family_scoped_discount(self):
         rule = dict(code="GEN", status="Active", discount_percentage=10,
