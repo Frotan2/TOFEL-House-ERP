@@ -13,11 +13,19 @@ native record cannot express on its own:
 * **waiting list**: one open entry per student per class, ordered by declared
   priority then request time, with an explicit seat offer that expires.
   Admission re-proves every fact under lock, so a stale offer cannot
-  overfill a class.
-* **override**: an extra seat granted by the policy-configured role for one
-  named student, with a reason, an expiry and a single use. Every admission
-  path that exceeds capacity must consume a matching Approved override —
-  there is no unchecked bypass.
+  overfill a class. Admission is by a live offer, or — when no seat exists
+  to offer — by an explicit, audited reason recorded with the admission;
+  a plain Waiting entry is never admitted silently.
+* **override**: exactly one extra seat granted by the policy-configured role
+  for one named student, with a reason, an expiry and a single use, only
+  for an enrolled student who is not already a member and holds no other
+  live override for the class. Every admission path that exceeds capacity
+  must consume a matching Approved override — there is no unchecked bypass.
+  Overrides created before the single-seat rule with ``seats > 1`` stay
+  consumable-whole (one admission marks the whole grant Used); the remedy
+  is to revoke such a grant and re-issue it as a single-seat override —
+  there is no silent conversion, because the original approval names one
+  student and one seat count.
 
 Reception and Academic staff read the availability projections; only the
 Teaching Scheduler admits, and only the configured override role approves
@@ -288,6 +296,26 @@ def consume_override(override_name, actor, on_date=None, group_name="",
     return {"override": doc.name, "seats": int(doc.seats), "approved_by": doc.approved_by}
 
 
+def _live_override_exists(group_name, student):
+    """A usable Approved override already held for this class and student.
+
+    An Approved row past its expiry can never admit (``usable_override``
+    refuses it), so it does not block a fresh grant; a row with no expiry
+    is treated as live, matching ``usable_override``.
+
+    The liveness test is one exact database count, never a capped page:
+    a ``limit_page_length`` read can return only expired rows while a live
+    row sits past the page, and the duplicate grant would then be allowed.
+    """
+    rows = frappe.db.sql(
+        "select count(*) from `tabTH Capacity Approval` "
+        "where student_group=%s and student=%s and status='Approved' "
+        "and (expires_on is null or expires_on='' or expires_on>=%s)",
+        (group_name, student, _today()))
+    count = rows[0][0] if rows else 0
+    return int(count or 0) > 0
+
+
 def row_target(override_name):
     row = _override_row(override_name)
     return row.get("student_group"), row.get("student")
@@ -553,12 +581,23 @@ def offer_waiting_list_seat(request_key, entry, expires_on=""):
 
 
 @frappe.whitelist(methods=["POST"])
-def admit_from_waiting_list(request_key, entry, override=""):
-    """Admit one waiting (or offered) student, consuming the offered seat.
+def admit_from_waiting_list(request_key, entry, override="",
+                            queue_jump_reason=""):
+    """Admit one offered student, consuming the offered seat.
 
     The seat, the enrollment and the class state are all re-proven under
     lock; an expired offer is refused, and a full class needs a matching
-    Approved override — exactly as a direct roster addition does.
+    Approved override — exactly as a direct roster addition does. A plain
+    Waiting entry holds no offer, so admitting it skips the offer, expiry
+    and reservation mechanism: it is refused unless the caller supplies an
+    explicit ``queue_jump_reason`` (for example, a full class where no seat
+    exists to offer and an approved override admits the queued learner).
+    The reason is returned with the admission and bound into the audit
+    hash, so no admission ever bypasses the offer silently. Queue order
+    still applies: a Waiting entry must be first among Waiting entries.
+    The reason is also written on the waiting-list entry's note, so the
+    record itself — not only the operation receipt — shows why the learner
+    was admitted without an offer.
     """
     from toefl_house.api import _execute
 
@@ -585,10 +624,18 @@ def admit_from_waiting_list(request_key, entry, override=""):
         if previous == 1:
             raise frappe.ValidationError(
                 f"Student {student} is already an active member of {group_name}")
-        # Direct admission from Waiting otherwise bypasses the same priority
-        # rule enforced by offer_waiting_list_seat. An existing unexpired
-        # Offered row already earned its place when the seat was reserved.
+        # A Waiting entry holds no seat offer: admitting it without one
+        # bypasses the offer/expiry/reservation mechanism. The only way in
+        # is an explicit, audited reason. An existing unexpired Offered row
+        # already earned its place when the seat was reserved.
+        jump_reason = ""
         if row["status"] == "Waiting":
+            if not isinstance(queue_jump_reason, str) or not queue_jump_reason.strip():
+                raise frappe.ValidationError(
+                    f"Waiting-list entry {entry} holds no seat offer; offer "
+                    "the seat first, or admit it with an explicit "
+                    "queue-jump reason")
+            jump_reason = _reason(queue_jump_reason)
             waiting = sorted(_open_entries(group_name, ("Waiting",)),
                              key=_queue_order)
             if not waiting or waiting[0]["name"] != row["name"]:
@@ -605,6 +652,15 @@ def admit_from_waiting_list(request_key, entry, override=""):
         doc.flags.ignore_permissions = True
         doc.status = "Admitted"
         doc.admitted_on = frappe.utils.now_datetime()
+        if jump_reason:
+            # The reason is returned to the caller, bound into the audit
+            # hash and stored in the operation receipt — and it is also
+            # written on the waiting-list record itself, so a later reader
+            # of the queue can see why this learner was admitted without
+            # an offer instead of finding only a bare "Admitted" row.
+            prior_note = (row.get("note") or "").strip()
+            admission_note = f"Admitted with queue-jump reason: {jump_reason}"
+            doc.note = f"{prior_note} | {admission_note}" if prior_note else admission_note
         doc.save(ignore_permissions=True)
         after = seat_facts(group_name)
         result = {
@@ -612,22 +668,38 @@ def admit_from_waiting_list(request_key, entry, override=""):
             "student_group": group_name,
             "reactivated": previous == 0,
             "override": seat["override"],
+            "queue_jump_reason": jump_reason,
             "seats": {"capacity": after["capacity"], "rostered": after["rostered"],
                       "reserved": after["reserved"], "available": after["available"]},
             "policy_effective_from": terms.get("effective_from", ""),
         }
+        after_hash = [doc.name, "Admitted", group_name, student]
+        if jump_reason:
+            after_hash.append(jump_reason)
         return result, dict(target=doc.name,
-                            after_hash=digest([doc.name, "Admitted", group_name,
-                                               student]))
+                            after_hash=digest(after_hash))
 
     return _execute("admit_from_waiting_list", request_key,
-                    {"entry": entry, "override": override}, work)
+                    {"entry": entry, "override": override,
+                     "queue_jump_reason": queue_jump_reason}, work)
 
 
 @frappe.whitelist(methods=["POST"])
 def create_capacity_override(request_key, student_group, student, seats, reason,
                              expires_on=""):
-    """Approve extra seats above the class capacity for one named student."""
+    """Approve exactly one extra seat above the class capacity.
+
+    For one named, enrolled student who is not already a member of the
+    class and holds no other live override for it. A multi-seat grant can
+    never be used up: the override names one student, and that student is
+    refused re-admission once a member, so seats beyond the first would
+    silently vanish when the override is consumed whole. One seat per
+    override keeps the grant, the consumption and the audit in agreement.
+
+    Legacy Approved overrides created before this rule with ``seats > 1``
+    are not converted automatically: revoke the old grant (with a reason)
+    and approve a fresh single-seat override for the same student.
+    """
     from toefl_house.api import _execute
 
     def work(actor):
@@ -644,10 +716,27 @@ def create_capacity_override(request_key, student_group, student, seats, reason,
         student_name = _bounded(student, "Student")
         clean_seats = _int(seats, "Override seats", 1,
                            terms["capacity_override_max_seats"])
+        if clean_seats != 1:
+            raise frappe.ValidationError(
+                "A capacity override grants exactly one seat to one named "
+                "student; approve one seat per override")
         clean_reason = _reason(reason)
-        facts = _group_facts(group_name)
+        # Lock the class row so the live-override check below and the
+        # insert serialize per class, as join_waiting_list does.
+        facts = _group_facts(group_name, for_update=True)
         _require_open_class(group_name, facts)
         _require_active_student(student_name)
+        require_matching_enrollment(student_name, facts, group_name)
+        if _roster_status(group_name, student_name) == 1:
+            raise frappe.ValidationError(
+                f"Student {student_name} is already an active member of "
+                f"{group_name}; an override grants a seat to a student "
+                "outside the class")
+        if _live_override_exists(group_name, student_name):
+            raise frappe.ValidationError(
+                f"Student {student_name} already holds a live capacity "
+                f"override for {group_name}; revoke it before approving "
+                "another")
         expiry = _override_expiry(terms, expires_on)
         doc = frappe.get_doc({
             "doctype": OVERRIDE, "student_group": group_name,
