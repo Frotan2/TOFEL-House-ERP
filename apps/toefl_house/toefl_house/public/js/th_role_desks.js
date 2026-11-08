@@ -206,6 +206,11 @@ frappe.provide("toefl_house.role_desks");
 		$("<p class='th-page-assurance'></p>")
 			.text(text("Review your work and choose an available action. Each action opens a form; your account's permissions apply when you save."))
 			.appendTo(header);
+		// Page-only roles may have no native workspace sidebar or its Logout menu.
+		$("<button type='button' class='btn btn-secondary btn-sm th-sign-out'></button>")
+			.text(text("Sign out"))
+			.on("click", () => frappe.app.logout())
+			.appendTo(header);
 		$("<nav class='th-desk-strip' aria-label='Your desks'></nav>").appendTo(header);
 	}
 
