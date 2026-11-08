@@ -711,11 +711,58 @@ class MarkedCensusTests(unittest.TestCase):
                 with self.assertRaises(engine.UpdateError):
                     self.runner.orphans("toeflhouse.localhost")
 
-    # INTEGRATION NOTE (Batch 2 execution, 2026-11-06): the candidate's two
-    # fees_total tests were omitted here. BenchRunner.fees_total does not
-    # exist on main (b2e608e9); it was added by the dangerous-fixes branch
-    # (5032608d, PR #137 territory), so the marked-fees-total hunk is a #137
-    # dependency. These tests return with #137.
+    def test_fees_total_accepts_exact_marked_report(self):
+        with self._stub('[["TH_CENSUS", "12345.6700"]]\\n'):
+            self.assertEqual(
+                self.runner.fees_total("toeflhouse.localhost"), "12345.67")
+
+    def test_fees_total_refuses_ambiguous_or_unmarked_report(self):
+        invalid = (
+            '[["12345.67"]]\\n',
+            'warning\\n[["TH_CENSUS", "12345.67"]]\\n',
+            '[["TH_CENSUS", "12345.67"]]\\nwarning\\n',
+            '[["TH_CENSUS", "12345.67"]]\\n[["TH_CENSUS", "12345.67"]]\\n',
+            '[["TH_CENSUS", "12"], ["TH_CENSUS", "13"]]\\n',
+            '[["TH_CENSUS", "12", "13"]]\\n',
+            '[["TH_CENSUS", 12]]\\n',
+            '[["TH_CENSUS", "-1"]]\\n',
+        )
+        for stdout in invalid:
+            with self.subTest(stdout=stdout), self._stub(stdout):
+                with self.assertRaises(engine.UpdateError):
+                    self.runner.fees_total("toeflhouse.localhost")
+
+    def test_record_hash_accepts_exact_marked_rows(self):
+        fields = engine.CENSUS_HASH_FIELDS["Fees"]
+        columns = ["name", *fields]
+        row = ["FEE-001", *("1" if field in engine._CENSUS_NUMERIC_FIELDS
+                            else "sample" for field in fields)]
+        numeric = frozenset(index for index, column in enumerate(columns)
+                            if column in engine._CENSUS_NUMERIC_FIELDS)
+        expected = engine._census_digest([row], numeric_columns=numeric)
+        with self._stub(json.dumps([["TH_CENSUS", *row]]) + "\\n"):
+            self.assertEqual(
+                self.runner._census_hash("toeflhouse.localhost", "Fees"),
+                expected)
+
+    def test_record_hash_refuses_unmarked_ambiguous_or_wrong_width(self):
+        fields = engine.CENSUS_HASH_FIELDS["Fees"]
+        row = ["FEE-001", *("1" if field in engine._CENSUS_NUMERIC_FIELDS
+                            else "sample" for field in fields)]
+        marked = json.dumps([["TH_CENSUS", *row]])
+        invalid = (
+            json.dumps([row]) + "\\n",
+            marked + "\\nwarning\\n",
+            "warning\\n" + marked + "\\n",
+            marked + "\\n" + marked + "\\n",
+            json.dumps([["TH_CENSUS", "FEE-001"]]) + "\\n",
+            json.dumps([["TH_CENSUS", *row, "extra"]]) + "\\n",
+        )
+        for stdout in invalid:
+            with self.subTest(stdout=stdout), self._stub(stdout):
+                with self.assertRaises(engine.UpdateError):
+                    self.runner._census_hash("toeflhouse.localhost", "Fees")
+
 
 
 if __name__ == "__main__":
