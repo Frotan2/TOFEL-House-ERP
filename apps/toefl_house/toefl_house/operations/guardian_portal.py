@@ -736,6 +736,7 @@ def revoke_consent(student, reason=""):
         (row["name"] for row in live if row.get("status") == "Active"),
         live[0]["name"])
     revoked_at = None
+    primary_revoked_at = None
     for _ in range(_REVOKE_MAX_PASSES):
         remaining = _live_consent_rows(guardian, student)
         if not remaining:
@@ -755,18 +756,19 @@ def revoke_consent(student, reason=""):
             doc.revocation_reason = reason or "Guardian requested revocation"
             doc.save(ignore_permissions=True)
             revoked_at = doc.revoked_at
+            if row["name"] == primary_name:
+                primary_revoked_at = doc.revoked_at
     remaining = _live_consent_rows(guardian, student)
     if remaining:
         raise frappe.ValidationError(
             f"Revocation incomplete: {len(remaining)} consent row(s) for "
             "this student are still not revoked; access is refused until "
             "revocation completes")
-    primary = _get_consent(guardian, student)
-    if primary is not None:
-        return {"name": primary.get("name"), "status": "Revoked",
-                "revoked_at": primary.get("revoked_at") or revoked_at}
+    # Keep the name of the originally Active consent as the receipt target.
+    # Re-reading _get_consent after revocation selects the newest Revoked
+    # row instead, which can be a different Pending row from this batch.
     return {"name": primary_name, "status": "Revoked",
-            "revoked_at": revoked_at}
+            "revoked_at": primary_revoked_at or revoked_at}
 
 
 @frappe.whitelist()
