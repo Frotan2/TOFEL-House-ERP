@@ -39,6 +39,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import time
 import traceback
 
 from native_db import safe_mariadb_credential_transport
@@ -665,11 +666,18 @@ def _verify_staged_restore_hashes(staged_paths: dict[str, Path],
 
     The source may change after authorization but before the copy starts.
     Rechecking the actual staged bytes before invoking Frappe closes that
-    time-of-check/time-of-use window for production recovery.
+    time-of-check/time-of-use window for production recovery. The recheck
+    is mandatory: a caller that supplies no gate-time digests is refused
+    instead of silently restoring unverified bytes, on every path
+    (production, disposable, and direct calls of _run_native_restore).
     """
-    if expected_hashes is not None and _artifact_hashes(staged_paths) != expected_hashes:
+    if expected_hashes is None:
         raise RestoreInputError(
-            "restore artifact content changed after emergency authorization")
+            "restore artifact content cannot be verified: no gate-time "
+            "digests were supplied for the staged-hash recheck")
+    if _artifact_hashes(staged_paths) != expected_hashes:
+        raise RestoreInputError(
+            "restore artifact content changed after the gate check")
 
 
 
@@ -842,6 +850,35 @@ def _same_file_state(left, right) -> bool:
     return all(getattr(left, field) == getattr(right, field) for field in identity)
 
 
+# Staging directories a killed restore leaves behind can hold plaintext:
+# native ``decrypt_backup`` replaces staged ciphertext with plaintext in
+# place, and a SIGKILL skips TemporaryDirectory cleanup. A later restore
+# reaps only staging older than a full day, so a concurrent restore (which
+# finishes in minutes) is never touched; litter younger than a day is
+# simply left until it ages past the threshold. Best effort only:
+# reaping must never fail a restore.
+STALE_STAGING_MAX_AGE_SECONDS = 24 * 3600
+STAGING_PREFIX = "toefl-house-native-restore-"
+
+
+def _reap_stale_restore_staging(now: float | None = None) -> None:
+    """Remove staging directories older than a day from killed restores."""
+    try:
+        entries = list(Path("/tmp").glob(f"{STAGING_PREFIX}*"))
+    except OSError:
+        return
+    threshold = (time.time() if now is None else now) - STALE_STAGING_MAX_AGE_SECONDS
+    for entry in entries:
+        try:
+            if entry.is_symlink() or not entry.is_dir():
+                continue
+            if entry.stat().st_mtime > threshold:
+                continue
+            shutil.rmtree(entry, ignore_errors=True)
+        except OSError:
+            continue
+
+
 def _stage_restore_artifacts(paths: dict[str, Path], temporary_root: Path) -> dict[str, Path]:
     """Give native Frappe disposable copies, never the preserved backup set.
 
@@ -1005,9 +1042,13 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
         return
     _append_audit(state_dir, {**audit_base, "outcome": "started"})
     try:
+        # The staged-hash recheck applies here exactly as on the production
+        # path: ``hashes`` were taken at the gate, before staging, so a swap
+        # of the source artifact in between is caught before native restore.
         _run_native_restore(site, backup_set, encryption_key,
                             db_root_password, admin_password,
-                            context_writer=context_writer)
+                            context_writer=context_writer,
+                            expected_hashes=hashes)
     except Exception:
         _append_audit(state_dir, {**audit_base, "outcome": "failed"})
         raise
@@ -1063,8 +1104,12 @@ def _run_native_restore(site: str, backup_set: str, encryption_key: str,
         # shell command, which accepts an unquoted path.
         if Path("/tmp").is_symlink():
             raise RestoreInputError("temporary restore storage is unsafe")
+        # A restore killed mid-run leaves its staging (possibly plaintext
+        # after native decryption) behind; reap only day-old leftovers so
+        # a concurrent restore is never touched.
+        _reap_stale_restore_staging()
         with tempfile.TemporaryDirectory(
-                prefix="toefl-house-native-restore-", dir="/tmp") as working_name:
+                prefix=STAGING_PREFIX, dir="/tmp") as working_name:
             working_dir = Path(working_name)
             staged_paths = _stage_restore_artifacts(paths, working_dir)
             _verify_staged_restore_hashes(staged_paths, expected_hashes)

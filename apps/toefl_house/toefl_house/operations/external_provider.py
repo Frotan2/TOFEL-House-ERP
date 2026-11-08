@@ -9,7 +9,9 @@ out-of-band by the Owner and explicitly enabled via portal_policy.
 
 The built-in providers are:
 - DashboardProvider (in-app, always available when enabled)
-- EmailProvider (via Frappe email queue, when enabled)
+- EmailProvider (enqueues via frappe.sendmail when enabled; reports
+  failure when no mail transport is available — it never claims a
+  delivery that was not enqueued)
 - SmsStubProvider / WhatsappStubProvider (no-op, require external enablement)
 
 All providers implement the same interface: send(notification) → bool
@@ -61,19 +63,41 @@ class DashboardProvider(NotificationProvider):
 
 
 class EmailProvider(NotificationProvider):
-    """Email delivery via Frappe — stub that succeeds when enabled."""
+    """Email delivery via Frappe — enqueues with frappe.sendmail.
+
+    Success means the message was accepted into the Frappe email queue
+    (the queue, not this provider, owns SMTP delivery and retries).
+    When no mail transport is available — offline harness, unconfigured
+    site — nothing is enqueued and the provider reports failure: the
+    old implementation returned True for any well-formed address
+    without sending anything, which marked notifications delivered
+    that nobody received.
+    """
 
     @property
     def name(self):
         return "Email"
 
     def send(self, notification):
-        # In production this would enqueue via frappe.sendmail.
-        # Here we succeed if recipient looks like an email.
         recipient = (notification.get("recipient") or "").strip()
-        if "@" in recipient and "." in recipient:
+        if "@" not in recipient or "." not in recipient:
+            return False
+        try:
+            import frappe
+        except Exception:
+            return False
+        sendmail = getattr(frappe, "sendmail", None)
+        if not callable(sendmail):
+            return False
+        try:
+            sendmail(
+                recipients=[recipient],
+                subject=notification.get("title") or "Notification",
+                message=notification.get("message") or "",
+            )
             return True
-        return False
+        except Exception:
+            return False
 
 
 class SmsStubProvider(NotificationProvider):
@@ -158,7 +182,10 @@ def deliver(notification, check_enabled=True):
     if channel not in ALL_CHANNELS:
         return (False, "unknown", f"Unknown channel: {channel}")
 
-    # Channel must be enabled (unless caller bypasses for synthetic tests)
+    # Channel must be enabled (unless caller bypasses for synthetic tests).
+    # A failure to evaluate enablement fails closed: the old code
+    # swallowed the exception and delivered anyway, so a config/DB
+    # outage silently re-enabled every channel.
     if check_enabled:
         try:
             from toefl_house.operations import portal_policy
@@ -166,7 +193,8 @@ def deliver(notification, check_enabled=True):
                 return (False, CHANNEL_LABELS.get(channel, channel),
                         f"Channel {channel} is disabled")
         except Exception:
-            pass
+            return (False, CHANNEL_LABELS.get(channel, channel),
+                    f"Channel {channel} enablement could not be verified")
 
     provider = get_provider(channel)
     if provider is None:
@@ -175,7 +203,10 @@ def deliver(notification, check_enabled=True):
     # External channels that are still on stub will return False — that
     # is intentional failed-delivery handling, not an exception.
     try:
-        ok = bool(provider.send(notification))
+        # Provider contract is a boolean. Strings such as "False" are
+        # truthy in Python and must not be mistaken for accepted delivery.
+        # Only an explicit True is authorization to mark the message sent.
+        ok = provider.send(notification) is True
         if ok:
             return (True, provider.name, "Delivered")
         else:

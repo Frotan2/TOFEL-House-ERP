@@ -165,6 +165,47 @@ class ActivationFlow(unittest.TestCase):
         self.assertEqual(self.config(), before)
         self.assertEqual(self.fake_probe(SITE)["mode"], "REFUSED")
 
+    def test_already_activated_reproves_mixed_mode_gate(self):
+        self.fresh_backup()
+        self.act.activate(SITE, log=lambda *_: None)
+        # Re-running activate() on the triple-only site must re-prove
+        # every gate (including the mixed-mode gate) instead of
+        # trusting the triple, and must leave the site triple-only.
+        self.act.activate(SITE, log=lambda *_: None)
+        config = self.config()
+        self.assertEqual(config[self.act.ACTIVE_KEY], 1)
+        self.assertEqual(config[self.act.SITE_KEY], SITE)
+        for key in self.act.SYNTHETIC_KEYS:
+            self.assertNotIn(key, config)
+        self.assertEqual(self.fake_probe(SITE)["mode"], "PRODUCTION")
+
+    def test_already_activated_triple_failing_mixed_mode_gate_is_refused(self):
+        self.fresh_backup()
+        # Triple-only site (as left by a kill after the activation
+        # write): the activation gates were never proven for it.
+        self.write({"db_type": "mariadb",
+                    self.act.ACTIVE_KEY: 1, self.act.SITE_KEY: SITE})
+        # A resolver that never refuses fixtures: the mixed-mode check
+        # can never observe REFUSED, so the site must be refused, not
+        # silently accepted as "Already activated".
+        def never_refuses_probe(site, *extra):
+            result = self.fake_probe(site, *extra)
+            result["mode"] = "PRODUCTION"
+            result["flag"] = 0
+            result["mirror"] = True
+            return result
+
+        with patch.object(self.act, "probe", side_effect=never_refuses_probe):
+            with self.assertRaisesRegex(self.act.Refused, "mixed-mode"):
+                self.act.activate(SITE, log=lambda *_: None)
+        # The refused re-proof must leave the site exactly as found:
+        # triple-only, no synthetic flags left behind.
+        config = self.config()
+        self.assertEqual(config[self.act.ACTIVE_KEY], 1)
+        self.assertEqual(config[self.act.SITE_KEY], SITE)
+        for key in self.act.SYNTHETIC_KEYS:
+            self.assertNotIn(key, config)
+
     def test_stale_test_flags_block_activation_by_presence(self):
         self.fresh_backup()
         self.write({"db_type": "mariadb", "allow_tests": 0})
@@ -266,6 +307,31 @@ class ActivationFlow(unittest.TestCase):
                 self.act.set_fee_item(SITE, bad, log=lambda *_: None)
         self.act.set_fee_item(SITE, "PLACEMENT-FEE", log=lambda *_: None)
         self.assertEqual(self.config()[self.act.FEE_ITEM_KEY], "PLACEMENT-FEE")
+
+    def test_fee_item_verification_interrupt_restores_previous_settings(self):
+        self.fresh_backup()
+        self.act.activate(SITE, log=lambda *_: None)
+        before = self.config()
+        orig_read_config = self.act.read_config
+        calls = {"n": 0}
+
+        def flaky_read_config(site):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                # The verification read, after the fee-item write.
+                raise KeyboardInterrupt(
+                    "synthetic interrupt during verification")
+            return orig_read_config(site)
+
+        with patch.object(self.act, "read_config",
+                          side_effect=flaky_read_config):
+            with self.assertRaises(KeyboardInterrupt):
+                self.act.set_fee_item(SITE, "PLACEMENT-FEE",
+                                      log=lambda *_: None)
+        # An interrupt during verification must roll back exactly like
+        # a failed gate, not leave a half-written fee item behind.
+        self.assertEqual(self.config(), before)
+        self.assertNotIn(self.act.FEE_ITEM_KEY, self.config())
 
     def test_confirmation_must_name_the_site(self):
         with self.assertRaises(self.act.Refused):

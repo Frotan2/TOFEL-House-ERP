@@ -45,6 +45,8 @@ class RosterControlTests(unittest.TestCase):
                         f"direct-queue-bypass-{student}", "GRP-SPARE", student)
                 self.assertIn("pending waiting-list entries", str(ctx.exception))
                 self.assertEqual(self.ops.roster("GRP-SPARE"), before)
+        self.ops.capacity.offer_waiting_list_seat(
+            "first-wait-offer-0001", first)
         enrolled = self.ops.capacity.admit_from_waiting_list(
             "first-wait-join-0001", first)
         self.assertEqual(enrolled["status"], "Admitted")
@@ -331,7 +333,9 @@ class ClassOperationsJourneyTests(unittest.TestCase):
             "sibling admission approved by the Academic Manager",
             "2026-10-02")
         admitted = self.ops.capacity.admit_from_waiting_list(
-            "journey-admit-0001", entry["name"], override=override["name"])
+            "journey-admit-0001", entry["name"], override=override["name"],
+            queue_jump_reason="full class; no seat exists to offer, approved "
+                              "override admits the queued learner")
         self.assertEqual(admitted["status"], "Admitted")
         self.assertEqual(admitted["override"]["override"], override["name"])
         self.assertEqual(self.site.get("TH Capacity Approval",

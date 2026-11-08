@@ -249,6 +249,11 @@ ORPHAN_CHECKS = (
     ("Sales Invoice Item", "Sales Invoice"),
     ("Payment Entry Reference", "Payment Entry"),
 )
+# Marker carried as the first column of every census row bench returns.
+# Bench prints each query result as a single JSON line; the parser accepts
+# only that one marked line, so a trailing log/warning line or an unrelated
+# JSON-looking line can never be mistaken for census evidence.
+CENSUS_MARKER = "TH_CENSUS"
 
 # Every code the engine can emit.  The Windows catalog must define English and
 # Dari text for each one; tests/foundation/test_update_engine.py enforces it.
@@ -1028,8 +1033,14 @@ def verify_manifest_signature(manifest_path: Path, signature_path: Path, store: 
 # --------------------------------------------------------------------------
 
 def inspect_image_archive(path: Path, *, expected: Mapping[str, object] | None = None,
-                          verify_layers: bool = False) -> dict:
-    """Bind saved image bytes to their labels/config digest without Docker."""
+                          verify_layers: bool = True) -> dict:
+    """Bind saved image bytes to their labels/config digest without Docker.
+
+    Layer contents are verified by default: the config digest and labels
+    alone cannot bind the layer bytes, so a tampered layer under a
+    re-signed manifest must never pass. A caller must explicitly opt out
+    with ``verify_layers=False``; no in-repo caller does.
+    """
     if path.is_symlink() or not path.is_file():
         raise refuse("release.archive.missing", "the prebuilt image archive is missing")
     try:
@@ -1715,7 +1726,10 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
 
     # Phase A deliberately carries no image bytes.  When the caller supplies an
     # archive it is verified here as well; otherwise the image is verified by
-    # the authorize phase, before it is ever imported.
+    # the authorize phase, before it is ever imported.  Layer contents are
+    # always verified whenever an archive is inspected: config digest and
+    # labels alone cannot bind the layer bytes, so a tampered layer must
+    # never pass a manifest-phase preflight as ``allow``.
     identity = None
     archive_value = request.get("archive")
     if (isinstance(archive_value, str) and archive_value) or require_archive:
@@ -1725,7 +1739,7 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
             identity = inspect_image_archive(
                 resolve_inside(product_root, archive_value, "request.archive"),
                 expected=manifest["image"],
-                verify_layers=require_archive)
+                verify_layers=True)
         except UpdateError as error:
             blockers.append(_block(error.code, error.detail))
 
@@ -2431,19 +2445,53 @@ class BenchRunner:
             raise refuse("apply.counts_unavailable", "the installed application list is malformed")
         return sorted(value)
 
-    def count(self, site: str, doctype: str) -> int | None:
-        result = self._run(["--site", site, "execute", "frappe.db.count",
-                            "--kwargs", json.dumps({"doctype": doctype})], timeout=180)
-        if result.returncode != 0:
-            return None
-        lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
-        if not lines:
+    @staticmethod
+    def _marked_rows(stdout: str | None) -> list[list] | None:
+        """Parse the single marked JSON line bench must print for a census.
+
+        The whole stdout must be exactly one non-empty line holding one JSON
+        list whose every row starts with CENSUS_MARKER. Anything else -- no
+        output, extra log lines, several JSON lines, an unmarked row -- is
+        absence or ambiguity, and returns None: the caller refuses instead
+        of guessing which line was the census. The last line of bench
+        stdout and the first JSON-looking line are never parsed.
+        """
+        text = (stdout or "").strip()
+        if not text or "\n" in text:
             return None
         try:
-            value = int(lines[-1])
-        except ValueError:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
             return None
-        return value if value >= 0 else None
+        if not isinstance(payload, list):
+            return None
+        rows: list[list] = []
+        for row in payload:
+            if (not isinstance(row, list) or not row
+                    or row[0] != CENSUS_MARKER):
+                return None
+            rows.append(row[1:])
+        return rows
+
+    def count(self, site: str, doctype: str) -> int | None:
+        # The doctype is interpolated into the query, so only the fixed
+        # census allowlist is ever counted; anything else is unavailable.
+        if doctype not in CENSUS_DOCTYPES:
+            return None
+        result = self._run(["--site", site, "execute", "frappe.db.sql",
+                            "--kwargs", json.dumps({"query":
+                                "SELECT 'TH_CENSUS' AS marker, "
+                                "CAST(COUNT(*) AS CHAR) AS total "
+                                f"FROM `tab{doctype}`"})], timeout=180)
+        if result.returncode != 0:
+            return None
+        rows = self._marked_rows(result.stdout)
+        if rows is None or len(rows) != 1 or len(rows[0]) != 1:
+            return None
+        cell = rows[0][0]
+        if not isinstance(cell, str) or not re.fullmatch(r"[0-9]+", cell):
+            return None
+        return int(cell)
 
     def census(self, site: str) -> dict[str, int | None]:
         return {doctype: self.count(site, doctype) for doctype in CENSUS_DOCTYPES}
@@ -2456,43 +2504,31 @@ class BenchRunner:
         is not evidence that records were preserved.
         """
         query = " UNION ALL ".join(
-            f"SELECT '{child}' AS child, CAST(COUNT(*) AS CHAR) AS orphans FROM `tab{child}` c "
+            f"SELECT 'TH_CENSUS' AS marker, '{child}' AS child, CAST(COUNT(*) AS CHAR) AS orphans FROM `tab{child}` c "
             f"LEFT JOIN `tab{parent}` p ON p.name = c.parent WHERE p.name IS NULL"
             for child, parent in ORPHAN_CHECKS)
         result = self._run(["--site", site, "execute", "frappe.db.sql",
                             "--kwargs", json.dumps({"query": query})], timeout=600)
         if result.returncode != 0:
             raise refuse("apply.counts_unavailable", "referential integrity could not be verified")
-        payload = None
-        for line in reversed((result.stdout or "").splitlines()):
-            line = line.strip()
-            if line.startswith("["):
-                try:
-                    payload = json.loads(line)
-                except json.JSONDecodeError:
-                    payload = None
-                if payload is not None:
-                    break
-        if not isinstance(payload, list):
+        rows = self._marked_rows(result.stdout)
+        if rows is None:
             raise refuse("apply.counts_unavailable", "the referential integrity report is unreadable")
+        if len(rows) != len(ORPHAN_CHECKS):
+            raise refuse("apply.counts_unavailable", "the referential integrity report is malformed")
         counts: dict[str, int] = {}
-        for item in payload:
-            if isinstance(item, list) and len(item) >= 2:
-                name, value = item[0], item[1]
-            elif isinstance(item, dict):
-                name, value = item.get("child"), item.get("orphans")
-            else:
+        for row in rows:
+            if len(row) != 2:
                 raise refuse("apply.counts_unavailable", "the referential integrity report is malformed")
+            name, value = row[0], row[1]
             if not isinstance(name, str):
                 raise refuse("apply.counts_unavailable", "the referential integrity report is malformed")
-            try:
-                number = int(value)
-            except (TypeError, ValueError):
-                raise refuse("apply.counts_unavailable",
-                             "the referential integrity report is malformed") from None
-            if number < 0:
+            if name in counts or name not in {child for child, _parent in ORPHAN_CHECKS}:
                 raise refuse("apply.counts_unavailable", "the referential integrity report is malformed")
-            counts[name] = number
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9]+", value):
+                raise refuse("apply.counts_unavailable",
+                             "the referential integrity report is malformed")
+            counts[name] = int(value)
         for child, _parent in ORPHAN_CHECKS:
             if child not in counts:
                 raise refuse("apply.counts_unavailable",
@@ -3009,9 +3045,12 @@ def verify_release(request: Mapping[str, object], *, now: datetime) -> dict:
     manifest = verify_manifest_signature(
         resolve_inside(product_root, request["manifest"], "request.manifest"),
         resolve_inside(product_root, request["signature"], "request.signature"), store, now=now)
+    # The ``verify_layers`` request flag is accepted for compatibility but
+    # never honoured as an opt-out: a ``verified`` answer must always mean
+    # the layer contents matched the signed config's diff_ids.
     identity = inspect_image_archive(
         resolve_inside(product_root, request["archive"], "request.archive"),
-        expected=manifest["image"], verify_layers=bool(request.get("verify_layers")))
+        expected=manifest["image"], verify_layers=True)
     return {
         "schema_version": ENGINE_SCHEMA_VERSION,
         "document_type": DOCUMENT_RESPONSE,

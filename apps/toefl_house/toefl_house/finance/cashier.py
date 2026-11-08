@@ -51,6 +51,10 @@ CASH_TYPES = ("Cash",)
 MAX_DRAWERS = 25
 TOLERANCE = 0.005
 MAX_HISTORY = 25
+# Supported scope of the default "all companies" read. Beyond this the
+# position/history read must raise an explicit error, never silently drop a
+# company from the desk's view of its drawers.
+_COMPANY_SCOPE_LIMIT = 50
 
 
 def assert_command_context():
@@ -515,8 +519,17 @@ def _resolve_companies(companies):
     if companies is not None:
         return [name for name in dict.fromkeys(companies)
                 if name and _company_permitted(name)]
-    return [row.get("name") for row in
-            (frappe.db.get_all(COMPANY, fields=["name"], limit_page_length=50) or [])
+    # Read one row past the supported scope: a 51st company must raise an
+    # explicit error, never silently vanish from cashier_position /
+    # cashier_history because the page ended at 50.
+    rows = (frappe.db.get_all(COMPANY, fields=["name"],
+                              limit_page_length=_COMPANY_SCOPE_LIMIT + 1) or [])
+    if len(rows) > _COMPANY_SCOPE_LIMIT:
+        raise frappe.ValidationError(
+            "Company scope exceeds the supported limit of "
+            f"{_COMPANY_SCOPE_LIMIT} companies; narrow the scope or contact "
+            "an administrator")
+    return [row.get("name") for row in rows
             if row.get("name") and _company_permitted(row.get("name"))]
 
 
