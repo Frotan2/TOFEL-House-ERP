@@ -1,0 +1,77 @@
+name: One-time verified ERP branch cleanup
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/one-time-erp-branch-cleanup.yml]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  delete-only-proven-merged-branches:
+    if: github.repository == 'Frotan2/TOFEL-House-ERP' && startsWith(github.event.head_commit.message, 'chore(cleanup): one-time')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify exact merged PRs and delete only matching frozen refs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const safe = [
+              {branch: 'fix/staff-session-signout-20261106', pr: 138, sha: '6e140e49735093318a91a4c820649d8c5aaac97e'},
+              {branch: 'fix/windows-isolated-acceptance-20261105', pr: 136, sha: 'e1436fe30384d359c1175a54f2e000c08c82db95'},
+              {branch: 'fix/windows-isolated-installer-20261106', pr: 144, sha: 'ac45302c12047fa4ebef4a6cc5aea205814b0889'},
+            ];
+            const deleted = [], held = [];
+            async function exactHead(branch) {
+              try {
+                const data = await github.rest.git.getRef({ owner, repo, ref: 'heads/' + branch });
+                return data.data.object.sha;
+              } catch (error) {
+                if (error.status === 404) return null;
+                throw error;
+              }
+            }
+            for (const item of safe) {
+              const p = (await github.rest.pulls.get({ owner, repo, pull_number: item.pr })).data;
+              const live = await exactHead(item.branch);
+              if (!p.merged || p.base.ref !== 'main' ||
+                  p.head.ref !== item.branch || p.head.sha !== item.sha ||
+                  live !== item.sha) {
+                held.push(item.branch + ': PR/SHA/branch not a verified main merge');
+                continue;
+              }
+              const recheck = await exactHead(item.branch);
+              if (recheck !== item.sha) {
+                held.push(item.branch + ': branch advanced during check');
+                continue;
+              }
+              await github.rest.git.deleteRef({ owner, repo, ref: 'heads/' + item.branch });
+              deleted.push(item.branch);
+            }
+            const stale = 'fix/windows-production-readiness-20261105';
+            const staleSha = 'e64adcbc92e28927f3ea955b2d179cf4fc336fb5';
+            if ((await exactHead(stale)) === staleSha) {
+              const comparison = (await github.rest.repos.compareCommits({
+                owner, repo, base: 'main', head: stale
+              })).data;
+              if (comparison.ahead_by === 0 && (await exactHead(stale)) === staleSha) {
+                await github.rest.git.deleteRef({ owner, repo, ref: 'heads/' + stale });
+                deleted.push(stale);
+              } else {
+                held.push(stale + ': unique commits or changed ref');
+              }
+            } else {
+              held.push(stale + ': branch changed or already missing');
+            }
+            core.info('Deleted only proven redundant refs: ' + JSON.stringify(deleted));
+            core.info('Held: ' + JSON.stringify(held));
+            await core.summary
+              .addHeading('TOEFL ERP safe branch cleanup')
+              .addRaw('Deleted: ' + deleted.join(', '))
+              .addBreak()
+              .addRaw('Held: ' + held.join(', '))
+              .write();
