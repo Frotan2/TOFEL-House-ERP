@@ -128,6 +128,11 @@ _in_flight_deliveries = set()
 # succeeded and a retry never resends to them. Legacy plain-text
 # last_failure values decode to (text, None) — no known successes.
 _DELIVERY_OUTCOME_VERSION = 1
+# A retry batch may need to inspect more FAILED rows than it will send:
+# undeliverable/exhausted early rows must not starve actionable later ones.
+# Reading beyond this bound requires an operator-visible refusal, not a
+# silent assumption that the oldest `limit` rows are the entire queue.
+RETRY_SCAN_MAX = 5000
 
 
 def _encode_delivery_outcome(detail, delivery_results):
@@ -141,7 +146,14 @@ def _encode_delivery_outcome(detail, delivery_results):
 
 
 def _decode_delivery_outcome(last_failure):
-    """Return (detail_text, results_or_None) for a stored last_failure."""
+    """Return (detail, results_or_None); refuse malformed structured history.
+
+    Old notification rows may have a plain-text last_failure and no
+    recipient-level evidence. JSON-looking rows, however, assert they
+    contain a versioned delivery record: silently dropping malformed or
+    unknown-version JSON would cause a retry to resend recipients whose
+    prior successes can no longer be safely recovered.
+    """
     if not last_failure:
         return ("", None)
     text = str(last_failure).strip()
@@ -149,16 +161,17 @@ def _decode_delivery_outcome(last_failure):
         return (text, None)
     try:
         payload = json.loads(text)
-    except ValueError:
-        return (text, None)
-    if not isinstance(payload, dict):
-        return (text, None)
-    if payload.get("version") != _DELIVERY_OUTCOME_VERSION:
-        return (payload.get("detail") or text, None)
-    results = payload.get("results")
-    if not isinstance(results, list):
-        return (payload.get("detail") or text, None)
-    return (payload.get("detail") or text, results)
+    except (ValueError, TypeError) as exc:
+        raise frappe.ValidationError(
+            "Notification recipient delivery history is malformed") from exc
+    if (not isinstance(payload, dict)
+            or type(payload.get("version")) is not int
+            or payload.get("version") != _DELIVERY_OUTCOME_VERSION
+            or not isinstance(payload.get("results"), list)
+            or not isinstance(payload.get("detail"), str)):
+        raise frappe.ValidationError(
+            "Notification recipient delivery history is malformed or unsupported")
+    return (payload["detail"], payload["results"])
 
 
 def _live_rows(rows, cap, what):
@@ -705,13 +718,9 @@ def _load_notification(name):
             "acknowledged_by": doc.get("acknowledged_by"),
             "last_failure": doc.get("last_failure"),
         }
-        # Per-recipient outcomes are durably persisted as JSON in
-        # last_failure (see _encode_delivery_outcome). A fresh load must
-        # recover them so a retry in another process/worker still knows
-        # which recipients already succeeded (C-10).
-        _detail, _results = _decode_delivery_outcome(data["last_failure"])
-        if _results is not None:
-            data["delivery_results"] = _results
+        # Parse the saved recipient outcomes only after the broad Frappe
+        # loading try/except: malformed evidence is a validation refusal,
+        # not a "notification not found" fallback.
         # Recipients child table
         try:
             recips = [r.get("recipient") for r in (doc.get("recipients") or [])]
@@ -720,6 +729,12 @@ def _load_notification(name):
             data["recipients"] = getattr(doc, "recipients_list", [])
     except Exception:
         return None, None
+    # A failed Frappe record read returns None above. A malformed
+    # structured delivery record raises visibly here: it must never be
+    # reinterpreted as "no previously delivered recipients".
+    _detail, _results = _decode_delivery_outcome(data["last_failure"])
+    if _results is not None:
+        data["delivery_results"] = _results
     # Escalation recipients live in their own child table; once a
     # notification is escalated they are recipients too, and a fresh
     # load must still retry them — they must never exist only in
@@ -751,7 +766,9 @@ def _send_to_recipients(payload, recipients, provider_override=None):
         if provider_override is not None:
             # Custom provider for tests
             try:
-                sent = bool(provider_override.send(per_payload))
+                # Only a real boolean True counts as delivery.
+                # bool("false") is True and would falsely confirm a send.
+                sent = provider_override.send(per_payload) is True
                 results.append({
                     "recipient": recipient,
                     "delivered": sent,
@@ -933,15 +950,44 @@ def _attempt_delivery_locked(notification_name, provider_override=None):
     # notification delivered. A notification is delivered only when
     # every recipient succeeds; per-recipient outcomes are recorded in
     # the detail and durably in last_failure (see _persist_delivery).
-    prior = [r for r in (data.get("delivery_results") or [])
-             if isinstance(r, dict) and r.get("recipient")]
-    succeeded = {r["recipient"] for r in prior if r.get("delivered")}
+    # Corrupted durable outcome JSON must NEVER be interpreted as
+    # evidence of delivery. In particular, a string "false" is truthy
+    # in Python: the old set comprehension treated it as success and
+    # skipped that recipient permanently. Reject malformed/duplicate
+    # results before calling any external provider.
+    raw_prior = data.get("delivery_results")
+    if raw_prior is None:
+        raw_prior = []
+    if not isinstance(raw_prior, list):
+        raise frappe.ValidationError(
+            "Notification recipient delivery history is malformed")
+    prior = []
+    seen_prior = set()
+    for record in raw_prior:
+        if (not isinstance(record, dict)
+                or not isinstance(record.get("recipient"), str)
+                or not record["recipient"].strip()
+                or type(record.get("delivered")) is not bool
+                or record["recipient"] in seen_prior):
+            raise frappe.ValidationError(
+                "Notification recipient delivery history is malformed")
+        seen_prior.add(record["recipient"])
+        prior.append(record)
+    succeeded = {r["recipient"] for r in prior if r["delivered"]}
     recipients = []
     for r in (data.get("recipients") or []):
         if r and r not in recipients:
             recipients.append(r)
     if not recipients:
-        recipients = [""]
+        # A persisted notification that lost its recipients is a damaged
+        # authorization target. The old fallback [""] handed an empty
+        # recipient to DashboardProvider, which unconditionally succeeds,
+        # and the notification was falsely marked delivered.
+        _persist_delivery(doc, data, notification_name, "failed",
+                          data["retry_count"], data.get("next_retry_at"),
+                          prior, "No recipients configured; restore the "
+                          "authorized recipient list before retrying", None)
+        return ("failed", "No recipients configured")
     pending = [r for r in recipients if r not in succeeded]
     if not pending:
         # Every recipient already succeeded but the status was never
@@ -1065,20 +1111,38 @@ def retry_failed_notifications(limit=20):
         raise ValueError("limit must be a whole number") from exc
     if limit < 1 or limit > 100:
         raise ValueError("limit must be 1..100")
+    # Reading only the first `limit` failed rows starves every due
+    # notification behind `limit` permanently blocked rows (exhausted
+    # retries, future schedules, invalid timestamps). Inspect a bounded
+    # superset in stable order and stop at the requested number of
+    # actionable rows instead. A backlog above the review cap refuses
+    # explicitly: no silent truncation of the retry queue.
     rows = frappe.db.get_all(
         NOTIFICATION_DOCTYPE,
         filters={"status": "failed"},
         fields=["name"],
-        order_by="modified asc",
-        limit=limit,
+        order_by="modified asc, name asc",
+        limit_page_length=RETRY_SCAN_MAX + 1,
     )
+    if len(rows) > RETRY_SCAN_MAX:
+        raise frappe.ValidationError(
+            "Notification retry backlog exceeds %d rows; review and "
+            "reduce blocked/exhausted notifications before resuming "
+            "the retry batch" % RETRY_SCAN_MAX)
     attempted = delivered = still_failed = 0
+    processed = 0
     for row in rows:
+        if processed >= limit:
+            break
         name = row.get("name") if isinstance(row, dict) else row
         try:
             status, detail = attempt_delivery(name)
         except Exception:
+            # An attempted row that fails during load, provider send,
+            # or persistence has consumed a batch slot: otherwise a
+            # stream of such rows can bypass the caller's work limit.
             still_failed += 1
+            processed += 1
             continue
         # Rows not yet due for retry (or with retries exhausted, or
         # already being delivered) were not attempted — do not count
@@ -1091,8 +1155,10 @@ def retry_failed_notifications(limit=20):
                 or "Delivery time has not arrived" in detail
                 or "Delivery time could not be evaluated" in detail
                 or "Max retries exhausted" in detail
+                or "No recipients configured" in detail
                 or "already in progress" in detail):
             continue
+        processed += 1
         attempted += 1
         if status == "delivered":
             delivered += 1
