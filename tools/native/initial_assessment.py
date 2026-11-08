@@ -15,6 +15,7 @@ def run(owner_user, forbidden_user):
     from toefl_house.security import SYNTHETIC, site_mode
     from toefl_house.setup_presets.native_grading_scale import create_owner_grading_scale
     from toefl_house.setup_presets.owner_policy_forms import active_family_level_mapping
+    from toefl_house.setup_presets.preset import load_preset
 
     assert site_mode() == SYNTHETIC and not frappe.conf.get("toefl_house_production_active")
     original_user = frappe.session.user
@@ -31,8 +32,11 @@ def run(owner_user, forbidden_user):
     token = secrets.token_hex(6).upper()
     family, foreign_family = "INIT-" + token, "OTHER-" + token
     level, foreign_level = "LEVEL-" + token, "FOREIGN-" + token
+    # Unreviewed program families cannot choose a formal/specialist grading mode.
+    # The positive native-policy test must use an approved graded program.
+    formal_family, formal_level = "GEN-ENG", "FORMAL-" + token
     policy, bad_policy = "POLICY-" + token, "BAD-" + token
-    legacy_policy = "LEGACY-" + token
+    legacy_policy, unreviewed_policy = "LEGACY-" + token, "UNREVIEWED-" + token
     scale = "Synthetic initial grading " + token
     day = frappe.utils.today()
     key = "initial-assessment-" + token.lower()
@@ -62,9 +66,26 @@ def run(owner_user, forbidden_user):
             native = frappe.get_doc("Program", native_program)
             assert len(native.courses) == 1 and native.courses[0].required
             assert frappe.db.exists("Course", native.courses[0].course)
-        room_name = "Synthetic initial room " + token
         assert active_family_level_mapping(family) == {"levels": [level]}
         assert active_family_level_mapping(foreign_family) == {"levels": [foreign_level]}
+        approved = next((row for row in load_preset()["programs"]
+                         if row["code"] == formal_family and
+                         row["progression_kind"] == "sequential"), None)
+        assert approved is not None, "No approved formal template for native grading test"
+        if not frappe.db.exists("TH Academic Program", formal_family):
+            academic.create_program(key + "formal-family", formal_family,
+                                    approved["title"], reason)
+        assert frappe.db.get_value("TH Academic Program", formal_family, "status") == "Active"
+        siblings = frappe.get_all("TH Program Level",
+                                  filters={"family": formal_family},
+                                  fields=["sequence"])
+        sequence = max((int(row.sequence) for row in siblings), default=0) + 1
+        assert sequence <= 100, "Formal family has no free test level position"
+        academic.create_level(key + "formal-level", formal_family, formal_level,
+                              "Synthetic graded " + token, sequence, 2,
+                              "Solar Hijri Month", day)
+        assert formal_level in active_family_level_mapping(formal_family)["levels"]
+        room_name = "Synthetic initial room " + token
         room = academic.create_room(key + "room", room_name, 15, reason)
         assert room == academic.create_room(key + "room", room_name, 15, reason)
         assert int(frappe.db.get_value("Room", room["name"], "seating_capacity")) == 15
@@ -72,7 +93,10 @@ def run(owner_user, forbidden_user):
                                    [{"grade_code": "P", "threshold": 60},
                                     {"grade_code": "F", "threshold": 0}], reason)
         for code in (policy, bad_policy, legacy_policy):
-            academic.create_assessment_policy(key + code.lower(), family, code, code, reason)
+            academic.create_assessment_policy(key + code.lower(), formal_family,
+                                              code, code, reason)
+        academic.create_assessment_policy(key + "unreviewed-policy", family,
+                                          unreviewed_policy, unreviewed_policy, reason)
         facets = {
             "components": [{"code": "SPK", "title": "Speaking", "maximum_score": 100}],
             "weights": [{"component": "SPK", "weight": 100}],
@@ -82,7 +106,7 @@ def run(owner_user, forbidden_user):
                 {"kind": "assessment_pass", "policy": policy},
                 {"kind": "approval", "role": "Academic Manager"}]},
             "retakes": {"max_attempts": 2, "wait_days": 7, "scope": "full", "governing": "best"},
-            "level_mapping": {"levels": [level]},
+            "level_mapping": {"levels": [formal_level]},
         }
         result = academic.set_assessment_policy_version(key + "version", policy, day,
                                                         reason, scale, facets)
@@ -105,6 +129,24 @@ def run(owner_user, forbidden_user):
                 raise AssertionError("Unsafe initial assessment input was accepted")
             finally:
                 frappe.db.rollback(save_point="initial_assessment_negative")
+
+        # Verify an unreviewed new family is denied, preserving the
+        # production grading-scope guard instead of weakening it for tests.
+        def unreviewed_scope_refused():
+            try:
+                academic.set_assessment_policy_version(
+                    key + "unreviewed-version", unreviewed_policy, day,
+                    reason, scale, dict(facets, level_mapping={"levels": [level]}))
+            except frappe.ValidationError as exc:
+                assert "no approved formal/specialist assessment scope" in str(exc), str(exc)
+            else:
+                raise AssertionError("An unreviewed program grading scope was accepted")
+        frappe.db.savepoint("initial_unreviewed_scope")
+        try:
+            unreviewed_scope_refused()
+        finally:
+            frappe.db.rollback(save_point="initial_unreviewed_scope")
+        assert not frappe.get_doc("TH Assessment Policy", unreviewed_policy).versions
 
         next_day = (date.fromisoformat(day) + timedelta(days=1)).isoformat()
         refused(lambda: academic.create_room(key + "room-duplicate", room_name, 30, reason))
@@ -145,6 +187,7 @@ def run(owner_user, forbidden_user):
                 "same_key_replay": True, "historical_rewrite_refused": True,
                 "foreign_family_refused": True, "unknown_grade_refused": True,
                 "non_owner_refused": True, "old_receipt_payload_compatible": True,
+                "unreviewed_family_scope_denied": True,
                 "all_test_records_rolled_back": True}
     finally:
         frappe.db.rollback(save_point="initial_assessment_root")
