@@ -31,6 +31,21 @@ ITEM_TAX_ROW = "Item Tax Template Detail"
 ITEM_TAX = "Item Tax"
 INVOICE = "Sales Invoice"
 TOLERANCE = 0.005
+# Supported scope of the reads below. Beyond any cap a configured
+# template or company would silently leave the result and cause false
+# refusals or a missing company; the read must raise an explicit error
+# instead. The probe reads one row past the cap to tell "exactly at the
+# cap" (allowed) from "over the cap" (refused).
+DEFAULT_TEMPLATE_LIMIT = 20
+COMPANY_SCOPE_LIMIT = 50
+# Rows inside one template (Sales Taxes and Charges rows, Item Tax Template
+# Detail rows) and Item Tax bindings for one invoice. A template with more
+# rows than this is outside the supported scope; silently dropping the
+# excess would make a configured tax line unmatchable. Note the Frappe
+# default: get_all with no limit_page_length returns at most 20 rows, so
+# these reads must name their limit explicitly.
+TEMPLATE_ROW_LIMIT = 100
+ITEM_TAX_BINDING_LIMIT = 200
 
 # The native charge-type vocabulary of Sales Taxes and Charges. Nothing else
 # can be a tax line; the list is ERPNext's own, not a business invention.
@@ -54,8 +69,15 @@ def _template_rows(template_name):
         filters={"parent": template_name, "parenttype": TEMPLATE},
         fields=["charge_type", "account_head", "rate", "description", "cost_center"],
         order_by="idx asc",
+        limit_page_length=TEMPLATE_ROW_LIMIT + 1,
     )
-    return [dict(row) for row in (rows or [])]
+    rows = [dict(row) for row in (rows or [])]
+    if len(rows) > TEMPLATE_ROW_LIMIT:
+        raise frappe.ValidationError(
+            "Tax template scope exceeds the supported limit of "
+            f"{TEMPLATE_ROW_LIMIT} rows in {template_name}; narrow the "
+            "configuration or contact an administrator")
+    return rows
 
 
 def default_templates(company):
@@ -65,9 +87,15 @@ def default_templates(company):
         filters={"company": company, "is_default": 1, "docstatus": 0},
         fields=["name", "title", "company"],
         order_by="name asc",
-        limit_page_length=20,
+        limit_page_length=DEFAULT_TEMPLATE_LIMIT + 1,
     )
-    return [dict(row) for row in (rows or [])]
+    rows = [dict(row) for row in (rows or [])]
+    if len(rows) > DEFAULT_TEMPLATE_LIMIT:
+        raise frappe.ValidationError(
+            "Default tax template scope exceeds the supported limit of "
+            f"{DEFAULT_TEMPLATE_LIMIT} templates for {company}; narrow the "
+            "configuration or contact an administrator")
+    return rows
 
 
 def item_tax_templates(item_codes):
@@ -79,9 +107,15 @@ def item_tax_templates(item_codes):
         ITEM_TAX,
         filters={"parent": ["in", codes], "parenttype": "Item"},
         fields=["parent", "item_tax_template"],
-        limit_page_length=200,
+        limit_page_length=ITEM_TAX_BINDING_LIMIT + 1,
     )
-    names = sorted({row.get("item_tax_template") for row in (rows or [])
+    rows = list(rows or [])
+    if len(rows) > ITEM_TAX_BINDING_LIMIT:
+        raise frappe.ValidationError(
+            "Item tax template scope exceeds the supported limit of "
+            f"{ITEM_TAX_BINDING_LIMIT} bindings for this invoice; narrow "
+            "the items or contact an administrator")
+    names = sorted({row.get("item_tax_template") for row in rows
                     if row.get("item_tax_template")})
     return names
 
@@ -92,13 +126,20 @@ def _item_template_rows(template_name):
         filters={"parent": template_name, "parenttype": ITEM_TAX_TEMPLATE},
         fields=["tax_type", "tax_rate"],
         order_by="idx asc",
+        limit_page_length=TEMPLATE_ROW_LIMIT + 1,
     )
+    rows = list(rows or [])
+    if len(rows) > TEMPLATE_ROW_LIMIT:
+        raise frappe.ValidationError(
+            "Item tax template scope exceeds the supported limit of "
+            f"{TEMPLATE_ROW_LIMIT} rows in {template_name}; narrow the "
+            "configuration or contact an administrator")
     # An item tax template states an account + rate; ERPNext applies it as
     # an "On Net Total" row for that account. That mapping is the native
     # behaviour, not a rule added here.
     return [{"charge_type": "On Net Total", "account_head": row.get("tax_type"),
              "rate": row.get("tax_rate"), "description": "", "cost_center": None}
-            for row in (rows or [])]
+            for row in rows]
 
 
 def allowed_tax_rows(company, item_codes=()):
@@ -114,6 +155,17 @@ def allowed_tax_rows(company, item_codes=()):
     for name in item_tax_templates(item_codes):
         allowed.extend(_item_template_rows(name))
     return allowed
+
+
+def _cost_center(value):
+    """A cost centre name, or None when the row sets none.
+
+    Blank and missing mean the same thing here: the row does not pin a cost
+    centre, so no cost-centre comparison applies to it.
+    """
+    if isinstance(value, str):
+        value = value.strip()
+    return value or None
 
 
 def _matches(row, allowed):
@@ -132,6 +184,14 @@ def _matches(row, allowed):
         # the amount instead (its `rate` column carries the amount).
         if candidate.get("rate") not in (None, ""):
             if abs(_flt(candidate.get("rate")) - _flt(row.get("rate"))) > 1e-6:
+                continue
+        # A template row that pins a cost centre pins it exactly: an invoice
+        # line with the right account and rate but the wrong cost centre is
+        # not backed by that template row. A template row with no cost
+        # centre constrains nothing, so older templates keep matching.
+        template_cost_center = _cost_center(candidate.get("cost_center"))
+        if template_cost_center is not None:
+            if _cost_center(row.get("cost_center")) != template_cost_center:
                 continue
         return True
     return False
@@ -227,7 +287,14 @@ def supplied_taxes_permitted(company, item_codes, taxes):
     """
     if not taxes:
         return True
-    allowed = allowed_tax_rows(company, item_codes)
+    # The guard must judge the same allowed rows the submit seam judges:
+    # a template row naming an account of another company, a group account
+    # or a disabled account is not postable for this company, so a line
+    # backed only by such a row is not permitted here either. Without this
+    # filter the guard would approve a line the submit seam then refuses.
+    allowed = [row for row in allowed_tax_rows(company, item_codes)
+               if _account_is_postable(company, row.get("account_head"))
+               or not row.get("account_head")]
     if not allowed:
         return False
     try:
@@ -248,9 +315,19 @@ def describe_tax_configuration(company=None):
     reports configuration state only — it never asserts a jurisdiction,
     rate or exemption.
     """
-    companies = [company] if company else [
-        row.get("name") for row in
-        (frappe.db.get_all("Company", fields=["name"], limit_page_length=50) or [])]
+    if company:
+        companies = [company]
+    else:
+        # Read one row past the supported scope: a 51st company must raise
+        # an explicit error, never silently leave the readiness report.
+        rows = (frappe.db.get_all("Company", fields=["name"],
+                                  limit_page_length=COMPANY_SCOPE_LIMIT + 1) or [])
+        if len(rows) > COMPANY_SCOPE_LIMIT:
+            raise frappe.ValidationError(
+                "Company scope exceeds the supported limit of "
+                f"{COMPANY_SCOPE_LIMIT} companies; narrow the scope or contact "
+                "an administrator")
+        companies = [row.get("name") for row in rows]
     out = {"companies": []}
     for name in companies:
         templates = default_templates(name)
