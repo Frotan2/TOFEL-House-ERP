@@ -18,6 +18,7 @@ import re
 import secrets
 import math
 import os
+import select
 import shlex
 import signal
 import subprocess
@@ -308,19 +309,18 @@ def _terminate_process(process) -> None:
 
 
 def _join_stream_drains(*drains) -> None:
-    """Wait for pipe readers after child termination, then close any stragglers."""
+    """Ask readers to stop and wait no longer than one shared deadline.
+
+    Never close a BufferedReader from this thread: ``close()`` can wait on
+    the reader's lock while that thread is blocked in a pipe read held open
+    by a descendant that escaped the child's process group.
+    """
+    for drain in drains:
+        drain.stop()
+    deadline = time.monotonic() + 5
     for drain in drains:
         if drain.ident is not None:
-            drain.join(timeout=5)
-    for drain in drains:
-        if drain.is_alive():
-            close = getattr(drain._stream, "close", None)
-            if callable(close):
-                try:
-                    close()
-                except (OSError, ValueError):
-                    pass
-            drain.join(timeout=1)
+            drain.join(timeout=max(0, deadline - time.monotonic()))
 
 
 class _StreamDrain(threading.Thread):
@@ -342,11 +342,32 @@ class _StreamDrain(threading.Thread):
         self.kept = b""
         self.over_limit = False
         self.read_error = False
+        self._stop_requested = threading.Event()
+        self._fd = None
+        if os.name == "posix":
+            try:
+                self._fd = stream.fileno()
+            except (AttributeError, OSError, ValueError):
+                pass
+
+    def stop(self) -> None:
+        """Interrupt a pollable pipe reader without cross-thread close()."""
+        self._stop_requested.set()
+
+    def _read_chunk(self):
+        if self._fd is None:
+            return self._stream.read(64 * 1024)
+        while not self._stop_requested.is_set():
+            readable, _, _ = select.select([self._fd], [], [], 0.1)
+            if not readable:
+                continue
+            return os.read(self._fd, 64 * 1024)
+        return b""
 
     def run(self) -> None:
         try:
-            while True:
-                chunk = self._stream.read(64 * 1024)
+            while not self._stop_requested.is_set():
+                chunk = self._read_chunk()
                 if not chunk:
                     break
                 self.total += len(chunk)
@@ -360,12 +381,10 @@ class _StreamDrain(threading.Thread):
         except Exception:
             self.read_error = True
         finally:
-            # The reader owns its pipe. In particular, limit-triggered early
-            # exits must close it after the parent kills the producer; leaving
-            # Popen's BufferedReader open leaks descriptors and emits
-            # ResourceWarning in repeated backup/restore probes. Lightweight
-            # test streams may not implement close(), so only real closable
-            # streams participate in this cleanup.
+            # The reader owns its pipe and closes it on its own thread. POSIX
+            # child pipes use select/os.read, so stop() can wake a reader even
+            # when an escaped descendant keeps the pipe open; the parent never
+            # calls BufferedReader.close() concurrently with a blocked read.
             close = getattr(self._stream, "close", None)
             if callable(close):
                 try:

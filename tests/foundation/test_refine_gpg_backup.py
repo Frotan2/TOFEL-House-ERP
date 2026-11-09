@@ -24,6 +24,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -396,6 +397,30 @@ class ProbeRealChildTests(unittest.TestCase):
                 self.artifact, "synthetic-key", timeout=10))
         self.assertEqual(result.returncode, 0)
         self.assertIn(b":symkey enc packet:", result.stdout)
+
+    @unittest.skipUnless(os.name == "posix" and shutil.which("setsid"),
+                         "requires POSIX process sessions")
+    def test_timeout_cleanup_is_bounded_when_descendant_holds_pipe(self):
+        escaped_pid_file = self.tmp / "escaped-child.pid"
+        make_fake_gpg_script(
+            self.bin_dir,
+            "setsid sh -c 'echo $$ > \"$GPG_ESCAPED_PID_FILE\"; exec sleep 30' &\n"
+            "wait\n")
+        started = time.monotonic()
+        try:
+            with patch.dict(os.environ, {"GPG_ESCAPED_PID_FILE": str(escaped_pid_file)}):
+                with self.assertRaises(native_gpg.GpgProbeError) as caught:
+                    self.assert_child_pipes_closed(
+                        lambda: native_gpg.probe_gpg_decrypt(
+                            self.artifact, "synthetic-key", timeout=1))
+            self.assertEqual(caught.exception.category, "probe-timeout")
+            self.assertLess(time.monotonic() - started, 4)
+        finally:
+            if escaped_pid_file.exists():
+                try:
+                    os.kill(int(escaped_pid_file.read_text()), signal.SIGKILL)
+                except (OSError, ValueError):
+                    pass
 
 
 @unittest.skipUnless(GPG is not None, "real gpg binary is required")
