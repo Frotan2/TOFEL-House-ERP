@@ -24,6 +24,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -331,6 +332,28 @@ class ProbeRealChildTests(unittest.TestCase):
         self.env.start()
         self.addCleanup(self.env.stop)
 
+    def assert_child_pipes_closed(self, operation):
+        real_popen = subprocess.Popen
+        children = []
+
+        def tracked_popen(*args, **kwargs):
+            child = real_popen(*args, **kwargs)
+            children.append(child)
+            return child
+
+        try:
+            with patch.object(native_gpg.subprocess, "Popen", side_effect=tracked_popen):
+                return operation()
+        finally:
+            self.assertTrue(children, "the probe did not spawn its expected child")
+            for child in children:
+                if child.poll() is None:
+                    native_gpg._terminate_process(child)
+                    child.wait(timeout=5)
+                for stream_name in ("stdin", "stdout", "stderr"):
+                    stream = getattr(child, stream_name)
+                    self.assertTrue(stream.closed, f"child {stream_name} pipe leaked")
+
     def test_stderr_flood_does_not_deadlock(self):
         make_fake_gpg_script(
             self.bin_dir,
@@ -338,14 +361,18 @@ class ProbeRealChildTests(unittest.TestCase):
             "printf 'plain-decrypted-bytes'\n"
             "exit 0\n")
         start = time.monotonic()
-        native_gpg.probe_gpg_decrypt(self.artifact, "synthetic-key", timeout=10)
+        self.assert_child_pipes_closed(
+            lambda: native_gpg.probe_gpg_decrypt(
+                self.artifact, "synthetic-key", timeout=10))
         self.assertLess(time.monotonic() - start, 10)
 
     def test_hanging_real_gpg_times_out_and_is_refused(self):
         make_fake_gpg_script(self.bin_dir, "sleep 30\n")
         start = time.monotonic()
         with self.assertRaises(native_gpg.GpgProbeError) as caught:
-            native_gpg.probe_gpg_decrypt(self.artifact, "synthetic-key", timeout=2)
+            self.assert_child_pipes_closed(
+                lambda: native_gpg.probe_gpg_decrypt(
+                    self.artifact, "synthetic-key", timeout=2))
         self.assertEqual(caught.exception.category, "probe-timeout")
         self.assertLess(time.monotonic() - start, 10)
 
@@ -353,11 +380,47 @@ class ProbeRealChildTests(unittest.TestCase):
         make_fake_gpg_script(self.bin_dir, "yes 'decrypted-plaintext-line'\n")
         start = time.monotonic()
         with self.assertRaises(native_gpg.GpgProbeError) as caught:
-            native_gpg.probe_gpg_decrypt(
-                self.artifact, "synthetic-key", timeout=30,
-                max_plaintext_bytes=1024 * 1024)
+            self.assert_child_pipes_closed(
+                lambda: native_gpg.probe_gpg_decrypt(
+                    self.artifact, "synthetic-key", timeout=30,
+                    max_plaintext_bytes=1024 * 1024))
         self.assertEqual(caught.exception.category, "output-limit-exceeded")
         self.assertLess(time.monotonic() - start, 10)
+
+    def test_packet_probe_closes_child_pipes(self):
+        make_fake_gpg_script(
+            self.bin_dir,
+            "printf 'gpg: :symkey enc packet:\\n'\n"
+            "exit 0\n")
+        result = self.assert_child_pipes_closed(
+            lambda: native_gpg.probe_gpg_packets(
+                self.artifact, "synthetic-key", timeout=10))
+        self.assertEqual(result.returncode, 0)
+        self.assertIn(b":symkey enc packet:", result.stdout)
+
+    @unittest.skipUnless(os.name == "posix" and shutil.which("setsid"),
+                         "requires POSIX process sessions")
+    def test_timeout_cleanup_is_bounded_when_descendant_holds_pipe(self):
+        escaped_pid_file = self.tmp / "escaped-child.pid"
+        make_fake_gpg_script(
+            self.bin_dir,
+            "setsid sh -c 'echo $$ > \"$GPG_ESCAPED_PID_FILE\"; exec sleep 30' &\n"
+            "wait\n")
+        started = time.monotonic()
+        try:
+            with patch.dict(os.environ, {"GPG_ESCAPED_PID_FILE": str(escaped_pid_file)}):
+                with self.assertRaises(native_gpg.GpgProbeError) as caught:
+                    self.assert_child_pipes_closed(
+                        lambda: native_gpg.probe_gpg_decrypt(
+                            self.artifact, "synthetic-key", timeout=1))
+            self.assertEqual(caught.exception.category, "probe-timeout")
+            self.assertLess(time.monotonic() - started, 4)
+        finally:
+            if escaped_pid_file.exists():
+                try:
+                    os.kill(int(escaped_pid_file.read_text()), signal.SIGKILL)
+                except (OSError, ValueError):
+                    pass
 
 
 @unittest.skipUnless(GPG is not None, "real gpg binary is required")
