@@ -307,6 +307,22 @@ def _terminate_process(process) -> None:
         pass
 
 
+def _join_stream_drains(*drains) -> None:
+    """Wait for pipe readers after child termination, then close any stragglers."""
+    for drain in drains:
+        if drain.ident is not None:
+            drain.join(timeout=5)
+    for drain in drains:
+        if drain.is_alive():
+            close = getattr(drain._stream, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except (OSError, ValueError):
+                    pass
+            drain.join(timeout=1)
+
+
 class _StreamDrain(threading.Thread):
     """Drain one child pipe in the background, capping what is kept.
 
@@ -343,6 +359,19 @@ class _StreamDrain(threading.Thread):
                     break
         except Exception:
             self.read_error = True
+        finally:
+            # The reader owns its pipe. In particular, limit-triggered early
+            # exits must close it after the parent kills the producer; leaving
+            # Popen's BufferedReader open leaks descriptors and emits
+            # ResourceWarning in repeated backup/restore probes. Lightweight
+            # test streams may not implement close(), so only real closable
+            # streams participate in this cleanup.
+            close = getattr(self._stream, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except (OSError, ValueError):
+                    self.read_error = True
 
 
 def _wait_for_process(process, outcome: dict) -> None:
@@ -427,11 +456,15 @@ def probe_gpg_decrypt(path, passphrase: str, *, expect_tar: bool = False,
     try:
         try:
             process.stdin.write((passphrase + "\n").encode("ascii"))
-            process.stdin.close()
         except (BrokenPipeError, OSError, ValueError):
             # GPG already exited (for example, on unreadable input). The
             # exit code below still decides the outcome; never retry.
             pass
+        finally:
+            try:
+                process.stdin.close()
+            except (BrokenPipeError, OSError, ValueError):
+                pass
         stdout_drain.start()
         stderr_drain.start()
         waiter.start()
@@ -447,6 +480,7 @@ def probe_gpg_decrypt(path, passphrase: str, *, expect_tar: bool = False,
         if timed_out or over_limit:
             _terminate_process(process)
             waiter.join(timeout=5)
+            _join_stream_drains(stdout_drain, stderr_drain)
         else:
             # The child exited; both drains finish at EOF. Bound the wait
             # so a pathological pipe cannot hang the caller after exit.
@@ -454,6 +488,8 @@ def probe_gpg_decrypt(path, passphrase: str, *, expect_tar: bool = False,
             stderr_drain.join(timeout=5)
             if stdout_drain.is_alive() or stderr_drain.is_alive():
                 _terminate_process(process)
+                waiter.join(timeout=5)
+                _join_stream_drains(stdout_drain, stderr_drain)
                 raise GpgProbeError("probe-error")
             # A fast child may exit *before* the first waiter-loop
             # iteration. Its drain threads may then discover an output
@@ -463,9 +499,16 @@ def probe_gpg_decrypt(path, passphrase: str, *, expect_tar: bool = False,
             if stdout_drain.over_limit or stderr_drain.over_limit:
                 over_limit = True
     except GpgProbeError:
+        _terminate_process(process)
+        if waiter.ident is not None:
+            waiter.join(timeout=5)
+        _join_stream_drains(stdout_drain, stderr_drain)
         raise
     except Exception:
         _terminate_process(process)
+        if waiter.ident is not None:
+            waiter.join(timeout=5)
+        _join_stream_drains(stdout_drain, stderr_drain)
         raise GpgProbeError("probe-error") from None
     if over_limit:
         raise GpgProbeError("output-limit-exceeded")
@@ -519,9 +562,13 @@ def probe_gpg_packets(path, passphrase: str, *, timeout: float):
     try:
         try:
             process.stdin.write((passphrase + "\n").encode("ascii"))
-            process.stdin.close()
         except (BrokenPipeError, OSError, ValueError):
             pass
+        finally:
+            try:
+                process.stdin.close()
+            except (BrokenPipeError, OSError, ValueError):
+                pass
         stdout_drain.start()
         stderr_drain.start()
         waiter.start()
@@ -537,18 +584,28 @@ def probe_gpg_packets(path, passphrase: str, *, timeout: float):
         if timed_out or over_limit:
             _terminate_process(process)
             waiter.join(timeout=5)
+            _join_stream_drains(stdout_drain, stderr_drain)
         else:
             stdout_drain.join(timeout=5)
             stderr_drain.join(timeout=5)
             if stdout_drain.is_alive() or stderr_drain.is_alive():
                 _terminate_process(process)
+                waiter.join(timeout=5)
+                _join_stream_drains(stdout_drain, stderr_drain)
                 raise GpgProbeError("probe-error")
             # The child may exit before the first loop iteration.
             over_limit = stdout_drain.over_limit or stderr_drain.over_limit
     except GpgProbeError:
+        _terminate_process(process)
+        if waiter.ident is not None:
+            waiter.join(timeout=5)
+        _join_stream_drains(stdout_drain, stderr_drain)
         raise
     except Exception:
         _terminate_process(process)
+        if waiter.ident is not None:
+            waiter.join(timeout=5)
+        _join_stream_drains(stdout_drain, stderr_drain)
         raise GpgProbeError("probe-error") from None
     if over_limit:
         raise GpgProbeError("output-limit-exceeded")
