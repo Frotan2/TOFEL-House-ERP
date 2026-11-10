@@ -432,6 +432,18 @@ class ReceiptWiringTests(unittest.TestCase):
         self.assertIn('_execute("issue_tuition_installment_plan", request_key',
                       self.installments)
 
+    def test_browser_count_is_canonical_before_receipt_hashing(self):
+        from tests.placement.test_http_transport_integers import ValidationError, helper
+
+        module = load_installments()
+        sys.modules["toefl_house.api"]._web_integer = helper()
+        module._execute = lambda kind, key, payload, work: payload
+        args = ("request-key", "enrollment", "plan", "2026-11-11", "2026-11-16")
+        command = module.issue_tuition_installment_plan
+        self.assertEqual(command(*args, "2"), command(*args, 2))
+        with self.assertRaises(ValidationError):
+            command(*args, "02")
+
     def test_both_billing_paths_lock_and_check_all_live_fees_for_enrollment(self):
         # Distinct Fee Structures must never bypass the *same enrollment's*
         # duplicate-tuition protection. This is a money-loss prevention
