@@ -62,5 +62,31 @@ class PlacementHTTPIntegerTests(unittest.TestCase):
                 self.assertIn("_web_integer(", code)
                 self.assertLess(code.index("_web_integer("), code.index("def work(actor):"))
 
+    def test_admission_commands_normalize_before_idempotency(self):
+        path = ROOT / "apps/toefl_house/toefl_house/admission/__init__.py"
+        commands = [
+            node for node in ast.parse(path.read_text(encoding="utf-8")).body
+            if isinstance(node, ast.FunctionDef)
+            and any(arg.arg == "expected_version" for arg in node.args.args)
+            and node.decorator_list
+        ]
+        self.assertEqual(len(commands), 8)
+        for command in commands:
+            with self.subTest(command=command.name):
+                command.decorator_list = []
+                namespace = {
+                    "_web_integer": helper(),
+                    "_execute": lambda kind, key, payload, work: payload,
+                }
+                exec(compile(ast.Module(body=[command], type_ignores=[]), str(path), "exec"), namespace)
+                call = namespace[command.name]
+                args = dict(request_key="synthetic-request", name="decision", expected_version="2")
+                extras = {"outcome": "Approved", "reason": "Reason", "evidence": "Evidence"}
+                args.update({arg.arg: extras[arg.arg] for arg in command.args.args if arg.arg in extras})
+                self.assertEqual(call(**args)["expected_version"], 2)
+                args["expected_version"] = "02"
+                with self.assertRaises(ValidationError):
+                    call(**args)
+
 if __name__ == "__main__":
     unittest.main()
