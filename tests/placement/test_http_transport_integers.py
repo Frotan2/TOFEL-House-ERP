@@ -12,11 +12,11 @@ class ValidationError(Exception):
     pass
 
 
-def helper():
+def helper(frappe=None):
     f = next(x for x in TREE.body if isinstance(x, ast.FunctionDef)
              and x.name == "_web_integer")
     f.decorator_list = []
-    namespace = {"frappe": type("Frappe", (), {"ValidationError": ValidationError})()}
+    namespace = {"frappe": frappe if frappe is not None else type("Frappe", (), {"ValidationError": ValidationError})()}
     exec(compile(ast.fix_missing_locations(ast.Module(body=[f], type_ignores=[])),
                  "api.py", "exec"), namespace)
     return namespace["_web_integer"]

@@ -39,6 +39,7 @@ def _receipts(desk, own=False):
 def reception_sections(students=None):
     if not collection_schema_ready():
         return []
+    from toefl_house.command_scope import authorize_command_scope
     from toefl_house.finance.collections import counter_for
     filters = {"docstatus": 1, "outstanding_amount": (">", 0)}
     if students is not None:
@@ -47,6 +48,10 @@ def reception_sections(students=None):
         filters=filters, order_by="due_date asc", limit=LIMIT_QUEUES)
     bills = []
     for row in fees:
+        try:
+            authorize_command_scope("record_reception_collection", {"fees": row["name"]}, frappe.session.user)
+        except frappe.PermissionError:
+            continue
         item = dict(id=row["name"], person=row["student"],
             detail=f'{row["program"]} · {row["outstanding_amount"]} {row["currency"]} outstanding',
             stage="Tuition due", next="Count the cash and issue one numbered receipt.", next_role="Reception")

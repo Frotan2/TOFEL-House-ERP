@@ -55,6 +55,21 @@ class CashQueueTests(unittest.TestCase):
         self.assertEqual(call.kwargs["filters"]["student"], ("in", ["SELECTED"]))
         self.assertEqual(self.module.project_rows.call_count, 1)
 
+    def test_reception_only_projects_bills_allowed_by_collection_scope(self):
+        fee = dict(student="STUDENT", program="PROGRAM", outstanding_amount=100,
+                   currency="AFN", company="COMPANY")
+        self.module.project_rows = Mock(return_value=[
+            dict(fee, name="FOREIGN"), dict(fee, name="LOCAL")])
+        self.scope.authorize_command_scope.side_effect = [
+            self.module.frappe.PermissionError("foreign branch"), None]
+
+        items = self.module.reception_sections(students=["STUDENT"])[0]["items"]
+
+        self.assertEqual([item["id"] for item in items], ["LOCAL"])
+        self.assertEqual(items[0]["action"]["args"]["fees"], "LOCAL")
+        self.scope.authorize_command_scope.assert_called_with(
+            "record_reception_collection", {"fees": "LOCAL"}, self.module.frappe.session.user)
+
     def test_unmigrated_site_exposes_no_cash_actions(self):
         self.module.collection_schema_ready = lambda: False
         self.module.project_rows = Mock()

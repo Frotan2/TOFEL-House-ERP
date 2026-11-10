@@ -20,8 +20,8 @@ What the stub provides:
 Nothing here is a parallel implementation of a business rule: the tests assert
 what the production modules do to this fake site.
 """
+from tests.placement.test_http_transport_integers import helper as web_integer_fixture
 from copy import deepcopy
-import ast
 import datetime
 import importlib.util
 import sys
@@ -686,18 +686,7 @@ class OperationsSite:
             return work(self.site.user)[0]
 
         api._execute = _execute
-        # Reuse the production transport converter. The in-memory API seam
-        # must provide the same strict canonical integer rules as the browser
-        # endpoint, without duplicating or weakening validation in tests.
-        api_source = APP / "api.py"
-        api_tree = ast.parse(api_source.read_text(encoding="utf-8"))
-        converter = next(node for node in api_tree.body
-                         if isinstance(node, ast.FunctionDef)
-                         and node.name == "_web_integer")
-        helper_scope = {"frappe": self.frappe}
-        exec(compile(ast.Module(body=[converter], type_ignores=[]),
-                     str(api_source), "exec"), helper_scope)
-        api._web_integer = helper_scope["_web_integer"]
+        api._web_integer = web_integer_fixture(self.frappe)
         sys.modules["toefl_house.api"] = api
 
         academic = types.ModuleType("toefl_house.academic")
