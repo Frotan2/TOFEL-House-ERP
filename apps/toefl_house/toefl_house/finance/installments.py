@@ -330,6 +330,9 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
     ordinary native cancellation and is corrected through the correction
     framework, never by silently rewriting the schedule.
     """
+    from toefl_house.api import _web_integer
+
+    installments = _web_integer(installments, "installments")
     def work(actor):
         pe_name = _name(program_enrollment, "Program enrollment")
         fs_name = _name(fee_structure, "Fee structure")
