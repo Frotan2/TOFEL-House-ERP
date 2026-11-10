@@ -13,6 +13,26 @@ function Canonical($value) {
     }
     return ConvertTo-Json -InputObject $value -Compress
 }
+# Docker versions differ in whether inspect emits these default values.
+# Preserve every non-default value and compare all other configuration fields.
+function CanonicalImageConfig($config) {
+    if ($config -isnot [System.Management.Automation.PSCustomObject]) {
+        throw 'Runtime image configuration is missing.'
+    }
+    $defaults = @{
+        AttachStderr=$false; AttachStdin=$false; AttachStdout=$false
+        Domainname=''; Hostname=''; Image=''; Labels=$null; OnBuild=$null
+        OpenStdin=$false; StdinOnce=$false; Tty=$false; User=''; Volumes=$null; WorkingDir=''
+    }
+    $normalized = [ordered]@{}
+    foreach ($property in $config.PSObject.Properties) {
+        $name = $property.Name
+        if ($defaults.ContainsKey($name) -and
+            (Canonical $property.Value) -ceq (Canonical $defaults[$name])) { continue }
+        $normalized[$name] = $property.Value
+    }
+    return Canonical ([pscustomobject]$normalized)
+}
 try {
     $release = Join-Path $PSScriptRoot '..\release'
     $manifest = Get-Content -LiteralPath (Join-Path $release 'offline-runtime.json') -Raw | ConvertFrom-Json
@@ -50,7 +70,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Imported runtime image is missing.' }
         $actual = $raw | ConvertFrom-Json
         if ($actual.Os -cne 'linux' -or $actual.Architecture -cne 'amd64' -or
-            (Canonical $actual.Config) -cne (Canonical $image.config) -or
+            (CanonicalImageConfig $actual.Config) -cne (CanonicalImageConfig $image.config) -or
             (Canonical $actual.RootFS.Layers) -cne (Canonical $image.layers)) {
             throw 'Imported runtime image does not match the supplied identity.'
         }

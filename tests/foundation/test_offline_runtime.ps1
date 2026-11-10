@@ -19,9 +19,10 @@ try {
         $path = Join-Path $release $row.file
         [IO.File]::WriteAllText($path, 'synthetic image')
         $ref = [regex]::Match($compose, $row.repository + '@sha256:[a-f0-9]{64}').Value
-        $config = @{ Env=@('SYNTHETIC=yes'); Cmd=@('synthetic'); User=''; Labels=@{a='1';b='2'} }
+        $config = @{ Env=@('SYNTHETIC=yes'); Cmd=@('synthetic'); Labels=@{a='1';b='2'} }
         $layers = @('sha256:' + ('1' * 64))
-        $images += @{key=$row.key; file=$row.file; tag=$row.tag; source=$ref; config=$config; layers=$layers;
+        $providerConfig = $config + @{ User=''; AttachStderr=$false; OnBuild=$null }
+        $images += @{key=$row.key; file=$row.file; tag=$row.tag; source=$ref; config=$providerConfig; layers=$layers;
             sha256=(Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant()}
         $actual[$row.tag] = @{Os='linux'; Architecture='amd64'; Config=$config; RootFS=@{Layers=$layers}}
     }
@@ -76,6 +77,14 @@ if ($LASTEXITCODE -ne 0) { exit 1 }
     }
     $images[1].sha256 = (Get-FileHash -LiteralPath (Join-Path $release 'cache-image.tar')).Hash.ToLowerInvariant()
     Save-Manifest
+    # An omitted default is compatible, but a non-default value must still fail.
+    $actual['toefl-house-erp-db:bundled'].Config.User = 'unexpected-user'
+    [IO.File]::WriteAllText($actualPath, ($actual | ConvertTo-Json -Depth 20))
+    & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $worker
+    if ($LASTEXITCODE -eq 0) { throw 'Wrong loaded image user was accepted.' }
+    if (@(Get-Content -LiteralPath $callsPath).Count -ne 2) { throw 'Importer continued after a configuration mismatch.' }
+    Remove-Item -LiteralPath $callsPath
+    $actual['toefl-house-erp-db:bundled'].Config.Remove('User')
     # Keep the expected manifest intact but simulate a mismatched loaded image.
     $actual['toefl-house-erp-db:bundled'].Architecture = 'arm64'
     [IO.File]::WriteAllText($actualPath, ($actual | ConvertTo-Json -Depth 20))
