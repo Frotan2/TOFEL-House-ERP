@@ -12,11 +12,11 @@ class ValidationError(Exception):
     pass
 
 
-def helper():
+def helper(frappe=None):
     f = next(x for x in TREE.body if isinstance(x, ast.FunctionDef)
              and x.name == "_web_integer")
     f.decorator_list = []
-    namespace = {"frappe": type("Frappe", (), {"ValidationError": ValidationError})()}
+    namespace = {"frappe": frappe if frappe is not None else type("Frappe", (), {"ValidationError": ValidationError})()}
     exec(compile(ast.fix_missing_locations(ast.Module(body=[f], type_ignores=[])),
                  "api.py", "exec"), namespace)
     return namespace["_web_integer"]
@@ -61,6 +61,47 @@ class PlacementHTTPIntegerTests(unittest.TestCase):
                 code = ast.get_source_segment(SRC, node)
                 self.assertIn("_web_integer(", code)
                 self.assertLess(code.index("_web_integer("), code.index("def work(actor):"))
+
+    def test_admission_commands_normalize_before_idempotency(self):
+        path = ROOT / "apps/toefl_house/toefl_house/admission/__init__.py"
+        commands = [
+            node for node in ast.parse(path.read_text(encoding="utf-8")).body
+            if isinstance(node, ast.FunctionDef)
+            and any(arg.arg == "expected_version" for arg in node.args.args)
+            and node.decorator_list
+        ]
+        self.assertEqual(len(commands), 8)
+        for command in commands:
+            with self.subTest(command=command.name):
+                command.decorator_list = []
+                namespace = {
+                    "_web_integer": helper(),
+                    "_execute": lambda kind, key, payload, work: payload,
+                }
+                exec(compile(ast.Module(body=[command], type_ignores=[]), str(path), "exec"), namespace)
+                call = namespace[command.name]
+                args = dict(request_key="synthetic-request", name="decision", expected_version="2")
+                extras = {"outcome": "Approved", "reason": "Reason", "evidence": "Evidence"}
+                args.update({arg.arg: extras[arg.arg] for arg in command.args.args if arg.arg in extras})
+                self.assertEqual(call(**args)["expected_version"], 2)
+                args["expected_version"] = "02"
+                with self.assertRaises(ValidationError):
+                    call(**args)
+
+    def test_class_creation_normalizes_form_capacity(self):
+        path = ROOT / "apps/toefl_house/toefl_house/teaching/__init__.py"
+        command = next(
+            node for node in ast.parse(path.read_text(encoding="utf-8")).body
+            if isinstance(node, ast.FunctionDef) and node.name == "create_student_group"
+        )
+        command.decorator_list = []
+        namespace = {"_web_integer": helper(), "_execute": lambda kind, key, payload, work: payload}
+        exec(compile(ast.Module(body=[command], type_ignores=[]), str(path), "exec"), namespace)
+        call = namespace["create_student_group"]
+        self.assertEqual(call("request", "group", "program", "year", max_strength="2")["max_strength"], 2)
+        for value in ("0", "02", "501"):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                call("request", "group", "program", "year", max_strength=value)
 
 if __name__ == "__main__":
     unittest.main()

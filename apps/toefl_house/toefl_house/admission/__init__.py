@@ -3,7 +3,7 @@ from contextlib import contextmanager
 import frappe
 from frappe.utils import get_datetime
 from toefl_house.admission import policies as returning_policies
-from toefl_house.api import ATTEMPT, DECISION, _execute, _now
+from toefl_house.api import ATTEMPT, DECISION, _execute, _now, _web_integer
 from toefl_house.policy import ADMISSION_OUTCOMES, digest, validate_admission_text
 from toefl_house.security import is_production, record_synthetic_flag
 
@@ -463,6 +463,7 @@ def create_admission(request_key, student_applicant, placement_decision, existin
 
 @frappe.whitelist(methods=["POST"])
 def review_admission(request_key, name, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_decision(name, expected_version)
         if doc.status != "Draft":
@@ -482,6 +483,7 @@ def review_admission(request_key, name, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def decide_admission(request_key, name, expected_version, outcome, reason, conditions=""):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_decision(name, expected_version)
         if doc.status != "Review":
@@ -535,6 +537,7 @@ def satisfy_conditions(request_key, name, expected_version, evidence):
     every forward step. History is preserved: the audit event chains the
     transition and the satisfied_by/at/evidence fields record the act.
     """
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_decision(name, expected_version)
         if doc.status != "Conditional":
@@ -568,6 +571,7 @@ def satisfy_conditions(request_key, name, expected_version, evidence):
 
 @frappe.whitelist(methods=["POST"])
 def accept_offer(request_key, name, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_decision(name, expected_version)
         if doc.status not in ("Approved", "Conditional"):
@@ -591,6 +595,7 @@ def accept_offer(request_key, name, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def withdraw_admission(request_key, name, expected_version, reason):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_decision(name, expected_version)
         if doc.status not in ("Draft", "Review"):
@@ -612,6 +617,7 @@ def withdraw_admission(request_key, name, expected_version, reason):
 
 @frappe.whitelist(methods=["POST"])
 def revoke_admission(request_key, name, expected_version, reason):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_decision(name, expected_version)
         if doc.status not in ("Approved", "Conditional"):
@@ -637,6 +643,7 @@ def revoke_admission(request_key, name, expected_version, reason):
 
 @frappe.whitelist(methods=["POST"])
 def expire_admission(request_key, name, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_decision(name, expected_version)
         if doc.status not in ("Approved", "Conditional"):
@@ -655,6 +662,7 @@ def expire_admission(request_key, name, expected_version):
 
 @frappe.whitelist(methods=["POST"])
 def convert_applicant(request_key, name, expected_version):
+    expected_version = _web_integer(expected_version, "expected_version")
     def work(actor):
         doc = _locked_decision(name, expected_version)
         if doc.status != "Approved":

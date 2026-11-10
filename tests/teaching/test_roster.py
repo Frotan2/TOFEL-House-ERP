@@ -7,6 +7,7 @@ full rosters. Moves lock both groups in name order and deactivate the
 source row instead of deleting it. Loads the REAL teaching module
 against a scripted frappe stub; hosted CI proves the roster journey.
 """
+from tests.placement.test_http_transport_integers import helper as web_integer_fixture
 import importlib.util
 import sys
 import types
@@ -164,6 +165,7 @@ class RosterCommandTests(unittest.TestCase):
         sys.modules["toefl_house.security"] = security
         api = types.ModuleType("toefl_house.api")
         api._execute = lambda kind, key, payload, work: work(ACTOR)[0]
+        api._web_integer = web_integer_fixture(stub)
         sys.modules["toefl_house.api"] = api
         rules = types.ModuleType("toefl_house.academic.rules")
         rules.resolve_duration = lambda *a, **k: None

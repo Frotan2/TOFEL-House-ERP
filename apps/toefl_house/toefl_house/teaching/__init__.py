@@ -59,7 +59,7 @@ from datetime import datetime, timedelta
 import json
 
 import frappe
-from toefl_house.api import _execute
+from toefl_house.api import _execute, _web_integer
 from toefl_house.academic.rules import resolve_duration
 from toefl_house.policy import (DELIVERY_MODES, clock_text, digest, distinct_roster_rows,
                                 is_valid_class_transition,
@@ -97,10 +97,12 @@ def active_skills():
     table, but the command pages deliberately avoid Link searches. Anyone who
     can reach the teaching-scheduling page may read the active vocabulary.
     """
-    if not any(frappe.has_role(r) for r in
-               ("Course Owner", "General Manager", "Academic Manager",
-                "Finance Manager", "Finance Officer", "Finance Auditor",
-                "Teaching Scheduler", "Teaching Auditor")):
+    roles = set(frappe.get_roles(frappe.session.user))
+    if not roles.intersection({
+        "Course Owner", "General Manager", "Academic Manager",
+        "Finance Manager", "Finance Officer", "Finance Auditor",
+        "Teaching Scheduler", "Teaching Auditor",
+    }):
         raise frappe.PermissionError("Active skills are not available to your role")
     rows = frappe.get_all("TH Skill", filters={"status": "Active"},
                           fields=["code", "title"], order_by="code asc")
@@ -300,6 +302,7 @@ def create_student_group(request_key, group_name, program, academic_year, academ
     intake. No supplied name or unsubmitted enrollment becomes roster truth.
     The stored common dates do not change when a learner joins later.
     """
+    max_strength = _web_integer(max_strength, "max_strength", maximum=500)
     def work(actor):
         try:
             name = validate_group_name(group_name, production=is_production())

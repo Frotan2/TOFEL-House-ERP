@@ -8,6 +8,7 @@ normal branch is unchanged. Loads the REAL admission module against a
 scripted frappe stub; the end-to-end returning journey is proven on
 hosted CI in tools/native/native_checks.py.
 """
+from tests.placement.test_http_transport_integers import helper as web_integer_fixture
 import importlib.util
 import sys
 import types
@@ -153,6 +154,7 @@ class ReturningConvertTests(unittest.TestCase):
         api.DECISION = "TH Placement Decision"
         api._execute = lambda kind, key, payload, work: work(ACTOR)[0]
         api._now = lambda: datetime(2026, 9, 22, 12, 0, 0)
+        api._web_integer = web_integer_fixture(stub)
         sys.modules["toefl_house.api"] = api
         returning = types.ModuleType("toefl_house.admission.policies")
         returning.governing_returning_mode = lambda on_date=None: ""

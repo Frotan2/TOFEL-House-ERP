@@ -20,6 +20,7 @@ What the stub provides:
 Nothing here is a parallel implementation of a business rule: the tests assert
 what the production modules do to this fake site.
 """
+from tests.placement.test_http_transport_integers import helper as web_integer_fixture
 from copy import deepcopy
 import datetime
 import importlib.util
@@ -685,6 +686,7 @@ class OperationsSite:
             return work(self.site.user)[0]
 
         api._execute = _execute
+        api._web_integer = web_integer_fixture(self.frappe)
         sys.modules["toefl_house.api"] = api
 
         academic = types.ModuleType("toefl_house.academic")
