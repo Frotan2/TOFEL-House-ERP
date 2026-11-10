@@ -216,6 +216,10 @@ assert(hooks.includes(`page_js.update({name: "public/js/th_role_desks.js" for na
 /* ------------------------------------------------- guided action tie-out */
 
 const actionFields = client.toefl_house.role_desks.actionFields;
+const refundStudent = actionFields["toefl_house.finance.tuition_refund_commands.request_tuition_refund"]
+	.find(field => field.fieldname === "student");
+assert.strictEqual(refundStudent.fieldtype, "Data",
+	"refund intake must accept the bill's Student ID without requiring Student read access");
 assert(Object.keys(actionFields).length >= 8, "guided actions went missing");
 
 const endpointFiles = {

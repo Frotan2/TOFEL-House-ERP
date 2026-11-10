@@ -1041,7 +1041,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1 },
 		],
 		"toefl_house.finance.tuition_refund_commands.request_tuition_refund": [
-			{ fieldname: "student", label: "Student", fieldtype: "Link", options: "Student", reqd: 1 },
+			{ fieldname: "student", label: "Student ID on the original tuition bill", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "company", label: "Company", fieldtype: "Link", options: "Company", reqd: 1 },
 			{ fieldname: "fees", label: "Original tuition bill", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "requested_amount", label: "Amount to return (AFN, maximum two decimal places)", fieldtype: "Data", reqd: 1 },
