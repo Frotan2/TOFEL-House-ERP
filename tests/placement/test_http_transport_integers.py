@@ -88,5 +88,20 @@ class PlacementHTTPIntegerTests(unittest.TestCase):
                 with self.assertRaises(ValidationError):
                     call(**args)
 
+    def test_class_creation_normalizes_form_capacity(self):
+        path = ROOT / "apps/toefl_house/toefl_house/teaching/__init__.py"
+        command = next(
+            node for node in ast.parse(path.read_text(encoding="utf-8")).body
+            if isinstance(node, ast.FunctionDef) and node.name == "create_student_group"
+        )
+        command.decorator_list = []
+        namespace = {"_web_integer": helper(), "_execute": lambda kind, key, payload, work: payload}
+        exec(compile(ast.Module(body=[command], type_ignores=[]), str(path), "exec"), namespace)
+        call = namespace["create_student_group"]
+        self.assertEqual(call("request", "group", "program", "year", max_strength="2")["max_strength"], 2)
+        for value in ("0", "02", "501"):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                call("request", "group", "program", "year", max_strength=value)
+
 if __name__ == "__main__":
     unittest.main()
