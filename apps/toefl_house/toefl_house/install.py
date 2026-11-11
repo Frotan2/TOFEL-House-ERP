@@ -157,4 +157,6 @@ def ensure_institute_letter_head():
         # The bundled PDF fonts do not cover the standard Afghani symbol.
         # Keep the currency itself and use its readable ISO code as the symbol.
         if frappe.db.get_value("Currency", "AFN", "symbol") == "\u060b":
-            frappe.db.set_value("Currency", "AFN", "symbol", "AFN")
+            currency = frappe.get_doc("Currency", "AFN")
+            currency.symbol = "AFN"
+            currency.save(ignore_permissions=True)

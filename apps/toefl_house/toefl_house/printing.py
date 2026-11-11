@@ -12,13 +12,14 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import money_in_words
 from frappe.utils.weasyprint import download_pdf as _vendor_download_pdf
 from frappe.utils.weasyprint import get_html as _vendor_get_html
 
 
 def format_fee_amount_in_words(doc, _method=None, _print_settings=None) -> None:
     """Render stored Fees in the document currency without changing the ledger."""
+    from frappe.utils import money_in_words
+
     if doc.currency:
         doc.grand_total_in_words = money_in_words(doc.grand_total, main_currency=doc.currency)
 
