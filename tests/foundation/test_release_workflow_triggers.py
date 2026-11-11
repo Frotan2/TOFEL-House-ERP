@@ -54,7 +54,7 @@ class ReleaseImageTriggerContract(unittest.TestCase):
         for workflow_name in ("owned-suite.yml", "windows-customer-package.yml"):
             with self.subTest(workflow_name=workflow_name):
                 workflow = (WORKFLOWS / workflow_name).read_text(encoding="utf-8")
-                self.assertIn("on:\\n  push:", workflow.replace("\r\n", "\n"))
+                self.assertIn("on:\n  push:", workflow.replace("\r\n", "\n"))
                 self.assertNotIn("    paths:", workflow.partition("  workflow_dispatch:")[0])
         self.assertIn("      - main", (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8"))
 
