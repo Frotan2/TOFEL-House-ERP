@@ -19,7 +19,7 @@ class ReleaseRetirementTests(unittest.TestCase):
                     "object": {"sha": self.sha}}
 
     def test_current_known_candidates_unique_and_exact(self):
-        self.assertEqual(len(cleanup.CANDIDATES), 8)
+        self.assertEqual(len(cleanup.CANDIDATES), 9)
         names = [b for _, b, _ in cleanup.CANDIDATES]
         self.assertEqual(len(set(names)), len(names))
         self.assertNotIn("main", names)
@@ -59,6 +59,24 @@ class ReleaseRetirementTests(unittest.TestCase):
         with patch.object(cleanup, "api", return_value=[{}] * 100):
             with self.assertRaisesRegex(RuntimeError, "complete"):
                 cleanup.list_page("/branches")
+
+    def test_archive_read_after_write_retries_transient_404(self):
+        expected = {"object": {"sha": self.sha}}
+        with (patch.object(cleanup, "api", side_effect=[None, None, expected]) as read,
+              patch.object(cleanup.time, "sleep") as sleeping):
+            self.assertEqual(cleanup.verified_tag("/git/ref/tags/archive/test", self.sha), expected)
+        self.assertEqual(read.call_count, 3)
+        self.assertEqual(sleeping.call_count, 2)
+
+    def test_archive_never_accepts_mismatched_or_missing_tag(self):
+        with patch.object(cleanup, "api", return_value={"object": {"sha": "f" * 40}}):
+            with self.assertRaisesRegex(RuntimeError, "unexpected commit"):
+                cleanup.verified_tag("/git/ref/tags/archive/test", self.sha)
+        with (patch.object(cleanup, "api", return_value=None) as read,
+              patch.object(cleanup.time, "sleep")):
+            with self.assertRaisesRegex(RuntimeError, "bounded retries"):
+                cleanup.verified_tag("/git/ref/tags/archive/test", self.sha)
+        self.assertEqual(read.call_count, 5)
 
     def test_main_and_no_open_prs_are_preconditions(self):
         with patch.object(cleanup, "list_page", return_value=[{"number": 1}]):
