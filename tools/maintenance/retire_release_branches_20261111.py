@@ -8,12 +8,13 @@ before deletion and allow this maintenance to run only without active PRs.
 import argparse
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 REPO = "Frotan2/TOFEL-House-ERP"
-SELF_BRANCH = "maintenance/retire-merged-release-branches-20261111"
+SELF_BRANCH = "maintenance/fix-archive-read-after-write-20261111"
 ARCHIVE = "archive/toefl-house-merged-20261111"
 # PR number, exact merged PR head ref, exact commit; never infer from prefix.
 CANDIDATES = (
@@ -25,6 +26,7 @@ CANDIDATES = (
     (160, "fix/staff-course-assessment", "4e4dc08f2d62d80563a9ddd0ac333f6760d40ee5"),
     (161, "fix/reception-linked-applicant-branch", "7ca9b64eb8cef378d972d6fca509526374742059"),
     (162, "maintenance/release-evidence-20261111", "7bafe6f1564da83164b77174bfad84cd37a9f22a"),
+    (163, "maintenance/retire-merged-release-branches-20261111", "d10a642c8b902a6e16b8fb304acc672cc656d64b"),
 )
 
 
@@ -71,6 +73,23 @@ def is_eligible(pr, expected, branch_ref, open_pulls):
     if not branch_ref or branch_ref.get("ref") != "refs/heads/" + branch or (branch_ref.get("object") or {}).get("sha") != sha:
         return False
     return not any((p.get("head") or {}).get("ref") == branch for p in open_pulls)
+
+
+def verified_tag(path, expected_sha):
+    """Bounded read-after-write verification; never accept a wrong SHA.
+
+    GitHub may return transient 404 just after successful tag creation.
+    An unexpected digest or sustained absence is always a hard refusal.
+    """
+    for attempt in range(5):
+        found = api("GET", path, absent_ok=True)
+        if found is not None:
+            if (found.get("object") or {}).get("sha") != expected_sha:
+                raise RuntimeError("Archive tag points to an unexpected commit: " + path)
+            return found
+        if attempt < 4:
+            time.sleep(attempt + 1)
+    raise RuntimeError("Archive tag not readable after bounded retries: " + path)
 
 
 def candidate_plan(main_sha):
@@ -146,9 +165,7 @@ def main():
             api("POST", "/git/refs", {"ref": "refs/tags/" + tag, "sha": sha})
         elif (found.get("object") or {}).get("sha") != sha:
             raise RuntimeError("Archive tag collision for " + branch)
-        verified = api("GET", url)
-        if verified["object"]["sha"] != sha:
-            raise RuntimeError("Archive verification failed for " + branch)
+        verified_tag(url, sha)
 
     for number, branch, sha in plan:
         if api("GET", "/git/ref/heads/main")["object"]["sha"] != expected_main:
@@ -158,9 +175,7 @@ def main():
         if not is_eligible(pr, (number, branch, sha), current, list_page("/pulls?state=open")):
             raise RuntimeError("Recheck failed before deletion: " + branch)
         tag = f"{ARCHIVE}/pr-{number}-{sha[:12]}"
-        archived = api("GET", ref_path(tag, "tags"), absent_ok=True)
-        if not archived or (archived.get("object") or {}).get("sha") != sha:
-            raise RuntimeError("Archive changed before deletion: " + branch)
+        verified_tag(ref_path(tag, "tags"), sha)
         api("DELETE", "/git/refs/heads/" + urllib.parse.quote(branch, safe="/"))
         if api("GET", ref_path(branch), absent_ok=True) is not None:
             raise RuntimeError("Branch not deleted: " + branch)
