@@ -7,11 +7,13 @@ script can remain in the Owner's restricted decision record; they must not
 be mistaken for user-interface language.
 
 **Current release state:** **REJECT / NO-GO — TEST PACKAGE, NO REAL DATA.**
-PR #150 is the merged non-Oracle code integration into `main`; use the live
-`main` SHA and its CI receipts for current repository state. Merging code into
-`main` is not production approval. `main` is not an independently approved
-release. Branch names, CI results for older commits, old screenshots, and
-source-level tests do not authorize live use.
+PR #150 records the original non-Oracle integration; later changes through
+PR #161 have been merged. The [2026-11-11 release-readiness checkpoint](engineering/RELEASE-READINESS-2026-11-11.md)
+records exact-SHA CI evidence, isolated Windows qualification claims, and
+remaining physical, signing and governance gates. Use the **live** `main` SHA
+and same-revision checks for any new release decision; this dated report is
+not future authorization. A merged PR or passing CI does not approve real
+students, money, backups, or institute production.
 
 ## Sources of truth (in precedence order)
 

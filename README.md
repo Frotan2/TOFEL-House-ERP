@@ -5,9 +5,13 @@
 **Customer data: TEST PACKAGE — NO REAL DATA.**
 
 The TOEFL House ERP is a native-first institute management system based on
-Frappe, ERPNext, Education and HRMS. The integration and review branch is
-`work`; `main` is not yet the approved customer release. Review is tracked
-in [draft PR #120](https://github.com/Frotan2/TOFEL-House-ERP/pull/120).
+Frappe, ERPNext, Education and HRMS. The integrated engineering candidate is on `main`; it is **not** an approved
+customer release. As of 2026-11-11, all five CI workflows passed on
+`1f821155445f1a7df630343f65c7681d1d0a6464` and an **unsigned TEST**
+Windows installer exists. Production remains **NO-GO** pending signed delivery,
+clean-host acceptance, approved recovery, private staff access and Owner
+sign-off. See the [dated release-readiness checkpoint](docs/engineering/RELEASE-READINESS-2026-11-11.md).
+Do not infer future release approval from this historical snapshot.
 
 > **Existing Owner installation:** Preserve the existing Frappe site,
 > `product/data`, Docker volumes, credentials, encrypted backups, and
