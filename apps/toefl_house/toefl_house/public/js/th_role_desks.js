@@ -2127,6 +2127,7 @@ frappe.provide("toefl_house.role_desks");
 			$("<p></p>").text(text("Checking current configuration…")).appendTo(output);
 			frappe.call({
 				method: "toefl_house.setup_presets.api.preview_owner_initial_setup",
+				type: "GET",
 				callback(response) {
 					button.prop("disabled", false);
 					output.empty();

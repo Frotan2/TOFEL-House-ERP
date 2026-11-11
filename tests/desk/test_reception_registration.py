@@ -804,7 +804,13 @@ class RegistrationDeskTests(unittest.TestCase):
             desk.STUDENT: [{"name": "STU-1", "student_applicant": "APP-1",
                             "th_candidate_ref": ref, "enabled": 1}],
         }
-        desk.project_rows = lambda _surface, dt, _fields, **kwargs: list(facts.get(dt, []))
+        projection = _import_desk("__init__")
+
+        def project_rows(surface, doctype, fields, **kwargs):
+            projection._assert_projection(surface, doctype, fields)
+            return list(facts.get(doctype, []))
+
+        desk.project_rows = project_rows
         stage = desk._walkin_progress([intake], [ref])["INQ-1"]
         self.assertEqual(stage[0], "Student profile created")
         item = desk._walkin_item(intake, stage)

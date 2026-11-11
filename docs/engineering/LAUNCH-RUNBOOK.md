@@ -306,9 +306,18 @@ Properties and limits:
   [ACCEPTANCE.md](ACCEPTANCE.md) before changing its evidence status. Do not
   publish the raw Socket.IO port or enable Funnel; any topology change requires
   a new qualification.
-- Removing the tailnet exposure at any time: run
-  `tailscale serve --delete` on the central PC. The ERP remains
-  loopback-only; nothing else is affected.
+- To remove the two ERP routes from the central PC, append `off` to
+  the commands used to configure them. With the setup above, run:
+
+  ```
+  tailscale serve --bg --set-path=/socket.io 9000 off
+  tailscale serve --bg 8000 off
+  tailscale serve status
+  ```
+
+  If the installed routes used different flags, use those same flags with
+  `off`. Check that both ERP routes are gone and any unrelated routes are
+  still present. [Tailscale Serve CLI reference](https://tailscale.com/docs/reference/tailscale-cli/serve)
 
 ## 7. Restore and recovery — HOLD (no Owner restore is authorized)
 
