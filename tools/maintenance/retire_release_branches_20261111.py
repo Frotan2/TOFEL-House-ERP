@@ -77,9 +77,13 @@ def candidate_plan(main_sha):
     open_pulls = list_page("/pulls?state=open")
     if open_pulls:
         raise RuntimeError("Open pull requests exist: refuse branch cleanup")
-    recent = list_page("/pulls?state=closed")
-    own = [p for p in recent if (p.get("head") or {}).get("ref") == SELF_BRANCH and
-           (p.get("head") or {}).get("repo", {}).get("full_name") == REPO and
+    # The merged workflow's *exact* commit identifies its own PR. Do not
+    # use the first page of closed PRs: this repository has over 100 of them.
+    associated = api("GET", "/commits/" + main_sha + "/pulls?per_page=10")
+    if not isinstance(associated, list) or len(associated) >= 10:
+        raise RuntimeError("Ambiguous merge-commit PR association")
+    own = [p for p in associated if (p.get("head") or {}).get("ref") == SELF_BRANCH and
+           ((p.get("head") or {}).get("repo") or {}).get("full_name") == REPO and
            (p.get("base") or {}).get("ref") == "main" and p.get("merged_at")]
     if len(own) != 1:
         raise RuntimeError("Exact merged cleanup PR cannot be identified")
