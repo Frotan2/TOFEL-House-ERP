@@ -379,6 +379,7 @@ doc_events = {
         "validate": "toefl_house.finance.guard_fees",
         "before_cancel": "toefl_house.finance.guard_fees",
         "before_update_after_submit": "toefl_house.finance.guard_fees",
+        "before_print": "toefl_house.printing.format_fee_amount_in_words",
     },
     "Student Group": {
         "validate": "toefl_house.teaching.guard_student_group",
