@@ -299,6 +299,17 @@ try {
                 release_version = $releaseVersion
                 original_release_revision = [string]$release.source_revision
             }
+            if ($RecordFactoryImage) {
+                $setupDigestPath = Join-Path $PSScriptRoot '..\..\.setup-sha256'
+                if (Test-Path -LiteralPath $setupDigestPath -PathType Leaf) {
+                    $setupDigest = [IO.File]::ReadAllText($setupDigestPath).Trim()
+                    if ($setupDigest -cnotmatch '^[0-9a-f]{64}$') {
+                        throw "The original Setup identity is invalid."
+                    }
+                    $record.internal_setup_sha256 = $setupDigest
+                    $record.internal_installation_id = [guid]::NewGuid().ToString("N")
+                }
+            }
             Write-VerifiedInstalledImageIdentity -Path $identityPath `
                 -Contents ($record | ConvertTo-Json -Depth 5) -CreateOnly:$RecordFactoryImage
             Write-Host "Verified installed image ID recorded in protected activation storage."

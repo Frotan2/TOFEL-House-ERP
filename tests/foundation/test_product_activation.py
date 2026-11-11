@@ -148,6 +148,32 @@ class ActivationFlow(unittest.TestCase):
             self.act.activate(SITE, log=lambda *_: None)
         self.assertNotIn(self.act.ACTIVE_KEY, self.config())
 
+    def test_windows_internal_activation_consumes_approval(self):
+        self.fresh_backup()
+        self.act.ACTIVATION_DIR = self.receipt_path.parent
+        identity = self.act.ACTIVATION_DIR / "installed-image-identity.json"
+        identity.write_text(json.dumps({
+            "schema_version": 1,
+            "document_type": "toefl-house-erp-installed-image",
+            "provenance": "factory",
+            "source_revision": "a" * 40,
+            "image_id": "sha256:" + "b" * 64,
+            "internal_setup_sha256": "c" * 64,
+            "internal_installation_id": "d" * 32,
+        }))
+        with patch("builtins.print"):
+            self.assertEqual(self.act.main(["activate", "--confirm", SITE]), 2)
+        self.assertNotIn(self.act.ACTIVE_KEY, self.config())
+        approval = {"request_id": "e" * 32}
+        with (patch("update_engine.load_trust_store", return_value={}),
+              patch("update_engine.validate_recovery_authorization", return_value=approval)):
+            self.act.activate_internal(SITE, log=lambda *_: None)
+            self.assertEqual(self.fake_probe(SITE)["mode"], "PRODUCTION")
+            self.act.deactivate(SITE, log=lambda *_: None)
+            with self.assertRaisesRegex(self.act.Refused, "already used"):
+                self.act.activate_internal(SITE, log=lambda *_: None)
+            self.assertEqual(self.fake_probe(SITE)["mode"], "REFUSED")
+
     @unittest.skipUnless(os.name == "posix",
                          "POSIX mode bits are enforced inside the Linux product container")
     def test_activation_passes_original_mode_mirror_fixture_and_mixed_flag_gates(self):

@@ -847,6 +847,48 @@ class BackupEvidenceTests(UpdateEngineBase):
 
 
 class RecoveryAuthorizationTests(UpdateEngineBase):
+    def test_internal_authorization_binds_host_and_uses_separate_trust(self):
+        fixture = self.fixture()
+        installation = {
+            "source_revision": "a" * 40,
+            "image_id": "sha256:" + "b" * 64,
+            "internal_installation_id": "c" * 32,
+            "internal_setup_sha256": "d" * 64,
+        }
+        fixture.write_recovery_authorization(mutate={
+            "document_type": "toefl-house-erp-internal-activation",
+            "scope": "internal-activation",
+            "operation": "internal-activation",
+            "installation": installation,
+            "windows_host_acceptance_verified": True,
+        })
+        kwargs = {
+            "site": engine.SITE_NAME,
+            "receipt_sha256": fixture.receipt_sha256,
+            "now": NOW,
+            "max_age_hours": 168,
+            "signature_path_2": fixture.product_root / fixture.authorization_signature_2_rel,
+        }
+        document = fixture.product_root / fixture.authorization_rel
+        signature = fixture.product_root / fixture.authorization_signature_rel
+        trust_path = fixture.product_root / fixture.trust_store_rel
+        trust = engine.load_trust_store(trust_path, now=NOW)
+        with self.assertRaises(engine.UpdateError):
+            engine.validate_recovery_authorization(document, signature, trust, **kwargs)
+        with self.assertRaises(engine.UpdateError):
+            engine.validate_recovery_authorization(
+                document, signature, trust, internal_installation=installation, **kwargs)
+        for key in trust["keys"]:
+            if key.get("approver_identity"):
+                key["purposes"] = ("internal-activation",)
+        result = engine.validate_recovery_authorization(
+            document, signature, trust, internal_installation=installation, **kwargs)
+        self.assertEqual(result["request_id"], "a" * 32)
+        with self.assertRaises(engine.UpdateError):
+            engine.validate_recovery_authorization(
+                document, signature, trust, **kwargs,
+                internal_installation={**installation, "internal_setup_sha256": "e" * 64})
+
     def test_missing_owner_authorization_refuses_the_update(self):
         fixture = self.fixture()
         self.assertIn("preflight.recovery.approval_missing",

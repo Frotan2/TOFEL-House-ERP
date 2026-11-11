@@ -76,6 +76,11 @@ public class CustomerSetup {
                 if (!File.Exists(Path.Combine(extracted, "product", "windows", "TOEFL House ERP.ps1")))
                     throw new Exception("Installer application is missing.");
                 File.WriteAllText(Path.Combine(extracted, ".payload-sha256"), digest);
+                input.Position = 0;
+                using (SHA256 hash = SHA256.Create()) {
+                    string setupDigest = BitConverter.ToString(hash.ComputeHash(input)).Replace("-", "").ToLowerInvariant();
+                    File.WriteAllText(Path.Combine(extracted, ".setup-sha256"), setupDigest);
+                }
                 // Atomic publish: interrupted extraction cannot look installed.
                 Directory.Move(extracted, target);
                 Launch(target, true);

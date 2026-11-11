@@ -1,24 +1,30 @@
 @echo off
 setlocal DisableDelayedExpansion
-rem Switches this site into operational PRODUCTION mode only; it is not production authorization.
-rem All activation safety gates run in the app; verify the secondary-drive copy on the host first.
+rem Requires a separately authorized internal release and the verified secondary-drive copy.
 cd /d "%~dp0.."
 title Activating TOEFL House ERP
 docker compose exec web python3 /product/activate.py status
 if errorlevel 1 goto :notrunning
+powershell -NoProfile -File "%~dp0Verify Package Image.ps1" -VerifyLoadedImage
+if errorlevel 1 goto :failed
 powershell -NoProfile -File "%~dp0Backup TOEFL House ERP.ps1" -VerifyExisting
 if errorlevel 1 goto :backupmissing
 echo.
-echo  This changes the site operational mode from SYNTHETIC/REFUSED to PRODUCTION.
-echo  It does NOT authorize release or approve production go-live.
-echo  Release status remains REJECTED until all external evidence gates and Owner approval pass.
+echo  This switches a verified REFUSED installation into approved internal use.
+echo  The signed public release remains separate.
 echo  Before continuing, verify that the fresh encrypted backup is on a separate local drive.
 echo  Public internet hosting is not enabled; the desktop port stays loopback-only.
 echo.
-choice /C YN /N /M "Switch site mode after backup verification? [Y/N] "
+docker compose exec -T web python3 /product/activate.py internal-context --confirm toeflhouse.localhost
+if errorlevel 1 goto :failed
+choice /C YN /N /M "Apply the approved internal release to this installation? [Y/N] "
 if errorlevel 2 goto :cancelled
 if not errorlevel 1 goto :cancelled
-docker compose exec web python3 /product/activate.py activate --confirm toeflhouse.localhost
+powershell -NoProfile -File "%~dp0Verify Package Image.ps1" -VerifyLoadedImage
+if errorlevel 1 goto :failed
+powershell -NoProfile -File "%~dp0Backup TOEFL House ERP.ps1" -VerifyExisting
+if errorlevel 1 goto :backupmissing
+docker compose exec -T web python3 /product/activate.py internal-activate --confirm toeflhouse.localhost
 if errorlevel 1 goto :failed
 echo.
 echo  Optional: Finance's placement-fee Item code (the Item must already exist in
@@ -33,7 +39,7 @@ if errorlevel 1 goto :itemfailed
 :done
 echo.
 echo  Site operational mode is PRODUCTION.
-echo  Production authorization remains REJECTED until release evidence and Owner approval pass.
+echo  Internal approval applied. Public release authorization has not changed.
 pause
 exit /b 0
 :itemfailed
