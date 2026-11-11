@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/retire-merged-branches.yml
+      - tools/maintenance/retire_release_branches_20261111.py
   workflow_dispatch:
     inputs:
       confirmation:
