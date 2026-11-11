@@ -157,6 +157,10 @@ def main():
         current = api("GET", ref_path(branch), absent_ok=True)
         if not is_eligible(pr, (number, branch, sha), current, list_page("/pulls?state=open")):
             raise RuntimeError("Recheck failed before deletion: " + branch)
+        tag = f"{ARCHIVE}/pr-{number}-{sha[:12]}"
+        archived = api("GET", ref_path(tag, "tags"), absent_ok=True)
+        if not archived or (archived.get("object") or {}).get("sha") != sha:
+            raise RuntimeError("Archive changed before deletion: " + branch)
         api("DELETE", "/git/refs/heads/" + urllib.parse.quote(branch, safe="/"))
         if api("GET", ref_path(branch), absent_ok=True) is not None:
             raise RuntimeError("Branch not deleted: " + branch)
@@ -164,7 +168,7 @@ def main():
     remaining = {x["name"] for x in list_page("/branches")}
     if remaining != {"main"} or api("GET", "/git/ref/heads/main")["object"]["sha"] != expected_main:
         raise RuntimeError("Unexpected post-cleanup branch or main ref")
-    print("SUCCESS: only main branch; source heads preserved as immutable archive refs")
+    print("SUCCESS: only main branch; SHA-pinned archive tags preserve merged heads")
 
 
 if __name__ == "__main__":
