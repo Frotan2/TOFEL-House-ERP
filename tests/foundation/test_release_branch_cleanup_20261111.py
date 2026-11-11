@@ -19,7 +19,7 @@ class ReleaseRetirementTests(unittest.TestCase):
                     "object": {"sha": self.sha}}
 
     def test_current_known_candidates_unique_and_exact(self):
-        self.assertEqual(len(cleanup.CANDIDATES), 9)
+        self.assertEqual(len(cleanup.CANDIDATES), 10)
         names = [b for _, b, _ in cleanup.CANDIDATES]
         self.assertEqual(len(set(names)), len(names))
         self.assertNotIn("main", names)
@@ -77,6 +77,34 @@ class ReleaseRetirementTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "bounded retries"):
                 cleanup.verified_tag("/git/ref/tags/archive/test", self.sha)
         self.assertEqual(read.call_count, 5)
+
+    def test_deleted_branch_retries_stale_api_before_accepting_absence(self):
+        with (patch.object(cleanup, "api", side_effect=[
+                  {"object": {"sha": self.sha}}, {"object": {"sha": self.sha}}, None
+              ]) as check,
+              patch.object(cleanup.time, "sleep") as sleeping):
+            cleanup.verified_absent_branch("/git/ref/heads/example")
+        self.assertEqual(check.call_count, 3)
+        self.assertEqual(sleeping.call_count, 2)
+
+    def test_branch_still_present_after_retry_window_refuses(self):
+        with (patch.object(cleanup, "api", return_value={"object": {"sha": self.sha}}) as check,
+              patch.object(cleanup.time, "sleep")):
+            with self.assertRaisesRegex(RuntimeError, "bounded retries"):
+                cleanup.verified_absent_branch("/git/ref/heads/example")
+        self.assertEqual(check.call_count, 6)
+
+    def test_final_inventory_waits_for_main_only(self):
+        with (patch.object(cleanup, "list_page", side_effect=[
+                  [{"name": "main"}, {"name": "recently-deleted"}], [{"name": "main"}]
+              ]) as inventory,
+              patch.object(cleanup, "api", return_value={
+                  "object": {"sha": "a" * 40}
+              }),
+              patch.object(cleanup.time, "sleep") as sleeping):
+            cleanup.verified_only_main("a" * 40)
+        self.assertEqual(inventory.call_count, 2)
+        sleeping.assert_called_once()
 
     def test_main_and_no_open_prs_are_preconditions(self):
         with patch.object(cleanup, "list_page", return_value=[{"number": 1}]):
