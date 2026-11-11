@@ -14,7 +14,7 @@ import urllib.parse
 import urllib.request
 
 REPO = "Frotan2/TOFEL-House-ERP"
-SELF_BRANCH = "maintenance/fix-archive-read-after-write-20261111"
+SELF_BRANCH = "maintenance/verify-branch-delete-consistency-20261111"
 ARCHIVE = "archive/toefl-house-merged-20261111"
 # PR number, exact merged PR head ref, exact commit; never infer from prefix.
 CANDIDATES = (
@@ -27,6 +27,7 @@ CANDIDATES = (
     (161, "fix/reception-linked-applicant-branch", "7ca9b64eb8cef378d972d6fca509526374742059"),
     (162, "maintenance/release-evidence-20261111", "7bafe6f1564da83164b77174bfad84cd37a9f22a"),
     (163, "maintenance/retire-merged-release-branches-20261111", "d10a642c8b902a6e16b8fb304acc672cc656d64b"),
+    (164, "maintenance/fix-archive-read-after-write-20261111", "3ba586904daac014c3e193c448bd235a65701d77"),
 )
 
 
@@ -92,6 +93,27 @@ def verified_tag(path, expected_sha):
     raise RuntimeError("Archive tag not readable after bounded retries: " + path)
 
 
+def verified_absent_branch(path):
+    """Deletion is asynchronous across GitHub API reads; refuse if it persists."""
+    for attempt in range(6):
+        if api("GET", path, absent_ok=True) is None:
+            return
+        if attempt < 5:
+            time.sleep(min(attempt + 1, 3))
+    raise RuntimeError("Deleted branch remains visible after bounded retries: " + path)
+
+
+def verified_only_main(main_sha):
+    """Wait for the branch-list view to agree with exact ref deletions."""
+    for attempt in range(6):
+        inventory = {row["name"] for row in list_page("/branches")}
+        if inventory == {"main"} and api("GET", "/git/ref/heads/main")["object"]["sha"] == main_sha:
+            return
+        if attempt < 5:
+            time.sleep(min(attempt + 1, 3))
+    raise RuntimeError("Post-cleanup inventory does not agree with main-only state")
+
+
 def candidate_plan(main_sha):
     open_pulls = list_page("/pulls?state=open")
     if open_pulls:
@@ -119,10 +141,13 @@ def candidate_plan(main_sha):
         number, branch, sha = expected
         pr = api("GET", "/pulls/" + str(number))
         current = api("GET", ref_path(branch), absent_ok=True)
+        if branch not in inventory:
+            # The branch-list and individual-ref endpoints may propagate a
+            # successful prior deletion at different speeds. Require 404.
+            verified_absent_branch(ref_path(branch))
+            continue
         if current is None:
-            if branch in inventory:
-                raise RuntimeError("Ref disappeared mid-inventory: " + branch)
-            continue  # idempotent rerun after prior successful deletion
+            raise RuntimeError("Ref disappeared mid-inventory: " + branch)
         if not is_eligible(pr, expected, current, open_pulls):
             raise RuntimeError("Not a safely merged unchanged PR: " + branch)
         if inventory.get(branch) != sha:
@@ -177,12 +202,9 @@ def main():
         tag = f"{ARCHIVE}/pr-{number}-{sha[:12]}"
         verified_tag(ref_path(tag, "tags"), sha)
         api("DELETE", "/git/refs/heads/" + urllib.parse.quote(branch, safe="/"))
-        if api("GET", ref_path(branch), absent_ok=True) is not None:
-            raise RuntimeError("Branch not deleted: " + branch)
+        verified_absent_branch(ref_path(branch))
         print("ARCHIVED AND DELETED", branch)
-    remaining = {x["name"] for x in list_page("/branches")}
-    if remaining != {"main"} or api("GET", "/git/ref/heads/main")["object"]["sha"] != expected_main:
-        raise RuntimeError("Unexpected post-cleanup branch or main ref")
+    verified_only_main(expected_main)
     print("SUCCESS: only main branch; SHA-pinned archive tags preserve merged heads")
 
 
