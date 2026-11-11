@@ -56,12 +56,16 @@ class NativeBillingPlanIntegrityTests(unittest.TestCase):
         package = types.ModuleType("toefl_house")
         package.__path__ = []
         frappe = types.SimpleNamespace(
-            db=types.SimpleNamespace(get_all=db_get_all),
+            db=types.SimpleNamespace(get_all=db_get_all,
+                                     get_value=lambda *args: "COMPANY"),
             ValidationError=ValueError)
         context = {"frappe": frappe, "FEE_STRUCTURE": "Fee Structure",
                    "_discount_family_for_native_program": lambda program: "GEN-ENG"}
+        company_scope = types.ModuleType("toefl_house.finance.company_scope")
+        company_scope.require_finance_company = lambda company: company
         with patch.dict(sys.modules, {
-            "toefl_house": package, "toefl_house.academic": academic}):
+            "toefl_house": package, "toefl_house.academic": academic,
+            "toefl_house.finance.company_scope": company_scope}):
             result = production_resolver(context)(
                 types.SimpleNamespace(program="N-STARTER", academic_year="1405",
                                       student="SYN-STUDENT"),
@@ -77,6 +81,7 @@ class NativeBillingPlanIntegrityTests(unittest.TestCase):
         self.assertEqual(gross, 1000)
         self.assertEqual(calls[0][0], "Fee Structure")
         self.assertEqual(calls[0][1]["filters"]["docstatus"], ("!=", 2))
+        self.assertEqual(calls[0][1]["filters"]["company"], "COMPANY")
 
     def test_no_plan_or_wrong_or_multiple_plan_blocks_billing(self):
         for plans in ([], [{"name": "FS-2"}],

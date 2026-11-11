@@ -216,12 +216,17 @@ def resolved_billable_components(pe, fs_name):
     differently from the one-payment route.
     """
     # A single enrollment must never choose arbitrarily between two live
-    # tuition plans for the same native Program/year. This guard is shared
+    # tuition plans for the same native Program/year/company. This guard is shared
     # by one-bill AND Solar Hijri installment issuance, not just Owner Setup.
+    company = frappe.db.get_value(FEE_STRUCTURE, fs_name, "company")
+    if not company:
+        raise frappe.ValidationError("Tuition Fee Structure has no accounting company")
+    from toefl_house.finance.company_scope import require_finance_company
+    require_finance_company(company)
     active_plans = frappe.db.get_all(
         FEE_STRUCTURE,
         filters={"program": pe.program, "academic_year": pe.academic_year,
-                 "docstatus": ("!=", 2)},
+                 "company": company, "docstatus": ("!=", 2)},
         fields=["name"], limit_page_length=2)
     if len(active_plans) != 1 or active_plans[0]["name"] != fs_name:
         raise frappe.ValidationError(
