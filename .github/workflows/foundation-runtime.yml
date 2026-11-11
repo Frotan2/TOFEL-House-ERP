@@ -7,6 +7,8 @@ on:
   push:
     paths:
       - .github/workflows/foundation-runtime.yml
+      # A reviewed source-revision qualification request forces this exact-main gate.
+      - docs/engineering/RELEASE-QUALIFICATION-REQUEST.md
       - docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md
       - tools/foundation/**
       - tools/native/site_setup.py
