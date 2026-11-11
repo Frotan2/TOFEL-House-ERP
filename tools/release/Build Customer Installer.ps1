@@ -262,8 +262,9 @@ TEST PACKAGE - NO REAL DATA. Production authorization remains REJECT.
     }
     # Verify the ACTUAL assembled executable, including the signed footer
     # layout and every ZIP payload byte, before publishing the output filename.
-    & $partial --verify-payload
-    if ($LASTEXITCODE -ne 0) {
+    # Windows PowerShell's call operator can return before a GUI EXE exits.
+    $verification = Start-Process -FilePath $partial -ArgumentList '--verify-payload' -Wait -PassThru -WindowStyle Hidden
+    if ($verification.ExitCode -ne 0) {
         throw 'The assembled Windows installer failed self-verification.'
     }
     # No partial installer is published at the customer-facing filename.

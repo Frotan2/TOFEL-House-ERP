@@ -20,9 +20,12 @@ class OfflineInstallerSigningTests(unittest.TestCase):
         self.assertIn("Get-AuthenticodeSignature -LiteralPath $partial", BUILDER)
         self.assertIn("TimeStamperCertificate", BUILDER)
         self.assertIn("4294960000", BUILDER)
-        self.assertLess(BUILDER.index("Set-AuthenticodeSignature"),
-                        BUILDER.index("& $partial --verify-payload"))
-        self.assertLess(BUILDER.index("& $partial --verify-payload"),
+        verification = BUILDER.index(
+            "Start-Process -FilePath $partial -ArgumentList '--verify-payload' -Wait -PassThru"
+        )
+        self.assertLess(BUILDER.index("Set-AuthenticodeSignature"), verification)
+        self.assertLess(verification, BUILDER.index("if ($verification.ExitCode -ne 0)"))
+        self.assertLess(BUILDER.index("if ($verification.ExitCode -ne 0)"),
                         BUILDER.index("[IO.File]::Move($partial, $output)"))
         self.assertIn("The assembled Windows installer failed self-verification.", BUILDER)
         self.assertIn("$manifest.source_revision", BUILDER)
