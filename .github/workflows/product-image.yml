@@ -20,6 +20,8 @@ on:
       - "v*"
     paths:
       - .github/workflows/product-image.yml
+      # A reviewed source-revision qualification request forces this exact-main gate.
+      - docs/engineering/RELEASE-QUALIFICATION-REQUEST.md
       # Changing native qualification policy must also recheck the exact
       # customer-image release gate before packaging.
       - .github/workflows/native-lifecycle.yml

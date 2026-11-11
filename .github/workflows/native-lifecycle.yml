@@ -8,6 +8,8 @@ on:
   push:
     paths:
       - .github/workflows/native-lifecycle.yml
+      # A reviewed source-revision qualification request forces this exact-main gate.
+      - docs/engineering/RELEASE-QUALIFICATION-REQUEST.md
       - apps/**
       - tools/native/**
       - tests/foundation/test_final_hosted_acceptance.py
