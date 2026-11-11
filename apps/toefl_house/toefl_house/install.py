@@ -130,3 +130,33 @@ def after_install():
     from frappe.utils.password import get_encryption_key
     get_encryption_key()
     after_migrate()
+    ensure_institute_letter_head()
+
+
+def ensure_institute_letter_head():
+    """Provide the institute's text identity on a fresh installation."""
+    name = "The TOEFL House"
+    if frappe.db.exists("Letter Head", name):
+        return
+    is_default = not frappe.db.exists("Letter Head", {"is_default": 1})
+    frappe.get_doc({
+        "doctype": "Letter Head",
+        "letter_head_name": name,
+        "source": "HTML",
+        "footer_source": "HTML",
+        "content": (
+            '<div style="text-align:center"><strong>The TOEFL House</strong>'
+            '<div dir="rtl" lang="fa-AF">خانه موفقیت</div></div>'
+        ),
+        "is_default": int(is_default),
+    }).insert(ignore_permissions=True)
+    if is_default:
+        # The packaged wkhtmltopdf renders inline letterheads but cannot
+        # render the separate repeating header produced by this setting.
+        frappe.db.set_single_value("Print Settings", "repeat_header_footer", 0)
+        # The bundled PDF fonts do not cover the standard Afghani symbol.
+        # Keep the currency itself and use its readable ISO code as the symbol.
+        if frappe.db.get_value("Currency", "AFN", "symbol") == "\u060b":
+            currency = frappe.get_doc("Currency", "AFN")
+            currency.symbol = "AFN"
+            currency.save(ignore_permissions=True)

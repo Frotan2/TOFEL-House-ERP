@@ -129,7 +129,7 @@ RELEASE_STATUSES = ("TEST PACKAGE - NO REAL DATA", "PRODUCTION RELEASE")
 AUTHORIZATIONS = ("REJECT", "AUTHORIZED")
 MIGRATION_MODES = ("supported", "none")
 SIGNATURE_ALGORITHMS = ("rsa-pkcs1v15-sha256",)
-KEY_PURPOSES = ("update-manifest", "recovery-authorization")
+KEY_PURPOSES = ("update-manifest", "recovery-authorization", "internal-activation")
 SAFE_HOST = re.compile(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}")
 SAFE_ASSET = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 # Business records that must never shrink across a supported migration.  These
@@ -463,6 +463,10 @@ _INVALID_CODES = {
 
 
 def load_json_file(path: Path, label: str, *, limit: int = MAX_JSON_BYTES) -> dict:
+    return _read_json_file(path, label, limit=limit)[0]
+
+
+def _read_json_file(path: Path, label: str, *, limit: int = MAX_JSON_BYTES) -> tuple[dict, bytes]:
     if path.is_symlink() or not path.is_file():
         raise UpdateError(_MISSING_CODES.get(label, "release.manifest.missing"), f"{label} is missing")
     try:
@@ -483,7 +487,7 @@ def load_json_file(path: Path, label: str, *, limit: int = MAX_JSON_BYTES) -> di
     if not isinstance(value, dict):
         raise UpdateError(_INVALID_CODES.get(label, "release.manifest.invalid"),
                           f"{label} must be a JSON object")
-    return value
+    return value, raw
 
 
 # --------------------------------------------------------------------------
@@ -649,6 +653,9 @@ def _load_trust_store(path: Path, *, now: datetime) -> dict:
                 or not all(isinstance(item, str) and item in KEY_PURPOSES for item in purposes)
                 or len(set(purposes)) != len(purposes)):
             raise refuse("trust.invalid", "trust key purposes are invalid")
+        if "internal-activation" in purposes and (
+                purposes != ["internal-activation"] or approver_identity is None):
+            raise refuse("trust.invalid", "an internal activation key must have its own purpose and approver")
         try:
             modulus_bytes = base64.b64decode(_text(entry["modulus_b64"], "trust.modulus_b64", maximum=1024),
                                              validate=True)
@@ -1362,7 +1369,8 @@ def _recovery_consumed_marker(state_dir: Path | None, request_id: str) -> Path |
 def validate_recovery_authorization(path: Path, signature_path: Path, store: dict, *, site: str,
                                     receipt_sha256: str, now: datetime, max_age_hours: int,
                                     signature_path_2: Path | None = None,
-                                    state_dir: Path | None = None) -> dict:
+                                    state_dir: Path | None = None,
+                                    internal_installation: dict | None = None) -> dict:
     """Validate a two-person recovery authorization, before any mutation.
 
     Schema 1 documents are refused outright: they carried one signature over
@@ -1382,25 +1390,35 @@ def validate_recovery_authorization(path: Path, signature_path: Path, store: dic
       swapped signature, an altered document, an expired window or a replayed
       request id is refused before any migration, restore or data mutation.
     """
-    document = load_json_file(path, "recovery authorization")
-    _require_exact_keys(document, (
+    document, raw = _read_json_file(path, "recovery authorization")
+    fields = (
         "schema_version", "document_type", "site", "scope", "operation", "request_id",
         "issued_utc", "expires_utc", "owner_key_custody_verified",
         "rehearsal_restore_verified", "backup_receipt_sha256", "approvals",
-    ), (
-        "schema_version", "document_type", "site", "scope", "operation", "request_id",
-        "issued_utc", "expires_utc", "owner_key_custody_verified",
-        "rehearsal_restore_verified", "backup_receipt_sha256", "approvals",
-    ), "recovery authorization", code="preflight.recovery.authorization_invalid")
+    )
+    operation = "site-update"
+    document_type = DOCUMENT_RECOVERY
+    if internal_installation is not None:
+        operation = "internal-activation"
+        document_type = "toefl-house-erp-internal-activation"
+        fields += ("installation", "windows_host_acceptance_verified")
+    _require_exact_keys(document, fields, fields, "recovery authorization",
+                        code="preflight.recovery.authorization_invalid")
     if (document["schema_version"] != RECOVERY_AUTHORIZATION_SCHEMA_VERSION
-            or document["document_type"] != DOCUMENT_RECOVERY):
+            or document["document_type"] != document_type):
         raise refuse("preflight.recovery.authorization_invalid",
                      "single-signature recovery authorization is superseded; "
                      "a two-person recovery authorization is required")
-    if document["site"] != site or document["scope"] != "site-update" \
-            or document["operation"] != "site-update":
+    if document["site"] != site or document["scope"] != operation \
+            or document["operation"] != operation:
         raise refuse("preflight.recovery.binding_mismatch",
                      "recovery authorization is for another site, scope or operation")
+    if internal_installation is not None and document["installation"] != internal_installation:
+        raise refuse("preflight.recovery.binding_mismatch",
+                     "internal authorization is for a different installation or package")
+    if internal_installation is not None and document["windows_host_acceptance_verified"] is not True:
+        raise refuse("preflight.recovery.rehearsal_unverified",
+                     "clean Windows host acceptance is not verified")
     request_id = document["request_id"]
     if not isinstance(request_id, str) or not RECOVERY_REQUEST_ID.fullmatch(request_id):
         raise refuse("preflight.recovery.approval_invalid",
@@ -1457,7 +1475,6 @@ def validate_recovery_authorization(path: Path, signature_path: Path, store: dic
     if signature_path_2 is None:
         raise refuse("preflight.recovery.approval_missing",
                      "the second recovery approval signature is missing")
-    raw = path.read_bytes()
     envelopes = []
     for signature_file in (signature_path, signature_path_2):
         envelope = _load_signature_envelope(signature_file, DOCUMENT_RECOVERY_SIGNATURE,
@@ -1468,10 +1485,16 @@ def validate_recovery_authorization(path: Path, signature_path: Path, store: dic
         raise refuse("preflight.recovery.approval_invalid",
                      "both recovery approvals must be signed by distinct keys")
     approval_by_key = {entry["key_id"]: entry for entry in parsed_approvals}
+    verified_moduli = set()
     for envelope in envelopes:
         # Purpose is checked before any approval-name comparison, so a
         # manifest-only key still fails with trust.key_unknown, as before.
-        key = select_key(store, envelope["key_id"], "recovery-authorization", now=now)
+        purpose = "recovery-authorization" if internal_installation is None else operation
+        key = select_key(store, envelope["key_id"], purpose, now=now)
+        if internal_installation is not None and key["modulus"] in verified_moduli:
+            raise refuse("preflight.recovery.approval_invalid",
+                         "internal approval requires distinct signing keys")
+        verified_moduli.add(key["modulus"])
         approval = approval_by_key.get(envelope["key_id"])
         if approval is None:
             raise refuse("preflight.recovery.approval_invalid",

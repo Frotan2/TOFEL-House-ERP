@@ -445,8 +445,17 @@ def command_trust_store(arguments: argparse.Namespace) -> int:
     if out.exists():
         raise fail(f"refusing to overwrite an existing trust store: {out}")
     out.parent.mkdir(parents=True, exist_ok=True)
-    write_json(out, trust_store_document(arguments.private_key, key_id,
-                                         days=arguments.days, executable=arguments.openssl))
+    document = trust_store_document(arguments.private_key, key_id,
+                                    days=arguments.days, executable=arguments.openssl)
+    if arguments.internal_approver_role or arguments.internal_approver_identity:
+        if not arguments.internal_approver_role or not arguments.internal_approver_identity:
+            raise fail("internal trust requires both the approver role and identity")
+        document["keys"][0].update(
+            purposes=["internal-activation"],
+            approver_role=arguments.internal_approver_role,
+            approver_identity=arguments.internal_approver_identity,
+        )
+    write_json(out, document)
     store = engine.load_trust_store(out, now=now)
     print(json.dumps({"status": "provisioned", "trust_store": str(out), "key_id": key_id,
                       "keys": len(store["keys"])}, indent=2, sort_keys=True))
@@ -461,11 +470,12 @@ def command_sign(arguments: argparse.Namespace) -> int:
     expected = {
         "update-manifest": engine.DOCUMENT_UPDATE,
         "recovery-authorization": engine.DOCUMENT_RECOVERY,
+        "internal-activation": "toefl-house-erp-internal-activation",
     }[arguments.document_type]
     if parsed.get("document_type") != expected:
         raise fail(f"the document must be a {expected!r} document")
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    if arguments.document_type == "recovery-authorization":
+    if arguments.document_type != "update-manifest":
         for name in ("site", "scope", "operation", "request_id", "issued_utc", "expires_utc",
                      "owner_key_custody_verified", "rehearsal_restore_verified",
                      "backup_receipt_sha256", "approvals"):
@@ -473,8 +483,14 @@ def command_sign(arguments: argparse.Namespace) -> int:
                 raise fail(f"the recovery authorization is missing {name}")
         if parsed.get("schema_version") != engine.RECOVERY_AUTHORIZATION_SCHEMA_VERSION:
             raise fail("only a schema-2 two-person recovery authorization may be signed")
-        if parsed["scope"] != "site-update" or parsed["operation"] != "site-update":
-            raise fail("a recovery authorization must be bound to a site-update operation")
+        operation = "internal-activation" if arguments.document_type == "internal-activation" else "site-update"
+        if parsed["scope"] != operation or parsed["operation"] != operation:
+            raise fail(f"the authorization must be bound to {operation}")
+        if operation == "internal-activation" and (
+            not isinstance(parsed.get("installation"), dict)
+            or parsed.get("windows_host_acceptance_verified") is not True
+        ):
+            raise fail("internal activation requires the installation identity and verified Windows acceptance")
         if not isinstance(parsed["request_id"], str) \
                 or not engine.RECOVERY_REQUEST_ID.fullmatch(parsed["request_id"]):
             raise fail("recovery request_id must be 32 lowercase hex characters")
@@ -510,20 +526,28 @@ def command_sign(arguments: argparse.Namespace) -> int:
     write_json(out, signature_envelope(envelope_type, key_id, signature))
     with tempfile.TemporaryDirectory(prefix="toefl-trust-") as folder:
         store_path = Path(folder) / TRUST_STORE
-        write_json(store_path, trust_store_document(arguments.private_key, key_id, days=1,
-                                                    executable=arguments.openssl))
+        verification_store = trust_store_document(arguments.private_key, key_id, days=1,
+                                                  executable=arguments.openssl)
+        if arguments.document_type == "internal-activation":
+            approver = next(entry for entry in parsed["approvals"] if entry["key_id"] == key_id)
+            verification_store["keys"][0].update(
+                purposes=["internal-activation"],
+                approver_role=approver["approver_role"],
+                approver_identity=approver["approver_identity"],
+            )
+        write_json(store_path, verification_store)
         try:
             store = engine.load_trust_store(store_path, now=now)
         except engine.UpdateError as error:
             raise fail(f"the signing key is not usable: {error}") from None
         try:
-            if arguments.document_type == "recovery-authorization":
+            if arguments.document_type != "update-manifest":
                 # This invocation produces only one of the two required
                 # approvals, so full two-person validation cannot pass here
                 # yet: the engine validates both signatures, the approver
                 # binding and the request id at preflight.  Verify only that
                 # this signature itself is valid for the signing key.
-                key = engine.select_key(store, key_id, "recovery-authorization", now=now)
+                key = engine.select_key(store, key_id, arguments.document_type, now=now)
                 if not engine.rsa_pkcs1v15_sha256_verify(key["modulus"], key["exponent"],
                                                          payload, signature):
                     raise fail("the produced recovery signature does not verify")
@@ -584,6 +608,8 @@ def build_parser() -> argparse.ArgumentParser:
     trust.add_argument("--out", required=True, type=Path)
     trust.add_argument("--days", type=int, default=1825)
     trust.add_argument("--openssl", default="openssl")
+    trust.add_argument("--internal-approver-role", choices=sorted(engine.RECOVERY_APPROVER_ROLES))
+    trust.add_argument("--internal-approver-identity")
     trust.set_defaults(handler=command_trust_store)
 
     sign = subparsers.add_parser("sign", help="sign an update or recovery document")
@@ -591,7 +617,7 @@ def build_parser() -> argparse.ArgumentParser:
     sign.add_argument("--private-key", required=True, type=Path)
     sign.add_argument("--key-id", required=True)
     sign.add_argument("--document-type", required=True,
-                      choices=["update-manifest", "recovery-authorization"])
+                      choices=["update-manifest", "recovery-authorization", "internal-activation"])
     sign.add_argument("--out", required=True, type=Path)
     sign.add_argument("--openssl", default="openssl")
     sign.set_defaults(handler=command_sign)

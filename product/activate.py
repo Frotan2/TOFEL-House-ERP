@@ -17,6 +17,8 @@ instead of typing Bench/Docker commands. It changes no release gate:
 Commands:
   status                          print the current site mode
   activate --confirm SITE         runbook steps 0-6 (refuses without a fresh backup)
+  internal-context --confirm SITE show the factory installation and backup identity
+  internal-activate --confirm SITE apply independent approvals and run the activation gates
   deactivate --confirm SITE       runbook step 8 (rollback to REFUSED)
   fee-item --confirm SITE CODE    runbook step 7 (existing native Item only)
 """
@@ -106,15 +108,18 @@ def _strict_json_object(pairs):
     return result
 
 
-def read_backup_receipt(path: Path | None = None) -> dict | None:
+def read_backup_receipt(path: Path | None = None, *, expected_sha256: str | None = None) -> dict | None:
     path = path or BACKUP_RECEIPT_PATH
     if not path.is_file():
         return None
     try:
         if path.stat().st_size > 64 * 1024:
             raise Refused("backup receipt is unexpectedly large")
+        raw = path.read_bytes()
+        if expected_sha256 is not None and hashlib.sha256(raw).hexdigest() != expected_sha256:
+            raise Refused("the approved backup receipt has changed")
         value = json.loads(
-            path.read_text(encoding="utf-8-sig"),
+            raw.decode("utf-8-sig"),
             object_pairs_hook=_strict_json_object,
             parse_constant=lambda _value: (_ for _ in ()).throw(ValueError()))
     except Refused:
@@ -504,9 +509,9 @@ def require_confirm(site: str, confirm: str | None) -> None:
         raise Refused(f"confirmation must be the site name ({site})")
 
 
-def activate(site: str, log=print) -> None:
+def activate(site: str, log=print, *, expected_backup_sha256: str | None = None) -> None:
     config = read_config(site)
-    receipt = read_backup_receipt()
+    receipt = read_backup_receipt(expected_sha256=expected_backup_sha256)
     # Recovery writes site_config, so it needs the same fresh verified
     # backup the activation itself requires; without one the leftover
     # state is left exactly as found.
@@ -557,6 +562,65 @@ def activate(site: str, log=print) -> None:
         raise
     log("All gates passed: site mode PRODUCTION, production stamps, fixtures refused, "
         "mixed mode refused.")
+
+
+def internal_activation_context(site: str, now: datetime) -> dict:
+    """Bind approval to the factory image, exact Setup bytes and this installation."""
+    from update_engine import load_json_file
+
+    identity = load_json_file(ACTIVATION_DIR / "installed-image-identity.json",
+                              "installed image identity")
+    if (identity.get("schema_version") != 1
+            or identity.get("document_type") != "toefl-house-erp-installed-image"
+            or identity.get("provenance") != "factory"):
+        raise Refused("internal activation requires a verified factory installation")
+    installation = {}
+    for key, pattern in (
+        ("source_revision", r"[0-9a-f]{40}"),
+        ("image_id", r"sha256:[0-9a-f]{64}"),
+        ("internal_setup_sha256", r"[0-9a-f]{64}"),
+        ("internal_installation_id", r"[0-9a-f]{32}"),
+    ):
+        value = identity.get(key)
+        if not isinstance(value, str) or not re.fullmatch(pattern, value):
+            raise Refused("internal activation is missing a verified installation identity")
+        installation[key] = value
+    backup_sha = _digest_file(BACKUP_RECEIPT_PATH) if BACKUP_RECEIPT_PATH.is_file() else None
+    receipt = read_backup_receipt(expected_sha256=backup_sha)
+    check_preconditions(site, read_config(site), receipt, now.timestamp())
+    validate_receipt_policy(receipt, probe(site).get("backup_policy"))
+    return {"site": site, "installation": installation, "backup_receipt_sha256": backup_sha}
+
+
+def activate_internal(site: str, log=print) -> None:
+    from update_engine import (MAX_RECOVERY_MAX_AGE_HOURS, _recovery_consumed_marker,
+                               _write_private_file_exclusive, load_trust_store,
+                               validate_recovery_authorization)
+
+    now = datetime.now(timezone.utc)
+    context = internal_activation_context(site, now)
+    if probe(site)["mode"] != "REFUSED":
+        raise Refused("internal activation requires a site in REFUSED mode")
+    state = config_path(site).parent / "private"
+    approval = validate_recovery_authorization(
+        ACTIVATION_DIR / "internal-activation.json",
+        ACTIVATION_DIR / "internal-activation.owner.sig.json",
+        load_trust_store(ACTIVATION_DIR / "internal-activation-trust.json", now=now),
+        site=site, receipt_sha256=context["backup_receipt_sha256"], now=now,
+        max_age_hours=MAX_RECOVERY_MAX_AGE_HOURS,
+        signature_path_2=ACTIVATION_DIR / "internal-activation.reviewer.sig.json",
+        state_dir=state, internal_installation=context["installation"],
+    )
+    marker = _recovery_consumed_marker(state, approval["request_id"])
+    try:
+        marker.parent.mkdir(mode=0o700, exist_ok=True)
+        _write_private_file_exclusive(marker, json.dumps(approval).encode("utf-8"))
+    except FileExistsError as exc:
+        raise Refused("the internal activation approval was already used") from exc
+    except OSError as exc:
+        raise Refused("the internal activation approval could not be recorded") from exc
+    activate(site, log, expected_backup_sha256=context["backup_receipt_sha256"])
+    log("Internal activation approved for this installation. Public release status is unchanged.")
 
 
 def deactivate(site: str, log=print) -> None:
@@ -620,8 +684,11 @@ def set_fee_item(site: str, code: str, log=print) -> None:
 
 
 def main(argv=None) -> int:
+    from update_engine import UpdateError
+
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=("status", "activate", "deactivate", "fee-item"))
+    parser.add_argument("command", choices=("status", "activate", "deactivate", "fee-item",
+                                            "internal-context", "internal-activate"))
     parser.add_argument("--confirm")
     parser.add_argument("code", nargs="?")
     args = parser.parse_args(argv)
@@ -635,13 +702,20 @@ def main(argv=None) -> int:
             print(f"Owner backup policy: {backup_policy.get('status', 'NOT CONFIGURED')}")
             return 0
         require_confirm(site, args.confirm)
-        if args.command == "activate":
+        if args.command == "internal-context":
+            print(json.dumps(internal_activation_context(site, datetime.now(timezone.utc))))
+        elif args.command == "internal-activate":
+            activate_internal(site)
+        elif args.command == "activate":
+            identity = ACTIVATION_DIR / "installed-image-identity.json"
+            if identity.exists() or identity.is_symlink():
+                raise Refused("Windows installations require separately authorized internal activation")
             activate(site)
         elif args.command == "deactivate":
             deactivate(site)
         else:
             set_fee_item(site, args.code or "")
-    except Refused as error:
+    except (Refused, UpdateError) as error:
         print(f"REFUSED: {error}")
         return 2
     return 0

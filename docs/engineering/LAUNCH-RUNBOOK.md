@@ -189,17 +189,31 @@ copy contains the plaintext site-config sidecar or a private recovery key.
 1. **Do not run the activation wrapper while precondition 7's retention/
    preservation hold is unresolved, even if an older receipt exists.** Only
    after the Owner's explicit decision is recorded and the implementation and
-   documentation agree, double-click `Activate TOEFL House ERP.cmd` and type
-   `ACTIVATE` after reviewing its warning. The wrapper first runs
+   documentation agree, double-click `Activate TOEFL House ERP.cmd` and use
+   the confirmation prompt. The wrapper first runs
    `Backup TOEFL House ERP.ps1 -VerifyExisting` on the Windows host, which
    rechecks the current secondary
    drive, exact backup-set path, manifest digest, all four file hashes/sizes,
    live Owner policy/public-key identity, and the scheduled task.
-2. The product then runs `product/activate.py` inside the container. It checks
+2. For internal use, the wrapper displays the installation binding and current
+   receipt hash. Have the Course Owner and independent recovery approver
+   verify the Windows installation and rehearse recovery before signing the
+   same schema-2 `toefl-house-erp-internal-activation` document. Use scope
+   and operation `internal-activation`, the displayed site, installation and
+   receipt fields, and set `windows_host_acceptance_verified` only after the
+   actual host checks pass. Use the existing release tool's
+   `sign --document-type internal-activation` option. Provision the two
+   independently authenticated, purpose-bound public keys in
+   `product/data/activation/internal-activation-trust.json` and the signed
+   document and signatures as `internal-activation.json`,
+   `internal-activation.owner.sig.json`, and
+   `internal-activation.reviewer.sig.json` in the same protected directory.
+   The signing keys stay in separate custody. The authorization is single-use.
+3. The product then runs `product/activate.py` inside the container. It checks
    the current receipt, source artifact hashes, live app policy and the app's
    own site-mode resolver. It saves a private-mode `site_config.json`
    snapshot; if a mode gate fails, the previous file is restored.
-3. Do not edit `site_config.json` by hand or run the in-container activation
+4. Do not edit `site_config.json` by hand or run the in-container activation
    script directly as a substitute for the Windows wrapper: that would skip
    the host-side check of the separate local backup drive.
 
@@ -208,10 +222,9 @@ Expected status after success:
 - `Site operational mode: PRODUCTION`;
 - `Production authorization: REJECT`.
 
-This is an operational mode change only. It is not a release/launch approval,
-not a green CI claim, and not a GO decision. Production authorization remains
-REJECT until the current [ACCEPTANCE.md](ACCEPTANCE.md) evidence ledger and
-all Owner/non-engineering gates are satisfied.
+Internal approval applies only to the reviewed installation. The public release
+decision remains REJECT and follows the [ACCEPTANCE.md](ACCEPTANCE.md) evidence
+ledger and its independent release gates.
 
 ## 3. Hard gates exercised by the guarded command
 
