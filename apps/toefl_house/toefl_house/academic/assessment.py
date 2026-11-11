@@ -1208,12 +1208,22 @@ def assessment_state(book):
     if not frappe.has_permission(BOOK, "read", name):
         raise frappe.PermissionError("Assessment books are not available to your role")
     doc = frappe.get_doc(BOOK, name)
+    policy_code = frappe.db.get_value(POLICY, doc.policy, "code")
+    _policy, version = pinned_version(policy_code, doc.policy_effective_from)
+    components = version_facets(version).get("components") or []
     results = frappe.get_all(RESULT, filters={"book": doc.name},
                              fields=["name", "student", "status", "outcome",
                                      "overall_percent", "grade_code", "revision"],
                              order_by="student asc")
     return {
         **_book_result(doc),
+        "students": (_book_students(doc) if doc.status in ("Open", "Returned")
+                     else sorted({row.get("student") for row in doc.get("marks") or []
+                                  if row.get("student")})),
+        "components": [
+            {"code": row["code"], "maximum_score": row["maximum_score"]}
+            for row in components
+        ],
         "results": results,
         "marks": [{"student": row.get("student"), "component": row.get("component"),
                    "maximum_score": row.get("maximum_score"), "mark": row.get("mark"),

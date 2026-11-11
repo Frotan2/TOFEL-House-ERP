@@ -466,6 +466,9 @@ def work():
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
         "sections": [
+            section("course-assessment", "Course assessment", "links",
+                    items=[{"title": "Class marks, review and results",
+                            "slug": "th-course-assessment"}]),
             section("funnel", "Academic funnel — today\u2019s operations", "facts", facts=funnel_facts,
                     empty_title="Nothing in the academic pipeline",
                     empty_body="No attempts, admissions or cohorts exist yet. Records appear here as the placement and admission workflows advance."),

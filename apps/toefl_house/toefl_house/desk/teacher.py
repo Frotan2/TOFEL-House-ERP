@@ -417,6 +417,9 @@ def work():
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
         "sections": [
+            section("course-assessment", "Course assessment", "links",
+                    items=[{"title": "Class marks and results",
+                            "slug": "th-course-assessment"}]),
             section("classes", "My classes", "queue", items=class_items,
                     empty_title="No classes assigned",
                     empty_body="No teaching assignment names this instructor. Assignments appear here from teaching scheduling."),

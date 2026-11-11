@@ -323,7 +323,7 @@ def decide_progression(request_key, academic_result, decision, reason):
             "eligibility": eligibility,
             "override_used": False,
             "decided_by": actor,
-            "decided_on": frappe.utils.now_datetime(),
+            "decided_on": str(frappe.utils.now_datetime()),
         }
         document = frappe.get_doc({
             "doctype": DECISION,
@@ -342,7 +342,7 @@ def decide_progression(request_key, academic_result, decision, reason):
             "eligibility_digest": digest(snapshot),
             "reason": clean_reason,
             "decided_by": actor,
-            "decided_on": frappe.utils.now_datetime(),
+            "decided_on": str(frappe.utils.now_datetime()),
             "synthetic": record_synthetic_flag(),
         })
         document.insert(ignore_permissions=True)
@@ -419,7 +419,7 @@ def override_progression(request_key, academic_result, decision, reason):
             "overridden_requirements": unmet,
             "override_reason": clean_reason,
             "decided_by": actor,
-            "decided_on": frappe.utils.now_datetime(),
+            "decided_on": str(frappe.utils.now_datetime()),
         }
         document = frappe.get_doc({
             "doctype": DECISION,
@@ -439,7 +439,7 @@ def override_progression(request_key, academic_result, decision, reason):
             "eligibility_digest": digest(snapshot),
             "reason": clean_reason,
             "decided_by": actor,
-            "decided_on": frappe.utils.now_datetime(),
+            "decided_on": str(frappe.utils.now_datetime()),
             "synthetic": record_synthetic_flag(),
         })
         document.insert(ignore_permissions=True)

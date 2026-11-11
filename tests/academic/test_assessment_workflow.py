@@ -498,6 +498,9 @@ class PublicationTests(AcademicCase):
         self.assertEqual(state["status"], "Published")
         self.assertEqual(len(state["results"]), 3)
         self.assertEqual(len(state["marks"]), 6)
+        self.assertEqual(set(state["students"]), set(self.h.students))
+        self.assertEqual({row["code"] for row in state["components"]},
+                         {row["component"] for row in state["marks"]})
         self.assertEqual(state["mark_count"], 6)
 
 
