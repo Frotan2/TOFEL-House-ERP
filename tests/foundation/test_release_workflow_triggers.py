@@ -40,6 +40,24 @@ def push_paths(workflow_name: str) -> set[str]:
 
 
 class ReleaseImageTriggerContract(unittest.TestCase):
+    def test_reviewed_release_request_triggers_all_exact_main_image_dependencies(self):
+        # A path-filtered main push after a maintenance-only merge can lack
+        # Native, Foundation and Product Image runs. Workflow dispatch is not
+        # always available to the Work operator. A reviewed release request
+        # must trigger the required long-running gates on its merge SHA.
+        request = "docs/engineering/RELEASE-QUALIFICATION-REQUEST.md"
+        for workflow_name in ("native-lifecycle.yml", "foundation-runtime.yml", "product-image.yml"):
+            with self.subTest(workflow_name=workflow_name):
+                workflow = (WORKFLOWS / workflow_name).read_text(encoding="utf-8")
+                self.assertIn(request, push_paths(workflow_name))
+                self.assertIn("  workflow_dispatch:", workflow)
+        for workflow_name in ("owned-suite.yml", "windows-customer-package.yml"):
+            with self.subTest(workflow_name=workflow_name):
+                workflow = (WORKFLOWS / workflow_name).read_text(encoding="utf-8")
+                self.assertIn("on:\\n  push:", workflow.replace("\r\n", "\n"))
+                self.assertNotIn("    paths:", workflow.partition("  workflow_dispatch:")[0])
+        self.assertIn("      - main", (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8"))
+
     def test_finance_runtime_and_regression_changes_trigger_image_qualification(self):
         paths = push_paths("product-image.yml")
         self.assertIn("tools/native/native_checks.py", paths)
