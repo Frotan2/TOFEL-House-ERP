@@ -52,6 +52,7 @@ _DESK_PAGES = (
     "th-teacher-desk", "th-configuration",
 )
 page_js.update({name: "public/js/th_role_desks.js" for name in _DESK_PAGES})
+page_js["th-course-assessment"] = "public/js/th_course_assessment.js"
 fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception", "Instructor"]]]},
             {"dt": "Custom Field", "filters": [["dt", "in", ["Sales Invoice", "Fee Structure", "Fees", "Student Group", "Student Applicant", "Student", "Course Schedule", "Payment Entry"]]]},
             {"dt": "Property Setter", "filters": [["doc_type", "=", "Student"], ["field_name", "=", "student_email_id"], ["property", "=", "reqd"]]}]

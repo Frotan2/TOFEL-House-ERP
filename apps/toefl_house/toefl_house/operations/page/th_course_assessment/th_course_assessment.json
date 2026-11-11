@@ -1,0 +1,9 @@
+{
+  "doctype": "Page",
+  "module": "Operations",
+  "name": "th-course-assessment",
+  "page_name": "th-course-assessment",
+  "roles": [{"role": "Academic Manager"}, {"role": "Instructor"}],
+  "standard": "Yes",
+  "title": "Course assessment"
+}
