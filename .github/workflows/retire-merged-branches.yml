@@ -1,160 +1,44 @@
-name: Retire audited TOEFL House ERP legacy branches
+name: Archive and retire exact merged release branches
 
-# One-time owner-authorized repository housekeeping.
-# Archive each exact old head as an immutable tag before deleting its branch.
-# No Oracle code is imported into the desktop ERP main branch.
+# A one-time, SHA-pinned cleanup. Only a workflow-file merge to main or an
+# explicitly confirmed manual dispatch can trigger changes. Never change main,
+# never delete any open/unmerged/moved branch, never weaken policy gates.
 on:
   push:
     branches: [main]
     paths:
       - .github/workflows/retire-merged-branches.yml
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type archive-and-retire-merged-branches to authorize cleanup'
+        type: string
+        required: true
 
 permissions:
   contents: write
-  pull-requests: write
+  pull-requests: read
 
 concurrency:
-  group: toefl-house-exact-head-branch-retirement
+  group: toefl-house-release-branch-retirement
   cancel-in-progress: false
 
 jobs:
   archive-and-retire:
-    if: github.repository == 'Frotan2/TOFEL-House-ERP' && github.ref == 'refs/heads/main'
+    if: >-
+      github.repository == 'Frotan2/TOFEL-House-ERP' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' ||
+       inputs.confirmation == 'archive-and-retire-merged-branches')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Verify source integration, archive exact heads, retire old branches
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-          import urllib.error
-          import urllib.parse
-          import urllib.request
-
-          REPO = 'Frotan2/TOFEL-House-ERP'
-          TOKEN = os.environ['GITHUB_TOKEN']
-          ROOT = 'https://api.github.com/repos/' + REPO
-          EXPECTED = {
-              'arena/c52e5d60-tofel-house-erp':
-                  ('8fa2440208d68e2ae7acaa4f39cfb95796a5a0cc', 'arena-c52e5d60', 'ancestor'),
-              'arena/09160c3d-tofel-house-erp':
-                  ('49b6685e5e48879ca253ad1d4f6572141d86d462', 'arena-09160c3d', 'ancestor'),
-              'independent/erp-batch2-execution-20261106':
-                  ('a91544596961bfdacefb2dcce8c121b5c106c533', 'batch2-execution', 'reconciled'),
-              'independent/erp-notification-retry-starvation-gpt6-20261106':
-                  ('b0db1ab3f5ac6951ff255bba18d602708c12fd00', 'notification-retry', 'reconciled'),
-              'feat/oracle-arm64-staging-foundation':
-                  ('20c835a8cf654b6ecbecdbc3f1c10c07e0138526', 'oracle-arm64-deferred', 'deferred'),
-          }
-
-          def api(method, path, payload=None, allow_404=False):
-              data = None if payload is None else json.dumps(payload).encode('utf-8')
-              request = urllib.request.Request(
-                  ROOT + path, data=data, method=method,
-                  headers={
-                      'Authorization': 'Bearer ' + TOKEN,
-                      'Accept': 'application/vnd.github+json',
-                      'X-GitHub-Api-Version': '2022-11-28',
-                      'Content-Type': 'application/json',
-                  })
-              try:
-                  with urllib.request.urlopen(request, timeout=30) as response:
-                      raw = response.read()
-                      return json.loads(raw) if raw else {}
-              except urllib.error.HTTPError as exc:
-                  if allow_404 and exc.code == 404:
-                      return None
-                  detail = exc.read(600).decode('utf-8', 'replace')
-                  raise RuntimeError(f'GitHub {method} {path} failed ({exc.code}): {detail}') from exc
-
-          def ref(name):
-              return api('GET', '/git/ref/heads/' + urllib.parse.quote(name, safe='/'), allow_404=True)
-
-          def current_branches():
-              data = api('GET', '/branches?per_page=100')
-              if len(data) >= 100:
-                  raise RuntimeError('Branch inventory may be paginated; refusing deletion')
-              return {row['name'] for row in data}
-
-          assert os.environ['GITHUB_REPOSITORY'] == REPO
-          assert os.environ['GITHUB_REF'] == 'refs/heads/main'
-          original_main_sha = os.environ['GITHUB_SHA']
-          main_ref = ref('main')
-          if not main_ref or main_ref['object']['sha'] != original_main_sha:
-              raise RuntimeError('main moved since this workflow began; refusing')
-          observed = current_branches()
-          unexpected = observed - ({'main'} | set(EXPECTED))
-          if unexpected:
-              raise RuntimeError('Unreviewed new branches present: ' + repr(sorted(unexpected)))
-
-          # Source PRs were reconciled into the final non-Oracle integration.
-          integration = api('GET', '/pulls/150')
-          staging = api('GET', '/pulls/151')
-          if not integration.get('merged_at') or integration['base']['ref'] != 'main':
-              raise RuntimeError('PR #150 is not a confirmed merge to main')
-          if not staging.get('merged_at'):
-              raise RuntimeError('PR #151 has not been reconciled')
-
-          oracle_pr = api('GET', '/pulls/131')
-          if oracle_pr['head']['ref'] != 'feat/oracle-arm64-staging-foundation' or oracle_pr['head']['sha'] != EXPECTED['feat/oracle-arm64-staging-foundation'][0]:
-              raise RuntimeError('Oracle PR #131 changed; refusing')
-          if oracle_pr.get('merged_at'):
-              raise RuntimeError('Oracle unexpectedly merged; manual investigation required')
-          open_pulls = api('GET', '/pulls?state=open&per_page=100')
-          if len(open_pulls) >= 100:
-              raise RuntimeError('Open PR inventory may be paginated; refusing')
-          if any(pr['number'] != 131 for pr in open_pulls):
-              raise RuntimeError('Unreviewed open PR: refusing branch retirement')
-
-          # Audit every head and archive tag before ANY destructive operation.
-          for branch, (sha, suffix, classification) in EXPECTED.items():
-              branch_ref = ref(branch)
-              if branch_ref and branch_ref['object']['sha'] != sha:
-                  raise RuntimeError('Unreviewed branch head changed: ' + branch)
-              if branch_ref and classification == 'ancestor':
-                  comparison = api('GET', '/compare/' + original_main_sha + '...' + sha)
-                  if comparison['ahead_by'] != 0:
-                      raise RuntimeError('Ancestor branch contains unique commits: ' + branch)
-              tag = 'refs/tags/archive/toefl-house-branch-retirement-20261110/' + suffix
-              tag_path = '/git/ref/tags/archive/toefl-house-branch-retirement-20261110/' + suffix
-              existing_tag = api('GET', tag_path, allow_404=True)
-              if existing_tag and existing_tag['object']['sha'] != sha:
-                  raise RuntimeError('Archive tag conflicts: ' + tag)
-              if not existing_tag:
-                  api('POST', '/git/refs', {'ref': tag, 'sha': sha})
-              verified = api('GET', tag_path)
-              if verified['object']['sha'] != sha:
-                  raise RuntimeError('Archive could not be verified: ' + branch)
-              print('ARCHIVED', branch, sha, tag)
-
-          # Oracle is deliberately deferred, not merged into the Windows product.
-          # Closing its PR preserves the discussion; the immutable tag retains its head.
-          if oracle_pr['state'] == 'open':
-              api('PATCH', '/pulls/131', {'state': 'closed'})
-              print('CLOSED deferred Oracle PR #131 without merge')
-
-          # Remove only exact reviewed heads with verified immutable archives.
-          for branch, (sha, suffix, _) in EXPECTED.items():
-              observed_ref = ref(branch)
-              if not observed_ref:
-                  print('ALREADY ABSENT', branch)
-                  continue
-              if observed_ref['object']['sha'] != sha:
-                  raise RuntimeError('Branch moved during cleanup: ' + branch)
-              api('DELETE', '/git/refs/heads/' + urllib.parse.quote(branch, safe='/'))
-              if ref(branch):
-                  raise RuntimeError('Branch still exists after delete: ' + branch)
-              print('RETIRED', branch)
-
-          remaining = current_branches()
-          if remaining != {'main'}:
-              raise RuntimeError('Unexpected remaining branches: ' + repr(sorted(remaining)))
-          if ref('main')['object']['sha'] != original_main_sha:
-              raise RuntimeError('main changed during cleanup')
-          print('SUCCESS: only main remains; five archive tags preserve prior heads')
-          PY
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Verify exact-SHA retirement contracts
+        run: python3 -m unittest -v tests.foundation.test_release_branch_cleanup_20261111
+      - name: Archive and retire only audited merged branches
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/maintenance/retire_release_branches_20261111.py --apply
