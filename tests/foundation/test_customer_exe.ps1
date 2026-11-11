@@ -8,7 +8,7 @@ $temp = Join-Path $env:TEMP ('customer-exe-test-' + [guid]::NewGuid().ToString('
 try {
     $compiler = Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
     $assembly = Join-Path $temp 'extractor.dll'
-    & $compiler /nologo /target:library /platform:x64 "/out:$assembly" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll (Join-Path $root 'tools\release\windows\CustomerSetup.cs')
+    & $compiler /nologo /target:library /platform:x64 /define:INTERNAL_UNSIGNED_SETUP "/out:$assembly" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll (Join-Path $root 'tools\release\windows\CustomerSetup.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Actual customer setup code did not compile.' }
     Add-Type -Path $assembly
     function Make-Zip([string]$path, [string[]]$names) {
@@ -27,6 +27,22 @@ try {
     [CustomerSetup]::ExtractPayload($good, $destination)
     if ((Get-Content -LiteralPath (Join-Path $destination 'product/windows/test.txt') -Raw) -cne 'synthetic') {
         throw 'Valid customer payload was not extracted.'
+    }
+    $installer = Join-Path $temp 'downloaded-setup-fixture.exe'
+    $launchFile = Join-Path $destination 'product/windows/start.ps1'
+    [IO.File]::WriteAllText($installer, 'synthetic setup')
+    [IO.File]::WriteAllText($launchFile, 'synthetic script')
+    [CustomerSetup]::PreserveDownloadMarker($installer, $destination)
+    if (Get-Item -LiteralPath $launchFile -Stream Zone.Identifier -ErrorAction SilentlyContinue) {
+        throw 'Local setup unexpectedly marked an extracted script.'
+    }
+    $marker = "[ZoneTransfer]`r`nZoneId=3`r`n"
+    Set-Content -LiteralPath $installer -Stream Zone.Identifier -Encoding ascii -NoNewline -Value $marker
+    [CustomerSetup]::PreserveDownloadMarker($installer, $destination)
+    if ((Get-Content -LiteralPath $launchFile -Stream Zone.Identifier -Raw) -cne $marker -or
+        [IO.File]::ReadAllText($launchFile) -cne 'synthetic script' -or
+        (Get-Item -LiteralPath (Join-Path $destination 'product/windows/test.txt') -Stream Zone.Identifier -ErrorAction SilentlyContinue)) {
+        throw 'Setup failed to preserve the download marker on the extracted script only.'
     }
     foreach ($names in @(
         @('good.txt', '../escape.txt'), @('good.txt', '/absolute.txt'),
@@ -78,7 +94,7 @@ try {
     $stream = [IO.File]::OpenRead($footer)
     try { if ([CustomerSetup]::FindFooter($stream) -ne 997) { throw 'Signed payload footer was not found.' } }
     finally { $stream.Dispose() }
-    Write-Output 'Real Windows setup code compiled; safe extraction, ZIP traversal refusal, duplicate refusal, prevalidation and unsigned/signed footer layout passed.'
+    Write-Output 'Real Windows setup code compiled; safe extraction, download-marker preservation, ZIP traversal refusal, duplicate refusal, prevalidation and unsigned/signed footer layout passed.'
 } finally {
     # The loaded test DLL can stay locked until this process exits; clean what can be removed.
     Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue

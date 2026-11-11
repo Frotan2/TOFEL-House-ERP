@@ -1,5 +1,6 @@
 // Small Windows GUI self-extractor. Payload is appended by the provider builder.
 // It never overwrites a previous installation, changes Docker data or downloads.
+// The online-assisted internal kit compiles with /define:INTERNAL_UNSIGNED_SETUP.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -73,6 +74,9 @@ public class CustomerSetup {
                 }
                 string extracted = Path.Combine(staging, "files"); Directory.CreateDirectory(extracted);
                 ExtractPayload(payload, extracted);
+#if INTERNAL_UNSIGNED_SETUP
+                PreserveDownloadMarker(exe, extracted);
+#endif
                 if (!File.Exists(Path.Combine(extracted, "product", "windows", "TOEFL House ERP.ps1")))
                     throw new Exception("Installer application is missing.");
                 File.WriteAllText(Path.Combine(extracted, ".payload-sha256"), digest);
@@ -83,7 +87,11 @@ public class CustomerSetup {
                 }
                 // Atomic publish: interrupted extraction cannot look installed.
                 Directory.Move(extracted, target);
+#if INTERNAL_UNSIGNED_SETUP
+                Launch(target, false);
+#else
                 Launch(target, true);
+#endif
             }
         } catch (Exception error) {
             Environment.ExitCode = 1;
@@ -190,11 +198,69 @@ public class CustomerSetup {
             return true;
         return false;
     }
+    public static void PreserveDownloadMarker(string installer, string extracted) {
+        byte[] marker = ReadDownloadMarker(installer);
+        if (marker == null) return;
+        foreach (string file in Directory.EnumerateFiles(extracted, "*", SearchOption.AllDirectories)) {
+            string extension = Path.GetExtension(file).ToLowerInvariant();
+            if (extension == ".ps1" || extension == ".cmd" || extension == ".vbs")
+                WriteDownloadMarker(file, marker);
+        }
+    }
+
+    // .NET Framework rejects ADS paths before reaching the filesystem API.
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateFileW",
+        CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern Microsoft.Win32.SafeHandles.SafeFileHandle OpenStream(
+        string name, uint access, uint share, IntPtr security, uint creation,
+        uint flags, IntPtr template);
+
+    public static byte[] ReadDownloadMarker(string path) {
+        var handle = OpenStream(path + ":Zone.Identifier", 0x80000000u, 7,
+            IntPtr.Zero, 3, 0, IntPtr.Zero);
+        if (handle.IsInvalid) {
+            int error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+            handle.Dispose();
+            if (error == 2) return null;
+            if (error == 50 || error == 123) {
+                string format = new DriveInfo(Path.GetPathRoot(path)).DriveFormat;
+                if (format == "FAT" || format == "FAT32" || format == "exFAT") return null;
+            }
+            throw new System.ComponentModel.Win32Exception(error, "Could not read the Windows download marker.");
+        }
+        using (handle)
+        using (var stream = new FileStream(handle, FileAccess.Read)) {
+            if (stream.Length > 65536) throw new IOException("The Windows download marker is too large.");
+            using (var data = new MemoryStream()) {
+                stream.CopyTo(data);
+                return data.ToArray();
+            }
+        }
+    }
+
+    public static void WriteDownloadMarker(string path, byte[] marker) {
+        var handle = OpenStream(path + ":Zone.Identifier", 0x40000000u, 0,
+            IntPtr.Zero, 2, 0, IntPtr.Zero);
+        if (handle.IsInvalid) {
+            int error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+            handle.Dispose();
+            throw new System.ComponentModel.Win32Exception(error, "Could not preserve the Windows download marker.");
+        }
+        using (handle)
+        using (var stream = new FileStream(handle, FileAccess.Write)) {
+            stream.Write(marker, 0, marker.Length);
+        }
+    }
+
     static void Launch(string target, bool install) {
         string script = Path.Combine(target, "product", "windows", "TOEFL House ERP.ps1");
         ProcessStartInfo start = new ProcessStartInfo();
         start.FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+#if INTERNAL_UNSIGNED_SETUP
+        start.Arguments = "-NoLogo -NoProfile -STA -WindowStyle Hidden -File \"" + script + "\"";
+#else
         start.Arguments = "-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + script + "\"" + (install ? " -AutoInstall" : "");
+#endif
         start.WorkingDirectory = target; start.UseShellExecute = false; start.CreateNoWindow = true;
         Process.Start(start);
     }
