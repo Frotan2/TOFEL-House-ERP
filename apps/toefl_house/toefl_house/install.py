@@ -138,6 +138,7 @@ def ensure_institute_letter_head():
     name = "The TOEFL House"
     if frappe.db.exists("Letter Head", name):
         return
+    is_default = not frappe.db.exists("Letter Head", {"is_default": 1})
     frappe.get_doc({
         "doctype": "Letter Head",
         "letter_head_name": name,
@@ -147,5 +148,9 @@ def ensure_institute_letter_head():
             '<div style="text-align:center"><strong>The TOEFL House</strong>'
             '<div dir="rtl" lang="fa-AF">خانه موفقیت</div></div>'
         ),
-        "is_default": int(not frappe.db.exists("Letter Head", {"is_default": 1})),
+        "is_default": int(is_default),
     }).insert(ignore_permissions=True)
+    if is_default:
+        # The packaged wkhtmltopdf renders inline letterheads but cannot
+        # render the separate repeating header produced by this setting.
+        frappe.db.set_single_value("Print Settings", "repeat_header_footer", 0)
