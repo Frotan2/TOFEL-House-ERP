@@ -66,7 +66,8 @@ class ReleaseRetirementTests(unittest.TestCase):
                 cleanup.candidate_plan("a" * 40)
 
     def test_missing_merged_cleanup_pr_refuses(self):
-        with patch.object(cleanup, "list_page", side_effect=[[], []]):
+        with (patch.object(cleanup, "list_page", return_value=[]),
+              patch.object(cleanup, "api", return_value=[])):
             with self.assertRaisesRegex(RuntimeError, "cleanup PR"):
                 cleanup.candidate_plan("a" * 40)
 
@@ -74,11 +75,11 @@ class ReleaseRetirementTests(unittest.TestCase):
         self_pr = {**self.pr, "number": 163, "head": {
             "repo": {"full_name": cleanup.REPO}, "ref": cleanup.SELF_BRANCH,
             "sha": "b" * 40}}
-        with patch.object(cleanup, "list_page", side_effect=[
-            [], [self_pr],
-            [{"name": "main", "commit": {"sha": "a" * 40}},
-             {"name": "new-agent-work", "commit": {"sha": "c" * 40}}]
-        ]):
+        with (patch.object(cleanup, "api", return_value=[self_pr]),
+              patch.object(cleanup, "list_page", side_effect=[
+                  [], [{"name": "main", "commit": {"sha": "a" * 40}},
+                       {"name": "new-agent-work", "commit": {"sha": "c" * 40}}]
+              ])):
             with self.assertRaisesRegex(RuntimeError, "Unexpected branch"):
                 cleanup.candidate_plan("a" * 40)
 
