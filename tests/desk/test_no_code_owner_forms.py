@@ -27,6 +27,11 @@ class NoCodeOwnerFormsTests(unittest.TestCase):
             timeout=30, check=False)
         self.assertEqual(completed.returncode, 0, completed.stderr[:2000])
 
+    def test_owner_setup_preview_uses_the_read_only_http_method(self):
+        call = self.gui.split(
+            'method: "toefl_house.setup_presets.api.preview_owner_initial_setup",',
+            1)[1].split("callback", 1)[0]
+        self.assertIn('type: "GET"', call)
     def test_grade_scale_is_numeric_and_json_is_internal_only(self):
         for key in ("grade_a", "grade_b", "grade_c", "grade_d"):
             self.assertIn(f'fieldname: "{key}"', self.gui)
