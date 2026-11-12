@@ -23,7 +23,8 @@ public class CustomerSetup {
         try {
             if (verifyOnly) { VerifyExecutablePayload(); return; }
             string exe = Application.ExecutablePath;
-            string parent = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TOEFL House ERP");
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string parent = Path.Combine(localAppData, "TOEFL House ERP");
             string target = Path.Combine(parent, "Customer");
             byte[] expected = new byte[32];
             long length;
@@ -47,8 +48,7 @@ public class CustomerSetup {
                     return;
                 }
                 Directory.CreateDirectory(parent);
-                staging = Path.Combine(parent, ".setup-" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(staging);
+                staging = CreateStagingDirectory(localAppData);
                 string payload = Path.Combine(staging, "payload.zip");
                 progress = new Form();
                 progress.Text = "TOEFL House ERP setup";
@@ -72,7 +72,7 @@ public class CustomerSetup {
                     hash.TransformFinalBlock(new byte[0], 0, 0);
                     if (BitConverter.ToString(hash.Hash) != BitConverter.ToString(expected)) throw new Exception("Installer integrity check failed.");
                 }
-                string extracted = Path.Combine(staging, "files"); Directory.CreateDirectory(extracted);
+                string extracted = Path.Combine(staging, "p"); Directory.CreateDirectory(extracted);
                 ExtractPayload(payload, extracted);
 #if INTERNAL_UNSIGNED_SETUP
                 PreserveDownloadMarker(exe, extracted);
@@ -101,6 +101,19 @@ public class CustomerSetup {
             if (progress != null) progress.Dispose();
             try { if (staging != null && Directory.Exists(staging)) Directory.Delete(staging, true); } catch { /* An interrupted staging directory is never published. */ }
         }
+    }
+    public static string CreateStagingDirectory(string localAppData) {
+        // Keep staging on the installation volume without repeating the product
+        // directory or using a 32-character hex name in every extraction path.
+        string id = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        string path = Path.Combine(localAppData, ".th-" + id);
+        if (File.Exists(path) || Directory.Exists(path))
+            throw new IOException("Setup could not reserve its staging folder.");
+        DirectoryInfo directory = Directory.CreateDirectory(path);
+        if ((directory.Attributes & FileAttributes.ReparsePoint) != 0)
+            throw new IOException("Setup refused a redirected staging folder.");
+        return directory.FullName;
     }
     // Provider validation of the actual assembled EXE: no GUI, extraction,
     // service changes, prerequisite installers or customer profile writes.
@@ -176,15 +189,23 @@ public class CustomerSetup {
                         throw new Exception("Unsafe installer archive path.");
                 }
                 string name = raw.Replace('/', Path.DirectorySeparatorChar);
-                string path = Path.GetFullPath(Path.Combine(extracted, name));
+                string path;
+                try { path = Path.GetFullPath(Path.Combine(extracted, name)); }
+                catch (PathTooLongException error) {
+                    throw new PathTooLongException("Setup cannot stage this Windows path: " + prefix + name, error);
+                }
                 if (Path.IsPathRooted(name) || name.Contains(":") || !path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
                     !names.Add(path) || ((entry.ExternalAttributes >> 16) & 0xF000) == 0xA000)
                     throw new Exception("Unsafe installer archive.");
             }
             foreach (ZipArchiveEntry entry in archive.Entries) {
                 string path = Path.GetFullPath(Path.Combine(extracted, entry.FullName.Replace('/', Path.DirectorySeparatorChar)));
-                if (entry.Name.Length == 0) Directory.CreateDirectory(path);
-                else { Directory.CreateDirectory(Path.GetDirectoryName(path)); entry.ExtractToFile(path); }
+                try {
+                    if (entry.Name.Length == 0) Directory.CreateDirectory(path);
+                    else { Directory.CreateDirectory(Path.GetDirectoryName(path)); entry.ExtractToFile(path); }
+                } catch (PathTooLongException error) {
+                    throw new PathTooLongException("Setup cannot stage this Windows path: " + path, error);
+                }
                 Application.DoEvents();
             }
         }
