@@ -28,6 +28,32 @@ try {
     if ((Get-Content -LiteralPath (Join-Path $destination 'product/windows/test.txt') -Raw) -cne 'synthetic') {
         throw 'Valid customer payload was not extracted.'
     }
+    # Use the entry and path depth that triggered the actual .NET Framework failure.
+    $profile = Join-Path $temp ('profile-' + ('x' * [Math]::Max(1, 152 - $temp.Length)))
+    $product = Join-Path $profile 'TOEFL House ERP'
+    $null = [IO.Directory]::CreateDirectory($product)
+    $entry = 'product/release/ci-gates.json.sha256'
+    $old = Join-Path $product ('.setup-' + ('a' * 32) + '\files')
+    if ((Join-Path $old $entry).Length -lt 260) {
+        throw 'The long profile fixture does not reproduce the old path length.'
+    }
+    $longProfileZip = Join-Path $temp 'deep-profile.zip'
+    $longest = 'product/release/toefl-house-erp-app.tar.sha256'
+    Make-Zip $longProfileZip @($entry, $longest)
+    $staging = [CustomerSetup]::CreateStagingDirectory($profile)
+    $stagedFiles = Join-Path $staging 'p'
+    if ((Split-Path -Parent $staging) -ine [IO.Path]::GetFullPath($profile)) {
+        throw 'Setup did not place staging directly in the per-user profile.'
+    }
+    if ((Join-Path $stagedFiles $longest).Length -ge 260) {
+        throw 'Setup did not leave enough Windows path space for the payload.'
+    }
+    [CustomerSetup]::ExtractPayload($longProfileZip, $stagedFiles)
+    $published = Join-Path $product 'Customer'
+    [IO.Directory]::Move($stagedFiles, $published)
+    if ([IO.File]::ReadAllText((Join-Path $published $longest)) -cne 'synthetic') {
+        throw 'The short-path extraction did not publish the complete payload.'
+    }
     $installer = Join-Path $temp 'downloaded-setup-fixture.exe'
     $launchFile = Join-Path $destination 'product/windows/start.ps1'
     [IO.File]::WriteAllText($installer, 'synthetic setup')
@@ -94,7 +120,7 @@ try {
     $stream = [IO.File]::OpenRead($footer)
     try { if ([CustomerSetup]::FindFooter($stream) -ne 997) { throw 'Signed payload footer was not found.' } }
     finally { $stream.Dispose() }
-    Write-Output 'Real Windows setup code compiled; safe extraction, download-marker preservation, ZIP traversal refusal, duplicate refusal, prevalidation and unsigned/signed footer layout passed.'
+    Write-Output 'Real Windows setup code compiled; deep-profile publication, safe extraction, download-marker preservation, ZIP traversal refusal, duplicate refusal, prevalidation and unsigned/signed footer layout passed.'
 } finally {
     # The loaded test DLL can stay locked until this process exits; clean what can be removed.
     Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
