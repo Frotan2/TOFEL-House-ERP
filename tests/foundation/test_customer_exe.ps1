@@ -11,6 +11,20 @@ try {
     & $compiler /nologo /target:library /platform:x64 /define:INTERNAL_UNSIGNED_SETUP "/out:$assembly" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll (Join-Path $root 'tools\release\windows\CustomerSetup.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Actual customer setup code did not compile.' }
     Add-Type -Path $assembly
+    $savedModulePath = $env:PSModulePath
+    try {
+        $env:PSModulePath = 'C:\IncompatiblePowerShellModules'
+        $launch = [CustomerSetup]::CreateLauncherStartInfo($temp, $false)
+        if ($launch.EnvironmentVariables.ContainsKey('PSModulePath')) {
+            throw 'Setup passed its caller module path to Windows PowerShell.'
+        }
+        if ($env:PSModulePath -cne 'C:\IncompatiblePowerShellModules') {
+            throw 'Setup changed its caller module path.'
+        }
+    } finally {
+        $env:PSModulePath = $savedModulePath
+    }
+
     function Make-Zip([string]$path, [string[]]$names) {
         $zip = [IO.Compression.ZipFile]::Open($path, [IO.Compression.ZipArchiveMode]::Create)
         try {

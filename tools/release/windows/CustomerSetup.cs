@@ -273,7 +273,7 @@ public class CustomerSetup {
         }
     }
 
-    static void Launch(string target, bool install) {
+    public static ProcessStartInfo CreateLauncherStartInfo(string target, bool install) {
         string script = Path.Combine(target, "product", "windows", "TOEFL House ERP.ps1");
         ProcessStartInfo start = new ProcessStartInfo();
         start.FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
@@ -283,6 +283,13 @@ public class CustomerSetup {
         start.Arguments = "-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + script + "\"" + (install ? " -AutoInstall" : "");
 #endif
         start.WorkingDirectory = target; start.UseShellExecute = false; start.CreateNoWindow = true;
-        Process.Start(start);
+        // Let Windows PowerShell build its own module search path. A caller
+        // running PowerShell 7 can otherwise supply incompatible modules.
+        start.EnvironmentVariables.Remove("PSModulePath");
+        return start;
+    }
+
+    static void Launch(string target, bool install) {
+        Process.Start(CreateLauncherStartInfo(target, install));
     }
 }
