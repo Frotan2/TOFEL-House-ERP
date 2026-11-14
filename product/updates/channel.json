@@ -7,16 +7,15 @@
     {
       "id": "stable",
       "provider": "TOEFL House",
-      "metadata_url": "https://updates.toefl-house.invalid/stable/index.json",
-      "allowed_hosts": [
-        "updates.toefl-house.invalid"
-      ],
+      "metadata_url": "",
+      "allowed_hosts": [],
       "required_assets": [
         "update.json",
         "update.json.sig",
         "toefl-house-erp-app.tar"
       ],
-      "enabled": false
+      "enabled": false,
+      "transport": "offline"
     }
   ]
 }

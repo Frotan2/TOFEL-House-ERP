@@ -755,8 +755,8 @@ def _load_channel_config(path: Path, *, channel_id: str | None) -> dict:
     selected = None
     for entry in channels:
         entry = _require_object(entry, "channel")
-        _require_exact_keys(entry, ("id", "provider", "metadata_url", "allowed_hosts", "required_assets", "enabled"),
-                            ("id", "provider", "metadata_url", "allowed_hosts", "required_assets", "enabled"),
+        fields = ("id", "provider", "metadata_url", "allowed_hosts", "required_assets", "enabled")
+        _require_exact_keys(entry, fields + ("transport",), fields,
                             "channel", code="channel.invalid")
         if entry.get("id") == wanted:
             selected = entry
@@ -766,20 +766,30 @@ def _load_channel_config(path: Path, *, channel_id: str | None) -> dict:
     if not _boolean(selected["enabled"], "channel.enabled"):
         raise refuse("channel.disabled", "this update channel is disabled by the provider")
     provider = _text(selected["provider"], "channel.provider", maximum=120)
+    transport = selected.get("transport", "https")
     allowed = selected["allowed_hosts"]
-    if (not isinstance(allowed, list) or not 1 <= len(allowed) <= 8
-            or not all(_valid_host(host) for host in allowed)
-            or len(set(allowed)) != len(allowed)):
-        raise refuse("channel.invalid", "channel allowed_hosts is invalid")
     assets = selected["required_assets"]
     if (not isinstance(assets, list) or not assets or len(assets) > 8
             or not all(isinstance(name, str) and SAFE_ASSET.fullmatch(name) for name in assets)
             or len(set(assets)) != len(assets)):
         raise refuse("channel.invalid", "channel required_assets is invalid")
-    metadata_url = parse_https_url(selected["metadata_url"], tuple(allowed))
+    if transport == "offline":
+        if (allowed != [] or selected["metadata_url"] != ""
+                or set(assets) != {"update.json", "update.json.sig", "toefl-house-erp-app.tar"}):
+            raise refuse("channel.invalid", "offline channel must use the fixed bundle files and no URLs")
+        metadata_url = ""
+    elif transport == "https":
+        if (not isinstance(allowed, list) or not 1 <= len(allowed) <= 8
+                or not all(_valid_host(host) for host in allowed)
+                or len(set(allowed)) != len(allowed)):
+            raise refuse("channel.invalid", "channel allowed_hosts is invalid")
+        metadata_url = parse_https_url(selected["metadata_url"], tuple(allowed))
+    else:
+        raise refuse("channel.invalid", "channel transport is not supported")
     return {
         "id": wanted,
         "provider": provider,
+        "transport": transport,
         "metadata_url": metadata_url,
         "allowed_hosts": tuple(host.lower() for host in allowed),
         "required_assets": tuple(assets),
@@ -1756,6 +1766,14 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
     if manifest["release_status"] != "PRODUCTION RELEASE":
         blockers.append(_block("policy.release_not_production",
                                "this release is a non-production test package"))
+    requirements = manifest["requirements"]
+    if channel["transport"] == "offline" and not (
+        requirements["backup_required"] and requirements["restore_verification_required"]
+        and requirements["recovery_required"]
+    ):
+        blockers.append(_block("release.manifest.invalid",
+                               "offline updates require a verified backup, restore rehearsal "
+                               "and two-person recovery authorization"))
 
     # Phase A deliberately carries no image bytes.  When the caller supplies an
     # archive it is verified here as well; otherwise the image is verified by
@@ -1783,7 +1801,6 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
         blockers.append(_block("preflight.update_in_progress", "an update transaction is not finished"))
 
     facts = _host_facts(request)
-    requirements = manifest["requirements"]
     required_free = max(requirements["minimum_free_bytes"], MIN_FREE_BYTES_FLOOR)
     if facts["disk_free_bytes"] < required_free:
         blockers.append(_block("preflight.disk.insufficient",

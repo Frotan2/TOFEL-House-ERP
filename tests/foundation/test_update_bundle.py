@@ -143,7 +143,7 @@ class BundleTests(UpdateBundleCase):
         self.assertEqual(summary["engine_verification"], "verified")
         self.assertEqual(summary["release_status"], "PRODUCTION RELEASE")
         self.assertEqual(summary["production_authorization"], "AUTHORIZED")
-        self.assertEqual(summary["trust_store"], str(self.trust_store))
+        self.assertEqual(Path(summary["trust_store"]), self.trust_store.resolve())
         for name in ("update.json", "update.json.sig", "index.json", "toefl-house-erp-app.tar"):
             self.assertIn(name, summary["files"])
         verified = self.verify_published(layers=True)
@@ -452,7 +452,9 @@ class PackagingTests(unittest.TestCase):
             self.assertFalse(entry["enabled"])
             self.assertEqual(set(entry["required_assets"]),
                              {"update.json", "update.json.sig", "toefl-house-erp-app.tar"})
-            self.assertTrue(entry["metadata_url"].startswith("https://"))
+            self.assertEqual(entry["transport"], "offline")
+            self.assertEqual(entry["metadata_url"], "")
+            self.assertEqual(entry["allowed_hosts"], [])
 
 
 if __name__ == "__main__":

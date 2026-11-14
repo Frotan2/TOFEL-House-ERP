@@ -208,7 +208,7 @@ class UpdateFixture:
         }
         (self.product_root / self.trust_store_rel).write_text(json.dumps(store, indent=2), encoding="utf-8")
 
-    def write_channel(self, *, enabled: bool = True) -> None:
+    def write_channel(self, *, enabled: bool = True, offline: bool = False) -> None:
         config = {
             "schema_version": 1,
             "document_type": "toefl-house-erp-update-channels",
@@ -224,6 +224,11 @@ class UpdateFixture:
                 "enabled": enabled,
             }],
         }
+        if offline:
+            config["channels"][0].update(
+                transport="offline", metadata_url="", allowed_hosts=[],
+                required_assets=["update.json", "update.json.sig", "toefl-house-erp-app.tar"],
+            )
         (self.product_root / self.channel_rel).write_text(json.dumps(config, indent=2), encoding="utf-8")
 
     def build_manifest(self, **overrides) -> dict:
@@ -672,6 +677,51 @@ class ChannelTests(UpdateEngineBase):
         fixture = self.fixture()
         fixture.write_channel(enabled=False)
         self.assertIn("channel.disabled", codes(fixture.preflight()))
+
+    def test_offline_accepts_the_same_verified_release_and_recovery_evidence(self):
+        fixture = self.fixture()
+        fixture.write_channel(offline=True)
+        result = fixture.preflight()
+        self.assertEqual(result["decision"], "allow", result["blockers"])
+        self.assertIn("preflight.recovery.approval_missing",
+                      codes(fixture.preflight(recovery_signature_2="")))
+        fixture.write_channel(offline=True, enabled=False)
+        self.assertIn("channel.disabled", codes(fixture.preflight()))
+
+    def test_offline_refuses_tampered_release_and_backup(self):
+        fixture = self.fixture()
+        fixture.write_channel(offline=True)
+        manifest = fixture.product_root / fixture.manifest_rel
+        original = manifest.read_bytes()
+        manifest.write_bytes(original + b" ")
+        self.assertIn("release.signature.invalid", codes(fixture.preflight()))
+        manifest.write_bytes(original)
+        artifact = next(fixture.backup_dir.glob("*-database-enc.sql.gz"))
+        artifact.write_bytes(artifact.read_bytes() + b"changed")
+        self.assertIn("preflight.backup.artifact_invalid", codes(fixture.preflight()))
+
+    def test_offline_refuses_signed_test_releases(self):
+        fixture = self.fixture(release_status="TEST PACKAGE - NO REAL DATA", authorization="REJECT")
+        fixture.write_channel(offline=True)
+        result = codes(fixture.preflight())
+        self.assertIn("policy.release_not_authorized", result)
+        self.assertIn("policy.release_not_production", result)
+
+    def test_offline_channel_refuses_mixed_or_unexpected_sources(self):
+        fixture = self.fixture()
+        fixture.write_channel(offline=True)
+        path = fixture.product_root / fixture.channel_rel
+        config = json.loads(path.read_text(encoding="utf-8"))
+        channel = config["channels"][0]
+        for field, value in (
+            ("metadata_url", "https://example.invalid/index.json"),
+            ("allowed_hosts", ["example.invalid"]),
+            ("required_assets", ["../update.json", "update.json.sig", "toefl-house-erp-app.tar"]),
+            ("transport", "file"),
+        ):
+            with self.subTest(field=field):
+                path.write_text(json.dumps({**config, "channels": [{**channel, field: value}]}))
+                self.assertIn("channel.invalid", codes(fixture.preflight()))
 
     def test_release_signed_for_another_channel_is_refused(self):
         fixture = self.fixture()

@@ -108,6 +108,43 @@ try {
     function Get-Text { return $null }
     function Save-Result { }
     function Write-Message { }
+    . (Import-ProbeFunction 'Get-ProductFileSha256')
+    . (Import-ProbeFunction 'Assert-SafeAssetName')
+    . (Import-ProbeFunction 'Save-OfflineRecoveryCheckpoint')
+    $siteName = 'toeflhouse.localhost'
+    $backupReceiptPath = Join-Path $script:WorkDir 'backup-receipt.json'
+    [IO.File]::WriteAllText($backupReceiptPath, '{"test_only":true}')
+    $backupDigest = Get-ProductFileSha256 -LiteralPath $backupReceiptPath
+    $offlineCheck = [pscustomobject]@{
+        Version='2026.11.01'
+        RunFolder='data/updates/runs/20261112T010203Z-a1b2c3d4'
+        Installed=[pscustomobject]@{image_id=$imageId}
+    }
+    $offlineTransaction = [pscustomobject]@{
+        installed=[pscustomobject]@{image_id=$imageId;version='2026.10.24';source_revision=('1' * 40)}
+        evidence=[pscustomobject]@{
+            backup_set='synthetic-backup';backup_receipt_sha256=$backupDigest
+            recovery_authorization_sha256=('c' * 64)
+        }
+    }
+    $script:Calls = New-Object System.Collections.ArrayList
+    Save-OfflineRecoveryCheckpoint $offlineCheck $offlineTransaction
+    $checkpoint = Get-Content -LiteralPath (Join-Path $script:WorkDir 'recovery-checkpoint.json') -Raw | ConvertFrom-Json
+    $pin = 'toefl-house-erp-app:recovery-' + ('a' * 64)
+    if ($checkpoint.previous_image_id -cne $imageId -or $checkpoint.recovery_image_tag -cne $pin -or
+        $checkpoint.backup_receipt_sha256 -cne $backupDigest -or
+        $script:Calls.Count -ne 1 -or $script:Calls[0] -cne "tag $imageId $pin" -or
+        $script:RecoveryCheckpoint -cne ($offlineCheck.RunFolder + '/recovery-checkpoint.json')) {
+        throw 'Offline checkpoint did not bind the prior image and verified backup before update.'
+    }
+    $copiedReceipt = Join-Path $script:WorkDir 'pre-update-backup-receipt.json'
+    if ((Get-ProductFileSha256 -LiteralPath $copiedReceipt) -cne $backupDigest) { throw 'Verified receipt copy differs' }
+    [IO.File]::Delete($copiedReceipt)
+    [IO.File]::WriteAllText($backupReceiptPath, '{"changed":true}')
+    $script:Calls.Clear()
+    try { Save-OfflineRecoveryCheckpoint $offlineCheck $offlineTransaction; throw 'Changed receipt accepted' }
+    catch { if ($_.Exception.Message -cne 'The verified backup receipt changed before the update.') { throw } }
+    if ($script:Calls.Count -ne 0) { throw 'A changed backup receipt reached Docker' }
     $ConfirmationAccepted = $true
     $imageTag = 'toefl-house-erp-app:local'
     $check = [pscustomobject]@{
