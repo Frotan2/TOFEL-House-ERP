@@ -229,7 +229,9 @@ class UpdateWorkflowTests(unittest.TestCase):
         self.assertEqual(CHANNEL["document_type"], "toefl-house-erp-update-channels")
         for entry in CHANNEL["channels"]:
             self.assertFalse(entry["enabled"])
-            self.assertTrue(entry["metadata_url"].startswith("https://"))
+            self.assertEqual(entry["transport"], "offline")
+            self.assertEqual(entry["metadata_url"], "")
+            self.assertEqual(entry["allowed_hosts"], [])
             self.assertEqual(set(entry["required_assets"]),
                              {"update.json", "update.json.sig", "toefl-house-erp-app.tar"})
         self.assertIn('if ($selected.enabled -ne $true) {', UPDATE)
@@ -246,13 +248,18 @@ class TwoPhaseProtocolTests(unittest.TestCase):
     def test_the_manifest_phase_runs_before_the_image_is_downloaded(self):
         check = self.block("function Invoke-UpdateCheck", "function Invoke-UpdateStart")
         preflight = check.index('Invoke-EngineStep "preflight"')
-        download = check.index("Save-RemoteFile (Resolve-ChannelUrl $channel $archiveName)")
+        download = check.index("Save-ChannelFile $channel $archiveName")
         authorize = check.index('Invoke-EngineStep "authorize"')
         self.assertLess(preflight, download, "the archive must not be fetched before the manifest phase allows it")
         self.assertLess(download, authorize, "the image phase must run after the archive exists")
         self.assertIn('$request.archive = $archiveRelative', check)
         self.assertIn('$request.action = "authorize"', check)
         self.assertIn('$request.transaction = $manifestTransaction', check)
+
+    def test_offline_install_preserves_recovery_evidence_before_image_import(self):
+        install = self.block("function Invoke-UpdateInstall", "function Invoke-SmokeTest")
+        self.assertLess(install.index('Save-OfflineRecoveryCheckpoint $Check $oldAuthorization.transaction'),
+                        install.index('Invoke-DockerVerbose @("load"'))
 
     def test_the_engine_state_is_durable_and_shared_across_runs(self):
         # The authorization record and one-use marker must live outside the

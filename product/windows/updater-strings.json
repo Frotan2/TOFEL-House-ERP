@@ -258,6 +258,12 @@
     "updater.downloading": {
       "en": "Downloading the signed update package..."
     },
+    "updater.staging_offline": {
+      "en": "Reading the signed offline update files..."
+    },
+    "updater.offline_failed": {
+      "en": "The signed offline update files could not be read. Ask your provider to check the update folder."
+    },
     "updater.engine_failed": {
       "en": "The update safety check did not finish. Nothing was installed. Contact trusted support."
     },

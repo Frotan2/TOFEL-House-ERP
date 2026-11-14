@@ -88,12 +88,13 @@ gates have been independently accepted.
    DATA / REJECT** candidate to an approved production release. The shipped
    verifier must reject that candidate.
 
-2. Publish `index.json`, `update.json`, `update.json.sig` and the exact
-   image archive on the provider's allowlisted metadata host.
+2. For offline delivery, copy the bundle to authorized removable media. For
+   an explicitly authorized HTTPS channel, publish the same bundle on the
+   provider's allowlisted metadata host.
 3. Provision `product/data/updates/trust-store.json` separately on the
    customer computer. **Never** trust an update-server-supplied trust anchor.
 4. Configure `product/updates/channel.json` only after approving the
-   actual provider host and release channel; then rebuild and independently
+   transport and release channel; then rebuild and independently
    qualify the distributable.
 5. Before a migrating update, create one schema-2 recovery authorization
    naming the Course Owner and General Manager or designated authority with
@@ -103,17 +104,50 @@ gates have been independently accepted.
    ```bash
    python3 tools/release/create_update_bundle.py sign \
      --document recovery-authorization.json --private-key <owner-key>.pem \
-     --key-id <owner-key-id> --document-type recovery \
+   --key-id <owner-key-id> --document-type recovery-authorization \
      --out recovery-authorization.sig
    python3 tools/release/create_update_bundle.py sign \
      --document recovery-authorization.json --private-key <manager-key>.pem \
-     --key-id <manager-key-id> --document-type recovery \
+   --key-id <manager-key-id> --document-type recovery-authorization \
      --out recovery-authorization-2.sig
    ```
 
    The trust store must bind each signing key to the correct distinct
    identity and role. A missing signature, reused request identifier,
    interrupted update or single-person approval is a hard refusal.
+
+## Offline internal delivery
+
+An approved provider can deliver the same signed four-file bundle on local
+media. Hosting is unnecessary. The installed channel still ships disabled.
+Provision an offline channel only after written Owner release authorization
+and independent acceptance. In the approved installed channel entry, use
+`"transport": "offline"`, an empty `metadata_url`, and an empty
+`allowed_hosts` array. Keep the existing channel identity and fixed
+`required_assets` of `update.json`, `update.json.sig` and
+`toefl-house-erp-app.tar`. The provider issues the bundle for that channel
+using the existing signing tool and `--copy-archive`.
+
+Provision the approved public trust store separately from the update media.
+The provider and the two recovery approvers keep their private keys in their
+own custody. An authorized operator copies `index.json` and the three assets
+into `product/data/updates/offline-inbox`, then uses **Check for Updates** and
+**Install Update** in the existing launcher. Local files undergo the same
+signature, release-authorization, version, archive, host, encrypted backup
+and two-person recovery checks. Installation requires a signed manifest that
+specifies verified backup and recovery evidence.
+
+Before importing an approved offline image, the updater retains the
+previous verified image by ID and writes `recovery-checkpoint.json` and a
+copy of the authorized backup receipt in the protected update run folder.
+The checkpoint identifies the prior image, verified backup set and receipt
+hash. Keep the referenced encrypted backup available under the approved
+retention policy. After a failed or interrupted update, leave the original
+site and volumes intact. Trusted support must verify the checkpoint,
+separate-drive backup and the prior image, then use the native restore
+procedure on an isolated target. The Course Owner and the independent
+recovery authority must approve recovery and verify the restored records
+before any cutover. The updater never downgrades a live database.
 
 **Release boundary:** This document is a specification for secure updates.
 It does not prove that the current Windows installer, updater, recovery

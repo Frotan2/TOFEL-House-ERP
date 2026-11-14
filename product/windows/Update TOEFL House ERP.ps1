@@ -1,6 +1,6 @@
 # TOEFL House ERP - signed, fail-closed update workflow for Windows.
 #
-# Check   reads the provider's trusted update channel, downloads a signed
+# Check   reads the configured provider channel, stages a signed
 #         release index, manifest, signature and prebuilt image archive, and
 #         asks the update engine for an allow/refuse decision.  It changes no
 #         site file, no Docker volume and no service state.
@@ -57,6 +57,7 @@ $sitesRoot = Join-Path $dataRoot "sites"
 $logsRoot = Join-Path $dataRoot "logs"
 $channelPath = Join-Path $productRoot "updates\channel.json"
 $trustStorePath = Join-Path $updatesRoot "trust-store.json"
+$offlineInbox = Join-Path $updatesRoot "offline-inbox"
 $journalPath = Join-Path $updatesRoot "journal.json"
 $resultPath = Join-Path $updatesRoot "last-result.json"
 $lockPath = Join-Path $updatesRoot "update.lock"
@@ -89,6 +90,7 @@ $script:WorkDir = ""
 $script:BackupDirRelative = ""
 $script:ActiveTransactionId = ""
 $script:EngineImage = ""
+$script:RecoveryCheckpoint = ""
 
 # ---------------------------------------------------------------------------
 # English message catalogue, result document and stage output
@@ -282,6 +284,16 @@ function Set-JournalState([string]$Phase, [string]$Version) {
             version = $Version
             transaction_id = $script:ActiveTransactionId
             updated_utc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+        }
+        $checkpoint = $script:RecoveryCheckpoint
+        if (-not $checkpoint -and $Phase -ceq "recovery-required" -and (Test-Path -LiteralPath $journalPath -PathType Leaf)) {
+            $previous = Read-JsonFile $journalPath "The update journal" $maxJsonBytes
+            $checkpoint = [string]$previous.recovery_checkpoint
+            if (-not $Version) { $document.version = [string]$previous.version }
+            if (-not $document.transaction_id) { $document.transaction_id = [string]$previous.transaction_id }
+        }
+        if ($checkpoint -cmatch '^data/updates/runs/[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}/recovery-checkpoint\.json$') {
+            $document.recovery_checkpoint = $checkpoint
         }
         $text = $document | ConvertTo-Json -Depth 4
         $temporary = $journalPath + ".tmp"
@@ -500,19 +512,28 @@ function Get-Channel {
     if ($selected.enabled -ne $true) {
         Stop-Update $script:ExitRefused "refused" "messages" "channel.disabled"
     }
+    $transport = "https"
+    if ($selected.PSObject.Properties["transport"]) { $transport = [string]$selected.transport }
     $allowed = @($selected.allowed_hosts)
-    if ($allowed.Count -lt 1 -or $allowed.Count -gt 8) {
-        Stop-Update $script:ExitRefused "refused" "messages" "channel.invalid"
-    }
-    if (-not (Test-AllowedUrl ([string]$selected.metadata_url) $allowed)) {
+    $assets = @($selected.required_assets)
+    $fixedAssets = @("update.json", "update.json.sig", "toefl-house-erp-app.tar")
+    if ($transport -ceq "offline") {
+        if ($null -eq $selected.allowed_hosts -or $allowed.Count -ne 0 -or
+            $selected.metadata_url -cne "" -or $assets.Count -ne $fixedAssets.Count -or
+            @($fixedAssets | Where-Object { $assets -cnotcontains $_ }).Count -ne 0) {
+            Stop-Update $script:ExitRefused "refused" "messages" "channel.invalid"
+        }
+    } elseif ($transport -cne "https" -or $allowed.Count -lt 1 -or $allowed.Count -gt 8 -or
+              -not (Test-AllowedUrl ([string]$selected.metadata_url) $allowed)) {
         Stop-Update $script:ExitRefused "refused" "messages" "channel.invalid"
     }
     return [pscustomobject]@{
         id = [string]$selected.id
         provider = [string]$selected.provider
+        transport = $transport
         metadata_url = [string]$selected.metadata_url
         allowed_hosts = $allowed
-        required_assets = @($selected.required_assets)
+        required_assets = $assets
     }
 }
 
@@ -585,6 +606,49 @@ function Resolve-ChannelUrl($Channel, [string]$Name) {
         throw "The update file is not on an allowed provider host."
     }
     return $resolved.AbsoluteUri
+}
+
+function Save-OfflineFile([string]$Name, [string]$Path, [int64]$MaximumBytes) {
+    if ($Name -cnotin @("index.json", "update.json", "update.json.sig", "toefl-house-erp-app.tar")) {
+        throw "The offline update file name is invalid."
+    }
+    foreach ($folder in @($updatesRoot, $offlineInbox)) {
+        $directory = Get-Item -LiteralPath $folder -Force
+        if (-not $directory.PSIsContainer -or ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "The offline update folder must be a regular local directory."
+        }
+    }
+    $file = Get-Item -LiteralPath (Join-Path $offlineInbox $Name) -Force
+    if ($file.PSIsContainer -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "The offline update asset must be a regular file."
+    }
+    $partial = $Path + ".part"
+    $created = $false
+    try {
+        $source = [IO.File]::Open($file.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+        try {
+            if ($source.Length -le 0 -or $source.Length -gt $MaximumBytes) {
+                throw "The offline update file size is invalid."
+            }
+            $target = [IO.File]::Open($partial, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            $created = $true
+            try { $source.CopyTo($target) } finally { $target.Dispose() }
+        } finally { $source.Dispose() }
+        [IO.File]::Move($partial, $Path)
+    } catch {
+        if ($created) { Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue }
+        throw
+    }
+}
+
+function Save-ChannelFile($Channel, [string]$Name, [string]$Path, [int64]$MaximumBytes) {
+    if ($Channel.transport -ceq "offline") {
+        if ($Name -ceq "") { $Name = "index.json" }
+        Save-OfflineFile $Name $Path $MaximumBytes
+    } else {
+        $url = if ($Name -ceq "") { $Channel.metadata_url } else { Resolve-ChannelUrl $Channel $Name }
+        Save-RemoteFile $url $Path $MaximumBytes
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -819,12 +883,15 @@ function Invoke-UpdateCheck {
     $script:WorkDir = Join-Path $runsRoot $runId
     New-Item -ItemType Directory -Path $script:WorkDir -Force | Out-Null
 
-    Write-Stage "updater.downloading"
+    $stagingStage = if ($channel.transport -ceq "offline") { "updater.staging_offline" } else { "updater.downloading" }
+    $fileFailure = if ($channel.transport -ceq "offline") { "updater.offline_failed" } else { "updater.download_failed" }
+    Write-Stage $stagingStage
     $indexPath = Join-Path $script:WorkDir "index.json"
     try {
-        Save-RemoteFile $channel.metadata_url $indexPath $maxIndexBytes
+        Save-ChannelFile $channel "" $indexPath $maxIndexBytes
     } catch {
-        Stop-Update $script:ExitRefused "refused" "launcher" "updater.network_failed"
+        $failure = if ($channel.transport -ceq "offline") { $fileFailure } else { "updater.network_failed" }
+        Stop-Update $script:ExitRefused "refused" "launcher" $failure
     }
     try {
         $index = Read-JsonFile $indexPath "The update index" $maxIndexBytes
@@ -868,10 +935,10 @@ function Invoke-UpdateCheck {
     # downloaded after the manifest phase allows it, so a forged, unauthorized
     # or incompatible release never costs the customer a single image byte.
     try {
-        Save-RemoteFile (Resolve-ChannelUrl $channel $manifestName) $manifestPath $maxJsonBytes
-        Save-RemoteFile (Resolve-ChannelUrl $channel $signatureName) $signaturePath $maxJsonBytes
+        Save-ChannelFile $channel $manifestName $manifestPath $maxJsonBytes
+        Save-ChannelFile $channel $signatureName $signaturePath $maxJsonBytes
     } catch {
-        Stop-Update $script:ExitRefused "refused" "launcher" "updater.download_failed"
+        Stop-Update $script:ExitRefused "refused" "launcher" $fileFailure
     }
 
     $workRelative = "data/updates/runs/" + $runId
@@ -920,11 +987,11 @@ function Invoke-UpdateCheck {
         Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $targetVersion
     }
 
-    Write-Stage "updater.downloading"
+    Write-Stage $stagingStage
     try {
-        Save-RemoteFile (Resolve-ChannelUrl $channel $archiveName) $archivePath $maxArchiveBytes
+        Save-ChannelFile $channel $archiveName $archivePath $maxArchiveBytes
     } catch {
-        Stop-Update $script:ExitRefused "refused" "launcher" "updater.download_failed"
+        Stop-Update $script:ExitRefused "refused" "launcher" $fileFailure
     }
     $archiveItem = Get-Item -LiteralPath $archivePath -Force
     if ($archiveItem.Length -lt $minArchiveBytes -or $archiveItem.Length -gt $maxArchiveBytes) {
@@ -961,6 +1028,7 @@ function Invoke-UpdateCheck {
     }
     return [pscustomobject]@{
         Allowed = $true
+        Transport = $channel.transport
         Version = $targetVersion
         Archive = $archivePath
         Sequence = $sequence
@@ -1006,6 +1074,44 @@ function Wait-ForApplication([int]$Tries) {
     return $false
 }
 
+function Save-OfflineRecoveryCheckpoint($Check, $Transaction) {
+    $previous = [string]$Check.Installed.image_id
+    $receiptDigest = [string]$Transaction.evidence.backup_receipt_sha256
+    $backupSet = [string]$Transaction.evidence.backup_set
+    if ($previous -cnotmatch '^sha256:[0-9a-f]{64}$' -or $previous -cne [string]$Transaction.installed.image_id -or
+        $receiptDigest -cnotmatch '^[0-9a-f]{64}$' -or -not (Assert-SafeAssetName $backupSet) -or
+        [string]$Transaction.evidence.recovery_authorization_sha256 -cnotmatch '^[0-9a-f]{64}$' -or
+        [string]$Check.RunFolder -cnotmatch '^data/updates/runs/[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$') {
+        throw "The offline update did not authorize a recoverable prior release."
+    }
+    $receiptCopy = Join-Path $script:WorkDir "pre-update-backup-receipt.json"
+    [IO.File]::Copy($backupReceiptPath, $receiptCopy, $false)
+    if ((Get-ProductFileSha256 -LiteralPath $receiptCopy) -cne $receiptDigest) {
+        throw "The verified backup receipt changed before the update."
+    }
+    $pin = "toefl-house-erp-app:recovery-" + $previous.Substring(7)
+    if ((Invoke-DockerVerbose @("tag", $previous, $pin)) -ne 0) {
+        throw "The prior verified image could not be preserved."
+    }
+    $checkpoint = [ordered]@{
+        schema_version = 1
+        document_type = "toefl-house-erp-offline-recovery-checkpoint"
+        site = $siteName
+        previous_version = [string]$Transaction.installed.version
+        previous_source_revision = [string]$Transaction.installed.source_revision
+        previous_image_id = $previous
+        recovery_image_tag = $pin
+        target_version = $Check.Version
+        backup_set = $backupSet
+        backup_receipt_sha256 = $receiptDigest
+    }
+    $path = Join-Path $script:WorkDir "recovery-checkpoint.json"
+    $partial = $path + ".part"
+    [IO.File]::WriteAllText($partial, ($checkpoint | ConvertTo-Json -Depth 4), [Text.UTF8Encoding]::new($false))
+    [IO.File]::Move($partial, $path)
+    $script:RecoveryCheckpoint = $Check.RunFolder + "/recovery-checkpoint.json"
+}
+
 function Invoke-UpdateInstall($Check) {
     if (-not $ConfirmationAccepted) {
         Stop-Update $script:ExitRefused "cancelled" "launcher" "updater.cancelled"
@@ -1038,6 +1144,9 @@ function Invoke-UpdateInstall($Check) {
     if ([string]$oldAuthorization.transaction.phase -cne "authorized" -or
         [string]$oldAuthorization.target.image.config_digest -cne $candidateImageId) {
         Stop-Update $script:ExitRefused "refused" "launcher" "updater.package_invalid" $Check.Version
+    }
+    if ($Check.Transport -ceq "offline") {
+        Save-OfflineRecoveryCheckpoint $Check $oldAuthorization.transaction
     }
 
     # The installed engine verified the signed archive, but an older image
@@ -1241,6 +1350,46 @@ function Invoke-SmokeTest {
     }
     foreach ($good in @("toefl-house-erp-app.tar", "update.json", "update.json.sig")) {
         if (-not (Assert-SafeAssetName $good)) { [void]$failures.Add("safe asset name was rejected: " + $good) }
+    }
+
+    # Use real Windows file I/O, with no Docker, trust provisioning or site.
+    $originalUpdatesRoot = $script:updatesRoot
+    $originalInbox = $script:offlineInbox
+    $testRoot = Join-Path $env:TEMP ("toefl-offline-update-" + [guid]::NewGuid().ToString("N"))
+    $script:updatesRoot = $testRoot
+    $script:offlineInbox = Join-Path $testRoot "offline-inbox"
+    $inboxIndex = Join-Path $script:offlineInbox "index.json"
+    $stagedIndex = Join-Path $testRoot "staged-index.json"
+    $partialIndex = $stagedIndex + ".part"
+    try {
+        [void][IO.Directory]::CreateDirectory($script:offlineInbox)
+        [IO.File]::WriteAllText($inboxIndex, "offline fixture")
+        Save-ChannelFile ([pscustomobject]@{transport="offline"}) "" $stagedIndex 100
+        if ([IO.File]::ReadAllText($stagedIndex) -cne "offline fixture") { throw "Offline staging altered the asset" }
+        [IO.File]::Delete($stagedIndex)
+        foreach ($probe in @(
+            @{ name="index.json"; limit=2 },
+            @{ name="../index.json"; limit=100 },
+            @{ name="update.json"; limit=100 }
+        )) {
+            $refused = $false
+            try { Save-OfflineFile $probe.name $stagedIndex $probe.limit } catch { $refused = $true }
+            if (-not $refused -or [IO.File]::Exists($stagedIndex)) { throw "Unsafe offline input was staged" }
+        }
+        [IO.File]::WriteAllText($partialIndex, "preserve")
+        $refused = $false
+        try { Save-OfflineFile "index.json" $stagedIndex 100 } catch { $refused = $true }
+        if (-not $refused -or [IO.File]::ReadAllText($partialIndex) -cne "preserve") {
+            throw "Offline staging did not preserve an existing partial file"
+        }
+    } catch {
+        [void]$failures.Add("offline staging: " + $_.Exception.Message)
+    } finally {
+        foreach ($file in @($inboxIndex, $stagedIndex, $partialIndex)) { [IO.File]::Delete($file) }
+        if ([IO.Directory]::Exists($script:offlineInbox)) { [IO.Directory]::Delete($script:offlineInbox) }
+        if ([IO.Directory]::Exists($testRoot)) { [IO.Directory]::Delete($testRoot) }
+        $script:updatesRoot = $originalUpdatesRoot
+        $script:offlineInbox = $originalInbox
     }
 
     # Release sequence table must match product/update_engine.py exactly.
