@@ -1119,8 +1119,8 @@ frappe.provide("toefl_house.role_desks");
 				description: "One original exam and one retake are permitted. The higher valid score is retained. Academic Manager approves promotion." },
 		],
 		"toefl_house.academic.create_assessment_policy": [
-			{ fieldname: "family", label: "Choose an active program", fieldtype: "Select", options: "__owner_choice:program__", reqd: 1 },
-			{ fieldname: "code", label: "Policy code (stable)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "family", label: "Program", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "code", label: "Policy reference", fieldtype: "Data", reqd: 1, read_only: 1 },
 			{ fieldname: "title", label: "Title", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
 		],

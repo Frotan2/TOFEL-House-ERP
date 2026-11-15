@@ -154,7 +154,8 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("if defined TH_GUI_MODE goto :nowelcome", INSTALL)
         self.assertIn("first-run-credentials.txt", INSTALL)
         self.assertIn("View Administrator Login", GUI)
-        self.assertIn('$action -ne "Check"', GUI)
+        self.assertRegex(GUI, r'\$action -notin @\([^\r\n)]*"Check"[^\r\n)]*\)'
+                              r' -and -not \(Test-DockerClient\)')
         self.assertIn('Start-LauncherAction "Check"', GUI)
 
     def test_hidden_launcher_waits_without_interactive_timeout(self):

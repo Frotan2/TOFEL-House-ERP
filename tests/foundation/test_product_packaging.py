@@ -278,7 +278,9 @@ class DesktopContract(unittest.TestCase):
         self.assertIn("Win32_LogicalDisk", body)
         self.assertIn("DriveType=3", body)
         self.assertIn("FreeSpace -gt 1073741824", body)
-        self.assertIn("DeviceID -ne $sourceDrive", body)
+        # The drive-letter check was replaced by a physical disk check.
+        self.assertIn("Get-Partition -DriveLetter", body)
+        self.assertIn("Assert-SeparateBackupDisk", body)
         self.assertIn("encrypt_backup", body)
         self.assertIn('"/product/backup.py"', body)
         self.assertNotIn('"backup", "--with-files"', body)

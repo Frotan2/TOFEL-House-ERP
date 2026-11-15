@@ -478,6 +478,7 @@ def _load_restore_trust_store(path: Path) -> dict:
     if not isinstance(keys, list) or not 1 <= len(keys) <= 8:
         raise RestoreInputError("emergency restore trust store is invalid")
     parsed = {}
+    seen_moduli = set()
     for entry in keys:
         if not isinstance(entry, dict):
             raise RestoreInputError("emergency restore trust store is invalid")
@@ -495,6 +496,11 @@ def _load_restore_trust_store(path: Path) -> dict:
                 "emergency restore trust store is invalid") from None
         if modulus.bit_length() < 2048 or exponent != 65537:
             raise RestoreInputError("emergency restore trust store is invalid")
+        # Labels cannot turn one RSA private key into two independent approvals.
+        if modulus in seen_moduli:
+            raise RestoreInputError(
+                "emergency restore trust store registers the same RSA public key more than once")
+        seen_moduli.add(modulus)
         purposes = entry.get("purposes")
         if not isinstance(purposes, list) or not all(
                 isinstance(item, str) for item in purposes):

@@ -26,6 +26,7 @@ from toefl_house.desk import (
     require_desk_audience,
     section,
 )
+from toefl_house.setup_presets.preset import load_preset
 
 SLUG = "th-academic-setup"
 
@@ -623,8 +624,8 @@ def work():
             section("grading", "Grading (owner decision D1)", "queue",
                     items=_grading_items(assessment_policies,
                                          assessment_versions, today),
-                    empty_title="Grading is undecided",
-                    empty_body="Owner decision D1 has not been made."),
+                    empty_title="No grading policies to configure",
+                    empty_body="Initialize the approved course catalog before configuring grading."),
         ],
     }
 
@@ -656,39 +657,42 @@ def _current_validation(policy_name, snapshot):
 
 
 def _grading_items(policies, versions, today):
-    """Assessment policies with computed readiness (D1 reference structure).
-
-    With no policies this is the explicit owner placeholder: D1 undecided,
-    nothing computes grades — plus the one action that can succeed (define
-    the first policy shell). With policies, each item states its computed
-    readiness and offers exactly the actions the server rule allows.
-    """
-    if not policies:
-        return [{
-            "id": "grading-policy",
-            "person": "Grading policy",
-            "detail": "This new site has no approved grading policy version yet.",
-            "status": "Not decided",
-            "stage": "Grading",
-            "stage_definition": ("Grade scales, cutoffs and assessment components "
-                               "must be configured and approved for this site. "
-                               "The guarded grading and progression commands "
-                               "exist, but no missing policy is inferred and "
-                               "native operational acceptance remains required."),
-            "next": ("Create a graded graded assessment policy and complete "
-                     "the numeric Owner setup. Do not publish grades until "
-                     "the native plan, permissions and results are verified."),
-            "next_role": "Course Owner",
-            "waiting_since": None,
+    """Show the actual policies and a separate next action for each missing family."""
+    items = []
+    graded_families = set()
+    for template in load_preset()["programs"]:
+        if template.get("progression_kind") != "sequential":
+            continue
+        code = template["code"]
+        families = project_rows("setup", PROGRAM, ["name", "title"],
+                                filters={"code": code, "status": "Active"}, limit=2)
+        if len(families) != 1:
+            continue
+        family = families[0]
+        graded_families.add(family["name"])
+        # A bounded general list is not proof that a family lacks a policy.
+        # Retired policies count here too: reactivate the existing policy.
+        if project_rows("setup", ASSESSMENT_POLICY, ["name"],
+                        filters={"family": family["name"]}, limit=1):
+            continue
+        title = family["title"]
+        items.append({
+            "id": f"grading-setup-{code}", "person": title,
+            "detail": "No assessment policy has been defined for this program.",
+            "status": "Not configured", "stage": "Grading",
+            "stage_definition": "Each approved graded program needs its own policy.",
+            "next": ("Define the policy, then complete and validate its numeric settings. "
+                     "This step does not publish grades."),
+            "next_role": "Course Owner", "waiting_since": None,
             "action": guided_action(
-                "Course Owner",
-                "toefl_house.academic.create_assessment_policy",
-                "Define assessment policy", {}),
-        }]
+                "Course Owner", "toefl_house.academic.create_assessment_policy",
+                "Define assessment policy", {"family": code,
+                                             "code": template["assessment_policy_code"],
+                                             "title": f"{template['title']} grading policy"}),
+        })
     versions_by_policy = {}
     for row in versions:
         versions_by_policy.setdefault(row.get("parent"), []).append(row)
-    items = []
     for policy in policies:
         rows = versions_by_policy.get(policy["name"], [])
         snapshot = configuration_rules.snapshot_digest(rows)
@@ -745,7 +749,7 @@ def _grading_items(policies, versions, today):
             "next_role": "Course Owner",
             "waiting_since": None,
         }
-        actions = _assessment_actions(policy, readiness)
+        actions = _assessment_actions(policy, readiness, graded=policy.get("family") in graded_families)
         if actions:
             item["action"] = actions[0]
             if len(actions) > 1:
@@ -781,7 +785,7 @@ FACET_ACTIONS = (
 )
 
 
-def _assessment_actions(policy, readiness):
+def _assessment_actions(policy, readiness, *, graded):
     """Exactly the version/facet/status/validate actions the server allows.
 
     Facet commands append versions under the same server rules as the
@@ -789,8 +793,6 @@ def _assessment_actions(policy, readiness):
     so they are offered everywhere the version action is.
     """
     code = policy["code"]
-    from toefl_house.setup_presets.owner_policy_forms import graded_template_family_codes
-    graded = policy.get("family") in graded_template_family_codes()
     retired = readiness == "retired"
     if retired:
         primary = guided_action(

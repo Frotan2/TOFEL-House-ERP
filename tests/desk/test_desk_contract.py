@@ -1314,7 +1314,7 @@ class SetupDeskWorldTests(unittest.TestCase):
     """
 
     def _run(self, *, mismatch=False, no_year=False, no_fee_types=False,
-             enrollment_history=False):
+             enrollment_history=False, grading_families=(), grading_policies=()):
         world = {
             "TH Academic Program": [{
                 "name": "PROG-GEN", "code": "GEN-ENG", "title": "General English",
@@ -1376,6 +1376,8 @@ class SetupDeskWorldTests(unittest.TestCase):
                 "modified": "2026-09-01 10:00:00",
             }],
         }
+        world["TH Academic Program"].extend(grading_families)
+        world["TH Assessment Policy"] = list(grading_policies)
 
         if no_year:
             world["Academic Year"] = []
@@ -1501,12 +1503,38 @@ class SetupDeskWorldTests(unittest.TestCase):
         self.assertIn("owner@example.com", item["next"])
         self.assertIn("initial", item["next"])
 
-    def test_grading_stays_an_explicit_owner_placeholder(self):
+    def test_grading_offers_owner_action_for_cataloged_family(self):
         payload = self._run()
         items = self._section(payload, "grading")["items"]
         self.assertEqual(len(items), 1)
-        self.assertEqual(items[0]["status"], "Not decided")
+        self.assertEqual(items[0]["status"], "Not configured")
         self.assertEqual(items[0]["next_role"], "Course Owner")
+        self.assertEqual(items[0]["action"]["args"]["family"], "GEN-ENG")
+
+    def test_ge_policy_does_not_hide_eap_setup_or_offer_specialist_defaults(self):
+        eap = {"name": "PROG-EAP", "code": "EAP", "title": "EAP", "status": "Active"}
+        specialist = {"name": "PROG-SS", "code": "SPECIAL-SPEAKING",
+                      "title": "Special Speaking", "status": "Active"}
+        ge = {"name": "GE-CURRENT", "family": "PROG-GEN", "code": "GE-CURRENT",
+              "title": "GE policy", "status": "Active"}
+        eap_retired = {"name": "EAP-PAST", "family": "PROG-EAP", "code": "EAP-PAST",
+                       "title": "EAP policy", "status": "Retired"}
+        create_method = "toefl_house.academic.create_assessment_policy"
+        for policies, expected in (((), {"GEN-ENG", "EAP"}), ((ge,), {"EAP"}),
+                                   ((ge, eap_retired), set())):
+            with self.subTest(policies=policies):
+                payload = self._run(grading_families=(eap, specialist),
+                                    grading_policies=policies)
+                items = self._section(payload, "grading")["items"]
+                by_family = {item["action"]["args"]["family"]: item["action"]["args"]["code"]
+                             for item in items if item.get("action")
+                             and item["action"]["endpoint"] == create_method}
+                self.assertEqual(set(by_family), expected)
+                if "EAP" in expected:
+                    self.assertEqual(by_family["EAP"], "EAP-ASSESS-01")
+                if eap_retired in policies:
+                    self.assertEqual(self._item(payload, "grading", "EAP-PAST")["action"]["label"],
+                                     "Reactivate policy")
 
     def test_discounts_section_and_health_fact(self):
         payload = self._run()
