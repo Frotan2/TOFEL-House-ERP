@@ -290,6 +290,15 @@ public class CustomerSetup {
     }
 
     static void Launch(string target, bool install) {
+#if INTERNAL_UNSIGNED_SETUP
+        // An early policy refusal from hidden Windows PowerShell would otherwise
+        // leave the operator with an extracted package and no visible launcher.
+        using (Process launcher = Process.Start(CreateLauncherStartInfo(target, install))) {
+            if (launcher == null || (launcher.WaitForExit(3000) && launcher.ExitCode != 0))
+                throw new Exception("Windows could not open the ERP launcher. The verified files are in place. Ask the institute administrator to check the approved Windows policy for this internal installer, then reopen Setup.");
+        }
+#else
         Process.Start(CreateLauncherStartInfo(target, install));
+#endif
     }
 }

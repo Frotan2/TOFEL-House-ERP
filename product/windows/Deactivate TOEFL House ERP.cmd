@@ -3,6 +3,8 @@ rem Rollback of production activation (docs/engineering/LAUNCH-RUNBOOK.md, step 
 rem Data is untouched; TOEFL House commands are simply refused again.
 cd /d "%~dp0.."
 title Deactivating TOEFL House ERP
+powershell -NoProfile -NonInteractive -File "%~dp0Test Local Docker.ps1"
+if errorlevel 1 goto :notrunning
 docker compose exec web python3 /product/activate.py status
 if errorlevel 1 goto :notrunning
 set "ANSWER="

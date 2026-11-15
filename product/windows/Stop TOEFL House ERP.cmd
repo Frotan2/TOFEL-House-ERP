@@ -7,6 +7,8 @@ rem identically with LF or CRLF line endings regardless of how this folder
 rem was delivered (Git checkout or GitHub ZIP).
 cd /d "%~dp0.."
 title Stopping TOEFL House ERP
+powershell -NoProfile -NonInteractive -File "%~dp0Test Local Docker.ps1"
+if errorlevel 1 goto :localenginehold
 echo [TH_STAGE] Stopping TOEFL House ERP while preserving all data...
 docker compose down
 if errorlevel 1 goto :downfailed
@@ -16,5 +18,9 @@ if not defined TH_GUI_MODE powershell -NoProfile -NonInteractive -Command "Start
 exit /b 0
 :downfailed
 echo  Could not stop cleanly. If the problem repeats, use the Repair script.
+if not defined TH_GUI_MODE pause
+exit /b 1
+:localenginehold
+echo  Stop could not verify the local Docker engine. No ERP action was started.
 if not defined TH_GUI_MODE pause
 exit /b 1

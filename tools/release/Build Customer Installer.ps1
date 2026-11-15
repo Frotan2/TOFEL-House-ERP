@@ -2,8 +2,10 @@
 # Downloads happen here on the provider PC, never on the customer PC.
 param(
     [Parameter(Mandatory=$true)][string]$Package,
-    [Parameter(Mandatory=$true)][string]$WslInstaller,
-    [Parameter(Mandatory=$true)][string]$DockerInstaller,
+    [string]$WslInstaller = "",
+    [string]$DockerInstaller = "",
+    [switch]$InternalDelivery,
+    [string]$PrivateHttpsArchive = "",
     [Parameter(Mandatory=$true)][string]$OutputExe,
     [string]$RuntimeBundle = "",
     [string]$SigningCertificateThumbprint = "",
@@ -67,10 +69,29 @@ try {
         Join-Path $packageRoot 'product\windows\Verify Package Image.ps1'
     )
     if ($LASTEXITCODE -ne 0) { throw 'Input package verification failed.' }
-    foreach ($prereqInput in @(
+    if ($InternalDelivery) {
+        if ($WslInstaller -or $DockerInstaller) {
+            throw 'Internal delivery must obtain Windows prerequisites from their publishers.'
+        }
+        $caddy = Get-Item -LiteralPath $PrivateHttpsArchive -Force
+        if ($caddy.PSIsContainer -or ($caddy.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+            (Get-FileHash -LiteralPath $caddy.FullName).Hash -ine 'ad93112d335ee687100c4c9f11bced16ca590377976b7fe7883882b9e797e472') {
+            throw 'Use the qualified stock Caddy 2.11.9 Windows AMD64 archive.'
+        }
+        $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
+        $head = & git --no-optional-locks -C $repoRoot rev-parse HEAD
+        if ($LASTEXITCODE -ne 0 -or ([string]$head).Trim() -cne $manifest.source_revision) {
+            throw 'Internal installer tools must come from the exact verified source revision.'
+        }
+        $pending = @(& git --no-optional-locks -C $repoRoot status --porcelain --untracked-files=all)
+        if ($LASTEXITCODE -ne 0 -or $pending.Count) { throw 'Use a clean source checkout for internal packaging.' }
+    } elseif (-not $WslInstaller -or -not $DockerInstaller -or $PrivateHttpsArchive) {
+        throw 'Supply the signed WSL and Docker installers for the offline provider build.'
+    }
+    foreach ($prereqInput in @(if (-not $InternalDelivery) {
         @{ path = $WslInstaller; publisher = 'Microsoft Corporation' },
         @{ path = $DockerInstaller; publisher = 'Docker Inc\.?' }
-    )) {
+    })) {
         $file = Get-Item -LiteralPath $prereqInput.path -Force
         if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Linked prerequisite rejected.' }
         $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
@@ -99,14 +120,56 @@ try {
     }
     $prerequisites = Join-Path $kit 'product\prerequisites'
     [IO.Directory]::CreateDirectory($prerequisites) | Out-Null
-    Copy-Item -LiteralPath $WslInstaller -Destination (Join-Path $prerequisites 'wsl-x64.msi')
-    Copy-Item -LiteralPath $DockerInstaller -Destination (Join-Path $prerequisites 'Docker Desktop Installer.exe')
-    $prereqManifest = @{
-        schema_version = 1
-        wsl = @{ sha256 = (Get-FileHash -LiteralPath (Join-Path $prerequisites 'wsl-x64.msi')).Hash.ToLowerInvariant() }
-        docker = @{ sha256 = (Get-FileHash -LiteralPath (Join-Path $prerequisites 'Docker Desktop Installer.exe')).Hash.ToLowerInvariant() }
+    if ($InternalDelivery) {
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'windows-prerequisites.json') -Destination (
+            Join-Path $prerequisites 'vendor-downloads.json')
+        $windowsTools = Join-Path $kit 'product\windows'
+        $operatorFiles = @(
+            'Owner Activation Request.ps1', 'Owner Activation Request.vbs', 'Prepare Internal Activation.ps1',
+            'Apply Internal Activation.ps1', 'Apply Internal Activation.vbs',
+            'Private HTTPS Setup.ps1', 'Private HTTPS Setup.cmd', 'Private HTTPS Setup.md', 'Caddyfile.template'
+        )
+        foreach ($name in $operatorFiles) {
+            Copy-Item -LiteralPath (Join-Path (Join-Path $PSScriptRoot 'windows') $name) -Destination $windowsTools
+        }
+        foreach ($name in @('Activate TOEFL House ERP.cmd', 'Deactivate TOEFL House ERP.cmd')) {
+            Copy-Item -LiteralPath (Join-Path (Join-Path $repoRoot 'product\windows') $name) -Destination $windowsTools
+        }
+        Copy-Item -LiteralPath $caddy.FullName -Destination (Join-Path $windowsTools 'caddy-windows-amd64.zip')
+        $dariSuffix = [string]([char]0x062F) + [char]0x0631 + [char]0x06CC
+        $dariGuides = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'docs\engineering') -File -Filter '*.md' |
+            Where-Object { $_.BaseName.EndsWith($dariSuffix) })
+        if ($dariGuides.Count -ne 1) { throw 'Expected one Dari Owner guide.' }
+        Copy-Item -LiteralPath $dariGuides[0].FullName -Destination (Join-Path $windowsTools 'Owner Guide - Dari.md')
+
+        $signing = Join-Path $kit 'Approval Signing'
+        foreach ($relative in @('tools/release/Sign Internal Activation.pyw','tools/release/create_update_bundle.py',
+                                 'product/update_engine.py','product/update_host.py','LICENSE')) {
+            $target = Join-Path $signing $relative
+            [void][IO.Directory]::CreateDirectory((Split-Path -Parent $target))
+            Copy-Item -LiteralPath (Join-Path $repoRoot $relative) -Destination $target
+        }
+        $utf8 = New-Object Text.UTF8Encoding($false)
+        foreach ($scriptFile in @(Get-ChildItem -LiteralPath $kit -File -Recurse |
+            Where-Object Extension -in @('.ps1','.cmd','.vbs'))) {
+            $text = [IO.File]::ReadAllText($scriptFile.FullName)
+            $filtered = $text -replace '(?i) -ExecutionPolicy Bypass(?=\s|$)', ''
+            $filtered = $filtered -replace "(?i)[`"']-ExecutionPolicy[`"'],\s*[`"']Bypass[`"'],\s*", ''
+            if ($filtered -match '(?i)ExecutionPolicy[^\r\n]{0,24}Bypass|Unblock-File') {
+                throw 'An internal installer script attempts to override Windows trust policy.'
+            }
+            if ($filtered -cne $text) { [IO.File]::WriteAllText($scriptFile.FullName, $filtered, $utf8) }
+        }
+    } else {
+        Copy-Item -LiteralPath $WslInstaller -Destination (Join-Path $prerequisites 'wsl-x64.msi')
+        Copy-Item -LiteralPath $DockerInstaller -Destination (Join-Path $prerequisites 'Docker Desktop Installer.exe')
+        $prereqManifest = @{
+            schema_version = 1
+            wsl = @{ sha256 = (Get-FileHash -LiteralPath (Join-Path $prerequisites 'wsl-x64.msi')).Hash.ToLowerInvariant() }
+            docker = @{ sha256 = (Get-FileHash -LiteralPath (Join-Path $prerequisites 'Docker Desktop Installer.exe')).Hash.ToLowerInvariant() }
+        }
+        [IO.File]::WriteAllText((Join-Path $prerequisites 'manifest.json'), ($prereqManifest | ConvertTo-Json -Depth 5))
     }
-    [IO.File]::WriteAllText((Join-Path $prerequisites 'manifest.json'), ($prereqManifest | ConvertTo-Json -Depth 5))
     $compose = Get-Content -LiteralPath (Join-Path $kit 'product\docker-compose.yml') -Raw
     if ($RuntimeBundle) {
         # Hosted Windows runners do not need a nested Linux Docker engine.
@@ -200,6 +263,16 @@ Hardware virtualization must be enabled. Windows component source files must
 already be available locally; missing components require provider preparation.
 TEST PACKAGE - NO REAL DATA. Production authorization remains REJECT.
 '@)
+    if ($InternalDelivery) {
+        [IO.File]::WriteAllLines((Join-Path $kit 'READ ME FIRST.txt'), [string[]]@(
+            'TOEFL HOUSE ERP - CONTROLLED INTERNAL WINDOWS INSTALLER',
+            'Open Setup and select Install. Windows may ask you to approve official WSL and Docker Desktop downloads.',
+            'Review each publisher prompt. Open the launcher again after a requested restart.',
+            'Use the Dari Owner guide for initial setup and maintenance.',
+            'Real records require verified Windows, staff access, encrypted backup and independently signed activation.',
+            'Public release authorization remains REJECT.'
+        ))
+    }
     $payload = Join-Path $staging 'payload.zip'
     $zip = [IO.Compression.ZipFile]::Open($payload, [IO.Compression.ZipArchiveMode]::Create)
     try {
@@ -211,7 +284,9 @@ TEST PACKAGE - NO REAL DATA. Production authorization remains REJECT.
     } finally { $zip.Dispose() }
     $compiler = Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
     $stub = Join-Path $staging 'stub.exe'
-    & $compiler /nologo /target:winexe /platform:x64 "/out:$stub" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll (Join-Path $PSScriptRoot 'windows\CustomerSetup.cs')
+    $variant = @()
+    if ($InternalDelivery) { $variant += '/define:INTERNAL_UNSIGNED_SETUP' }
+    & $compiler @variant /nologo /target:winexe /platform:x64 "/out:$stub" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll (Join-Path $PSScriptRoot 'windows\CustomerSetup.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Windows setup compilation failed.' }
     $partial = $output + '.part-' + [guid]::NewGuid().ToString('N') + '.exe'
     $stream = [IO.File]::Create($partial)

@@ -41,13 +41,15 @@ echo  If the prerequisite files are missing, request a complete package from you
 goto :pause
 :dockerfound
 
+powershell -NoProfile -NonInteractive -File "%~dp0Test Local Docker.ps1" -AllowStopped
+if errorlevel 1 goto :localenginehold
 docker info >nul 2>nul
 if not errorlevel 1 goto :dockerup
 echo.
 echo  Docker Desktop is installed but not running.
 echo  Starting it now - this can take a minute...
 if exist "%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe" goto :startuserdocker
-start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+start "" "%ProgramFiles%\Docker\Docker\Docker Desktop.exe"
 goto :desktopstarted
 :startuserdocker
 start "" "%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe"
@@ -61,6 +63,8 @@ if %DAEMON_TRIES% GTR 0 goto :waitdaemon
 echo  Docker Desktop did not finish starting within 5 minutes.
 goto :failed
 :dockerup
+powershell -NoProfile -NonInteractive -File "%~dp0Test Local Docker.ps1"
+if errorlevel 1 goto :localenginehold
 
 rem The fresh-storage check must precede even Docker image imports. An
 rem orphaned named MariaDB volume is still customer data if site files and
@@ -161,9 +165,10 @@ echo  --------------------------------------------------------------
 :nowelcome
 
 echo [TH_STAGE] TOEFL House ERP is ready.
+if not defined TH_GUI_MODE powershell -NoProfile -NonInteractive -STA -File "%~dp0Create ERP Desktop Shortcut.ps1"
 if not defined TH_GUI_MODE start "" "http://127.0.0.1:8000/"
 echo.
-echo  Install finished. From now on use the "Start TOEFL House ERP" shortcut.
+echo  Install finished. Use the TOEFL House ERP graphical launcher for daily work.
 if not defined TH_GUI_MODE pause
 exit /b 0
 
@@ -231,5 +236,9 @@ echo  then Copy Safe Support Status. Do not send raw log folders,
 echo  passwords, student records, site files or backups.
 echo  ------------------------------------------------------------------
 :pause
+if not defined TH_GUI_MODE pause
+exit /b 1
+:localenginehold
+echo  Setup stopped before changing ERP storage. Review the Docker message.
 if not defined TH_GUI_MODE pause
 exit /b 1

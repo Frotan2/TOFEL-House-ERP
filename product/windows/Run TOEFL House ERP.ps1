@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet("Install", "Start", "Repair", "Stop", "Check", "UpdateCheck", "UpdateInstall", "Prepare")]
-    [string]$Action
+    [ValidateSet("Install", "Start", "Repair", "Stop", "Check", "UpdateCheck", "UpdateInstall", "Prepare", "Backup", "VerifyBackup")]
+    [string]$Action,
+    [ValidatePattern("^[A-Za-z]:$")][string]$BackupDrive
 )
 $ErrorActionPreference = "Stop"
 $scriptNames = @{
@@ -53,6 +54,14 @@ foreach ($bin in @("$env:ProgramFiles\Docker\Docker\resources\bin",
                    "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin")) {
     if (Test-Path -LiteralPath (Join-Path $bin 'docker.exe')) { $env:PATH = $bin + ';' + $env:PATH }
 }
+if ($Action -in @('Backup', 'VerifyBackup')) {
+    $backupPath = Join-Path $PSScriptRoot 'Backup TOEFL House ERP.ps1'
+    $backupArgs = @()
+    if ($Action -eq 'VerifyBackup') { $backupArgs += '-VerifyExisting' }
+    if ($Action -eq 'Backup' -and $BackupDrive) { $backupArgs += @('-BackupDrive', $BackupDrive) }
+    & (Join-Path $PSHOME 'powershell.exe') -NoLogo -NoProfile -NonInteractive -File $backupPath @backupArgs
+    exit $LASTEXITCODE
+}
 if ($Action -eq 'Install') {
     $productRoot = Join-Path $PSScriptRoot '..'
     foreach ($relative in @('data\secrets\db.env', 'data\sites\toeflhouse.localhost\site_config.json', 'data\.installation-claim')) {
@@ -82,6 +91,21 @@ if ($Action -eq 'Install') {
     if ($LASTEXITCODE -ne 0) { exit 1 }
 }
 if ($Action -eq 'Install' -or $Action -eq 'Prepare') {
+    $preparePath = Join-Path $PSScriptRoot 'Prepare This PC.ps1'
+    . (Join-Path $PSScriptRoot 'Test Local Docker.ps1')
+    try {
+        Assert-NoDockerOverrides
+        if (Get-Command docker.exe -CommandType Application -ErrorAction SilentlyContinue) {
+            Assert-LocalDockerEngine -AllowStopped
+        }
+    } catch {
+        [Console]::Error.WriteLine($_.Exception.Message)
+        exit 1
+    }
+    if (Test-Path -LiteralPath (Join-Path $PSScriptRoot '..\prerequisites\vendor-downloads.json') -PathType Leaf) {
+        & powershell.exe -NoLogo -NoProfile -NonInteractive -File $preparePath -Preflight
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+    }
     $engineReady = $false
     if (Get-Command docker -ErrorAction SilentlyContinue) {
         & docker info *> $null
@@ -95,12 +119,20 @@ if ($Action -eq 'Install' -or $Action -eq 'Prepare') {
           "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe") |
             Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
     ).Count -gt 0)
-    if ($Action -eq 'Install' -and -not $engineReady -and $desktopInstalled) {
+    $wslReady = $false
+    $wsl = Get-Command wsl.exe -CommandType Application -ErrorAction SilentlyContinue
+    if ($wsl) {
+        $version = @(& $wsl.Source --version 2>$null)
+        if ($LASTEXITCODE -eq 0 -and $version.Count -and
+            (($version[0] -replace '\x00', '') -match '\b(\d+\.\d+\.\d+(?:\.\d+)?)\b')) {
+            $wslReady = [version]$Matches[1] -ge [version]'2.1.5'
+        }
+    }
+    if ($Action -eq 'Install' -and -not $engineReady -and $desktopInstalled -and $wslReady) {
         Write-Output '[TH_STAGE] Docker Desktop is installed; checking its engine without changing Windows prerequisites...'
     } elseif (-not $engineReady) {
-        $preparePath = Join-Path $PSScriptRoot 'Prepare This PC.ps1'
         try {
-            Write-Output '[TH_STAGE] Preparing Windows from the included offline installers...'
+            Write-Output '[TH_STAGE] Preparing Windows with verified Microsoft WSL and Docker Desktop installers...'
             $preparation = Start-Process -FilePath "$PSHOME\powershell.exe" -Verb RunAs -Wait -PassThru -ArgumentList @(
                 '-NoLogo', '-NoProfile', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass',
                 '-File', ('"' + $preparePath + '"')
@@ -128,8 +160,14 @@ if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
 $env:TH_GUI_MODE = "1"
 try {
     & $scriptPath
-    if ($LASTEXITCODE -eq 0) { exit 0 }
-    exit 1
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+    if ($Action -eq 'Install') {
+        & powershell.exe -NoLogo -NoProfile -NonInteractive -STA -File (Join-Path $PSScriptRoot 'Create ERP Desktop Shortcut.ps1')
+        if ($LASTEXITCODE -ne 0) {
+            Write-Output '[TH_SHORTCUT] The desktop shortcut needs attention. Open View Details.'
+        }
+    }
+    exit 0
 } catch {
     [Console]::Error.WriteLine("The operation failed; see product service status.")
     exit 1

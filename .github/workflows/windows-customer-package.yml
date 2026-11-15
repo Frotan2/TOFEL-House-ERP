@@ -59,6 +59,8 @@ jobs:
             'product/windows/Prepare Customer Package.ps1',
             'product/windows/Test Fresh Installation.ps1',
             'product/windows/Test Existing Installation.ps1',
+            'product/windows/Test Local Docker.ps1',
+            'product/windows/Create ERP Desktop Shortcut.ps1',
             'product/windows/Update TOEFL House ERP.ps1'
           )
           foreach ($path in $paths) {
@@ -86,6 +88,22 @@ jobs:
         run: |
           & powershell.exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File 'product/windows/TOEFL House ERP.ps1' -SmokeTest
           if ($LASTEXITCODE -ne 0) { throw "Windows GUI initialization failed." }
+      - name: Check graphical activation and backup refusal paths
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($test in @('test_windows_activation_import.ps1','test_windows_backup_physical.ps1')) {
+            & powershell.exe -NoLogo -NoProfile -STA -File (Join-Path 'tests/foundation' $test)
+            if ($LASTEXITCODE -ne 0) { throw "Windows qualification failed for $test." }
+          }
+      - name: Initialize the commercial installation forms in scratch
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($tool in @('Owner Activation Request.ps1','Apply Internal Activation.ps1','Private HTTPS Setup.ps1')) {
+            & powershell.exe -NoLogo -NoProfile -STA -File (Join-Path 'tools/release/windows' $tool) -SmokeTest
+            if ($LASTEXITCODE -ne 0) { throw "Setup form failed for $tool." }
+          }
       - name: Verify real PowerShell storage-inventory decisions
         shell: powershell
         run: |
@@ -126,7 +144,14 @@ jobs:
           public class FakeDocker {
               public static int Main(string[] args) {
                   if (args.Length == 0) return 1;
-                  if (args[0] == "info") return 0;
+                  if (args[0] == "context" && args.Length > 1 && args[1] == "inspect") {
+                      Console.WriteLine("npipe:////./pipe/dockerDesktopLinuxEngine");
+                      return 0;
+                  }
+                  if (args[0] == "info") {
+                      if (args.Length > 1 && args[1] == "--format") Console.WriteLine("linux");
+                      return 0;
+                  }
                   if (args[0] == "volume") {
                       bool present = Environment.GetEnvironmentVariable("TH_SYNTHETIC_VOLUME_EXISTS") == "1";
                       if (args.Length > 1 && args[1] == "ls") {

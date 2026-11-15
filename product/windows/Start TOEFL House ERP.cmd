@@ -8,13 +8,15 @@ rem identically with LF or CRLF line endings regardless of how this folder
 rem was delivered (Git checkout or GitHub ZIP).
 cd /d "%~dp0.."
 title Starting TOEFL House ERP
+powershell -NoProfile -NonInteractive -File "%~dp0Test Local Docker.ps1" -AllowStopped
+if errorlevel 1 goto :localenginehold
 docker info >nul 2>nul
 if errorlevel 1 goto :startdaemon
 goto :up
 :startdaemon
 echo  Starting Docker Desktop - this can take a minute...
 if exist "%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe" goto :startuserdocker
-start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+start "" "%ProgramFiles%\Docker\Docker\Docker Desktop.exe"
 goto :desktopstarted
 :startuserdocker
 start "" "%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe"
@@ -28,6 +30,8 @@ if %DAEMON_TRIES% GTR 0 goto :waitdaemon
 echo  Docker Desktop did not finish starting within 5 minutes.
 goto :failed
 :up
+powershell -NoProfile -NonInteractive -File "%~dp0Test Local Docker.ps1"
+if errorlevel 1 goto :localenginehold
 if not exist data\secrets\db.env goto :nosecret
 echo [TH_STAGE] Verifying preserved site and database before starting...
 powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Test Existing Installation.ps1"
@@ -113,5 +117,9 @@ echo.
 echo  Stop and contact trusted support before using Repair.
 echo  Use Check This PC, then Copy Safe Support Status in the Windows GUI.
 echo  Do not send entire log folders, passwords or student records.
+if not defined TH_GUI_MODE pause
+exit /b 1
+:localenginehold
+echo  Start stopped before changing ERP storage. Review the Docker message.
 if not defined TH_GUI_MODE pause
 exit /b 1

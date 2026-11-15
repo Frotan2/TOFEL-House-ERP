@@ -7,6 +7,8 @@ rem identically with LF or CRLF line endings regardless of how this folder
 rem was delivered (Git checkout or GitHub ZIP).
 cd /d "%~dp0.."
 title Repairing TOEFL House ERP
+powershell -NoProfile -NonInteractive -File "%~dp0Test Local Docker.ps1"
+if errorlevel 1 goto :daemondown
 docker info >nul 2>nul
 if errorlevel 1 goto :daemondown
 goto :repair
