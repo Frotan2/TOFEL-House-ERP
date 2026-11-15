@@ -169,10 +169,19 @@ class ActivationFlow(unittest.TestCase):
               patch("update_engine.validate_recovery_authorization", return_value=approval)):
             self.act.activate_internal(SITE, log=lambda *_: None)
             self.assertEqual(self.fake_probe(SITE)["mode"], "PRODUCTION")
+            self.assertEqual(self.config()[self.act.INTERNAL_CATALOG_SITE_KEY], SITE)
+            self.assertNotIn("toefl_house_customer_release_approved", self.config())
+            self.assertNotIn("toefl_house_owner_catalog_install_enabled", self.config())
             self.act.deactivate(SITE, log=lambda *_: None)
+            self.assertNotIn(self.act.INTERNAL_CATALOG_SITE_KEY, self.config())
             with self.assertRaisesRegex(self.act.Refused, "already used"):
                 self.act.activate_internal(SITE, log=lambda *_: None)
             self.assertEqual(self.fake_probe(SITE)["mode"], "REFUSED")
+
+    def test_general_activation_does_not_issue_catalog_authority(self):
+        self.fresh_backup()
+        self.act.activate(SITE, log=lambda *_: None)
+        self.assertNotIn(self.act.INTERNAL_CATALOG_SITE_KEY, self.config())
 
     @unittest.skipUnless(os.name == "posix",
                          "POSIX mode bits are enforced inside the Linux product container")

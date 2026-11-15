@@ -2145,6 +2145,33 @@ frappe.provide("toefl_house.role_desks");
 						text("Already correct") + ": " + Number(data.counts.match || 0) + "  ·  " +
 						text("Needs a decision") + ": " + Number(data.counts.review || 0)
 					).appendTo(output);
+					const settings = data.confirmed_settings || {};
+					$("<h4></h4>").text(text("Institute settings and native forms")).appendTo(output);
+					$("<p></p>").text([settings.display_name, settings.currency, settings.time_zone,
+						settings.academic_calendar].filter(Boolean).join(" · ")).appendTo(output);
+					(settings.academic_years || []).forEach((year) => {
+						$("<p></p>").text(text("Academic year") + " " + year.name +
+							" · " + year.start + " – " + year.end).appendTo(output);
+					});
+					if (settings.friday_weekly_off === true) {
+						$("<p></p>").text(text("Add Friday as the weekly day off in the native Holiday List.")).appendTo(output);
+					}
+					const native = $("<div class='th-route-group'></div>").appendTo(output);
+					const forms = [
+						["Company and AFN accounts", "List/Company"],
+						["Kabul time zone", "Form/System Settings/System Settings"],
+						["Accounting fiscal year", "List/Fiscal Year"],
+						["Weekly holidays", "List/Holiday List"],
+						["Staff identities and roles", "List/User"],
+					];
+					forms.forEach(([label, route]) => {
+						$("<button type='button' class='btn btn-secondary btn-sm'></button>")
+							.text(text(label)).on("click", () => routeToSource(route)).appendTo(native);
+					});
+					$("<p class='text-muted'></p>").text(text(
+						"Use the licensed Company and confirmed fiscal dates in the native forms. " +
+						"Finance enters verified opening balances. Create staff accounts only for real authorized staff."
+					)).appendTo(output);
 					const timetable = data.daily_timetable;
 					if (timetable && timetable.status === "OWNER_CONFIRMED" &&
 						Array.isArray(timetable.sessions) && timetable.sessions.length === 7) {
@@ -2203,17 +2230,23 @@ frappe.provide("toefl_house.role_desks");
 						});
 					}
 					// Fresh installs do not have prior course records. This control
-					// only appears when the SERVER has verified the two release
-					// switches, clean-site guard, finance prerequisites and plan.
+					// only appears after the server verifies release authorization,
+					// clean-site state, finance prerequisites and the exact plan.
 					// The POST independently rechecks all of them under a lock.
 					const fresh = data.fresh_installation || {};
 					if (fresh.profile === "FRESH_SITE_NO_PRIOR_COURSE_HISTORY") {
 						$("<p></p>").text(text(fresh.message || "")).appendTo(output);
 					}
-					if (fresh.can_initialize === true &&
+					const finance = fresh.finance || {};
+					if (fresh.can_initialize === true && finance.company && finance.receivable_account &&
+						finance.income_account && finance.cost_center &&
 						fresh.profile === "FRESH_SITE_NO_PRIOR_COURSE_HISTORY" &&
 						data.counts.review === 0 && data.planned_actions_count > 0 &&
 						typeof data.plan_hash === "string" && data.plan_hash.length > 0) {
+						$("<p></p>").text(text("Draft tuition Company") + ": " + finance.company +
+							" · " + text("Receivable ledger") + ": " + finance.receivable_account +
+							" · " + text("Income ledger") + ": " + finance.income_account +
+							" · " + text("Cost center") + ": " + finance.cost_center).appendTo(output);
 						const apply = $("<button type='button' class='btn btn-primary btn-sm'></button>")
 							.text(text("Initialize new course catalog")).appendTo(output);
 						apply.on("click", () => {

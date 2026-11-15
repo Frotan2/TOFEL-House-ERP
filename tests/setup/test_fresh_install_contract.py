@@ -88,7 +88,10 @@ class FreshInstituteSetupTests(unittest.TestCase):
         self.assertIn("expected_plan_hash: data.plan_hash", client)
         self.assertIn('confirmation: "APPLY_TO_NEW_COURSE_SITE"', client)
         self.assertIn("def initialize_owner_catalog(", installer)
-        self.assertIn("preview_digest(snapshot)", installer)
+        self.assertIn("preview_digest(plan, finance)", installer)
+        self.assertIn("_finance_preconditions(lock=True)", installer)
+        self.assertIn('arguments["company"] = finance["company"]', installer)
+        self.assertIn('preview["plan_hash"] = preview_digest(planned, finance)', backend)
         self.assertIn("_qualified_site()", installer)
         self.assertNotIn("frappe.db.commit(", installer)
 

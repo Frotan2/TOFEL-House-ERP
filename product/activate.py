@@ -52,6 +52,7 @@ ENV_PYTHON = BENCH_DIR / "env" / "bin" / "python"
 SYNTHETIC_SITES = {"placement-test.localhost", "placement-second.localhost"}
 ACTIVE_KEY = "toefl_house_production_active"
 SITE_KEY = "toefl_house_production_site"
+INTERNAL_CATALOG_SITE_KEY = "toefl_house_internal_catalog_site"
 FEE_ITEM_KEY = "toefl_house_placement_fee_item"
 SYNTHETIC_KEYS = ("toefl_house_synthetic_only", "allow_tests")
 BACKUP_MAX_AGE_SECONDS = 24 * 3600
@@ -265,14 +266,14 @@ def check_preconditions(site: str, config: dict, receipt: object, now: float,
 
 
 def with_activation(config: dict, site: str) -> dict:
-    updated = dict(config)
+    updated = without_activation(config)
     updated[ACTIVE_KEY] = 1
     updated[SITE_KEY] = site
     return updated
 
 
 def without_activation(config: dict) -> dict:
-    return {key: value for key, value in config.items() if key not in (ACTIVE_KEY, SITE_KEY)}
+    return {key: value for key, value in config.items() if key not in (ACTIVE_KEY, SITE_KEY, INTERNAL_CATALOG_SITE_KEY)}
 
 
 def _recover_interrupted_activation(site: str, config: dict, log=print) -> dict:
@@ -305,7 +306,8 @@ def _recover_interrupted_activation(site: str, config: dict, log=print) -> dict:
     if any(config.get(key) != 1 for key in SYNTHETIC_KEYS):
         return config
     cleaned = {key: value for key, value in config.items()
-               if key not in (ACTIVE_KEY, SITE_KEY, *SYNTHETIC_KEYS)}
+               if key not in SYNTHETIC_KEYS}
+    cleaned = without_activation(cleaned)
     write_config(site, cleaned)
     log("Recovered an interrupted activation: removed the activation triple "
         "and test flags left by a previous run; re-running every gate.")
@@ -509,7 +511,8 @@ def require_confirm(site: str, confirm: str | None) -> None:
         raise Refused(f"confirmation must be the site name ({site})")
 
 
-def activate(site: str, log=print, *, expected_backup_sha256: str | None = None) -> None:
+def activate(site: str, log=print, *, expected_backup_sha256: str | None = None,
+             verified_internal_catalog: bool = False) -> None:
     config = read_config(site)
     receipt = read_backup_receipt(expected_sha256=expected_backup_sha256)
     # Recovery writes site_config, so it needs the same fresh verified
@@ -551,6 +554,14 @@ def activate(site: str, log=print, *, expected_backup_sha256: str | None = None)
         if state["mode"] != "PRODUCTION" or state["flag"] != 0 or not state.get("mirror"):
             raise Refused(f"activation gates failed: {state}")
         _prove_mixed_mode_refused(site)
+        if verified_internal_catalog:
+            # Only the internal wrapper passes this after consuming a
+            # host/site/backup-bound, independently verified authorization.
+            approved = read_config(site)
+            approved[INTERNAL_CATALOG_SITE_KEY] = site
+            write_config(site, approved)
+            if read_config(site).get(INTERNAL_CATALOG_SITE_KEY) != site:
+                raise Refused("the internal catalog authorization did not persist")
     except BaseException:
         # BaseException, not Exception: a Ctrl-C/SystemExit during the
         # gate sequence must roll back exactly like a failed gate, or the
@@ -619,7 +630,8 @@ def activate_internal(site: str, log=print) -> None:
         raise Refused("the internal activation approval was already used") from exc
     except OSError as exc:
         raise Refused("the internal activation approval could not be recorded") from exc
-    activate(site, log, expected_backup_sha256=context["backup_receipt_sha256"])
+    activate(site, log, expected_backup_sha256=context["backup_receipt_sha256"],
+             verified_internal_catalog=True)
     log("Internal activation approved for this installation. Public release status is unchanged.")
 
 

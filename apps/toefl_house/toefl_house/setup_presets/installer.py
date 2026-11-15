@@ -1,8 +1,7 @@
 """Release-gated, Owner-authorized, atomic academic first-run setup.
 
-The endpoint is intentionally disabled on every existing installation.
-Setting just one switch cannot enable it. The verified customer installer must
-explicitly qualify the release *and* authorize clean-site catalog setup. The
+Only the explicitly qualified customer path or a separately authorized
+internal installation may initialize the catalog on an empty site. The
 endpoint never creates students, staff, grades, salaries or posted Fees, and
 never changes Owner backup/retention policy or tax.
 """
@@ -35,53 +34,87 @@ _NO_LIVE_RECORDS = (
 
 
 def _qualified_site():
-    if (frappe.conf.get("toefl_house_customer_release_approved") is not True
-            or frappe.conf.get("toefl_house_owner_catalog_install_enabled") is not True):
+    internal_site = frappe.conf.get("toefl_house_internal_catalog_site")
+    internal_approved = False
+    if isinstance(internal_site, str) and internal_site:
+        from toefl_house.security import is_production
+        internal_approved = internal_site == frappe.local.site and is_production()
+    customer_approved = (
+        frappe.conf.get("toefl_house_customer_release_approved") is True
+        and frappe.conf.get("toefl_house_owner_catalog_install_enabled") is True
+    )
+    if not (internal_approved or customer_approved):
         raise frappe.PermissionError(
-            "Owner first-run setup remains disabled until independent release "
-            "acceptance and clean-site installation are approved")
+            "Complete the authorized activation for this installation "
+            "before initializing the first-run catalog")
     for doctype in _NO_LIVE_RECORDS:
         if frappe.db.count(doctype):
             raise frappe.ValidationError(
                 "First-run setup refuses any site with existing admissions, "
                 "students, bills, payments or payroll; preserve this site")
-    if frappe.db.get_single_value("TH Backup Control", "enabled") in (1, "1", True):
+    backup_on = frappe.db.get_single_value("TH Backup Control", "enabled") in (1, "1", True)
+    if internal_approved and not backup_on:
         raise frappe.ValidationError(
-            "First-run setup refuses a site with Backup Control switched On")
+            "Keep the approved Backup Control switched On for internal setup")
+    if not internal_approved and backup_on:
+        raise frappe.ValidationError(
+            "Customer first-run setup refuses a site with Backup Control switched On")
 
 
-def _finance_preconditions():
-    if not frappe.db.exists("Item Group", "Fee Component"):
+def _finance_preconditions(*, lock=False):
+    """Read the one native accounting target shown to the approving Owner."""
+    if frappe.db.get_value("Item Group", "Fee Component", "is_group") not in (1, "1", True):
         raise frappe.ValidationError(
-            "Native Education Fee Component Item Group is missing; complete "
-            "Education installation before initializing the catalog")
-    companies = frappe.db.get_all("Company", fields=["name"], limit=2)
+            "Native Education Fee Component must be an Item Group with "
+            "Is Group checked. Ask the installation administrator to review it")
+    companies = frappe.db.get_all("Company", fields=["name"], limit_page_length=2)
     if len(companies) != 1:
         raise frappe.ValidationError(
             "Exactly one approved legal Company must be configured before "
             "initializing draft fee plans")
     company = companies[0].name
-    if frappe.db.get_value("Company", company, "default_currency") != "AFN":
+    defaults = frappe.db.get_value(
+        "Company", company, ["default_currency", "default_receivable_account",
+                             "default_income_account", "cost_center"],
+        as_dict=True, for_update=lock)
+    if not defaults or defaults.default_currency != "AFN":
         raise frappe.ValidationError(
             "The approved TOEFL House Company must use AFN as its accounting "
             "currency before any tuition plan is initialized")
-    receivable = frappe.db.get_value(
-        "Company", company, "default_receivable_account")
-    if not receivable:
+    receivable = defaults.default_receivable_account
+    income = defaults.default_income_account
+    cost_center = defaults.cost_center
+    for label, name, root in (
+            ("receivable", receivable, "Asset"), ("income", income, "Income")):
+        account = frappe.db.get_value(
+            "Account", name,
+            ["company", "root_type", "account_type", "account_currency", "is_group", "disabled"],
+            as_dict=True, for_update=lock) if name else None
+        if (not account or account.company != company or account.root_type != root
+                or (label == "receivable" and account.account_type != "Receivable")
+                or account.account_currency not in (None, "", "AFN")
+                or account.is_group not in (0, "0", False)
+                or account.disabled not in (0, "0", False)):
+            raise frappe.ValidationError(
+                f"Finance must set an enabled same-Company AFN {label} ledger "
+                "in the native Company defaults")
+    center = frappe.db.get_value(
+        "Cost Center", cost_center, ["company", "is_group", "disabled"],
+        as_dict=True, for_update=lock) if cost_center else None
+    if (not center or center.company != company
+            or center.is_group not in (0, "0", False)
+            or center.disabled not in (0, "0", False)):
         raise frappe.ValidationError(
-            "Finance must configure the Company's default receivable account "
-            "before initializing draft tuition plans")
-    if frappe.db.get_value("Account", receivable, "company") != company:
-        raise frappe.ValidationError(
-            "The Company's default receivable account is missing or belongs "
-            "to another company; Finance must correct it before setup")
+            "Finance must set an enabled same-Company leaf cost center "
+            "in the native Company defaults")
+    return {"company": company, "receivable_account": receivable,
+            "income_account": income, "cost_center": cost_center, "currency": "AFN"}
 
 
-def preview_digest(snapshot):
-    """Bound precondition proof to the exact planned catalog operations."""
-    plan = prepare_catalog_plan(snapshot)
+def preview_digest(plan, finance):
+    """Bind Owner confirmation to planned operations and the native ledger identity."""
     return digest({"preset_id": plan["preset_id"], "actions": plan["actions"],
-                   "review": plan["preview"]["counts"]["review"]})
+                   "review": plan["preview"]["counts"]["review"], "finance": finance})
 
 
 @frappe.whitelist(methods=["POST"])
@@ -104,8 +137,9 @@ def initialize_owner_catalog(expected_plan_hash, confirmation):
     _qualified_site()
     snapshot = _snapshot()
     plan = prepare_catalog_plan(snapshot)
+    finance = _finance_preconditions(lock=True)
     if (not isinstance(expected_plan_hash, str)
-            or expected_plan_hash != preview_digest(snapshot)):
+            or expected_plan_hash != preview_digest(plan, finance)):
         raise frappe.ValidationError(
             "Setup changed since it was reviewed; refresh the preview and "
             "confirm the current exact plan before proceeding")
@@ -113,8 +147,6 @@ def initialize_owner_catalog(expected_plan_hash, confirmation):
         return {"status": "ALREADY_MATCHED", "created": 0,
                 "preset_id": plan["preset_id"], "production_ready": False}
 
-    # Require all accounting prerequisites before creating a single master.
-    _finance_preconditions()
     # Existing categories without their native accounting Item are unsafe.
     required_category = load_preset()["fee_policy"]["category"]
     if frappe.db.exists("Fee Category", required_category):
@@ -132,6 +164,8 @@ def initialize_owner_catalog(expected_plan_hash, confirmation):
                      if key != "operation"}
         if operation == "create_level":
             arguments["effective_from"] = year
+        if operation == "set_level_fee_component":
+            arguments["company"] = finance["company"]
         arguments["request_key"] = action_request_key(plan["preset_id"], action)
         _ALLOWED[operation](**arguments)
         created.append(operation)
