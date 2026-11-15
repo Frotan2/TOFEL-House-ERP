@@ -233,14 +233,15 @@ def _load_module(roles, enrollments=()):
                 for key in ("frappe", "frappe.utils", "toefl_house", "toefl_house.policy",
                             "toefl_house.academic", "toefl_house.academic.rules",
                             "toefl_house.configuration", "toefl_house.configuration.rules",
-                            "toefl_house.configuration.audit", "toefl_house.transactions")}
+                            "toefl_house.configuration.audit", "toefl_house.transactions",
+                            "toefl_house.security")}
     # Auto-loaded command modules bind `import frappe` at import time: evict
     # them so every test re-imports against ITS stub instead of inheriting
     # the first test's backend (stale gates, writes landing in the wrong
     # store, and exception classes the current fake cannot catch).
     for key in ("toefl_house.configuration", "toefl_house.configuration.rules",
                 "toefl_house.configuration.audit", "toefl_house.transactions",
-                "toefl_house.academic.rules"):
+                "toefl_house.academic.rules", "toefl_house.security"):
         sys.modules.pop(key, None)
     stub = types.ModuleType("frappe")
     for attr in ("session", "PermissionError", "ValidationError", "utils",
@@ -613,6 +614,34 @@ class FeeConfigurationLifecycleTests(unittest.TestCase):
 
 
 class DiscountConfigurationLifecycleTests(unittest.TestCase):
+    def test_internal_production_refuses_activation_and_still_allows_retirement(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            fake.store.setdefault("Student", {})["STU-001"] = {"name": "STU-001"}
+            args = ("AWARD-10", "Named award", 10)
+            academic.create_discount_rule("R" * 24, *args, student="STU-001",
+                                          description="Recorded student award")
+            # Synthetic qualification can still exercise its own awards,
+            # even if someone copied an internal marker into its config.
+            marker = "toefl_house_internal_catalog_site"
+            fake.conf[marker] = fake.local.site
+            academic.set_discount_rule_status("A" * 24, "AWARD-10", 1)
+
+            fake.local.site = "institute.localhost"
+            fake.conf.update(toefl_house_synthetic_only=0, allow_tests=0,
+                             toefl_house_production_active=1,
+                             toefl_house_production_site=fake.local.site)
+            # A mismatched marker is not an internal production activation.
+            self.assertEqual(academic.set_discount_rule_status(
+                "B" * 24, "AWARD-10", 1)["status"], "Active")
+
+            fake.conf[marker] = fake.local.site
+            self.assertEqual(academic.set_discount_rule_status(
+                "C" * 24, "AWARD-10", 0)["status"], "Retired")
+            with self.assertRaisesRegex(fake.ValidationError, "approval is on hold"):
+                academic.set_discount_rule_status("D" * 24, "AWARD-10", 1)
+            self.assertEqual(fake.store["TH Discount Rule"]["AWARD-10"].status,
+                             "Retired")
+
     def test_owner_manages_discount_rules(self):
         for academic, fake in _load_module({"Course Owner"}):
             fake.store.setdefault("Item Group", {})["Fee Component"] = {"name": "Fee Component"}

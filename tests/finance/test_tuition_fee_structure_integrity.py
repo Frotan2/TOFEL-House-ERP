@@ -4,6 +4,7 @@ Executes the real shared resolver used by full-semester Fees and installments.
 Isolated framework doubles keep these tests non-mutating and deterministic.
 """
 import ast
+import importlib.util
 from pathlib import Path
 import sys
 import types
@@ -26,7 +27,7 @@ def production_resolver(context):
 
 
 class NativeBillingPlanIntegrityTests(unittest.TestCase):
-    def resolve(self, plans, components):
+    def resolve(self, plans, components, discount_rules=(), internal=False):
         calls = []
         def db_get_all(doctype, **kwargs):
             calls.append((doctype, kwargs))
@@ -35,26 +36,12 @@ class NativeBillingPlanIntegrityTests(unittest.TestCase):
             if doctype == "Fee Component":
                 return [types.SimpleNamespace(**row) for row in components]
             if doctype == "TH Discount Rule":
-                return []
+                return discount_rules
             raise AssertionError(doctype)
 
-        # Verify the shared resolver actually validates the native rows
-        # before attempting discounts; reject duplicate, missing or invalid.
-        def validate_component_rows(rows):
-            seen = set()
-            for row in rows:
-                category, amount = row["category"], row["amount"]
-                if not category or category in seen or float(amount) <= 0:
-                    raise ValueError("bad component")
-                seen.add(category)
-
-        rules = types.SimpleNamespace(
-            validate_component_rows=validate_component_rows,
-            resolve_charge_discount=lambda *args, **kwargs: None)
         academic = types.ModuleType("toefl_house.academic")
-        academic.rules = rules
         package = types.ModuleType("toefl_house")
-        package.__path__ = []
+        package.__path__ = [str(SOURCE.parent.parent)]
         frappe = types.SimpleNamespace(
             db=types.SimpleNamespace(get_all=db_get_all,
                                      get_value=lambda *args: "COMPANY"),
@@ -63,9 +50,16 @@ class NativeBillingPlanIntegrityTests(unittest.TestCase):
                    "_discount_family_for_native_program": lambda program: "GEN-ENG"}
         company_scope = types.ModuleType("toefl_house.finance.company_scope")
         company_scope.require_finance_company = lambda company: company
+        security = types.ModuleType("toefl_house.security")
+        security.is_internal_production = lambda: internal
         with patch.dict(sys.modules, {
             "toefl_house": package, "toefl_house.academic": academic,
+            "toefl_house.security": security,
             "toefl_house.finance.company_scope": company_scope}):
+            spec = importlib.util.spec_from_file_location(
+                "offline_tuition_academic_rules", SOURCE.parent.parent / "academic" / "rules.py")
+            academic.rules = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(academic.rules)
             result = production_resolver(context)(
                 types.SimpleNamespace(program="N-STARTER", academic_year="1405",
                                       student="SYN-STUDENT"),
@@ -101,6 +95,34 @@ class NativeBillingPlanIntegrityTests(unittest.TestCase):
             with self.subTest(rows=rows), self.assertRaisesRegex(
                     ValueError, "duplicate, missing or invalid"):
                 self.resolve([{"name": "FS-1"}], rows)
+
+    def test_internal_hold_refuses_matching_awards_instead_of_issuing_gross_or_net(self):
+        plans = [{"name": "FS-1"}]
+        components = [{"fees_category": "Semester Tuition Fee", "amount": 1000}]
+        for scope in (
+            {},
+            {"student": "SYN-STUDENT", "program": "GEN-ENG",
+             "fee_category": "Semester Tuition Fee"},
+        ):
+            rule = dict(code="LEGACY", status="Active", discount_percentage=10,
+                        precedence=1, **scope)
+            with self.subTest(scope=scope):
+                with self.assertRaisesRegex(ValueError, "Tuition was not issued.*on hold"):
+                    self.resolve(plans, components, [rule], internal=True)
+                (rows, discounts, gross), _ = self.resolve(plans, components, [rule])
+                self.assertEqual((rows[0]["amount"], discounts[0]["rule_code"], gross),
+                                 (900, "LEGACY", 1000))
+
+    def test_internal_hold_does_not_block_undiscounted_tuition(self):
+        plans = [{"name": "FS-1"}]
+        components = [{"fees_category": "Semester Tuition Fee", "amount": 1000}]
+        rule = dict(code="OTHER", status="Active", discount_percentage=10, precedence=1)
+        for scope in ({"student": "OTHER-STUDENT"}, {"program": "EAP"},
+                      {"fee_category": "Books"}, {"status": "Retired"}):
+            with self.subTest(scope=scope):
+                result, _ = self.resolve(plans, components, [dict(rule, **scope)],
+                                         internal=True)
+                self.assertEqual(result, (components, [], 1000))
 
 
 if __name__ == "__main__":

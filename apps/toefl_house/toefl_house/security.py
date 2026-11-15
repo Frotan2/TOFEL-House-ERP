@@ -218,6 +218,13 @@ def is_production():
     return site_mode() == PRODUCTION
 
 
+def is_internal_production():
+    """Identify an activated internal delivery, separate from public production."""
+    approved_site = frappe.conf.get("toefl_house_internal_catalog_site")
+    return (isinstance(approved_site, str) and bool(approved_site)
+            and approved_site == frappe.local.site and is_production())
+
+
 def require_operational():
     """Accept the synthetic qualification sites or the activated production site.
 
