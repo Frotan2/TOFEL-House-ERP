@@ -1,5 +1,5 @@
 # PROVIDER ONLY. Assemble one offline Windows EXE from a verified customer kit.
-# Downloads happen here on the provider PC, never on the customer PC.
+# The internal variant includes an offline ERP payload and a pinned vendor catalog.
 param(
     [Parameter(Mandatory=$true)][string]$Package,
     [string]$WslInstaller = "",
@@ -46,8 +46,10 @@ try {
     $allowlistBlock = [regex]::Match($packagerSource, '(?s)ALLOWED_FILES = \(\r?\n(.*?)\r?\n\)').Groups[1].Value
     if (-not $allowlistBlock) { throw 'Cannot resolve the provider package allowlist.' }
     $allowed = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    $sourceFiles = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
     foreach ($match in [regex]::Matches($allowlistBlock, '(?m)^    "([^"\r\n]+)",')) {
         [void]$allowed.Add($match.Groups[1].Value)
+        [void]$sourceFiles.Add($match.Groups[1].Value)
     }
     foreach ($name in @('READ ME FIRST.txt', 'product/release/toefl-house-erp-app.tar',
         'product/release/toefl-house-erp-app.tar.sha256', 'product/release/release-manifest.json',
@@ -65,10 +67,6 @@ try {
     # The EXE remains a test candidate; this builder grants no production approval.
     $manifest = Get-Content -LiteralPath (Join-Path $packageRoot 'product\release\release-manifest.json') -Raw | ConvertFrom-Json
     if ($manifest.production_authorization -cne 'REJECT') { throw 'Expected an engineering candidate manifest.' }
-    & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (
-        Join-Path $packageRoot 'product\windows\Verify Package Image.ps1'
-    )
-    if ($LASTEXITCODE -ne 0) { throw 'Input package verification failed.' }
     if ($InternalDelivery) {
         if ($WslInstaller -or $DockerInstaller) {
             throw 'Internal delivery must obtain Windows prerequisites from their publishers.'
@@ -85,9 +83,19 @@ try {
         }
         $pending = @(& git --no-optional-locks -C $repoRoot status --porcelain --untracked-files=all)
         if ($LASTEXITCODE -ne 0 -or $pending.Count) { throw 'Use a clean source checkout for internal packaging.' }
+        $verify = Join-Path $repoRoot 'product\windows\Verify Package Image.ps1'
     } elseif (-not $WslInstaller -or -not $DockerInstaller -or $PrivateHttpsArchive) {
         throw 'Supply the signed WSL and Docker installers for the offline provider build.'
+    } else {
+        $verify = Join-Path $packageRoot 'product\windows\Verify Package Image.ps1'
     }
+    $release = Join-Path $packageRoot 'product\release'
+    & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $verify `
+        -Archive (Join-Path $release 'toefl-house-erp-app.tar') `
+        -Checksum (Join-Path $release 'toefl-house-erp-app.tar.sha256') `
+        -Manifest (Join-Path $release 'release-manifest.json') `
+        -ManifestChecksum (Join-Path $release 'release-manifest.json.sha256')
+    if ($LASTEXITCODE -ne 0) { throw 'Input package verification failed.' }
     foreach ($prereqInput in @(if (-not $InternalDelivery) {
         @{ path = $WslInstaller; publisher = 'Microsoft Corporation' },
         @{ path = $DockerInstaller; publisher = 'Docker Inc\.?' }
@@ -105,13 +113,19 @@ try {
     $staging = Join-Path $parent ('.customer-build-' + [guid]::NewGuid().ToString('N'))
     $kit = Join-Path $staging 'kit'
     [IO.Directory]::CreateDirectory($kit) | Out-Null
-    foreach ($file in @($all | Where-Object { -not $_.PSIsContainer })) {
-        $relative = $file.FullName.Substring($packageRoot.Length).TrimStart('\')
+    foreach ($relative in $allowed) {
+        $source = if ($InternalDelivery -and $sourceFiles.Contains($relative)) {
+            $local = Get-Item -LiteralPath (Join-Path $repoRoot $relative) -Force
+            if ($local.PSIsContainer -or ($local.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                throw 'An installer source file is linked or is not a regular file.'
+            }
+            $local.FullName
+        } else { Join-Path $packageRoot $relative }
         $destination = Join-Path $kit $relative
         [IO.Directory]::CreateDirectory((Split-Path -Parent $destination)) | Out-Null
-        if ($relative -ieq 'product\release\toefl-house-erp-app.tar') {
-            Copy-ArchiveInput $file.FullName $destination
-        } else { Copy-Item -LiteralPath $file.FullName -Destination $destination }
+        if ($relative -ieq 'product/release/toefl-house-erp-app.tar') {
+            Copy-ArchiveInput $source $destination
+        } else { Copy-Item -LiteralPath $source -Destination $destination }
     }
     foreach ($required in @('Prepare This PC.ps1', 'Import Offline Runtime.ps1')) {
         if (-not (Test-Path -LiteralPath (Join-Path $kit ('product\windows\' + $required)))) {

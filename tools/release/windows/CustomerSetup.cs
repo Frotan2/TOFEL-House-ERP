@@ -286,6 +286,11 @@ public class CustomerSetup {
         // Let Windows PowerShell build its own module search path. A caller
         // running PowerShell 7 can otherwise supply incompatible modules.
         start.EnvironmentVariables.Remove("PSModulePath");
+#if INTERNAL_UNSIGNED_SETUP
+        // Honor the installed Windows policy, even when a developer shell
+        // launches Setup with a transient process policy.
+        start.EnvironmentVariables.Remove("PSExecutionPolicyPreference");
+#endif
         return start;
     }
 
