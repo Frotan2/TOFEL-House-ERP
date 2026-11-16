@@ -29,3 +29,5 @@ Collect exact-revision receipts for the guarded Owner catalog and timetable setu
 Keep the previous graphical installation and isolated recovery evidence for `f8a851b`. No live host, database or backups are part of this request. The artifact remains a qualification build until the exact Windows installer passes separate clean-client acceptance and the required independent reviews. It neither authorizes a data migration nor supplies the institute's two installation-bound signatures.
 
 All five workflows passed on `baebb2d` and assembled its checksum-bearing Windows qualification installer. The subsequent graphical proxy preparation and certificate export change requires its own five receipts. The packaging job checks the staging feature using the same pinned Caddy archive bundled into that executable.
+
+The backup-only Owner setup passed its disposable-site lifecycle test on `e5b5d14`. Qualify the complete revision again after wiring the new record into the standard permission, validation and audit registries. The new settings leave unrelated business policies unset and keep backup enablement and activation under their existing controls.
