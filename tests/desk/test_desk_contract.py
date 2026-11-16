@@ -1745,11 +1745,14 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                          "toefl_house.operations.owner_configuration.set_backup_enabled")
         self.assertEqual(switch_item["action"]["args"], {"enabled": 1})
         backup_item = backup_section["items"][1]
-        self.assertEqual(backup_item["status"], "Owner configuration required")
+        self.assertEqual(backup_item["status"], "Backup Off")
+        self.assertEqual(backup_item["action"], {
+            "endpoint": "toefl_house.operations.owner_configuration.configure_local_backup_policy",
+            "label": "Save and validate backup settings", "args": {},
+        })
         self.assertIn("decision D17: delete valid older sets beyond the keep count", backup_item["detail"])
-        self.assertIn("backup and activation fail closed", backup_item["detail"])
-        self.assertIn("Owner-approved retention behavior from decision D17",
-                      backup_item["next"])
+        self.assertIn("Backup and activation fail closed", backup_item["detail"])
+        self.assertIn("Back Up Now and Verify Backup", backup_item["next"])
         self.assertIn("no default is supplied", backup_item["next"])
         self.assertIn("owner decision D17", backup_item["stage_definition"])
         # Reporting & Metrics is carried by the owner-operations policy.

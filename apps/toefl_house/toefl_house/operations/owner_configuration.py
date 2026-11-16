@@ -1,9 +1,8 @@
 """Guarded Course Owner policy for the remaining cross-domain business settings.
 
-This is a single global, effective-dated carrier. Existing domain authorities
-remain authoritative where they already exist (Billing Policy and Enrollment
-Exit Policy); this carrier owns only the missing cross-domain terms and
-surfaces them in one Settings-plane record.
+Existing domain authorities remain authoritative where they already exist
+(Billing Policy and Enrollment Exit Policy). The local backup setting can be
+approved without recording unrelated cross-domain Owner Operations terms.
 
 No secrets, credentials, private keys, custodians or authorization grants are
 stored. A public recovery key may be recorded because it cannot decrypt without
@@ -57,6 +56,8 @@ def _bool(value, label):
 
 
 BACKUP_CONTROL = "TH Backup Control"
+BACKUP_POLICY = "TH Backup Policy"
+BACKUP_POLICY_ACTION = "configure_local_backup_policy"
 
 
 def backup_switch_state():
@@ -165,23 +166,7 @@ def _backup_retention_behavior(value):
     return behavior
 
 
-def validate_terms(values, *, allow_legacy_backup=False):
-    review = _int(values.get("reporting_review_days"), "Reporting review days", 1, 366)
-    capacity = _int(values.get("capacity_target"), "Class capacity target", 1, 1000)
-    tax_enabled = _bool(values.get("tax_enabled"), "Tax enabled")
-    rate = values.get("tax_rate")
-    if isinstance(rate, bool):
-        raise ValueError("Tax rate must be numeric")
-    try:
-        rate = float(rate)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Tax rate must be numeric") from exc
-    if not math.isfinite(rate) or not 0 <= rate <= 100:
-        raise ValueError("Tax rate must be between 0 and 100")
-    inclusive = _bool(values.get("tax_inclusive"), "Tax inclusive")
-    transfer = _bool(values.get("transfer_allowed"), "Transfers allowed")
-    withdrawal = _bool(values.get("withdrawal_allowed"), "Withdrawals allowed")
-    notice = _int(values.get("calendar_notice_days"), "Calendar notice days", 0, 366)
+def _validate_backup_terms(values, *, allow_legacy_backup=False):
     custody = str(values.get("custody_requirement") or "").strip()
     if not 1 <= len(custody) <= MAX_CUSTODY:
         raise ValueError("Key custody requirement is required and must be concise")
@@ -214,10 +199,6 @@ def validate_terms(values, *, allow_legacy_backup=False):
 
     reason = foundation.validate_change_reason(values.get("reason") or "")
     return {
-        "reporting_review_days": review, "capacity_target": capacity,
-        "tax_enabled": tax_enabled, "tax_rate": rate,
-        "tax_inclusive": inclusive, "transfer_allowed": transfer,
-        "withdrawal_allowed": withdrawal, "calendar_notice_days": notice,
         "backup_schedule_time": schedule,
         "backup_retention_versions": retention,
         "backup_retention_behavior": retention_behavior,
@@ -225,6 +206,86 @@ def validate_terms(values, *, allow_legacy_backup=False):
         "custody_requirement": custody, "recovery_quorum": quorum,
         "reason": reason,
     }
+
+
+def validate_terms(values, *, allow_legacy_backup=False):
+    review = _int(values.get("reporting_review_days"), "Reporting review days", 1, 366)
+    capacity = _int(values.get("capacity_target"), "Class capacity target", 1, 1000)
+    tax_enabled = _bool(values.get("tax_enabled"), "Tax enabled")
+    rate = values.get("tax_rate")
+    if isinstance(rate, bool):
+        raise ValueError("Tax rate must be numeric")
+    try:
+        rate = float(rate)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Tax rate must be numeric") from exc
+    if not math.isfinite(rate) or not 0 <= rate <= 100:
+        raise ValueError("Tax rate must be between 0 and 100")
+    inclusive = _bool(values.get("tax_inclusive"), "Tax inclusive")
+    transfer = _bool(values.get("transfer_allowed"), "Transfers allowed")
+    withdrawal = _bool(values.get("withdrawal_allowed"), "Withdrawals allowed")
+    notice = _int(values.get("calendar_notice_days"), "Calendar notice days", 0, 366)
+    return {
+        "reporting_review_days": review, "capacity_target": capacity,
+        "tax_enabled": tax_enabled, "tax_rate": rate,
+        "tax_inclusive": inclusive, "transfer_allowed": transfer,
+        "withdrawal_allowed": withdrawal, "calendar_notice_days": notice,
+        **_validate_backup_terms(values, allow_legacy_backup=allow_legacy_backup),
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def configure_local_backup_policy(request_key, backup_schedule_time,
+                                  backup_retention_versions, backup_retention_behavior,
+                                  backup_recovery_public_key, custody_requirement,
+                                  recovery_quorum, reason):
+    """Owner saves and validates explicit local backup terms in one transaction."""
+    payload = {key: value for key, value in locals().items() if key != "request_key"}
+
+    def work(actor):
+        try:
+            terms = _validate_backup_terms(payload)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        # Lock the existing DocType metadata row to serialize even the first
+        # Single save, before any tabSingles rows for this setting exist.
+        frappe.get_doc("DocType", BACKUP_POLICY, for_update=True)
+        terms.update(effective_from=frappe.utils.today(), policy_nonce=secrets.token_hex(16))
+        before = frappe.db.get_value(
+            configuration_audit.AUDIT, {"target": BACKUP_POLICY}, "after_hash",
+            order_by="creation desc", for_update=True) or ""
+        doc = frappe.get_doc(BACKUP_POLICY, BACKUP_POLICY, for_update=True)
+        doc.policy_snapshot = _backup_snapshot_text(terms)
+        doc.save(ignore_permissions=True)
+        return {"status": "Validated", "schedule_time": terms["backup_schedule_time"],
+                "retention_versions": terms["backup_retention_versions"],
+                "retention_behavior": terms["backup_retention_behavior"]}, {
+            "target": BACKUP_POLICY, "before_hash": before,
+            "after_hash": digest(terms),
+        }
+
+    return configuration_audit.execute(BACKUP_POLICY_ACTION, request_key, payload, work)
+
+
+def _backup_snapshot_text(terms):
+    return json.dumps(terms, sort_keys=True, separators=(",", ":"))
+
+
+def validate_backup_policy_snapshot(raw):
+    if not isinstance(raw, str) or not raw:
+        raise ValueError("Backup policy snapshot is missing")
+    supplied = json.loads(raw)
+    if not isinstance(supplied, dict):
+        raise ValueError("Invalid backup policy snapshot")
+    terms = _validate_backup_terms(supplied)
+    effective = rules.parse_date(supplied.get("effective_from"))
+    nonce = supplied.get("policy_nonce")
+    if not isinstance(nonce, str) or not re.fullmatch(r"[0-9a-f]{32}", nonce):
+        raise ValueError("Invalid backup policy identity")
+    terms.update(effective_from=effective, policy_nonce=nonce)
+    if _backup_snapshot_text(terms) != raw:
+        raise ValueError("Invalid backup policy snapshot")
+    return terms
 
 
 def validate_policy(doc):
@@ -472,13 +533,35 @@ def _validated_governing_owner_operations(on_date=None):
     return _governing_owner_terms(doc, rows, on_date)
 
 
+def _validated_backup_terms(on_date=None):
+    # Once the dedicated setting has been audited, never substitute an old
+    # broad Owner Operations policy for a missing or invalid current setting.
+    raw = frappe.db.get_singles_dict(BACKUP_POLICY).get("policy_snapshot")
+    events = frappe.db.get_all(
+        configuration_audit.AUDIT, filters={"target": BACKUP_POLICY},
+        fields=["action", "after_hash", "creation"],
+        order_by="creation desc", limit_page_length=2,
+    )
+    if not raw and not events:
+        return _validated_governing_owner_operations(on_date)
+    terms = validate_backup_policy_snapshot(raw)
+    if (not events or events[0].get("action") != BACKUP_POLICY_ACTION
+            or events[0].get("after_hash") != digest(terms)
+            or not events[0].get("creation")
+            or (len(events) > 1 and (not events[1].get("creation")
+                or events[1]["creation"] >= events[0]["creation"]))):
+        return {}
+    when = rules.parse_date(on_date or frappe.utils.today())
+    return terms if terms["effective_from"] <= when else {}
+
+
 def current_backup_policy(on_date=None):
     """Expose only a currently validated, explicitly enabled backup policy."""
     switch = backup_switch_state()
     if switch["enabled"] is not True:
         return {"configured": False, "status": "OFF"}
     try:
-        terms = _validated_governing_owner_operations(on_date)
+        terms = _validated_backup_terms(on_date)
         if not terms:
             return {"configured": False, "status": "NOT CONFIGURED"}
         schedule_value = terms.get("backup_schedule_time")
@@ -506,6 +589,8 @@ def current_backup_policy(on_date=None):
             "recovery_key_sha256": recovery_key_hash,
             "switch_nonce": switch["switch_nonce"],
         }
+        if "policy_nonce" in terms:
+            identity["policy_nonce"] = terms["policy_nonce"]
         policy_hash = hashlib.sha256(json.dumps(
             identity, sort_keys=True, separators=(",", ":")
         ).encode("utf-8")).hexdigest()
@@ -528,7 +613,10 @@ def current_backup_public_key_b64(on_date=None):
     policy = current_backup_policy(on_date)
     if policy.get("configured") is not True:
         return ""
-    terms = _validated_governing_owner_operations(on_date)
+    try:
+        terms = _validated_backup_terms(on_date)
+    except (TypeError, ValueError, KeyError):
+        return ""
     key = str(terms.get("backup_recovery_public_key") or "").strip()
     if hashlib.sha256(key.encode("utf-8")).hexdigest() != policy.get("recovery_key_sha256"):
         return ""

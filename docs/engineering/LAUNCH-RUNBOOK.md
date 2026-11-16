@@ -101,13 +101,11 @@ Backup & Recovery policy, provision or test key material, register/run the task,
 or start a backup. The only permitted Owner actions are the read-only checks in
 §§7–8.
 
-1. In the Configuration desk's **Backup & Recovery** section, create the
-   Owner policy if absent, then use **Set policy version** and **Validate
-   policy**. Supply approved values for every required Owner field (including
-   reporting, capacity, tax, transfers/withdrawals, calendar, backup time,
-   retention count/behavior, public key, custody, and quorum); do not invent
-   defaults or use
-   placeholders. Generate/obtain the dedicated OpenPGP key pair under the
+1. In **Configuration > Backup & Recovery**, use **Save and validate backup
+   settings**. Enter the approved backup time, keep count, retention behavior,
+   public key, custody requirements and recovery quorum. This form leaves tax,
+   transfer and other deferred business decisions untouched. Use the separate
+   Backup On/Off control once the settings are ready. Obtain the dedicated OpenPGP key pair under the
    approved custody procedure and enter only its ASCII-armored public key.
    The Windows backup task runs as the interactive Windows user who registers
    it; that user session and Docker Desktop/server must be available for the

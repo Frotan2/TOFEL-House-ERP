@@ -39,6 +39,7 @@ KIND_AUTHORITY = {
     "set_portal_flags": "business_policy",
     "create_owner_operations_policy": "business_policy",
     "set_owner_operations_policy_version": "business_policy",
+    "configure_local_backup_policy": "business_policy",
     "set_owner_operations_policy_status": "business_policy",
     "validate_owner_operations_policy": "business_policy",
     "set_backup_enabled": "business_policy",

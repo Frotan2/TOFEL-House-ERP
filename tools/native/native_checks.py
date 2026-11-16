@@ -2165,6 +2165,44 @@ def main():
                 frappe.db.rollback(save_point='ops_life')
                 frappe.set_user('Administrator')
         check('owner-operations-lifecycle-validated-gate-off-switch',owner_operations_lifecycle)
+
+        def independent_backup_first_run():
+            from toefl_house.operations import owner_configuration as backup_config
+
+            def configure(key, count=3):
+                return backup_config.configure_local_backup_policy(
+                    key, '02:30', count, backup_config.RETENTION_DELETE_BEYOND_KEEP,
+                    '-----BEGIN PGP PUBLIC KEY BLOCK-----\nSYNTHETIC-RUNTIME-PROBE-NOT-A-KEY\n'
+                    '-----END PGP PUBLIC KEY BLOCK-----',
+                    'Synthetic Owner custody evidence', 2, 'Synthetic first-run qualification')
+
+            frappe.db.savepoint('backup_first_run')
+            try:
+                assert not frappe.db.count(backup_config.POLICY)
+                denied(lambda: as_user('enrollment_officer', lambda: configure('syn_backup_deny_001')))
+                result = as_user('course_owner', lambda: configure('syn_backup_first_001'))
+                assert result['status'] == 'Validated', result
+                assert as_user('course_owner', lambda: configure('syn_backup_first_001')) == result
+                assert backup_config.current_backup_policy() == {'configured': False, 'status': 'OFF'}
+                backup_config.set_backup_enabled('syn_backup_enable_001', 1)
+                live = backup_config.current_backup_policy()
+                assert live['configured'] and live['schedule_time'] == '02:30' and live['retention_versions'] == 3, live
+                assert not frappe.db.count(backup_config.POLICY)
+                assert backup_config.governing_owner_operations() == {}
+                assert backup_config.current_backup_public_key_b64()
+                configure('syn_backup_change_001', 4)
+                revised = backup_config.current_backup_policy()
+                assert revised['retention_versions'] == 4 and revised['policy_hash'] != live['policy_hash'], revised
+                backup_config.set_backup_enabled('syn_backup_disable_01', 0)
+                assert backup_config.current_backup_policy() == {'configured': False, 'status': 'OFF'}
+                assert backup_config.current_backup_public_key_b64() == ''
+                return {'schedule': live['schedule_time'], 'keep_count': live['retention_versions'],
+                        'owner_operations_policy_created': False}
+            finally:
+                frappe.db.rollback(save_point='backup_first_run')
+                frappe.set_user('Administrator')
+
+        check('independent-backup-first-run-has-no-unapproved-business-terms', independent_backup_first_run)
         from toefl_house.academic import catalog_linkage as linkm
         check('enrollment-linkage-unconfigured-denied',lambda:unavailable(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('s12_nopolicy_0000001',dec['name'])),'No active catalog linkage policy'))
         def linkage_fixture():

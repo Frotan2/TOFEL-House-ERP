@@ -79,7 +79,8 @@ class NoCodeOwnerFormsTests(unittest.TestCase):
             self.assertIn(label, self.gui)
         weekly_step = next(line for line in self.gui.splitlines() if "3. Rooms and weekly patterns" in line)
         self.assertIn('"th-academic-setup"', weekly_step)
-        self.assertIn("authorized scheduler generates and reviews sessions", weekly_step)
+        self.assertIn("Schedule individual sessions in Academic Desk", weekly_step)
+        self.assertIn("approved Class Operations Policy", weekly_step)
         self.assertIn('routeToSource(route)', self.gui)
         self.assertIn("never a request to edit JSON, scripts or database tables", self.gui)
 

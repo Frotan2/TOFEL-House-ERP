@@ -677,7 +677,8 @@ def _timetable_section():
         if not complete:
             next_step = "The full weekly pattern could not be read safely. Review the stored template before editing."
         elif active:
-            next_step = ("Have an authorized scheduler generate sessions for a real class and date range."
+            next_step = ("Use Schedule session on the active class in Academic Desk. "
+                         "Generating a batch from the weekly pattern needs an approved Class Operations Policy."
                          if slots else "Add the approved weekly slots.")
         else:
             next_step = "Reactivate this template before editing its pattern or generating sessions."
@@ -709,7 +710,8 @@ def _timetable_section():
         notes.append("A Course Owner with institute-wide access can create a template. You can review templates in your assigned branches.")
     return section("timetables", "Recurring timetables", "queue", items=items, actions=actions,
                    empty_title="No templates in your scope",
-                   empty_body="Define an approved weekly pattern before asking the scheduler to generate class sessions.",
+                   empty_body=("Record approved weekly patterns here. A scheduler can book an individual "
+                               "session from an active class in Academic Desk."),
                    notes=" ".join(notes))
 
 

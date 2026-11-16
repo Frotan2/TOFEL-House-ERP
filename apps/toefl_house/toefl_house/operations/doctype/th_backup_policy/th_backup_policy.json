@@ -1,0 +1,26 @@
+{
+ "actions": [],
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["policy_snapshot"],
+ "fields": [
+  {
+   "description": "Validated local backup settings, public recovery key and non-secret custody requirements. The private key stays outside the ERP.",
+   "fieldname": "policy_snapshot",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Validated local backup policy",
+   "read_only": 1
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-11-16 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Operations",
+ "name": "TH Backup Policy",
+ "owner": "Administrator",
+ "permissions": [{"role": "Course Owner", "read": 1}],
+ "states": [],
+ "track_changes": 1
+}

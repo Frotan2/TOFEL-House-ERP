@@ -701,10 +701,18 @@ frappe.provide("toefl_house.role_desks");
 	 * signature, adds a fresh idempotency key and submits to the same
 	 * whitelisted, guarded command the command pages use.
 	 */
+	const BACKUP_POLICY_FIELDS = [
+		{ fieldname: "reason", label: "Change reason", fieldtype: "Small Text", reqd: 1 },
+		{ fieldname: "backup_schedule_time", label: "Nightly backup time (local)", fieldtype: "Time", reqd: 1 },
+		{ fieldname: "backup_retention_versions", label: "Backup keep count for deletion mode (minimum 2)", description: "Used only if the Owner explicitly authorizes deletion beyond the count. Preservation mode retains all valid sets and does not rotate them.", fieldtype: "Int", reqd: 1 },
+		{ fieldname: "backup_retention_behavior", label: "Backup retention behavior (Owner decision; no default)", description: "Choose explicitly to preserve all valid sets on the separate local drive or authorize deletion of valid older sets on that drive beyond the keep count. Leaving this unset keeps backup and activation fail-closed.", fieldtype: "Select", options: "\nPreserve all valid backup sets\nDelete valid older sets beyond keep count", reqd: 1 },
+		{ fieldname: "backup_recovery_public_key", label: "Recovery public key (ASCII-armored; public only)", fieldtype: "Small Text", reqd: 1 },
+		{ fieldname: "custody_requirement", label: "Key custody requirement", fieldtype: "Small Text", reqd: 1 },
+		{ fieldname: "recovery_quorum", label: "Recovery quorum", fieldtype: "Int", reqd: 1 },
+	];
 	const OWNER_POLICY_VERSION_FIELDS = [
 		{ fieldname: "policy", label: "Owner policy", fieldtype: "Data", reqd: 1, read_only: 1 },
 		{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
-		{ fieldname: "reason", label: "Change reason", fieldtype: "Small Text", reqd: 1 },
 		{ fieldname: "reporting_review_days", label: "Reporting review interval (decision input only; days)", description: "No current report runner consumes this value.", fieldtype: "Int", reqd: 1 },
 		{ fieldname: "capacity_target", label: "Class capacity target (decision input only)", description: "Planning target only. Class membership enforcement uses native Student Group max_strength, not this value.", fieldtype: "Int", reqd: 1 },
 		{ fieldname: "tax_enabled", label: "Tax enabled (decision input only)", description: "No current tax runtime reads these fields. Native ERPNext tax configuration remains authoritative.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
@@ -713,12 +721,7 @@ frappe.provide("toefl_house.role_desks");
 		{ fieldname: "transfer_allowed", label: "Transfers allowed (decision input only)", description: "No current transfer command reads this value; it does not enable transfer behavior.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
 		{ fieldname: "withdrawal_allowed", label: "Withdrawals allowed (decision input only)", description: "Withdrawals and dismissals are governed by TH Enrollment Exit Policy; this field is not consumed by that resolver.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
 		{ fieldname: "calendar_notice_days", label: "Calendar notice (decision input only; days)", description: "No current calendar or lifecycle scheduler enforces this value.", fieldtype: "Int", reqd: 1 },
-		{ fieldname: "backup_schedule_time", label: "Nightly backup time (local)", fieldtype: "Time", reqd: 1 },
-		{ fieldname: "backup_retention_versions", label: "Backup keep count for deletion mode (minimum 2)", description: "Used only if the Owner explicitly authorizes deletion beyond the count. Preservation mode retains all valid sets and does not rotate them.", fieldtype: "Int", reqd: 1 },
-		{ fieldname: "backup_retention_behavior", label: "Backup retention behavior (Owner decision; no default)", description: "Choose explicitly to preserve all valid sets on the separate local drive or authorize deletion of valid older sets on that drive beyond the keep count. Leaving this unset keeps backup and activation fail-closed.", fieldtype: "Select", options: "\nPreserve all valid backup sets\nDelete valid older sets beyond keep count", reqd: 1 },
-		{ fieldname: "backup_recovery_public_key", label: "Recovery public key (ASCII-armored; public only)", fieldtype: "Small Text", reqd: 1 },
-		{ fieldname: "custody_requirement", label: "Key custody requirement", fieldtype: "Small Text", reqd: 1 },
-		{ fieldname: "recovery_quorum", label: "Recovery quorum", fieldtype: "Int", reqd: 1 },
+		...BACKUP_POLICY_FIELDS,
 	];
 	// Same reviewed numeric weights for first setup and later revisions.
 	const ACADEMIC_WEIGHT_FIELDS = Object.freeze([
@@ -822,6 +825,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "enabled", label: "Backup On / Off", description: "Off stops future TOEFL House backup runs without deleting existing backup files. On still requires the verified backup configuration and separate recovery disk.", fieldtype: "Check" },
 		],
 		"toefl_house.operations.owner_configuration.set_owner_operations_policy_version": OWNER_POLICY_VERSION_FIELDS,
+		"toefl_house.operations.owner_configuration.configure_local_backup_policy": BACKUP_POLICY_FIELDS,
 		"toefl_house.operations.owner_configuration.validate_owner_operations_policy": [
 			{ fieldname: "policy", label: "Owner policy", fieldtype: "Data", reqd: 1, read_only: 1 },
 		],
@@ -2188,7 +2192,7 @@ frappe.provide("toefl_house.role_desks");
 		const steps = [
 			["1. Courses and tuition", "Check the four programs, eleven levels and approved full-semester AFN prices.", "th-academic-setup"],
 			["2. Academic and billing rules", "Choose percentages, waiting days, billing options and approval roles using forms.", "th-configuration"],
-			["3. Rooms and weekly patterns", "Enter verified room capacity and approved weekly slots. An authorized scheduler generates and reviews sessions for each real class.", "th-academic-setup"],
+			["3. Rooms and weekly patterns", "Enter verified room capacity and approved weekly slots. Schedule individual sessions in Academic Desk. Generate a range of sessions only after an approved Class Operations Policy is in effect.", "th-academic-setup"],
 			["4. Finance and daily work", "Use guided receivables, collections and approved instructor contracts, never source files.", "th-finance-desk"],
 			["5. Review before opening", "Check each staff role, backup recovery and operational readiness with the Owner.", "th-owner-cockpit"],
 		];

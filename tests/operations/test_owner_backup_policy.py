@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import re
+import secrets
 from datetime import datetime, time as _clock_time, timedelta
 from pathlib import Path
 import unittest
@@ -20,7 +21,9 @@ TEST_PUBLIC_KEY = (
 def load_policy_helpers():
     source = ast.parse(SOURCE.read_text(encoding="utf-8"))
     names = {"_int", "_bool", "backup_switch_state", "_backup_schedule_time", "_backup_public_key",
-             "_backup_retention_behavior", "validate_terms", "_version_rows", "_governing_owner_terms",
+             "_backup_retention_behavior", "_validate_backup_terms", "validate_terms",
+             "configure_local_backup_policy", "_backup_snapshot_text", "validate_backup_policy_snapshot",
+             "_validated_backup_terms", "_version_rows", "_governing_owner_terms",
              "_owner_policy_validation_is_current",
              "_validated_governing_owner_operations", "governing_owner_operations",
              "current_backup_policy", "current_backup_public_key_b64"}
@@ -29,7 +32,8 @@ def load_policy_helpers():
     constants = [node for node in source.body
                  if isinstance(node, ast.Assign)
                  and any(isinstance(target, ast.Name) and target.id in {
-                     "BACKUP_CONTROL", "MIN_BACKUP_VERSIONS", "MAX_BACKUP_VERSIONS",
+                     "BACKUP_CONTROL", "BACKUP_POLICY", "BACKUP_POLICY_ACTION",
+                     "MIN_BACKUP_VERSIONS", "MAX_BACKUP_VERSIONS",
                      "MAX_BACKUP_PUBLIC_KEY", "MAX_CUSTODY",
                      "RETENTION_PRESERVE_ALL", "RETENTION_DELETE_BEYOND_KEEP",
                      "BACKUP_RETENTION_BEHAVIORS"
@@ -45,6 +49,9 @@ def load_policy_helpers():
         "json": json,
         "math": __import__("math"),
         "re": re,
+        "secrets": secrets,
+        "digest": lambda value: hashlib.sha256(
+            json.dumps(value, sort_keys=True).encode("utf-8")).hexdigest(),
         "POLICY": "TH Owner Operations Policy",
         "GOVERNING_FIELDS": (
             "effective_from", "reporting_review_days", "capacity_target",
@@ -56,8 +63,11 @@ def load_policy_helpers():
         ),
         "configuration_audit": SimpleNamespace(AUDIT="TH Configuration Audit Event"),
         "frappe": SimpleNamespace(
+            whitelist=lambda **kwargs: (lambda func: func),
+            ValidationError=ValueError,
             db=SimpleNamespace(
                 get_all=lambda *args, **kwargs: [],
+                get_singles_dict=lambda _dt: {},
                 # Synthetic fixture explicitly switches backup On. Production
                 # without a saved switch must stay Off.
                 get_single_value=lambda _dt, field: "1" if field == "enabled"
@@ -65,6 +75,7 @@ def load_policy_helpers():
             ),
             utils=SimpleNamespace(today=lambda: "2026-10-08"),
         ),
+        "rules": SimpleNamespace(parse_date=lambda value: datetime.fromisoformat(value).date().isoformat()),
         "MIN_BACKUP_VERSIONS": 2,
         "MAX_BACKUP_VERSIONS": 10000,
         "MAX_BACKUP_PUBLIC_KEY": 65536,
@@ -109,6 +120,60 @@ def valid_terms(**updates):
 class BackupPolicyValidationTests(unittest.TestCase):
     def setUp(self):
         self.policy = load_policy_helpers()
+
+    def test_backup_only_command_commits_exact_validated_snapshot_and_rotates_receipts(self):
+        action = self.policy["BACKUP_POLICY_ACTION"]
+        target = self.policy["BACKUP_POLICY"]
+        events = []
+        doc = SimpleNamespace(policy_snapshot="", save=lambda **_kw: None)
+        frappe = self.policy["frappe"]
+        frappe.get_doc = lambda _doctype, name, **_kw: doc if name == target else None
+        frappe.db.get_singles_dict = lambda _dt: {"policy_snapshot": doc.policy_snapshot}
+        frappe.db.get_all = lambda _dt, filters, **_kw: events[:2] if filters["target"] == target else []
+        frappe.db.get_value = lambda *args, **kwargs: events[0]["after_hash"] if events else None
+        self.policy["_validated_governing_owner_operations"] = lambda _date=None: (
+            self.fail("Dedicated settings must not read unrelated Owner policy"))
+
+        def execute(kind, key, payload, work):
+            self.assertEqual(kind, action)
+            result, event = work("owner@example.invalid")
+            events.insert(0, dict(event, action=kind, creation=f"2026-10-08 12:00:0{len(events)}"))
+            return result
+
+        self.policy["configuration_audit"].execute = execute
+        terms = {k: v for k, v in valid_terms().items() if k.startswith("backup_") or k in {
+            "custody_requirement", "recovery_quorum", "reason"}}
+        configure = self.policy["configure_local_backup_policy"]
+        with self.assertRaisesRegex(ValueError, "Recovery quorum"):
+            configure("bad-quorum", **dict(terms, recovery_quorum=None))
+        with self.assertRaisesRegex(ValueError, "Key custody requirement"):
+            configure("bad-custody", **dict(terms, custody_requirement=""))
+        self.assertEqual(events, [])
+
+        result = configure("first-valid", **terms)
+        self.assertEqual(result["status"], "Validated")
+        self.assertNotIn("backup_recovery_public_key", result)
+        self.assertEqual(set(json.loads(doc.policy_snapshot)), {*terms, "effective_from", "policy_nonce"})
+        previous = self.policy["current_backup_policy"]()
+        self.assertEqual(previous["schedule_time"], "02:30")
+        self.assertEqual(base64.b64decode(self.policy["current_backup_public_key_b64"]()).decode(), TEST_PUBLIC_KEY)
+
+        earlier_snapshot = doc.policy_snapshot
+        configure("second-valid", **terms)
+        self.assertEqual(events[0]["before_hash"], events[1]["after_hash"])
+        self.assertNotEqual(previous["policy_hash"], self.policy["current_backup_policy"]()["policy_hash"])
+
+        # Missing/malformed state, a stale snapshot and ambiguous evidence
+        # all fail closed instead of reverting to the legacy policy.
+        current_snapshot = doc.policy_snapshot
+        for raw in ("", "{", earlier_snapshot):
+            doc.policy_snapshot = raw
+            self.assertEqual(self.policy["current_backup_policy"](),
+                             {"configured": False, "status": "NOT CONFIGURED"})
+            self.assertEqual(self.policy["current_backup_public_key_b64"](), "")
+        doc.policy_snapshot = current_snapshot
+        events[1]["creation"] = events[0]["creation"]
+        self.assertFalse(self.policy["current_backup_policy"]()["configured"])
 
     def test_normalizes_native_time_values_without_defaulting(self):
         terms = self.policy["validate_terms"](valid_terms(backup_schedule_time="02:30:00"))
@@ -264,7 +329,8 @@ class BackupPolicyValidationTests(unittest.TestCase):
         )
         self.policy["_policy_doc"] = lambda: doc
         events = []
-        self.policy["frappe"].db.get_all = lambda *args, **kwargs: events
+        self.policy["frappe"].db.get_all = lambda _dt, filters, **_kw: (
+            events if filters["target"] == doc.name else [])
         resolve = self.policy["_validated_governing_owner_operations"]
         self.assertEqual(resolve(), {}, "missing validation evidence must not resolve backup policy")
         self.assertEqual(
