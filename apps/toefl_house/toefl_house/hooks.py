@@ -81,7 +81,7 @@ has_permission = {
                  "TH Adjustment Posting Policy",
                  "TH Alerting Policy",
                  "TH Guardian Lifecycle Policy", "TH Owner Operations Policy",
-                 "TH Backup Control",
+                 "TH Backup Control", "TH Backup Policy",
                  "TH Notification", "TH Notification Dispatch Rule",
                  "TH Portal Configuration", "TH Guardian Consent",
                  "TH Portal Announcement",
@@ -116,6 +116,7 @@ for _dt in ("TH Notification", "TH Notification Dispatch Rule",
     has_permission[_dt] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Owner Operations Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Backup Control"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Backup Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Operation"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Class Operations Policy"] = "toefl_house.permissions.configuration_has_permission"
@@ -179,6 +180,7 @@ for _dt in ("TH Notification", "TH Notification Dispatch Rule",
     permission_query_conditions[_dt] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Owner Operations Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Backup Control"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Backup Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Operation"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Class Operations Policy"] = "toefl_house.permissions.configuration_query"
@@ -294,6 +296,9 @@ doc_events = {
     },
     "TH Backup Control": {
         "validate": "toefl_house.operations.doctype.th_backup_control.th_backup_control.validate",
+    },
+    "TH Backup Policy": {
+        "validate": "toefl_house.operations.doctype.th_backup_policy.th_backup_policy.validate",
     },
     "TH Guardian Consent": {
         "validate": "toefl_house.operations.doctype.th_guardian_consent.th_guardian_consent.validate",
