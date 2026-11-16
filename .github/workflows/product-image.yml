@@ -2161,6 +2161,7 @@ jobs:
       - name: Assemble the actual single-file offline TEST installer
         shell: powershell
         run: |
+          & 'tests/foundation/test_windows_private_https.ps1' -PinnedArchive (Join-Path $env:RUNNER_TEMP 'caddy-windows-amd64.zip')
           $destination = Join-Path $env:RUNNER_TEMP 'customer-installer'
           New-Item -ItemType Directory -Path $destination -Force | Out-Null
           $output = Join-Path $destination 'TOEFL-House-ERP-Setup-TEST.exe'

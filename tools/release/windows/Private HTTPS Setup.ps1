@@ -92,21 +92,35 @@ function Confirm-LocalBindAddress([string]$BindAddress) {
     }
 }
 
-function Save-NewPrivateHttpsConfiguration([string]$Path, [string]$Configuration) {
+function Assert-PlainLocalDirectory([string]$Path) {
     if ($Path -cnotmatch '\A[A-Za-z]:\\') {
         throw 'Choose an existing folder on a local Windows drive.'
     }
-    $fullPath = [IO.Path]::GetFullPath($Path)
-    if ([IO.Path]::GetFileName($fullPath) -ine 'Caddyfile') {
-        throw 'Save the new configuration with the file name Caddyfile and no extension.'
-    }
-    $folder = [IO.DirectoryInfo]::new([IO.Path]::GetDirectoryName($fullPath))
+    $folder = [IO.DirectoryInfo]::new([IO.Path]::GetFullPath($Path))
     while ($null -ne $folder) {
         if (-not $folder.Exists -or ($folder.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
             throw 'Choose an existing local folder without redirected folders or symbolic links.'
         }
         $folder = $folder.Parent
     }
+}
+
+function Open-PlainLocalFile([string]$Path) {
+    Assert-PlainLocalDirectory ([IO.Path]::GetDirectoryName($Path))
+    $file = [IO.FileInfo]::new($Path)
+    if (!$file.Exists -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'The expected local file is missing or redirected.'
+    }
+    return [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+}
+
+function Save-NewPrivateHttpsConfiguration([string]$Path, [string]$Configuration) {
+    if ($Path -cnotmatch '\A[A-Za-z]:\\') { throw 'Choose a file on a local Windows drive.' }
+    $fullPath = [IO.Path]::GetFullPath($Path)
+    if ([IO.Path]::GetFileName($fullPath) -ine 'Caddyfile') {
+        throw 'Save the new configuration with the file name Caddyfile and no extension.'
+    }
+    Assert-PlainLocalDirectory ([IO.Path]::GetDirectoryName($fullPath))
     $stream = [IO.File]::Open($fullPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
     try {
         $bytes = [Text.UTF8Encoding]::new($false).GetBytes($Configuration)
@@ -116,6 +130,104 @@ function Save-NewPrivateHttpsConfiguration([string]$Path, [string]$Configuration
     }
 }
 
+function Set-ProxyDownloadMarker([string]$Executable, [string[]]$Origins) {
+    # The executable came from a vendor download, even when the embedded ZIP
+    # carries no zone stream. Preserve a restricted-zone mark if present.
+    $mark = "[ZoneTransfer]`r`nZoneId=3`r`n"
+    foreach ($origin in $Origins) {
+        $streams = @(Get-Item -LiteralPath $origin -Stream '*' | Where-Object Stream -CEQ 'Zone.Identifier')
+        if (!$streams.Count) { continue }
+        if ($streams[0].Length -gt 4096) { throw 'The proxy download marker is invalid.' }
+        $inputMark = Get-Content -LiteralPath $origin -Stream Zone.Identifier -Raw
+        if ($inputMark -match '(?m)^ZoneId=4\r?$') { $mark = "[ZoneTransfer]`r`nZoneId=4`r`n" }
+    }
+    Set-Content -LiteralPath $Executable -Stream Zone.Identifier -Value $mark -Encoding Ascii -NoNewline
+}
+
+function Save-PrivateProxyFiles([string]$Parent, [string]$Archive, [string]$Configuration) {
+    Assert-PlainLocalDirectory $Parent
+    $target = Join-Path $Parent 'TOEFL House ERP Private HTTPS'
+    if (Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue) {
+        throw 'A proxy files folder already exists. Choose a new destination folder.'
+    }
+    Add-Type -AssemblyName System.IO.Compression
+    $source = Open-PlainLocalFile $Archive
+    $stage = $null
+    try {
+        if ($source.Length -lt 1 -or $source.Length -gt 64MB) {
+            throw 'The bundled proxy archive has an invalid size.'
+        }
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { $digest = [BitConverter]::ToString($sha.ComputeHash($source)).Replace('-', '') }
+        finally { $sha.Dispose() }
+        if ($digest -ine 'ad93112d335ee687100c4c9f11bced16ca590377976b7fe7883882b9e797e472') {
+            throw 'The bundled proxy archive failed its release checksum.'
+        }
+        $source.Position = 0
+        $zip = [IO.Compression.ZipArchive]::new($source, [IO.Compression.ZipArchiveMode]::Read, $true)
+        try {
+            $entries = @($zip.Entries | Where-Object FullName -CEQ 'caddy.exe')
+            if ($entries.Count -ne 1 -or $entries[0].Length -lt 1 -or $entries[0].Length -gt 160MB) {
+                throw 'The verified proxy archive does not contain one Windows executable.'
+            }
+            $stage = Join-Path $Parent ('.toefl-https-' + [guid]::NewGuid().ToString('N'))
+            [void][IO.Directory]::CreateDirectory($stage)
+            $entry = $entries[0].Open()
+            try {
+                $exe = [IO.File]::Open((Join-Path $stage 'caddy.exe'), [IO.FileMode]::CreateNew,
+                    [IO.FileAccess]::Write, [IO.FileShare]::None)
+                try {
+                    $entry.CopyTo($exe)
+                    if ($exe.Length -ne $entries[0].Length) { throw 'The proxy executable was not fully extracted.' }
+                } finally { $exe.Dispose() }
+            } finally { $entry.Dispose() }
+            Set-ProxyDownloadMarker (Join-Path $stage 'caddy.exe') @($Archive, $PSCommandPath)
+            Save-NewPrivateHttpsConfiguration (Join-Path $stage 'Caddyfile') $Configuration
+        } finally { $zip.Dispose() }
+        [IO.Directory]::Move($stage, $target)
+        $stage = $null
+        return $target
+    } finally {
+        $source.Dispose()
+        if ($stage) {
+            # Only remove our two named output files inside our newly created staging directory.
+            Assert-PlainLocalDirectory $stage
+            [IO.File]::Delete((Join-Path $stage 'caddy.exe'))
+            [IO.File]::Delete((Join-Path $stage 'Caddyfile'))
+            [IO.Directory]::Delete($stage)
+        }
+    }
+}
+
+function Read-PrivateHttpsPublicCertificate([string]$Path) {
+    $source = Open-PlainLocalFile $Path
+    try {
+        if ($source.Length -lt 1 -or $source.Length -gt 16384) {
+            throw 'The public certificate file has an invalid size.'
+        }
+        $reader = [IO.StreamReader]::new($source)
+        try { $pem = $reader.ReadToEnd() }
+        finally { $reader.Dispose() }
+    } finally { $source.Dispose() }
+    if ($pem -cnotmatch '\A-----BEGIN CERTIFICATE-----\r?\n([A-Za-z0-9+/=\r\n]+)-----END CERTIFICATE-----\s*\z') {
+        throw 'The file must contain exactly one public PEM certificate.'
+    }
+    $der = [Convert]::FromBase64String($Matches[1])
+    if ([Security.Cryptography.X509Certificates.X509Certificate2]::GetCertContentType($der) -ne 'Cert') {
+        throw 'The input is not a public X.509 certificate.'
+    }
+    $certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($der)
+    try {
+        $constraints = @($certificate.Extensions | Where-Object { $_.Oid.Value -ceq '2.5.29.19' })
+        if ($certificate.HasPrivateKey -or $certificate.Subject -cne $certificate.Issuer -or
+            $constraints.Count -ne 1 -or -not $constraints[0].CertificateAuthority -or
+            $certificate.NotBefore -gt (Get-Date) -or $certificate.NotAfter -le (Get-Date)) {
+            throw 'The file is not a currently valid public CA certificate.'
+        }
+        return ,$certificate.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+    } finally { $certificate.Dispose() }
+}
+
 if ($FunctionsOnly) { return }
 
 Add-Type -AssemblyName System.Windows.Forms,System.Drawing
@@ -123,7 +235,7 @@ Add-Type -AssemblyName System.Windows.Forms,System.Drawing
 
 $form = New-Object Windows.Forms.Form
 $form.Text = 'TOEFL House ERP - Private HTTPS'
-$form.ClientSize = New-Object Drawing.Size(640, 410)
+$form.ClientSize = New-Object Drawing.Size(640, 450)
 $form.FormBorderStyle = [Windows.Forms.FormBorderStyle]::FixedDialog
 $form.MaximizeBox = $false
 $form.MinimizeBox = $false
@@ -145,7 +257,7 @@ function Add-FormField([string]$Label, [int]$Top, [int]$MaxLength) {
     return $field
 }
 
-Add-FormLabel 'Use the values approved by your institute network administrator. This saves a Caddy configuration file. Service setup, firewall scope and certificate trust are separate administrator steps.' 19 60
+Add-FormLabel 'Use the values approved by your institute network administrator. Prepare the proxy files here. Follow the guide to set up the Windows task, firewall and device trust.' 19 60
 $dns = Add-FormField 'Private ERP DNS name' 86 253
 $bind = Add-FormField 'Reserved private IPv4 address on this PC' 146 15
 $cidr = Add-FormField 'Approved staff IPv4 network and prefix' 206 18
@@ -159,14 +271,70 @@ $save.Text = 'Save new Caddyfile'
 $save.SetBounds(320, 345, 170, 37)
 $save.Enabled = $false
 $form.Controls.Add($save)
+$prepare = New-Object Windows.Forms.Button
+$prepare.Text = 'Prepare proxy files'
+$prepare.SetBounds(22, 345, 176, 37)
+$prepare.Enabled = $false
+$form.Controls.Add($prepare)
+$export = New-Object Windows.Forms.Button
+$export.Text = 'Export public CA certificate'
+$export.SetBounds(22, 395, 286, 36)
+$form.Controls.Add($export)
 $close = New-Object Windows.Forms.Button
 $close.Text = 'Close'
 $close.SetBounds(505, 345, 113, 37)
 $close.DialogResult = [Windows.Forms.DialogResult]::Cancel
 $form.Controls.Add($close)
-$form.AcceptButton = $save
+$form.AcceptButton = $prepare
 $form.CancelButton = $close
-$confirm.Add_CheckedChanged({ $save.Enabled = $confirm.Checked })
+$confirm.Add_CheckedChanged({
+    $save.Enabled = $confirm.Checked
+    $prepare.Enabled = $confirm.Checked
+})
+$prepare.Add_Click({
+    try {
+        $configuration = ConvertTo-PrivateHttpsConfiguration $dns.Text.Trim() $bind.Text.Trim() $cidr.Text.Trim() (Join-Path $PSScriptRoot 'Caddyfile.template')
+        Confirm-LocalBindAddress $bind.Text.Trim()
+        $picker = New-Object Windows.Forms.FolderBrowserDialog
+        try {
+            $picker.Description = 'Choose a local folder for the verified proxy files.'
+            if ($picker.ShowDialog($form) -ne [Windows.Forms.DialogResult]::OK) { return }
+            $output = Save-PrivateProxyFiles $picker.SelectedPath (Join-Path $PSScriptRoot 'caddy-windows-amd64.zip') $configuration
+        } finally { $picker.Dispose() }
+        [void][Windows.Forms.MessageBox]::Show($form,
+            "Verified proxy files saved in $output. Apply the file permissions, task and firewall steps in the guide.",
+            'Proxy files ready', 'OK', 'Information')
+    } catch {
+        [void][Windows.Forms.MessageBox]::Show($form, $_.Exception.Message, 'Private HTTPS setup', 'OK', 'Warning')
+    }
+})
+$export.Add_Click({
+    try {
+        $root = 'C:\ProgramData\TOEFL House ERP\Private HTTPS\certificates\pki\authorities\local\root.crt'
+        [byte[]]$public = Read-PrivateHttpsPublicCertificate $root
+        $picker = New-Object Windows.Forms.SaveFileDialog
+        try {
+            $picker.Title = 'Save the public CA certificate'
+            $picker.FileName = 'TOEFL House ERP Staff CA.cer'
+            $picker.Filter = 'Public Windows certificate (*.cer)|*.cer'
+            $picker.DefaultExt = 'cer'
+            if ($picker.ShowDialog($form) -ne [Windows.Forms.DialogResult]::OK) { return }
+            if ([IO.Path]::GetExtension($picker.FileName) -ine '.cer') { throw 'Choose an unused .cer file.' }
+            Assert-PlainLocalDirectory ([IO.Path]::GetDirectoryName($picker.FileName))
+            $file = [IO.File]::Open($picker.FileName, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            try { $file.Write($public, 0, $public.Length) }
+            finally { $file.Dispose() }
+        } finally { $picker.Dispose() }
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { $hash = [BitConverter]::ToString($sha.ComputeHash($public)).Replace('-', '') }
+        finally { $sha.Dispose() }
+        [void][Windows.Forms.MessageBox]::Show($form,
+            "Public certificate saved. SHA-256: $hash`r`nConfirm it to staff through a separate trusted channel.",
+            'Public certificate exported', 'OK', 'Information')
+    } catch {
+        [void][Windows.Forms.MessageBox]::Show($form, $_.Exception.Message, 'Public certificate export', 'OK', 'Warning')
+    }
+})
 $save.Add_Click({
     try {
         $name = $dns.Text.Trim()
@@ -196,11 +364,11 @@ $save.Add_Click({
 
 try {
     if ($SmokeTest) {
-        if ($save.Enabled) { throw 'Save must be disabled without confirmation.' }
+        if ($save.Enabled -or $prepare.Enabled) { throw 'Proxy preparation must begin disabled.' }
         $confirm.Checked = $true
-        if (-not $save.Enabled) { throw 'Save did not respond to confirmation.' }
+        if (-not $save.Enabled -or -not $prepare.Enabled) { throw 'Proxy preparation did not enable.' }
         $confirm.Checked = $false
-        if ($save.Enabled) { throw 'Save remained enabled after confirmation changed.' }
+        if ($save.Enabled -or $prepare.Enabled) { throw 'Proxy preparation remained enabled.' }
         'Private HTTPS form initialized.'
         return
     }

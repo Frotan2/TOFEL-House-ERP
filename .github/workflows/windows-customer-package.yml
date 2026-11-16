@@ -92,7 +92,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($test in @('test_windows_activation_import.ps1','test_windows_backup_physical.ps1')) {
+          foreach ($test in @('test_windows_activation_import.ps1','test_windows_backup_physical.ps1','test_windows_private_https.ps1')) {
             & powershell.exe -NoLogo -NoProfile -STA -File (Join-Path 'tests/foundation' $test)
             if ($LASTEXITCODE -ne 0) { throw "Windows qualification failed for $test." }
           }
