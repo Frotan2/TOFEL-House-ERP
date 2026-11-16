@@ -4,7 +4,9 @@ $tokens = $null
 $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw ($errors | Out-String) }
-$names = @('Get-RegularLocalItem', 'Read-ApprovalInput', 'Assert-NewApprovalTargets', 'Publish-InternalApprovals')
+$names = @('Get-RegularLocalItem', 'Read-ApprovalInput', 'Get-AuthenticatedPublicRecord',
+    'Assert-ProtectedApprovalStorage', 'Assert-ProtectedEnrollmentDirectory', 'Publish-InitialTrust',
+    'Assert-NewApprovalTargets', 'Publish-InternalApprovals')
 foreach ($node in $ast.EndBlock.Statements) {
     if ($node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $names) {
         . ([scriptblock]::Create($node.Extent.Text))
@@ -32,9 +34,33 @@ function Expect-Refusal([scriptblock]$Action, [string]$Pattern) {
 }
 try {
     Expect-Refusal { Assert-NewApprovalTargets $directory } '*cannot find path*'
-    [IO.File]::WriteAllText($trust, 'already registered fixture')
+    Expect-Refusal { Publish-InitialTrust $directory $approved['internal-activation.json'] } '*Windows protection*'
+    $acl = Get-Acl -LiteralPath $root
+    $acl.SetAccessRuleProtection($true, $false)
+    foreach ($sid in @([Security.Principal.WindowsIdentity]::GetCurrent().User.Value, 'S-1-5-18', 'S-1-5-32-544')) {
+        $rule = [Security.AccessControl.FileSystemAccessRule]::new(
+            [Security.Principal.SecurityIdentifier]::new($sid), 'FullControl',
+            'ContainerInherit,ObjectInherit', 'None', 'Allow')
+        $acl.SetAccessRule($rule)
+    }
+    Set-Acl -LiteralPath $root -AclObject $acl
+    Publish-InitialTrust $directory $approved['internal-activation.json']
+    Expect-Refusal { Publish-InitialTrust $directory $approved['internal-activation.owner.sig.json'] } '*already exist*'
+    $trustAcl = Get-Acl -LiteralPath $trust
+    $unsafeAcl = Get-Acl -LiteralPath $trust
+    $unsafeAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new(
+        [Security.Principal.SecurityIdentifier]::new('S-1-5-32-545'), 'Write', 'Allow'))
+    Set-Acl -LiteralPath $trust -AclObject $unsafeAcl
+    Expect-Refusal { Assert-NewApprovalTargets $directory } '*Windows protection*'
+    Set-Acl -LiteralPath $trust -AclObject $trustAcl
     $originalTrustHash = (Get-FileHash -LiteralPath $trust).Hash
     [IO.File]::WriteAllBytes($source, $approved['internal-activation.json'])
+    $recordHash = (Get-FileHash -LiteralPath $source).Hash
+    if ((Get-AuthenticatedPublicRecord $source $recordHash) -cne
+        [Convert]::ToBase64String($approved['internal-activation.json'])) {
+        throw 'Enrollment did not retain the authenticated public record.'
+    }
+    Expect-Refusal { Get-AuthenticatedPublicRecord $source ('c' * 64) } '*confirmed SHA-256*'
     $fromDisk = Read-ApprovalInput $source
     if ($fromDisk -isnot [byte[]] -or
         [Convert]::ToBase64String($fromDisk) -ne [Convert]::ToBase64String($approved['internal-activation.json'])) {

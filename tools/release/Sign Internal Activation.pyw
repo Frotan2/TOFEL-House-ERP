@@ -29,6 +29,39 @@ def _regular_file(path):
         raise ValueError("Select a regular file from the approved offline location.")
 
 
+def export_public_record(role_name, identity, key_id, private_key, openssl, output_dir, passphrase):
+    if role_name not in ROLES or not identity.strip() or len(identity) > 140:
+        raise ValueError("Enter your approved name and role.")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{2,63}", key_id):
+        raise ValueError("Use 3–64 lowercase letters, numbers, dots, underscores or hyphens; begin with a letter or number.")
+    _regular_file(private_key)
+    _regular_file(openssl)
+    if not output_dir.is_dir() or output_dir.is_symlink():
+        raise ValueError("Choose the public record output folder.")
+    if len(passphrase) > 4096 or any(char in passphrase for char in (b"\r", b"\n", b"\0")):
+        raise ValueError("The passphrase contains an unsupported character or is too long.")
+    role, _ = ROLES[role_name]
+    output = output_dir / f"internal-activation.{role}.public.json"
+    if output.exists():
+        raise ValueError("That public record already exists. Choose a different output folder.")
+    with tempfile.TemporaryDirectory(prefix="toefl-public-key-") as temporary:
+        record = Path(temporary) / "key.json"
+        completed = subprocess.run(
+            [sys.executable, "-I", str(SIGNER), "trust-store", "--key-id", key_id,
+             "--internal-approver-role", role, "--internal-approver-identity", identity,
+             "--private-key", str(private_key), "--openssl", str(openssl),
+             "--out", str(record), "--passphrase-stdin"],
+            input=passphrase, capture_output=True, check=False, timeout=45,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        if completed.returncode:
+            raise ValueError("Public record export failed. Check your approved RSA key, passphrase, and OpenSSL.")
+        data = record.read_bytes()
+        with output.open("xb") as file:
+            file.write(data)
+    return output, hashlib.sha256(data).hexdigest()
+
+
 def load_request(path):
     _regular_file(path)
     with path.open("rb") as file:
@@ -165,7 +198,7 @@ class SigningWindow:
             ("private_key", "Choose your private RSA key", "Private key selected",
              [("RSA key", "*.pem *.key")]),
             ("openssl", "Choose approved OpenSSL", "OpenSSL selected", [("Windows executable", "*.exe")]),
-            ("output_dir", "Choose signature folder", "Signature output folder selected", None),
+            ("output_dir", "Choose output folder", "Output folder selected", None),
         )
         for row, (attribute, label, selected, types) in enumerate(choices, start=6):
             state = tk.StringVar(value="Awaiting selection")
@@ -177,6 +210,8 @@ class SigningWindow:
         ttk.Entry(layout, textvariable=self.passphrase, show="*").grid(row=9, column=1, sticky="ew")
         self.sign_button = ttk.Button(layout, text="Sign my approval", command=self.sign)
         self.sign_button.grid(row=10, column=1, sticky="e", pady=(8, 0))
+        self.export_button = ttk.Button(layout, text="Export my public key", command=self.export)
+        self.export_button.grid(row=10, column=0, sticky="w", pady=(8, 0))
 
     def choose_request(self):
         chosen = filedialog.askopenfilename(parent=self.root, filetypes=[("Activation request", "*.json")])
@@ -220,6 +255,38 @@ class SigningWindow:
         message = str(error) if isinstance(error, ValueError) else "The selected file or tool could not be used."
         messagebox.showerror("Approval was not signed", message, parent=self.root)
 
+    def export(self):
+        if not all((self.private_key, self.openssl, self.output_dir, self.role.get() in ROLES)):
+            messagebox.showerror("Public record not exported",
+                                 "Choose your role, private key, approved OpenSSL, and output folder.", parent=self.root)
+            return
+        identity = simpledialog.askstring("Approved identity", "Enter your approved full name:", parent=self.root)
+        if identity is None:
+            return
+        key_id = simpledialog.askstring("Key ID", "Enter a unique key ID agreed with the institute:", parent=self.root)
+        if key_id is None:
+            return
+        passphrase = self.passphrase.get().encode("utf-8")
+        self.passphrase.set("")
+        self.export_button.state(["disabled"])
+        self.root.update_idletasks()
+        try:
+            output, digest = export_public_record(self.role.get(), identity.strip(), key_id.strip(),
+                                                  self.private_key, self.openssl, self.output_dir, passphrase)
+        except (ValueError, OSError, subprocess.TimeoutExpired) as error:
+            messagebox.showerror("Public record not exported",
+                                 str(error) if isinstance(error, ValueError) else "The selected file or tool could not be used.",
+                                 parent=self.root)
+        else:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(digest)
+            messagebox.showinfo("Public record saved",
+                                f"Send only {output.name}. Confirm this SHA-256 separately with the institute "
+                                f"administrator. It has been copied to the clipboard.\n\n{digest}",
+                                parent=self.root)
+        finally:
+            self.export_button.state(["!disabled"])
+
     def sign(self):
         if not all((self.request, self.private_key, self.openssl, self.output_dir, self.role.get() in ROLES)):
             self.report_error(ValueError("Choose the request, your role and key, OpenSSL, and the output folder."))
@@ -252,7 +319,7 @@ class SigningWindow:
 
 if __name__ == "__main__":
     import tkinter as tk
-    from tkinter import filedialog, messagebox, ttk
+    from tkinter import filedialog, messagebox, simpledialog, ttk
 
     window = tk.Tk()
     SigningWindow(window)

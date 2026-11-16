@@ -139,16 +139,19 @@ try {
     if ($LASTEXITCODE -ne 0 -or $engine -cne 'linux') {
         throw 'The current local Docker Desktop engine is not running Linux containers.'
     }
-    & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -File $verifyImage.FullName -VerifyLoadedImage | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'The installed ERP image did not pass the package check.' }
+    $verifiedWeb = @(& $windowsPowerShell -NoLogo -NoProfile -NonInteractive -File $verifyImage.FullName -VerifyLoadedImage -GetVerifiedWebContainer)
+    if ($LASTEXITCODE -ne 0 -or $verifiedWeb.Count -ne 1 -or
+        $verifiedWeb[0] -isnot [string] -or $verifiedWeb[0] -cnotmatch '\A[0-9a-f]{64}\z') {
+        throw 'The running ERP web container did not pass the installed image check.'
+    }
     & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -File $verifyBackup.FullName -VerifyExisting | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'The current encrypted backup did not pass the Windows activation check.' }
-    $rows = @(& $dockerPath compose exec -T web python3 /product/activate.py status)
+    $rows = @(& $dockerPath exec $verifiedWeb[0] python3 /product/activate.py status)
     if ($LASTEXITCODE -ne 0 -or 'Site operational mode: REFUSED' -cnotin $rows) {
         throw 'Activation preparation requires the verified site in REFUSED mode.'
     }
     $site = 'toeflhouse.localhost'
-    $rows = @(& $dockerPath compose exec -T web python3 /product/activate.py internal-context --confirm $site)
+    $rows = @(& $dockerPath exec $verifiedWeb[0] python3 /product/activate.py internal-context --confirm $site)
     if ($LASTEXITCODE -ne 0) { throw 'The running ERP did not accept the current site and backup context.' }
     $context = ($rows -join "`n") | ConvertFrom-Json
 } finally {

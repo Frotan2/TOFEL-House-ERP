@@ -452,6 +452,15 @@ def command_bundle(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def passphrase_from_stdin(arguments: argparse.Namespace) -> bytes | None:
+    if not getattr(arguments, "passphrase_stdin", False):
+        return None
+    passphrase = sys.stdin.buffer.read(4097)
+    if len(passphrase) > 4096 or any(char in passphrase for char in (b"\r", b"\n", b"\0")):
+        raise fail("the signing passphrase exceeds the limit or contains an unsupported character")
+    return passphrase
+
+
 def command_trust_store(arguments: argparse.Namespace) -> int:
     key_id = check_key_id(arguments.key_id)
     now = datetime.now(timezone.utc).replace(microsecond=0)
@@ -460,7 +469,8 @@ def command_trust_store(arguments: argparse.Namespace) -> int:
         raise fail(f"refusing to overwrite an existing trust store: {out}")
     out.parent.mkdir(parents=True, exist_ok=True)
     document = trust_store_document(arguments.private_key, key_id,
-                                    days=arguments.days, executable=arguments.openssl)
+                                    days=arguments.days, executable=arguments.openssl,
+                                    passphrase=passphrase_from_stdin(arguments))
     if arguments.internal_approver_role or arguments.internal_approver_identity:
         if not arguments.internal_approver_role or not arguments.internal_approver_identity:
             raise fail("internal trust requires both the approver role and identity")
@@ -530,11 +540,7 @@ def command_sign(arguments: argparse.Namespace) -> int:
             raise fail("backup_receipt_sha256 must be the SHA-256 of the verified backup receipt")
     else:
         engine.validate_manifest(parsed, now=now)
-    passphrase = None
-    if getattr(arguments, "passphrase_stdin", False):
-        passphrase = sys.stdin.buffer.read(4097)
-        if len(passphrase) > 4096 or any(char in passphrase for char in (b"\r", b"\n", b"\0")):
-            raise fail("the signing passphrase exceeds the limit or contains an unsupported character")
+    passphrase = passphrase_from_stdin(arguments)
     signature = sign_bytes(arguments.private_key, payload, arguments.openssl, passphrase=passphrase)
     envelope_type = (engine.DOCUMENT_UPDATE_SIGNATURE if arguments.document_type == "update-manifest"
                      else engine.DOCUMENT_RECOVERY_SIGNATURE)
@@ -629,6 +635,8 @@ def build_parser() -> argparse.ArgumentParser:
     trust.add_argument("--openssl", default="openssl")
     trust.add_argument("--internal-approver-role", choices=sorted(engine.RECOVERY_APPROVER_ROLES))
     trust.add_argument("--internal-approver-identity")
+    trust.add_argument("--passphrase-stdin", action="store_true",
+                       help="read the key passphrase from standard input until EOF")
     trust.set_defaults(handler=command_trust_store)
 
     sign = subparsers.add_parser("sign", help="sign an update or recovery document")

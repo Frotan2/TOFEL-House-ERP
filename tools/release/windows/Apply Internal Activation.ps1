@@ -43,10 +43,124 @@ function Read-ApprovalInput([string]$Path) {
     } finally { $stream.Dispose() }
 }
 
+function Get-AuthenticatedPublicRecord([string]$Path, [string]$Fingerprint) {
+    $fingerprint = $Fingerprint.Trim()
+    if ($fingerprint -notmatch '^[a-f0-9]{64}$') {
+        throw 'Enter the SHA-256 supplied separately by the verified approver.'
+    }
+    [byte[]]$bytes = Read-ApprovalInput $Path
+    if ($bytes.Length -gt 8192) { throw 'The public key record exceeds the supported size.' }
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $actual = [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-', '') }
+    finally { $sha.Dispose() }
+    if ($actual -ine $fingerprint) {
+        throw 'The public key record does not match its independently confirmed SHA-256.'
+    }
+    return [Convert]::ToBase64String($bytes)
+}
+
+function Assert-ProtectedApprovalStorage([IO.FileSystemInfo]$Item, [switch]$RequireProtectedAcl) {
+    $acl = Get-Acl -LiteralPath $Item.FullName
+    $operator = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $allowed = @($operator, 'S-1-5-18', 'S-1-5-32-544')
+    $owner = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+    $aces = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+    $unexpected = @($aces | Where-Object { $_.IdentityReference.Value -notin $allowed })
+    if (($RequireProtectedAcl -and !$acl.AreAccessRulesProtected) -or $owner -notin $allowed -or $unexpected.Count) {
+        throw 'The installed approval files do not have their expected Windows protection.'
+    }
+}
+
+function Assert-ProtectedEnrollmentDirectory([IO.DirectoryInfo]$Directory) {
+    Assert-ProtectedApprovalStorage $Directory -RequireProtectedAcl
+}
+
+function Publish-InitialTrust([IO.DirectoryInfo]$Directory, [byte[]]$Bytes) {
+    $Directory = Get-RegularLocalItem $Directory.FullName $true
+    Assert-ProtectedEnrollmentDirectory $Directory
+    if ($Bytes.Length -lt 1 -or $Bytes.Length -gt 16384) {
+        throw 'The validated public trust record has an invalid size.'
+    }
+    $target = Join-Path $Directory.FullName 'internal-activation-trust.json'
+    foreach ($filename in @('internal-activation-trust.json') + $approvalNames) {
+        if (Get-Item -LiteralPath (Join-Path $Directory.FullName $filename) -Force -ErrorAction SilentlyContinue) {
+            throw 'Approval keys or approval files already exist. Enrollment cannot replace them.'
+        }
+    }
+    $pending = Join-Path $Directory.FullName ('.trust-' + [guid]::NewGuid().ToString('N') + '.tmp')
+    $created = $false
+    try {
+        $stream = [IO.File]::Open($pending, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        $created = $true
+        try {
+            $stream.Write($Bytes, 0, $Bytes.Length)
+            $stream.Flush($true)
+        } finally { $stream.Dispose() }
+        [IO.File]::Move($pending, $target)
+    } finally {
+        if ($created) { [IO.File]::Delete($pending) }
+    }
+}
+
+function Set-InstalledDockerPath([string]$CurrentPath) {
+    foreach ($bin in @((Join-Path $env:ProgramFiles 'Docker\Docker\resources\bin'),
+            (Join-Path $env:LOCALAPPDATA 'Programs\DockerDesktop\resources\bin'))) {
+        if (Test-Path -LiteralPath (Join-Path $bin 'docker.exe') -PathType Leaf) {
+            $env:Path = $bin + ';' + $CurrentPath
+            break
+        }
+    }
+}
+
+function Get-InstalledEnrollment([string[]]$Records) {
+    $expected = Join-Path $env:LOCALAPPDATA 'TOEFL House ERP\Customer\product\windows'
+    $windows = Get-RegularLocalItem $expected $true
+    if ($windows.FullName -ine $PSScriptRoot) {
+        throw 'Open this form from the installed Windows ERP launcher.'
+    }
+    $product = $windows.Parent
+    $directory = Get-RegularLocalItem (Join-Path $product.FullName 'data\activation') $true
+    Assert-ProtectedEnrollmentDirectory $directory
+    if (Test-Path -LiteralPath (Join-Path $product.FullName '.env')) {
+        throw 'An unexpected Compose environment file is present. Verify the installed ERP.'
+    }
+    $verifyDocker = Get-RegularLocalItem (Join-Path $windows.FullName 'Test Local Docker.ps1') $false
+    $verifyImage = Get-RegularLocalItem (Join-Path $windows.FullName 'Verify Package Image.ps1') $false
+    $powershell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $savedPath = $env:Path
+    Push-Location -LiteralPath $product.FullName
+    try {
+        Set-InstalledDockerPath $savedPath
+        . $verifyDocker.FullName
+        Assert-LocalDockerEngine
+        $docker = Get-Command docker.exe -CommandType Application | Select-Object -First 1
+        $web = @(& $powershell -NoLogo -NoProfile -NonInteractive -File $verifyImage.FullName -VerifyLoadedImage -GetVerifiedWebContainer)
+        if ($LASTEXITCODE -ne 0 -or $web.Count -ne 1 -or $web[0] -cnotmatch '^[0-9a-f]{64}$') {
+            throw 'The running ERP container failed installed image verification.'
+        }
+        $status = @(& $docker.Source exec $web[0] python3 /product/activate.py status)
+        if ($LASTEXITCODE -ne 0 -or 'Site operational mode: REFUSED' -cnotin $status) {
+            throw 'The verified ERP must be running and awaiting initial authorization.'
+        }
+        $inputJson = ConvertTo-Json -Compress -InputObject @($Records)
+        $result = @($inputJson | & $docker.Source exec -i $web[0] python3 /product/activate.py internal-enrollment --confirm $site)
+        if ($LASTEXITCODE -ne 0 -or $result.Count -ne 1) {
+            throw 'The ERP refused to validate the two public keys. Check the named roles, key validity and independence.'
+        }
+        $verified = ConvertFrom-Json -InputObject $result[0]
+        return @{ Directory = $directory; Trust = [Convert]::FromBase64String($verified.trust_b64);
+                  Approvers = $verified.approvers }
+    } finally {
+        Pop-Location
+        $env:Path = $savedPath
+    }
+}
+
 function Assert-NewApprovalTargets([IO.DirectoryInfo]$Directory) {
     # Registered trust is read from its installed, protected location.
     # It is never imported from the signatures folder or rewritten.
-    Get-RegularLocalItem (Join-Path $Directory.FullName 'internal-activation-trust.json') $false | Out-Null
+    $trust = Get-RegularLocalItem (Join-Path $Directory.FullName 'internal-activation-trust.json') $false
+    Assert-ProtectedApprovalStorage $trust
     foreach ($name in $approvalNames) {
         $existing = Get-Item -LiteralPath (Join-Path $Directory.FullName $name) -Force -ErrorAction SilentlyContinue
         if ($null -ne $existing) {
@@ -119,6 +233,7 @@ function Invoke-InstalledActivation([string[]]$Paths) {
         if (!(Test-Path -LiteralPath (Join-Path $activation.FullName 'internal-activation-trust.json') -PathType Leaf)) {
             throw 'The independently authenticated public key trust has not been registered. Ask the authorized institute administrator to complete enrollment.'
         }
+        Assert-ProtectedEnrollmentDirectory $activation
         Assert-NewApprovalTargets $activation
         if (Test-Path -LiteralPath (Join-Path $product.FullName '.env')) {
             throw 'An unexpected Compose environment file is present. Verify the installed ERP before activation.'
@@ -135,31 +250,27 @@ function Invoke-InstalledActivation([string[]]$Paths) {
         $savedPath = $env:Path
         Push-Location -LiteralPath $product.FullName
         try {
-            foreach ($bin in @((Join-Path $env:ProgramFiles 'Docker\Docker\resources\bin'),
-                    (Join-Path $env:LOCALAPPDATA 'Programs\DockerDesktop\resources\bin'))) {
-                if (Test-Path -LiteralPath (Join-Path $bin 'docker.exe') -PathType Leaf) {
-                    $env:Path = $bin + ';' + $savedPath
-                    break
-                }
-            }
+            Set-InstalledDockerPath $savedPath
             . $verifyDocker.FullName
             Assert-LocalDockerEngine
             $docker = Get-Command docker.exe -CommandType Application | Select-Object -First 1
-            & $powershell -NoLogo -NoProfile -NonInteractive -File $verifyImage.FullName -VerifyLoadedImage | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw 'The loaded ERP image failed verification.' }
+            $web = @(& $powershell -NoLogo -NoProfile -NonInteractive -File $verifyImage.FullName -VerifyLoadedImage -GetVerifiedWebContainer)
+            if ($LASTEXITCODE -ne 0 -or $web.Count -ne 1 -or $web[0] -cnotmatch '^[0-9a-f]{64}$') {
+                throw 'The running ERP container failed installed image verification.'
+            }
             & $powershell -NoLogo -NoProfile -NonInteractive -File $verifyBackup.FullName -VerifyExisting | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 throw 'The current encrypted backup did not verify. Use Verify Backup in the ERP launcher.'
             }
-            $status = @(& $docker.Source compose exec -T web python3 /product/activate.py status)
+            $status = @(& $docker.Source exec $web[0] python3 /product/activate.py status)
             if ($LASTEXITCODE -ne 0 -or 'Site operational mode: REFUSED' -cnotin $status) {
                 throw 'The verified local ERP must be running and awaiting authorization.'
             }
-            & $docker.Source compose exec -T web python3 /product/activate.py internal-context --confirm $site | Out-Null
+            & $docker.Source exec $web[0] python3 /product/activate.py internal-context --confirm $site | Out-Null
             if ($LASTEXITCODE -ne 0) { throw 'The installed ERP did not accept the current activation context.' }
 
             Publish-InternalApprovals $activation $input {
-                $result = @(& $docker.Source compose exec -T web python3 /product/activate.py internal-activate --confirm $site)
+                $result = @(& $docker.Source exec $web[0] python3 /product/activate.py internal-activate --confirm $site)
                 if ($LASTEXITCODE -ne 0) {
                     $reason = $result | Where-Object { $_ -cmatch '^REFUSED: [^\x00-\x1f]{1,500}$' } | Select-Object -First 1
                     if ($reason) { throw $reason }
@@ -243,6 +354,76 @@ $closeButton.Location = [Drawing.Point]::new(194,238)
 $closeButton.Size = [Drawing.Size]::new(104,36)
 $form.Controls.Add($closeButton)
 $form.CancelButton = $closeButton
+$enrollButton = New-Object Windows.Forms.Button
+$enrollButton.Text = 'Register public keys'
+$enrollButton.SetBounds(508,238,196,36)
+$form.Controls.Add($enrollButton)
+$enrollButton.Add_Click({
+    $wizard = New-Object Windows.Forms.Form
+    $wizard.Text = 'First enrollment - authorized institute administrator'
+    $wizard.StartPosition = 'CenterParent'
+    $wizard.ClientSize = [Drawing.Size]::new(686,292)
+    $note = New-Object Windows.Forms.Label
+    $note.Text = 'Choose each approved public record. Enter its SHA-256 from a separate, authenticated communication. Do not enter a private key or a signature file.'
+    $note.SetBounds(16,16,654,44)
+    $wizard.Controls.Add($note)
+    $paths = @()
+    $digests = @()
+    foreach ($entry in @(@('Course Owner',70), @('General Manager',144))) {
+        $field = New-Object Windows.Forms.TextBox
+        $field.ReadOnly = $true
+        $field.SetBounds(202,$entry[1],454,23)
+        $wizard.Controls.Add($field)
+        $paths += $field
+        $choose = New-Object Windows.Forms.Button
+        $choose.Text = 'Choose ' + $entry[0]
+        $choose.SetBounds(16,$entry[1],174,25)
+        $choose.Tag = $field
+        $wizard.Controls.Add($choose)
+        $choose.Add_Click({
+            param($sender, $eventArgs)
+            $picker = New-Object Windows.Forms.OpenFileDialog
+            try {
+                $picker.Filter = 'Public key records (*.json)|*.json'
+                if ($picker.ShowDialog($sender.FindForm()) -eq 'OK') { $sender.Tag.Text = $picker.FileName }
+            } finally { $picker.Dispose() }
+        })
+        $label = New-Object Windows.Forms.Label
+        $label.Text = 'Confirmed SHA-256'
+        $label.SetBounds(16,($entry[1]+32),174,25)
+        $wizard.Controls.Add($label)
+        $digestBox = New-Object Windows.Forms.TextBox
+        $digestBox.SetBounds(202,($entry[1]+32),454,23)
+        $wizard.Controls.Add($digestBox)
+        $digests += $digestBox
+    }
+    $register = New-Object Windows.Forms.Button
+    $register.Text = 'Review and register'
+    $register.SetBounds(16,233,174,35)
+    $wizard.Controls.Add($register)
+    $register.Add_Click({
+        try {
+            $register.Enabled = $false
+            $records = @(Get-AuthenticatedPublicRecord $paths[0].Text $digests[0].Text;
+                         Get-AuthenticatedPublicRecord $paths[1].Text $digests[1].Text)
+            $verified = Get-InstalledEnrollment $records
+            $summary = ($verified.Approvers | ForEach-Object {
+                $_.approver_role + ': ' + $_.approver_identity + ' (' + $_.key_id + ')'
+            }) -join [Environment]::NewLine
+            $question = 'Register these separately authenticated public keys on this installation?' +
+                [Environment]::NewLine + $summary
+            if ([Windows.Forms.MessageBox]::Show($wizard,$question,$wizard.Text,'YesNo','Question') -eq 'Yes') {
+                Publish-InitialTrust $verified.Directory $verified.Trust
+                [void][Windows.Forms.MessageBox]::Show($wizard,'Public keys registered. Applying signatures is a separate step.',$wizard.Text)
+                $wizard.Close()
+            }
+        } catch {
+            [void][Windows.Forms.MessageBox]::Show($wizard,$_.Exception.Message,$wizard.Text,'OK','Error')
+        } finally { $register.Enabled = $true }
+    })
+    try { [void]$wizard.ShowDialog($form) }
+    finally { $wizard.Dispose() }
+})
 
 $applyButton.Add_Click({
     $paths = @($ownerField.Text, $reviewerField.Text, $requestField.Text)

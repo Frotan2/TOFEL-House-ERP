@@ -18,6 +18,7 @@ Commands:
   status                          print the current site mode
   activate --confirm SITE         runbook steps 0-6 (refuses without a fresh backup)
   internal-context --confirm SITE show the factory installation and backup identity
+  internal-enrollment --confirm SITE validate two public key records on stdin
   internal-activate --confirm SITE apply independent approvals and run the activation gates
   deactivate --confirm SITE       runbook step 8 (rollback to REFUSED)
   fee-item --confirm SITE CODE    runbook step 7 (existing native Item only)
@@ -25,6 +26,7 @@ Commands:
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -34,6 +36,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 
 _PRODUCT_DIR = Path(__file__).resolve().parent
 if str(_PRODUCT_DIR) not in sys.path:
@@ -635,6 +638,56 @@ def activate_internal(site: str, log=print) -> None:
     log("Internal activation approved for this installation. Public release status is unchanged.")
 
 
+def validate_internal_enrollment(raw: bytes, now: datetime) -> tuple[bytes, list[dict]]:
+    """Validate purpose-bound public records and produce the combined trust bytes."""
+    from update_engine import load_json_file, load_trust_store, select_key
+
+    try:
+        documents = json.loads(raw.decode("ascii"))
+        if not isinstance(documents, list) or len(documents) != 2:
+            raise ValueError
+        records = [base64.b64decode(entry, validate=True) for entry in documents]
+        if any(not 1 <= len(entry) <= 8192 for entry in records):
+            raise ValueError
+    except (ValueError, TypeError, UnicodeError):
+        raise Refused("expected exactly two bounded public key records") from None
+
+    def comparison_name(name: str) -> str:
+        # Keep the registered spelling in the document. Ignore cosmetic
+        # variations when deciding whether enrollment names two people.
+        plain = unicodedata.normalize("NFKC", name).replace("\u200c", "").replace("\u200d", "")
+        return " ".join(plain.split()).casefold()
+
+    parsed = []
+    roles = ("course-owner", "general-manager")
+    with tempfile.TemporaryDirectory(prefix="toefl-public-enrollment-") as temp:
+        path = Path(temp) / "record.json"
+        original = []
+        for expected_role, record in zip(roles, records):
+            path.write_bytes(record)
+            store = load_trust_store(path, now=now)
+            if len(store["keys"]) != 1:
+                raise Refused("select one public key record for each approver")
+            key = select_key(store, store["keys"][0]["key_id"], "internal-activation", now=now)
+            identity = key["approver_identity"]
+            if (key["approver_role"] != expected_role or not any(char.isalpha() for char in identity)
+                    or any(not char.isprintable() and char not in "\u200c\u200d" for char in identity)):
+                raise Refused("the chosen record does not identify the expected approver role")
+            parsed.append(key)
+            original.append(load_json_file(path, "trust store", limit=8192))
+        owner, reviewer = parsed
+        if (owner["key_id"] == reviewer["key_id"] or owner["modulus"] == reviewer["modulus"]
+                or comparison_name(owner["approver_identity"]) == comparison_name(reviewer["approver_identity"])):
+            raise Refused("enrollment requires two different people and two different keys")
+        combined = {**original[0], "keys": [row["keys"][0] for row in original]}
+        encoded = (json.dumps(combined, sort_keys=True, ensure_ascii=True) + "\n").encode("ascii")
+        path.write_bytes(encoded)
+        load_trust_store(path, now=now)
+    summary = [{name: key[name] for name in ("approver_role", "approver_identity", "key_id")}
+               for key in parsed]
+    return encoded, summary
+
+
 def deactivate(site: str, log=print) -> None:
     saved = backup_config(site)
     log(f"Saved current settings to {saved.name}")
@@ -700,7 +753,8 @@ def main(argv=None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command", choices=("status", "activate", "deactivate", "fee-item",
-                                            "internal-context", "internal-activate"))
+                                            "internal-context", "internal-enrollment",
+                                            "internal-activate"))
     parser.add_argument("--confirm")
     parser.add_argument("code", nargs="?")
     args = parser.parse_args(argv)
@@ -716,6 +770,12 @@ def main(argv=None) -> int:
         require_confirm(site, args.confirm)
         if args.command == "internal-context":
             print(json.dumps(internal_activation_context(site, datetime.now(timezone.utc))))
+        elif args.command == "internal-enrollment":
+            raw = sys.stdin.buffer.read(32769)
+            if len(raw) > 32768:
+                raise Refused("the public key enrollment input is too large")
+            encoded, summary = validate_internal_enrollment(raw, datetime.now(timezone.utc))
+            print(json.dumps({"trust_b64": base64.b64encode(encoded).decode("ascii"), "approvers": summary}))
         elif args.command == "internal-activate":
             activate_internal(site)
         elif args.command == "activate":

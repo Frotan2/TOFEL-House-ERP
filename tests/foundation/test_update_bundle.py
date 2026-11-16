@@ -431,6 +431,27 @@ class RecoveryAuthorizationTests(UpdateBundleCase):
                         "-passout", "stdin", "-out", str(protected_key)],
                        input=passphrase + b"\n", check=True, capture_output=True)
 
+        key_records = self.tmp / "public-records"
+        key_records.mkdir()
+        with self.assertRaises(ValueError):
+            gui.export_public_record("Course Owner", "Synthetic Owner", "test-owner", protected_key,
+                                     Path(openssl_path), key_records, b"wrong test passphrase")
+        self.assertEqual(list(key_records.iterdir()), [])
+        record, record_digest = gui.export_public_record(
+            "Course Owner", "Synthetic Owner", "test-owner", protected_key,
+            Path(openssl_path), key_records, passphrase,
+        )
+        self.assertEqual(hashlib.sha256(record.read_bytes()).hexdigest(), record_digest)
+        current_trust = engine.load_trust_store(record, now=datetime.now(timezone.utc))
+        key = engine.select_key(current_trust, "test-owner", purpose="internal-activation",
+                                now=datetime.now(timezone.utc))
+        self.assertEqual((key["approver_role"], key["approver_identity"]), ("course-owner", "Synthetic Owner"))
+        self.assertNotIn(b"PRIVATE KEY", record.read_bytes())
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            gui.export_public_record("Course Owner", "Another name", "other-id", protected_key,
+                                     Path(openssl_path), key_records, passphrase)
+        self.assertEqual(hashlib.sha256(record.read_bytes()).hexdigest(), record_digest)
+
         for bad_digest, bad_passphrase in (("0" * 64, passphrase), (digest, b"wrong test passphrase")):
             with self.assertRaises(ValueError):
                 gui.sign_request(document, bad_digest, "Course Owner", protected_key,

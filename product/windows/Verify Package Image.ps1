@@ -6,6 +6,7 @@ param(
     [string]$Manifest = (Join-Path $PSScriptRoot "..\release\release-manifest.json"),
     [string]$ManifestChecksum = "",
     [switch]$VerifyLoadedImage,
+    [switch]$GetVerifiedWebContainer,
     [switch]$RecordFactoryImage,
     [switch]$VerifyProviderImage,
     [switch]$RecordSignedUpdateImage,
@@ -169,6 +170,13 @@ function Get-ArchiveIdentity {
 }
 
 try {
+    if ($GetVerifiedWebContainer -and (-not $VerifyLoadedImage -or $RecordFactoryImage -or
+        $VerifyProviderImage -or $RecordSignedUpdateImage -or $ReadArchiveIdentity -or
+        $PSBoundParameters.ContainsKey('ExpectedUpdatedImageId') -or
+        $PSBoundParameters.ContainsKey('ExpectedUpdatedVersion') -or
+        $PSBoundParameters.ContainsKey('ExpectedUpdatedRevision'))) {
+        throw "Selecting the verified web container requires only ordinary loaded-image verification."
+    }
     if ($ReadArchiveIdentity) {
         Get-ArchiveIdentity $Archive | ConvertTo-Json -Depth 12 -Compress
         exit 0
@@ -360,6 +368,28 @@ try {
             }
         } else {
             throw "Unknown installed-image provenance; refusing to start."
+        }
+        if ($GetVerifiedWebContainer) {
+            # Resolve this installation's running web instance only after
+            # validating the installed image and update journal.
+            Push-Location -LiteralPath (Join-Path $PSScriptRoot '..')
+            try {
+                $web = @(& docker compose ps -q web 2>$null)
+                if ($LASTEXITCODE -ne 0 -or $web.Count -ne 1 -or
+                    $web[0] -isnot [string] -or $web[0] -cnotmatch '\A[0-9a-f]{64}\z') {
+                    throw "The installed ERP must have exactly one running web container."
+                }
+                $webID = $web[0]
+                $instance = @(& docker container inspect $webID --format '{{.Id}} {{.Image}} {{.State.Running}}' 2>$null)
+                if ($LASTEXITCODE -ne 0 -or $instance.Count -ne 1 -or
+                    $instance[0] -cne "$webID $([string]$loaded.Id) true") {
+                    throw "The running web container does not match the verified installed image."
+                }
+            } finally {
+                Pop-Location
+            }
+            Write-Output $webID
+            exit 0
         }
         Write-Host "Customer installed image identity: approved ID and release record verified."
         exit 0
