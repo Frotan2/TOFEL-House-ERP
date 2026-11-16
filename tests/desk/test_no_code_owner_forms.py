@@ -75,9 +75,11 @@ class NoCodeOwnerFormsTests(unittest.TestCase):
     def test_setup_home_has_real_navigation_and_no_command_line_steps(self):
         self.assertIn("Start your course in simple steps", self.gui)
         for label in ("1. Courses and tuition", "2. Academic and billing rules",
-                      "3. Rooms, teachers and timetables",
                       "4. Finance and daily work", "5. Review before opening"):
             self.assertIn(label, self.gui)
+        weekly_step = next(line for line in self.gui.splitlines() if "3. Rooms and weekly patterns" in line)
+        self.assertIn('"th-academic-setup"', weekly_step)
+        self.assertIn("authorized scheduler generates and reviews sessions", weekly_step)
         self.assertIn('routeToSource(route)', self.gui)
         self.assertIn("never a request to edit JSON, scripts or database tables", self.gui)
 

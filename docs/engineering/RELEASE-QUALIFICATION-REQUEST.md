@@ -21,3 +21,9 @@ The Product Image job must still demand its exact-SHA upstream gate receipts, co
 - If the CI contract fails or product image cannot be produced, retain the failure and resolve its actual cause; do not downgrade or bypass any required gate.
 
 Reference: [dated release-readiness checkpoint](RELEASE-READINESS-2026-11-11.md).
+
+## Turnkey Windows candidate — 2026-11-16
+
+Collect exact-revision receipts for the guarded Owner catalog and timetable setup, Windows package and public key enrollment in [PR #173](https://github.com/Frotan2/TOFEL-House-ERP/pull/173). The Windows smoke passed on `aab374c`, but its Owned suite found a stale first-run navigation assertion. This follow-up corrects that fixture and the institute's private HTTPS directions. The linked candidate must receive fresh receipts under the rule above; `aab374c` receipts do not establish a later build's identity.
+
+Keep the previous graphical installation and isolated recovery evidence for `f8a851b`. No live host, database or backups are part of this request. The artifact remains a qualification build until the exact Windows installer passes separate clean-client acceptance and the required independent reviews. It neither authorizes a data migration nor supplies the institute's two installation-bound signatures.
