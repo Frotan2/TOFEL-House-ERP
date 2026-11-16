@@ -405,6 +405,12 @@ PROJECTION_FIELDS = {
         "name", "parent", "parenttype", "duration_value", "duration_unit",
         "effective_from", "superseded_on", "reason", "set_by",
     ],
+    ("setup", "TH Timetable Template"): [
+        "name", "code", "title", "status", "program", "branch", "delivery_mode", "modified",
+    ],
+    ("setup", "TH Timetable Slot"): [
+        "name", "parent", "weekday", "from_time", "to_time", "course", "room", "instructor",
+    ],
     ("setup", "TH Discount Rule"): [
         "name", "code", "title", "discount_percentage", "precedence",
         "status", "fee_category", "program", "student", "description", "modified",

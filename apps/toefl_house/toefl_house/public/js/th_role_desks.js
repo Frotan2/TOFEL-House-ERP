@@ -733,6 +733,38 @@ frappe.provide("toefl_house.role_desks");
 			description: "Final exam receives the remainder. For 40, the final is 60%. This changes future grading only." },
 	]);
 
+	const TIMETABLE_SLOT_FIELDS = ["weekday", "from_time", "to_time", "course", "room", "instructor"];
+
+	function slotFields() {
+		return [
+			{ fieldname: "weekday", label: text("Weekday"), fieldtype: "Select", in_list_view: 1,
+				options: "\nMon\nTue\nWed\nThu\nFri\nSat\nSun", reqd: 1 },
+			{ fieldname: "from_time", label: text("From"), fieldtype: "Time", in_list_view: 1, reqd: 1 },
+			{ fieldname: "to_time", label: text("Until"), fieldtype: "Time", in_list_view: 1, reqd: 1 },
+			timetableReference("course", "Course", "Course", { in_list_view: 1, reqd: 1 }),
+			timetableReference("room", "Room (optional)", "Room"),
+			timetableReference("instructor", "Instructor (optional)", "Instructor"),
+		];
+	}
+
+	function timetableReference(fieldname, label, doctype, extra = {}) {
+		const model = frappe.model || {};
+		const canFind = (model.can_select && model.can_select(doctype)) ||
+			(model.can_read && model.can_read(doctype));
+		return { fieldname, label: text(label), fieldtype: canFind ? "Link" : "Data",
+			...(canFind ? { options: doctype } : { description: text("Use the exact name on the existing record.") }),
+			formatter: escapeText, ...extra };
+	}
+
+	function cleanTimetableSlots(rows) {
+		if (!Array.isArray(rows) || rows.length > 40 ||
+			rows.some((row) => !row || typeof row !== "object" ||
+				TIMETABLE_SLOT_FIELDS.some((field) => row[field] != null &&
+					(typeof row[field] !== "string" || row[field].length > 140)))) return null;
+		return rows.map((row) => Object.fromEntries(TIMETABLE_SLOT_FIELDS.map(
+			(field) => [field, (row[field] || "").trim()])));
+	}
+
 	const ACTION_FIELDS = Object.freeze({
 		"toefl_house.finance.cashier.reconcile_cashier_day": [
 			{ fieldname: "company", label: "Company", fieldtype: "Data", read_only: 1, reqd: 1 },
@@ -1124,6 +1156,24 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "title", label: "Title", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
 		],
+		"toefl_house.teaching.timetables.create_timetable_template": [
+			{ fieldname: "code", label: "Template code (letters, numbers and dashes)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Template name", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "delivery_mode", label: "Delivery mode", fieldtype: "Select", options: "\nOn-site\nOnline\nHybrid", reqd: 1 },
+			{ fieldname: "program", label: "Program (blank applies to all programs)", fieldtype: "Data" },
+			{ fieldname: "branch", label: "Branch (blank applies to all branches)", fieldtype: "Data" },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
+		],
+		"toefl_house.teaching.timetables.set_timetable_slots": [
+			{ fieldname: "template", label: "Template", fieldtype: "Data", read_only: 1, reqd: 1 },
+			{ fieldname: "slots", label: "Complete weekly pattern", fieldtype: "Table", reqd: 1,
+				description: "Review every row. Saving replaces the entire weekly pattern. Existing sessions never change." },
+			{ fieldname: "reason", label: "Reason for this pattern", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.timetables.set_timetable_template_status": [
+			{ fieldname: "template", label: "Template", fieldtype: "Data", read_only: 1, reqd: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Data", hidden: 1, read_only: 1 },
+		],
 		"toefl_house.academic.create_room": [
 			{ fieldname: "room_name", label: "Room name", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "seating_capacity", label: "Maximum students", fieldtype: "Int", reqd: 1 },
@@ -1378,6 +1428,23 @@ frappe.provide("toefl_house.role_desks");
 		const ownAttendance = action.endpoint === "toefl_house.teaching.record_instructor_attendance";
 		const cashClose = action.endpoint === "toefl_house.finance.cashier.reconcile_cashier_day";
 		let fields = ACTION_FIELDS[action.endpoint];
+		const timetableSlots = action.endpoint === "toefl_house.teaching.timetables.set_timetable_slots";
+		const timetableStatus = action.endpoint === "toefl_house.teaching.timetables.set_timetable_template_status";
+		if (timetableSlots) {
+			const pattern = cleanTimetableSlots(action.args && action.args.slots);
+			if (!pattern) {
+				frappe.msgprint(text("The full pattern could not be loaded. Refresh Academic Setup before editing the timetable."));
+				return;
+			}
+			fields = fields.map((field) => field.fieldname === "slots" ?
+				{ ...field, fields: slotFields(), data: pattern, in_place_edit: true } : field);
+		}
+		if (action.endpoint === "toefl_house.teaching.timetables.create_timetable_template") {
+			fields = fields.map((field) => {
+				const doctype = { program: "Program", branch: "Branch" }[field.fieldname];
+				return doctype ? timetableReference(field.fieldname, field.label, doctype) : field;
+			});
+		}
 		if (cashClose) {
 			const drawers = action.args && action.args.drawers;
 			const accounts = Array.isArray(drawers) ? drawers.map((row) => row && row.account) : [];
@@ -1587,6 +1654,17 @@ frappe.provide("toefl_house.role_desks");
 				fields.forEach((field) => {
 					if (field.fieldname) args[field.fieldname] = values[field.fieldname];
 				});
+				if (timetableSlots) {
+					const pattern = cleanTimetableSlots(args.slots);
+					if (!pattern || !pattern.length ||
+						pattern.some((row) => !row.weekday || !row.from_time || !row.to_time || !row.course)) {
+						frappe.msgprint(text("Enter 1 to 40 complete weekly slots. Each needs a weekday, start time, end time and course."));
+						return;
+					}
+					// Pass only the six command fields, never grid metadata.
+					args.slots = JSON.stringify(pattern);
+				}
+				if (timetableStatus) args.active = action.args.active;
 				if (action.endpoint.startsWith("toefl_house.reception_intake.")) {
 					// Native Frappe Data/Small Text inputs may return null or
 					// undefined when cleared. An explicitly blank optional field
@@ -1830,6 +1908,14 @@ frappe.provide("toefl_house.role_desks");
 					// Closing cannot be undone through this workflow; make the
 					// operator explicitly confirm before sending the guarded POST.
 					frappe.confirm(text("Close this visitor inquiry? Future follow-ups will not be possible on this visit. The existing record will be retained."), submitAction);
+				} else if (timetableSlots) {
+					frappe.confirm(text(
+						"Replace the complete weekly pattern with these slots? This affects only future generation; existing class sessions stay as they are."
+					), submitAction);
+				} else if (timetableStatus) {
+					frappe.confirm(text(args.active === "true"
+						? "Reactivate this template for future generation? Existing class sessions stay as they are."
+						: "Retire this template to stop future generation? Existing class sessions stay as they are."), submitAction);
 				} else if (teachingContractForm) {
 					frappe.confirm(text(
 						action.endpoint === "toefl_house.teaching.compensation.revise_teaching_contract"
@@ -1888,7 +1974,8 @@ frappe.provide("toefl_house.role_desks");
 			}
 		}
 		fields.forEach((field) => {
-			if (values[field.fieldname] !== undefined && values[field.fieldname] !== null && values[field.fieldname] !== "") {
+			if (field.fieldtype !== "Table" && values[field.fieldname] !== undefined &&
+				values[field.fieldname] !== null && values[field.fieldname] !== "") {
 				dialog.set_value(field.fieldname, values[field.fieldname]);
 			}
 		});
@@ -2101,7 +2188,7 @@ frappe.provide("toefl_house.role_desks");
 		const steps = [
 			["1. Courses and tuition", "Check the four programs, eleven levels and approved full-semester AFN prices.", "th-academic-setup"],
 			["2. Academic and billing rules", "Choose percentages, waiting days, billing options and approval roles using forms.", "th-configuration"],
-			["3. Rooms, teachers and timetables", "Enter verified capacity and staff assignments; review sessions before students join.", "th-academic-desk"],
+			["3. Rooms and weekly patterns", "Enter verified room capacity and approved weekly slots. An authorized scheduler generates and reviews sessions for each real class.", "th-academic-setup"],
 			["4. Finance and daily work", "Use guided receivables, collections and approved instructor contracts, never source files.", "th-finance-desk"],
 			["5. Review before opening", "Check each staff role, backup recovery and operational readiness with the Owner.", "th-owner-cockpit"],
 		];

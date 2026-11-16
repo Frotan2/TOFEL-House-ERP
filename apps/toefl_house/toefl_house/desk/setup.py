@@ -24,8 +24,10 @@ from toefl_house.desk import (
     project_count,
     project_rows,
     require_desk_audience,
+    scope_filters,
     section,
 )
+from toefl_house.policy import clock_text
 from toefl_house.setup_presets.preset import load_preset
 
 SLUG = "th-academic-setup"
@@ -36,6 +38,7 @@ NATIVE_PROGRAM = "Program"
 DURATION = "TH Level Duration"
 ENROLLMENT = "Program Enrollment"
 YEAR = "Academic Year"
+TIMETABLE_TEMPLATE = "TH Timetable Template"
 FEE_CATEGORY = "Fee Category"
 FEE_STRUCTURE = "Fee Structure"
 FEE_ROW = "Fee Component"
@@ -617,6 +620,7 @@ def work():
                     empty_title="No discount rules yet",
                     empty_body="Define scholarship or discount rules under Policy A; "
                                "charges receive at most one discount according to configured precedence."),
+            _timetable_section(),
             section("years", "Academic years", "queue", items=year_items,
                     empty_title="No academic years yet",
                     empty_body="Define the first academic year from Setup actions; "
@@ -628,6 +632,85 @@ def work():
                     empty_body="Initialize the approved course catalog before configuring grading."),
         ],
     }
+
+
+def _timetable_section():
+    """Show patterns for the scoped Owner; slot children inherit parent visibility."""
+    max_slots = 40  # Bound the projection to the existing command's maximum.
+    templates = project_rows(
+        "setup", TIMETABLE_TEMPLATE,
+        ["name", "code", "title", "status", "program", "branch", "delivery_mode", "modified"],
+        order_by="modified desc, name asc", limit=LIMIT_QUEUES + 1)
+    visible = templates[:LIMIT_QUEUES]
+    slot_limit = len(visible) * max_slots
+    rows = project_rows(
+        "setup", "TH Timetable Slot",
+        ["name", "parent", "weekday", "from_time", "to_time", "course", "room", "instructor"],
+        filters={"parent": ("in", [row["name"] for row in visible]),
+                 "parenttype": TIMETABLE_TEMPLATE, "parentfield": "slots"},
+        order_by="parent asc, idx asc", limit=slot_limit + 1) if visible else []
+    by_template = {}
+    for row in rows:
+        by_template.setdefault(row["parent"], []).append(row)
+    actions = []
+    branch_limited = bool(scope_filters("setup").get("branch"))
+    if not branch_limited:
+        action = guided_action(
+            "Course Owner", "toefl_house.teaching.timetables.create_timetable_template",
+            "Create timetable template", {})
+        if action:
+            actions.append(action)
+    items = []
+    for row in visible:
+        active = row["status"] == "Active"
+        slots = by_template.get(row["name"], [])
+        complete = len(rows) <= slot_limit and len(slots) <= max_slots
+        try:
+            pattern = [{
+                "weekday": slot["weekday"],
+                "from_time": clock_text(slot["from_time"]), "to_time": clock_text(slot["to_time"]),
+                "course": slot["course"], "room": slot.get("room") or "",
+                "instructor": slot.get("instructor") or "",
+            } for slot in slots] if complete else []
+        except (KeyError, ValueError):
+            complete, pattern = False, []
+        if not complete:
+            next_step = "The full weekly pattern could not be read safely. Review the stored template before editing."
+        elif active:
+            next_step = ("Have an authorized scheduler generate sessions for a real class and date range."
+                         if slots else "Add the approved weekly slots.")
+        else:
+            next_step = "Reactivate this template before editing its pattern or generating sessions."
+        row_actions = []
+        if active and complete:
+            row_actions.append(guided_action(
+                "Course Owner", "toefl_house.teaching.timetables.set_timetable_slots",
+                "Edit weekly slots", {"template": row["code"], "slots": pattern}))
+        if row["status"] in ("Active", "Retired"):
+            row_actions.append(guided_action(
+                "Course Owner", "toefl_house.teaching.timetables.set_timetable_template_status",
+                "Retire template" if active else "Reactivate template",
+                {"template": row["code"], "active": "false" if active else "true"}))
+        items.append({
+            "id": row["code"], "person": row["title"], "status": row["status"],
+            "detail": " · ".join(str(part) for part in (
+                row.get("program") or "Any program", row.get("branch") or "Any branch",
+                row.get("delivery_mode"), f"{len(slots)} weekly slot(s)" if complete else "",
+            ) if part),
+            "stage": "Weekly pattern",
+            "stage_definition": "Pattern changes are audited and apply only to future generation; existing sessions remain unchanged.",
+            "next": next_step, "next_role": "Course Owner", "waiting_since": row.get("modified"),
+            "actions": [action for action in row_actions if action],
+        })
+    notes = []
+    if len(templates) > LIMIT_QUEUES:
+        notes.append(f"Showing the {LIMIT_QUEUES} most recently changed templates.")
+    if branch_limited:
+        notes.append("A Course Owner with institute-wide access can create a template. You can review templates in your assigned branches.")
+    return section("timetables", "Recurring timetables", "queue", items=items, actions=actions,
+                   empty_title="No templates in your scope",
+                   empty_body="Define an approved weekly pattern before asking the scheduler to generate class sessions.",
+                   notes=" ".join(notes))
 
 
 def _current_year(years, today):
