@@ -120,7 +120,7 @@ if ($Action -eq 'Install' -or $Action -eq 'Prepare') {
             Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
     ).Count -gt 0)
     $wslReady = $false
-    $wsl = Get-Command wsl.exe -CommandType Application -ErrorAction SilentlyContinue
+    $wsl = Get-Command wsl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($wsl) {
         $version = @(& $wsl.Source --version 2>$null)
         if ($LASTEXITCODE -eq 0 -and $version.Count -and

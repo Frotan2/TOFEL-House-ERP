@@ -73,7 +73,7 @@ try {
         "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
         "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe"
     )
-    $wslCommand = Get-Command wsl.exe -CommandType Application -ErrorAction SilentlyContinue
+    $wslCommand = Get-Command wsl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     $wslOK = $false
     if ($wslCommand) {
         $wslVersion = @(& $wslCommand.Source --version 2>$null)

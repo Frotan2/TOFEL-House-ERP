@@ -13,7 +13,9 @@ function Assert-NoDockerOverrides {
 
 function Assert-LocalDockerEngine([switch]$AllowStopped) {
     Assert-NoDockerOverrides
-    $docker = Get-Command docker.exe -CommandType Application -ErrorAction SilentlyContinue
+    # Get-Command can list more than one executable. Validate the first path,
+    # which is the one the normal Docker command resolves on this process PATH.
+    $docker = Get-Command docker.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $docker) {
         throw 'Docker Desktop was not found. Install it directly from Docker and reopen the launcher.'
     }

@@ -200,8 +200,9 @@ jobs:
           '@
           Add-Type -TypeDefinition $fakeDocker -OutputAssembly (Join-Path $fakeDir 'docker.exe') -OutputType ConsoleApplication
           $env:PATH = "$fakeDir;$env:PATH"
-          if ((Get-Command docker.exe -CommandType Application).Source -ine (Join-Path $fakeDir 'docker.exe')) {
-            throw 'Synthetic Docker did not take precedence on PATH.'
+          $resolvedDocker = Get-Command docker.exe -CommandType Application | Select-Object -First 1
+          if ($resolvedDocker.Source -ine (Join-Path $fakeDir 'docker.exe')) {
+            throw "Synthetic Docker did not take precedence on PATH (resolved: $($resolvedDocker.Source))."
           }
           $env:TH_SYNTHETIC_VOLUME_EXISTS = '0'
           $env:TH_SYNTHETIC_REVISION = (& git --no-optional-locks rev-parse HEAD).Trim()

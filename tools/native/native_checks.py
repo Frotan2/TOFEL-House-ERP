@@ -6231,6 +6231,16 @@ def main():
         def desk_qualification():
             frappe.set_user('Administrator')
             health_privacy_controls.update(seed_health_privacy_controls(frappe))
+            # Use the approved family codes on this disposable site. Give GE
+            # a policy shell and leave EAP available for separate setup.
+            as_user('course_owner',lambda:acm.create_program(
+                'desk-grading-ge-family-0001','GEN-ENG','Synthetic GE grading'))
+            as_user('course_owner',lambda:acm.create_program(
+                'desk-grading-eap-family-0001','EAP','Synthetic EAP grading'))
+            as_user('course_owner',lambda:acm.create_assessment_policy(
+                'desk-grading-ge-policy-0001','GEN-ENG','GEN-ENG-ASSESS-01',
+                'Synthetic GE assessment policy'))
+            frappe.db.commit()
             # The original desk qualification only tested JSON endpoints.
             # A real Owner reported /api/method/frappe.desk.desk_page.getpage
             # failing with FileNotFoundError, because Frappe scrubs page names
@@ -6351,11 +6361,20 @@ def main():
                 'static_explanatory_help_allowed':True}
             owf={f['label'] for f in next(s for s in own['sections'] if s['id']=='health')['facts']}
             assert {'Failed background jobs','Stopped scheduled job types','Failed scheduled runs'}<=owf,sorted(owf)
-            # S6 academic-setup-finalization: years coverage and the grading
-            # placeholder are owner-visible facts, not hidden state.
+            # The Owner can finish an incomplete policy or start setup for a
+            # different approved program without inventing grading values.
             assert {'years','grading','discounts'}<=desk_sections(setu)
-            yg={item['id']:item for item in next(s for s in setu['sections'] if s['id']=='grading')['items']}
-            assert yg['grading-policy']['status']=='Not decided',yg
+            grading={item['id']:item for item in next(
+                section for section in setu['sections'] if section['id']=='grading')['items']}
+            assert set(grading)=={'GEN-ENG-ASSESS-01','grading-setup-EAP'},sorted(grading)
+            ge,eap=grading['GEN-ENG-ASSESS-01'],grading['grading-setup-EAP']
+            assert ge['status']=='Incomplete' and eap['status']=='Not configured',(ge,eap)
+            assert ge['action']['endpoint']=='toefl_house.setup_presets.owner_policy_forms.configure_initial_assessment',ge
+            assert ge['action']['args']=={'policy':'GEN-ENG-ASSESS-01'},ge
+            assert eap['action']['endpoint']=='toefl_house.academic.create_assessment_policy',eap
+            assert eap['action']['args']['family']=='EAP',eap
+            assert eap['action']['args']['code']=='EAP-ASSESS-01',eap
+            assert ge['action']['role']==eap['action']['role']=='Course Owner',(ge,eap)
             yy={item['id']:item for item in next(s for s in setu['sections'] if s['id']=='years')['items']}
             assert 'SYN-AY-2027' in yy,('the synthetic academic year must be owner-visible',sorted(yy))
             # S6 teacher-daily-use: the seventh desk loads for its audience
