@@ -951,6 +951,24 @@ class RecoveryAuthorizationTests(UpdateEngineBase):
         fixture.write_recovery_authorization(key=rogue, key_id="support-2026a")
         self.assertIn("preflight.recovery.authorization_invalid", codes(fixture.preflight()))
 
+    def test_site_update_rejects_one_rsa_key_under_two_bindings(self):
+        fixture = self.fixture()
+        trust_path = fixture.product_root / fixture.trust_store_rel
+        trust = json.loads(trust_path.read_text(encoding="utf-8"))
+        trust["keys"][2]["modulus_b64"] = trust["keys"][1]["modulus_b64"]
+        trust_path.write_text(json.dumps(trust), encoding="utf-8")
+        fixture.write_recovery_authorization(second_key=fixture.support)
+
+        with self.assertRaises(engine.UpdateError) as refused:
+            engine.validate_recovery_authorization(
+                fixture.product_root / fixture.authorization_rel,
+                fixture.product_root / fixture.authorization_signature_rel,
+                engine.load_trust_store(trust_path, now=NOW), site=engine.SITE_NAME,
+                receipt_sha256=fixture.receipt_sha256, now=NOW, max_age_hours=168,
+                signature_path_2=fixture.product_root / fixture.authorization_signature_2_rel)
+        self.assertEqual(refused.exception.code, "preflight.recovery.approval_invalid")
+        self.assertIn("distinct RSA public keys", refused.exception.detail)
+
     def test_expired_authorization_is_refused(self):
         fixture = self.fixture()
         fixture.write_recovery_authorization(issued=NOW - timedelta(days=9),

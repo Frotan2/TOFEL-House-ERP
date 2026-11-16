@@ -1392,7 +1392,7 @@ def validate_recovery_authorization(path: Path, signature_path: Path, store: dic
     * ``backup_receipt_sha256`` — the verified backup receipt;
     * ``approvals`` — exactly two entries, one Course Owner and one General
       Manager or designated recovery authority, with distinct identities,
-      distinct roles and distinct trusted key ids;
+      distinct roles, distinct trusted key ids and distinct RSA public keys;
     * two detached RSA signatures over the identical document bytes, each by
       a trust-store key whose stored approver identity and role match the
       approval entry for that key.  A key without an approver binding, a
@@ -1501,9 +1501,9 @@ def validate_recovery_authorization(path: Path, signature_path: Path, store: dic
         # manifest-only key still fails with trust.key_unknown, as before.
         purpose = "recovery-authorization" if internal_installation is None else operation
         key = select_key(store, envelope["key_id"], purpose, now=now)
-        if internal_installation is not None and key["modulus"] in verified_moduli:
+        if key["modulus"] in verified_moduli:
             raise refuse("preflight.recovery.approval_invalid",
-                         "internal approval requires distinct signing keys")
+                         "both recovery approvals require distinct RSA public keys")
         verified_moduli.add(key["modulus"])
         approval = approval_by_key.get(envelope["key_id"])
         if approval is None:
