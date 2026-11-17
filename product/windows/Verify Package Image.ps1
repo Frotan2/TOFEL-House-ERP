@@ -317,6 +317,28 @@ try {
                     $record.internal_setup_sha256 = $setupDigest
                     $record.internal_installation_id = [guid]::NewGuid().ToString("N")
                 }
+                # Preserve exact signed bytes. Runtime verification binds this
+                # statement to the installed image using provider-pinned trust.
+                $customerFiles = @('customer-release.json', 'customer-release.sig.json')
+                $grantDir = Split-Path -Parent $Manifest
+                $grants = @($customerFiles | ForEach-Object {
+                    Get-Item -LiteralPath (Join-Path $grantDir $_) -ErrorAction SilentlyContinue
+                })
+                if ($grants.Count) {
+                    if ($grants.Count -ne $customerFiles.Count -or -not $record.internal_setup_sha256) {
+                        throw 'Factory release authorization is incomplete.'
+                    }
+                    foreach ($grant in $grants) {
+                        if ($grant.PSIsContainer -or ($grant.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+                            $grant.Length -lt 1 -or $grant.Length -gt 8192) {
+                            throw 'Factory release authorization is malformed.'
+                        }
+                    }
+                    foreach ($grant in $grants) {
+                        $destination = Join-Path (Split-Path -Parent $identityPath) $grant.Name
+                        [IO.File]::Copy($grant.FullName, $destination, $false)
+                    }
+                }
             }
             Write-VerifiedInstalledImageIdentity -Path $identityPath `
                 -Contents ($record | ConvertTo-Json -Depth 5) -CreateOnly:$RecordFactoryImage

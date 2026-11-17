@@ -330,6 +330,8 @@ const allowedCalls = new Set([...Object.values(EXPECTED).map((shape) => shape.en
 	"toefl_house.setup_presets.api.preview_owner_initial_setup",
 	"toefl_house.setup_presets.owner_policy_forms.owner_form_options",
 	"toefl_house.setup_presets.installer.initialize_owner_catalog",
+	"toefl_house.operations.recovery_kit.create_recovery_kit",
+	"toefl_house.operations.owner_configuration.set_backup_enabled",
 	client.toefl_house.role_desks.registry,
 	...Object.keys(actionFields)]);
 for (const method of Object.keys(actionFields)) {
@@ -344,6 +346,12 @@ for (const method of Object.keys(actionFields)) {
 for (const [, method] of source.matchAll(/method:\s*"([\w.]+)"/g)) {
 	assert(allowedCalls.has(method), `desk client calls an unreviewed endpoint: ${method}`);
 }
+
+const recoveryKitSource = fs.readFileSync(path.join(APP, "operations/recovery_kit.py"), "utf8");
+assert(recoveryKitSource.includes('@frappe.whitelist(methods=["POST"])') &&
+	recoveryKitSource.includes('require_authority("business_policy")') &&
+	recoveryKitSource.includes("_verified_factory_release()"),
+	"recovery kit creation must remain a guarded Owner POST on an approved factory release");
 
 /* A reviewed, GET-only Course Owner setup preflight may be called.
  * The bridge must expose no mutation or write privilege. */

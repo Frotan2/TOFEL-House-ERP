@@ -9,7 +9,9 @@ param(
     [Parameter(Mandatory=$true)][string]$OutputExe,
     [string]$RuntimeBundle = "",
     [string]$SigningCertificateThumbprint = "",
-    [string]$TimestampServer = ""
+    [string]$TimestampServer = "",
+    [string]$CustomerReleaseGrant = "",
+    [string]$CustomerReleaseSignature = ""
 )
 $ErrorActionPreference = 'Stop'
 $staging = $null
@@ -22,9 +24,45 @@ function Copy-ArchiveInput([string]$Origin, [string]$Destination) {
     } catch { Copy-Item -LiteralPath $Origin -Destination $Destination -ErrorAction Stop }
 }
 
+function Get-InstallerSigningCertificate([string]$Thumbprint, [string]$Timestamp) {
+    if ($Thumbprint -notmatch '^[0-9a-fA-F]{40}$' -or
+        $Timestamp -notmatch '^http://[A-Za-z0-9.-]+(?::[0-9]{2,5})?(/[^\s]*)?$') {
+        throw 'A code-signing certificate and Authenticode-compatible HTTP timestamp server are required.'
+    }
+    $certificates = @(Get-ChildItem 'Cert:\CurrentUser\My', 'Cert:\LocalMachine\My' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Thumbprint -ieq $Thumbprint })
+    $now = [DateTime]::UtcNow
+    if ($certificates.Count -ne 1 -or -not $certificates[0].HasPrivateKey -or
+        $certificates[0].NotBefore.ToUniversalTime() -gt $now -or
+        $certificates[0].NotAfter.ToUniversalTime() -le $now -or
+        -not @($certificates[0].EnhancedKeyUsageList |
+            Where-Object { $_.ObjectId -eq '1.3.6.1.5.5.7.3.3' }).Count) {
+        throw 'One currently valid code-signing certificate with a private key is required.'
+    }
+    return $certificates[0]
+}
+
+function Set-VerifiedFileSignature([string]$Path, $Certificate, [string]$Timestamp) {
+    $name = [IO.Path]::GetFileName($Path)
+    $signed = Set-AuthenticodeSignature -LiteralPath $Path -Certificate $Certificate -HashAlgorithm SHA256 -TimestampServer $Timestamp
+    if ($signed.Status -ne 'Valid') { throw ('Could not sign ' + $name + '.') }
+    $identity = Get-AuthenticodeSignature -LiteralPath $Path
+    if ($identity.Status -ne 'Valid' -or $null -eq $identity.TimeStamperCertificate -or
+        $null -eq $identity.SignerCertificate -or $identity.SignerCertificate.Thumbprint -ine $Certificate.Thumbprint) {
+        throw ('Signature, publisher, or timestamp verification failed for ' + $name + '.')
+    }
+}
+
 try {
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
+    if ($TimestampServer -and -not $SigningCertificateThumbprint) {
+        throw 'A timestamp server cannot be used without a code-signing certificate.'
+    }
+    $signingCertificate = $null
+    if ($SigningCertificateThumbprint) {
+        $signingCertificate = Get-InstallerSigningCertificate $SigningCertificateThumbprint $TimestampServer
+    }
     $packageRoot = (Get-Item -LiteralPath $Package).FullName
     $output = [IO.Path]::GetFullPath($OutputExe)
     if ([IO.Path]::GetExtension($output) -ine '.exe' -or (Test-Path -LiteralPath $output)) {
@@ -64,7 +102,8 @@ try {
             throw ('Qualified provider kit component is missing: ' + $relative)
         }
     }
-    # The EXE remains a test candidate; this builder grants no production approval.
+    # Engineering kit receipts remain TEST. Production permission can only
+    # come from an independently signed, image-bound customer release grant.
     $manifest = Get-Content -LiteralPath (Join-Path $packageRoot 'product\release\release-manifest.json') -Raw | ConvertFrom-Json
     if ($manifest.production_authorization -cne 'REJECT') { throw 'Expected an engineering candidate manifest.' }
     if ($InternalDelivery) {
@@ -113,6 +152,49 @@ try {
     $staging = Join-Path $parent ('.customer-build-' + [guid]::NewGuid().ToString('N'))
     $kit = Join-Path $staging 'kit'
     [IO.Directory]::CreateDirectory($kit) | Out-Null
+    if ($CustomerReleaseGrant -or $CustomerReleaseSignature) {
+        if (-not ($CustomerReleaseGrant -and $CustomerReleaseSignature -and $InternalDelivery -and $signingCertificate)) {
+            throw 'Factory customer release requires the signed Windows builder and both production authorization files.'
+        }
+        $releaseDir = Join-Path $kit 'product\release'
+        [IO.Directory]::CreateDirectory($releaseDir) | Out-Null
+        foreach ($document in @(
+            @{Input=$CustomerReleaseGrant; Name='customer-release.json'},
+            @{Input=$CustomerReleaseSignature; Name='customer-release.sig.json'}
+        )) {
+            $file = Get-Item -LiteralPath $document.Input -ErrorAction Stop
+            if ($file.PSIsContainer -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+                $file.Length -lt 1 -or $file.Length -gt 8192) {
+                throw 'A production authorization input is invalid.'
+            }
+            [IO.File]::Copy($file.FullName, (Join-Path $releaseDir $document.Name), $false)
+        }
+        $imageId = [string]$manifest.image.config_digest
+        if ($imageId -cnotmatch '^sha256:[a-f0-9]{64}$' -or $staging.Contains(',')) {
+            throw 'Could not verify the exact provider image for this release.'
+        }
+        $docker = Get-Command docker.exe -CommandType Application -ErrorAction Stop
+        . (Join-Path $packageRoot 'product\windows\Test Local Docker.ps1')
+        Assert-LocalDockerEngine
+        $releaseCheck = Join-Path $staging 'release-check'
+        [IO.Directory]::CreateDirectory($releaseCheck) | Out-Null
+        foreach ($name in @('customer-release.json', 'customer-release.sig.json')) {
+            [IO.File]::Copy((Join-Path $releaseDir $name), (Join-Path $releaseCheck $name), $false)
+        }
+        $identity = @{
+            schema_version=1; document_type='toefl-house-erp-installed-image'
+            provenance='factory'; source_revision=[string]$manifest.source_revision; image_id=$imageId
+        } | ConvertTo-Json -Compress
+        [IO.File]::WriteAllText((Join-Path $releaseCheck 'installed-image-identity.json'), $identity)
+        $checkArgs = @('run', '--rm', '--pull', 'never', '--network', 'none', '--read-only',
+            '--mount', "type=bind,source=$releaseCheck,target=/run/activation,readonly",
+            '--entrypoint', '/home/frappe/bench/env/bin/python', $imageId, '-c',
+            'import sys; sys.path.insert(0, "/product"); from pathlib import Path; from customer_release import verify; print(verify(Path("/run/activation")))')
+        & $docker.Source @checkArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw 'The exact provider image refused the production release grant. No installer was signed.'
+        }
+    }
     foreach ($relative in $allowed) {
         $source = if ($InternalDelivery -and $sourceFiles.Contains($relative)) {
             $local = Get-Item -LiteralPath (Join-Path $repoRoot $relative) -Force
@@ -287,6 +369,23 @@ TEST PACKAGE - NO REAL DATA. Production authorization remains REJECT.
             'Public release authorization remains REJECT.'
         ))
     }
+    if ($CustomerReleaseGrant) {
+        [IO.File]::WriteAllLines((Join-Path $kit 'READ ME FIRST.txt'), [string[]]@(
+            'TOEFL HOUSE ERP - WINDOWS INSTALLER',
+            'Open Setup. Follow official Windows prerequisite and restart prompts.',
+            'When the ERP opens, create your named administrator in its setup wizard.',
+            'In the Owner Configuration desk, set up recovery and confirm the first encrypted backup.',
+            'Once that backup verifies, the installer applies the provider release authorization automatically.',
+            'Keep your recovery kit in separate custody. Never keep it on the same disk as your backups.'
+        ))
+    }
+    # Sign the bytes which will actually be compressed and installed. The
+    # internal variant rewrites staged scripts above before signing them.
+    if ($signingCertificate) {
+        foreach ($scriptFile in Get-ChildItem -LiteralPath $kit -File -Recurse -Filter '*.ps1') {
+            Set-VerifiedFileSignature $scriptFile.FullName $signingCertificate $TimestampServer
+        }
+    }
     $payload = Join-Path $staging 'payload.zip'
     $zip = [IO.Compression.ZipFile]::Open($payload, [IO.Compression.ZipArchiveMode]::Create)
     try {
@@ -319,33 +418,13 @@ TEST PACKAGE - NO REAL DATA. Production authorization remains REJECT.
     } finally { $stream.Dispose() }
     # Signed publisher identity is separate from the embedded payload hash.
     # Uncertified artifacts can only be used as disposable engineering tests.
-    if ($SigningCertificateThumbprint) {
-        if ($SigningCertificateThumbprint -notmatch '^[0-9a-fA-F]{40}$' -or
-            $TimestampServer -notmatch '^http://[A-Za-z0-9.-]+(?::[0-9]{2,5})?(/[^\s]*)?$') {
-            throw 'A code-signing certificate and Authenticode-compatible HTTP timestamp server are required.'
-        }
+    if ($signingCertificate) {
         # PE certificate-table offsets are 32-bit; do not claim to sign a
         # single-file installer that exceeds the supported address range.
         if ((Get-Item -LiteralPath $partial).Length -ge [int64]4294960000) {
             throw 'The offline EXE exceeds the safe PE Authenticode signing limit; shrink the provider image.'
         }
-        $certificates = @(Get-ChildItem 'Cert:\CurrentUser\My', 'Cert:\LocalMachine\My' -ErrorAction SilentlyContinue |
-            Where-Object { $_.Thumbprint -ieq $SigningCertificateThumbprint })
-        if ($certificates.Count -ne 1 -or -not $certificates[0].HasPrivateKey -or
-            $certificates[0].NotBefore -gt [DateTime]::UtcNow -or
-            $certificates[0].NotAfter -le [DateTime]::UtcNow -or
-            -not @($certificates[0].EnhancedKeyUsageList |
-                Where-Object { $_.ObjectId -eq '1.3.6.1.5.5.7.3.3' }).Count) {
-            throw 'One currently valid code-signing certificate with a private key is required.'
-        }
-        $signed = Set-AuthenticodeSignature -LiteralPath $partial -Certificate $certificates[0] -HashAlgorithm SHA256 -TimestampServer $TimestampServer
-        if ($signed.Status -ne 'Valid') { throw 'Offline installer signing failed.' }
-        $identity = Get-AuthenticodeSignature -LiteralPath $partial
-        if ($identity.Status -ne 'Valid' -or
-            $null -eq $identity.TimeStamperCertificate -or
-            $identity.SignerCertificate.Thumbprint -ine $SigningCertificateThumbprint) {
-            throw 'Final installer signature or timestamp verification failed.'
-        }
+        Set-VerifiedFileSignature $partial $signingCertificate $TimestampServer
     } else {
         Write-Warning 'UNSIGNED TEST INSTALLER ONLY. Not a signed customer deliverable.'
     }

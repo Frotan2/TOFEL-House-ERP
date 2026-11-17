@@ -20,6 +20,7 @@ Commands:
   internal-context --confirm SITE show the factory installation and backup identity
   internal-enrollment --confirm SITE validate two public key records on stdin
   internal-activate --confirm SITE apply independent approvals and run the activation gates
+  customer-activate --confirm SITE apply a developer-authorized factory release after verified backup
   deactivate --confirm SITE       runbook step 8 (rollback to REFUSED)
   fee-item --confirm SITE CODE    runbook step 7 (existing native Item only)
 """
@@ -56,6 +57,7 @@ SYNTHETIC_SITES = {"placement-test.localhost", "placement-second.localhost"}
 ACTIVE_KEY = "toefl_house_production_active"
 SITE_KEY = "toefl_house_production_site"
 INTERNAL_CATALOG_SITE_KEY = "toefl_house_internal_catalog_site"
+CUSTOMER_RELEASE_ID_KEY = "toefl_house_customer_release_id"
 FEE_ITEM_KEY = "toefl_house_placement_fee_item"
 SYNTHETIC_KEYS = ("toefl_house_synthetic_only", "allow_tests")
 BACKUP_MAX_AGE_SECONDS = 24 * 3600
@@ -276,7 +278,8 @@ def with_activation(config: dict, site: str) -> dict:
 
 
 def without_activation(config: dict) -> dict:
-    return {key: value for key, value in config.items() if key not in (ACTIVE_KEY, SITE_KEY, INTERNAL_CATALOG_SITE_KEY)}
+    return {key: value for key, value in config.items()
+            if key not in (ACTIVE_KEY, SITE_KEY, INTERNAL_CATALOG_SITE_KEY, CUSTOMER_RELEASE_ID_KEY)}
 
 
 def _recover_interrupted_activation(site: str, config: dict, log=print) -> dict:
@@ -515,7 +518,7 @@ def require_confirm(site: str, confirm: str | None) -> None:
 
 
 def activate(site: str, log=print, *, expected_backup_sha256: str | None = None,
-             verified_internal_catalog: bool = False) -> None:
+             verified_internal_catalog: bool = False, customer_release_id: str | None = None) -> None:
     config = read_config(site)
     receipt = read_backup_receipt(expected_sha256=expected_backup_sha256)
     # Recovery writes site_config, so it needs the same fresh verified
@@ -562,8 +565,12 @@ def activate(site: str, log=print, *, expected_backup_sha256: str | None = None,
             # host/site/backup-bound, independently verified authorization.
             approved = read_config(site)
             approved[INTERNAL_CATALOG_SITE_KEY] = site
+            if customer_release_id is not None:
+                approved[CUSTOMER_RELEASE_ID_KEY] = customer_release_id
             write_config(site, approved)
-            if read_config(site).get(INTERNAL_CATALOG_SITE_KEY) != site:
+            persisted = read_config(site)
+            if (persisted.get(INTERNAL_CATALOG_SITE_KEY) != site
+                    or persisted.get(CUSTOMER_RELEASE_ID_KEY) != customer_release_id):
                 raise Refused("the internal catalog authorization did not persist")
     except BaseException:
         # BaseException, not Exception: a Ctrl-C/SystemExit during the
@@ -636,6 +643,18 @@ def activate_internal(site: str, log=print) -> None:
     activate(site, log, expected_backup_sha256=context["backup_receipt_sha256"],
              verified_internal_catalog=True)
     log("Internal activation approved for this installation. Public release status is unchanged.")
+
+
+def activate_customer(site: str, log=print) -> None:
+    from customer_release import verify
+
+    if probe(site)["mode"] != "REFUSED":
+        raise Refused("factory first-use activation requires a site in REFUSED mode")
+    release_id = verify(ACTIVATION_DIR)
+    context = internal_activation_context(site, datetime.now(timezone.utc))
+    activate(site, log, expected_backup_sha256=context["backup_receipt_sha256"],
+             verified_internal_catalog=True, customer_release_id=release_id)
+    log(f"Factory release {release_id} activated after verified Owner backup.")
 
 
 def validate_internal_enrollment(raw: bytes, now: datetime) -> tuple[bytes, list[dict]]:
@@ -754,7 +773,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command", choices=("status", "activate", "deactivate", "fee-item",
                                             "internal-context", "internal-enrollment",
-                                            "internal-activate"))
+                                            "internal-activate", "customer-activate"))
     parser.add_argument("--confirm")
     parser.add_argument("code", nargs="?")
     args = parser.parse_args(argv)
@@ -778,6 +797,8 @@ def main(argv=None) -> int:
             print(json.dumps({"trust_b64": base64.b64encode(encoded).decode("ascii"), "approvers": summary}))
         elif args.command == "internal-activate":
             activate_internal(site)
+        elif args.command == "customer-activate":
+            activate_customer(site)
         elif args.command == "activate":
             identity = ACTIVATION_DIR / "installed-image-identity.json"
             if identity.exists() or identity.is_symlink():

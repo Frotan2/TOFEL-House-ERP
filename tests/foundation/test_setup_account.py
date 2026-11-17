@@ -12,7 +12,8 @@ class SetupAccountTests(unittest.TestCase):
         self.user.roles = [O(role=r) for r in ("System Manager", "Guardian", "Student", "Accounts Manager")]
         self.frappe = O(flags=O(in_setup_wizard=True), session=O(user="Administrator"),
                         PermissionError=PermissionError, get_doc=Mock(return_value=self.user),
-                        db=O(exists=Mock(return_value=False)), clear_cache=Mock())
+                        db=O(exists=Mock(return_value=False)), clear_cache=Mock(),
+                        get_installed_apps=Mock(return_value=["frappe", "foundation_security"]))
         path = Path(__file__).resolve().parents[2] / "apps/foundation_security/foundation_security/setup.py"
         spec = importlib.util.spec_from_file_location("initial_setup_test", path)
         self.module = importlib.util.module_from_spec(spec)
@@ -32,6 +33,38 @@ class SetupAccountTests(unittest.TestCase):
         self.user.set.assert_called_once_with("roles", [{"role": "System Manager"}])
         self.user.save.assert_called_once_with()
         self.frappe.clear_cache.assert_called_once_with(user="initial@example.test")
+
+    def test_verified_customer_wizard_enrolls_only_named_owner_role(self):
+        self.frappe.get_installed_apps.return_value.append("toefl_house")
+        gate = Mock(return_value=True)
+        with patch.dict(sys.modules, {
+            "toefl_house.setup_presets.provider_release": O(first_owner_enrollment_allowed=gate),
+        }):
+            self.run_hook()
+        gate.assert_called_once_with()
+        self.user.set.assert_called_once_with(
+            "roles", [{"role": "System Manager"}, {"role": "Course Owner"}])
+        self.user.save.assert_called_once_with()
+
+    def test_unverified_customer_wizard_has_no_owner_role(self):
+        self.frappe.get_installed_apps.return_value.append("toefl_house")
+        gate = Mock(return_value=False)
+        with patch.dict(sys.modules, {
+            "toefl_house.setup_presets.provider_release": O(first_owner_enrollment_allowed=gate),
+        }):
+            self.run_hook()
+        gate.assert_called_once_with()
+        self.user.set.assert_called_once_with("roles", [{"role": "System Manager"}])
+
+    def test_verified_release_cannot_promote_a_portal_identity(self):
+        self.frappe.get_installed_apps.return_value.append("toefl_house")
+        self.frappe.db.exists.return_value = True
+        gate = Mock(return_value=True)
+        with patch.dict(sys.modules, {
+            "toefl_house.setup_presets.provider_release": O(first_owner_enrollment_allowed=gate),
+        }):
+            self.assert_refused()
+        gate.assert_not_called()
 
     def test_not_a_general_role_reset_entrypoint(self):
         self.frappe.flags.in_setup_wizard = False

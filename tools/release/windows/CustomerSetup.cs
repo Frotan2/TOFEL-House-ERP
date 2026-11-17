@@ -74,6 +74,9 @@ public class CustomerSetup {
                 }
                 string extracted = Path.Combine(staging, "p"); Directory.CreateDirectory(extracted);
                 ExtractPayload(payload, extracted);
+                // The Windows prerequisite check needs the post-extraction disk
+                // budget. Release the duplicate ZIP before the launcher starts.
+                File.Delete(payload);
 #if INTERNAL_UNSIGNED_SETUP
                 PreserveDownloadMarker(exe, extracted);
 #endif
@@ -87,11 +90,7 @@ public class CustomerSetup {
                 }
                 // Atomic publish: interrupted extraction cannot look installed.
                 Directory.Move(extracted, target);
-#if INTERNAL_UNSIGNED_SETUP
-                Launch(target, false);
-#else
                 Launch(target, true);
-#endif
             }
         } catch (Exception error) {
             Environment.ExitCode = 1;
@@ -278,7 +277,7 @@ public class CustomerSetup {
         ProcessStartInfo start = new ProcessStartInfo();
         start.FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
 #if INTERNAL_UNSIGNED_SETUP
-        start.Arguments = "-NoLogo -NoProfile -STA -WindowStyle Hidden -File \"" + script + "\"";
+        start.Arguments = "-NoLogo -NoProfile -STA -WindowStyle Hidden -File \"" + script + "\"" + (install ? " -AutoInstall" : "");
 #else
         start.Arguments = "-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + script + "\"" + (install ? " -AutoInstall" : "");
 #endif

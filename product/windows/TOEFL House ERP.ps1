@@ -93,12 +93,21 @@ $installUpdateButton = New-LauncherButton "Install Update" 309 451 220
 $backupButton = New-LauncherButton "Back Up Now" 30 507 269
 $verifyBackupButton = New-LauncherButton "Verify Backup" 309 507 220
 $internalTools = Test-Path -LiteralPath (Join-Path $productRoot 'prerequisites\vendor-downloads.json') -PathType Leaf
+# Visibility only. The application verifies the actual release signature and
+# backup before assigning the first Owner or enabling real operations.
+$customerDelivery = $internalTools -and
+    (Test-Path -LiteralPath (Join-Path $productRoot 'release\customer-release.json') -PathType Leaf) -and
+    (Test-Path -LiteralPath (Join-Path $productRoot 'release\customer-release.sig.json') -PathType Leaf)
 $prepareActivation = New-LauncherButton "Activation Request" 30 559 159
 $applyActivation = New-LauncherButton "Apply Approvals" 199 559 149
 $privateHttps = New-LauncherButton "Private HTTPS" 358 559 142
 $dariGuide = New-LauncherButton "Owner Guide - Dari" 510 559 172
 foreach ($button in @($prepareActivation, $applyActivation, $privateHttps, $dariGuide)) {
     $button.Visible = $internalTools
+}
+if ($customerDelivery) {
+    $prepareActivation.Visible = $false
+    $applyActivation.Visible = $false
 }
 if ($internalTools) { $form.ClientSize = New-Object System.Drawing.Size(720, 703) }
 
@@ -213,7 +222,7 @@ function Set-Busy([bool]$busy) {
     $receiptPresent = Test-Path -LiteralPath (Join-Path $productRoot 'data\activation\backup-receipt.json') -PathType Leaf
     $backupButton.Enabled = (-not $busy) -and $siteConfigured
     $verifyBackupButton.Enabled = (-not $busy) -and $siteConfigured -and $receiptPresent
-    $prepareActivation.Enabled = $verifyBackupButton.Enabled
+    $prepareActivation.Enabled = (-not $customerDelivery) -and $verifyBackupButton.Enabled
     $applyActivation.Enabled = $prepareActivation.Enabled
     $privateHttps.Enabled = (-not $busy) -and $siteConfigured
     $dariGuide.Enabled = -not $busy
@@ -519,6 +528,28 @@ $timer.Add_Tick({
         Set-Busy $false
         if ($exitCode -eq 3010) {
             $status.Text = "Windows setup needs a restart. Save your work, restart Windows, then reopen TOEFL House ERP and click Install."
+            if ($completedAction -eq "Install" -and
+                -not (Test-Path -LiteralPath (Join-Path $productRoot 'data\.installation-claim')) -and
+                (Test-Path -LiteralPath (Join-Path $productRoot '..\.setup-sha256') -PathType Leaf)) {
+                # A prerequisite reboot happens before the database is
+                # claimed. Resume once under this same user's normal policy.
+                $resumeKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce'
+                $resumeName = 'TOEFLHouseERPSetup'
+                $launcherPath = Join-Path $PSScriptRoot 'TOEFL House ERP.ps1'
+                $resume = '"' + $powershellExe + '" -NoLogo -NoProfile -STA -WindowStyle Hidden -File "' + $launcherPath + '" -AutoInstall'
+                try {
+                    if (-not (Test-Path -LiteralPath $resumeKey)) {
+                        $null = New-Item -Path $resumeKey -Force
+                    }
+                    $old = (Get-ItemProperty -LiteralPath $resumeKey -ErrorAction Stop).$resumeName
+                    if ($old -and $old -cne $resume) { throw 'Another installation has a pending restart.' }
+                    New-ItemProperty -LiteralPath $resumeKey -Name $resumeName -Value $resume -PropertyType String -Force | Out-Null
+                    $status.Text = "Save your work and restart Windows. ERP setup will continue when you sign in again."
+                } catch {
+                    # The existing graphical resume instruction is safe if
+                    # the Windows profile disallows scheduling it.
+                }
+            }
             [System.Windows.Forms.MessageBox]::Show($status.Text, "Restart required") | Out-Null
         } elseif ($exitCode -eq 0) {
             if ($completedAction -eq "Prepare") {

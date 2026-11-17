@@ -129,7 +129,8 @@ RELEASE_STATUSES = ("TEST PACKAGE - NO REAL DATA", "PRODUCTION RELEASE")
 AUTHORIZATIONS = ("REJECT", "AUTHORIZED")
 MIGRATION_MODES = ("supported", "none")
 SIGNATURE_ALGORITHMS = ("rsa-pkcs1v15-sha256",)
-KEY_PURPOSES = ("update-manifest", "recovery-authorization", "internal-activation")
+KEY_PURPOSES = ("update-manifest", "recovery-authorization", "internal-activation",
+                "customer-installation-release")
 SAFE_HOST = re.compile(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}")
 SAFE_ASSET = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 # Business records that must never shrink across a supported migration.  These
@@ -656,6 +657,8 @@ def _load_trust_store(path: Path, *, now: datetime) -> dict:
         if "internal-activation" in purposes and (
                 purposes != ["internal-activation"] or approver_identity is None):
             raise refuse("trust.invalid", "an internal activation key must have its own purpose and approver")
+        if "customer-installation-release" in purposes and purposes != ["customer-installation-release"]:
+            raise refuse("trust.invalid", "a customer release key must have its own purpose")
         try:
             modulus_bytes = base64.b64decode(_text(entry["modulus_b64"], "trust.modulus_b64", maximum=1024),
                                              validate=True)

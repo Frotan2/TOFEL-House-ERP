@@ -323,8 +323,17 @@ def _backup_switch_item():
 
 
 def _backup_policy_item(today, title, body):
+    from toefl_house.operations.owner_configuration import _validated_backup_terms
+    from toefl_house.setup_presets.provider_release import has_verified_factory_release
+
     backup = current_backup_policy(today)
     configured = backup.get("configured") is True
+    guided_recovery = has_verified_factory_release()
+    saved_public_key = None
+    if guided_recovery:
+        terms = _validated_backup_terms(today)
+        if terms:
+            saved_public_key = terms["backup_recovery_public_key"]
     detail = (
         f"Nightly at {backup['schedule_time']} local time; keep count "
         f"{backup['retention_versions']}; retention behavior: {backup['retention_behavior']}."
@@ -349,7 +358,11 @@ def _backup_policy_item(today, title, body):
         "next_role": "Course Owner", "waiting_since": None,
         "action": {
             "endpoint": "toefl_house.operations.owner_configuration.configure_local_backup_policy",
-            "label": "Save and validate backup settings", "args": {},
+            "label": ("Save settings and turn backups on" if guided_recovery and not saved_public_key
+                      else "Save and validate backup settings"),
+            "args": {},
+            "guided_recovery": guided_recovery,
+            "saved_recovery_public_key": saved_public_key,
         },
     }
 

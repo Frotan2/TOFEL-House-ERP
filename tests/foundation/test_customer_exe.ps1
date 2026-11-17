@@ -17,6 +17,15 @@ try {
         $env:PSModulePath = 'C:\IncompatiblePowerShellModules'
         $env:PSExecutionPolicyPreference = 'Bypass'
         $launch = [CustomerSetup]::CreateLauncherStartInfo($temp, $false)
+        $fresh = [CustomerSetup]::CreateLauncherStartInfo($temp, $true)
+        if ($launch.Arguments -match '(?i)\s-AutoInstall(?:\s|$)' -or
+            -not $fresh.Arguments.EndsWith(' -AutoInstall', [StringComparison]::Ordinal)) {
+            throw 'Only a freshly published installer payload should start first-run setup.'
+        }
+        if ($fresh.Arguments -match '(?i)\s-ExecutionPolicy\b' -or
+            $fresh.EnvironmentVariables.ContainsKey('PSExecutionPolicyPreference')) {
+            throw 'Automatic setup must use the normal Windows execution policy.'
+        }
         if ($launch.EnvironmentVariables.ContainsKey('PSModulePath')) {
             throw 'Setup passed its caller module path to Windows PowerShell.'
         }

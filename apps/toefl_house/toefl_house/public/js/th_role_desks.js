@@ -1424,6 +1424,71 @@ frappe.provide("toefl_house.role_desks");
 		dialog.show();
 	}
 
+	function openRecoveryKit(onSaved) {
+		let saving = false;
+		const dialog = new frappe.ui.Dialog({
+			title: text("Save your recovery kit"),
+			fields: [
+				{ fieldname: "passphrase", fieldtype: "Password", label: text("Recovery kit passphrase"), reqd: 1 },
+				{ fieldname: "confirm", fieldtype: "Password", label: text("Repeat passphrase"), reqd: 1 },
+				{ fieldname: "separate_copy", fieldtype: "Check", reqd: 1,
+					label: text("I will save this kit separately from this computer and the backup drive.") },
+			],
+			primary_action_label: text("Create and save recovery kit"),
+			async primary_action(values) {
+				if (saving) return;
+				if (values.passphrase.length < 16 || values.passphrase !== values.confirm || !values.separate_copy) {
+					frappe.msgprint(text("Enter matching passphrases of at least 16 characters and confirm separate storage."));
+					return;
+				}
+				if (typeof window.showSaveFilePicker !== "function") {
+					frappe.msgprint(text("Open ERP in Microsoft Edge or Chrome on this computer to save the kit directly."));
+					return;
+				}
+				saving = true;
+				try {
+					const destination = await window.showSaveFilePicker({
+						suggestedName: "TOEFL-House-Recovery-Kit.gpg",
+						types: [{ description: text("Encrypted recovery kit"), accept: { "application/octet-stream": [".gpg"] } }],
+					});
+					const response = await frappe.call({
+						method: "toefl_house.operations.recovery_kit.create_recovery_kit",
+						type: "POST",
+						args: { recovery_password: values.passphrase },
+					});
+					const kit = response.message;
+					if (!kit || typeof kit.kit_b64 !== "string" || !kit.kit_b64 || kit.kit_b64.length > 16384 ||
+						typeof kit.public_key !== "string" || !kit.public_key.startsWith("-----BEGIN PGP PUBLIC KEY BLOCK-----")) {
+						throw new Error("invalid recovery kit");
+					}
+					const bytes = Uint8Array.from(atob(kit.kit_b64), (character) => character.charCodeAt(0));
+					const output = await destination.createWritable();
+					try {
+						await output.write(bytes);
+						await output.close();
+					} catch (error) {
+						await output.abort().catch(() => {});
+						throw error;
+					} finally {
+						bytes.fill(0);
+					}
+					onSaved(kit.public_key);
+					dialog.hide();
+				} catch (error) {
+					if (error.name !== "AbortError") {
+						frappe.msgprint(text("The recovery kit could not be saved. Backup settings were not changed."));
+					}
+				} finally {
+					values.passphrase = values.confirm = "";
+					dialog.set_value("passphrase", "");
+					dialog.set_value("confirm", "");
+					saving = false;
+				}
+			},
+		});
+		dialog.show();
+	}
+
 	function openGuidedAction(action) {
 		if (action.endpoint === "toefl_house.finance.collections.get_collection_receipt") {
 			loadCollectionReceipt(action.args.payment_entry);
@@ -1432,6 +1497,32 @@ frappe.provide("toefl_house.role_desks");
 		const ownAttendance = action.endpoint === "toefl_house.teaching.record_instructor_attendance";
 		const cashClose = action.endpoint === "toefl_house.finance.cashier.reconcile_cashier_day";
 		let fields = ACTION_FIELDS[action.endpoint];
+		const guidedRecovery = action.guided_recovery === true &&
+			action.endpoint === "toefl_house.operations.owner_configuration.configure_local_backup_policy";
+		let recoveryPublicKey = guidedRecovery ? action.saved_recovery_public_key || "" : "";
+		const initialRecovery = guidedRecovery && !recoveryPublicKey;
+		if (guidedRecovery) {
+			fields = fields.filter((field) => field.fieldname !== "backup_recovery_public_key");
+			if (initialRecovery) {
+				const defaults = {
+					reason: "Owner accepted initial Windows recovery setup.",
+					backup_schedule_time: "02:30:00",
+					backup_retention_versions: 3,
+					backup_retention_behavior: "Delete valid older sets beyond keep count",
+					custody_requirement: "Owner confirms the protected recovery kit is held separately from the system and backup drives.",
+					recovery_quorum: 2,
+				};
+				fields = fields.map((field) => ({ ...field, default: defaults[field.fieldname] }));
+			}
+			if (initialRecovery) fields = [
+				{ fieldname: "save_recovery_kit", fieldtype: "Button", label: text("Create and save recovery kit"),
+					click: () => openRecoveryKit((publicKey) => {
+						recoveryPublicKey = publicKey;
+						frappe.show_alert({ message: text("Recovery kit saved. Continue to save backup settings."), indicator: "green" });
+					}) },
+				...fields,
+			];
+		}
 		const timetableSlots = action.endpoint === "toefl_house.teaching.timetables.set_timetable_slots";
 		const timetableStatus = action.endpoint === "toefl_house.teaching.timetables.set_timetable_template_status";
 		if (timetableSlots) {
@@ -1646,6 +1737,10 @@ frappe.provide("toefl_house.role_desks");
 			fields: [{ fieldname: "request_key", label: text("Request reference"), fieldtype: "Data", hidden: 1, read_only: 1, default: requestKey }, ...contextFields, ...fields],
 			primary_action_label: text(action.label),
 			primary_action(values) {
+				if (guidedRecovery && !recoveryPublicKey) {
+					frappe.msgprint(text("Create and save your recovery kit before saving backup settings."));
+					return;
+				}
 				const guard = ACTION_GUARDS[action.endpoint];
 				if (guard) {
 					const problem = guard(values);
@@ -1658,6 +1753,10 @@ frappe.provide("toefl_house.role_desks");
 				fields.forEach((field) => {
 					if (field.fieldname) args[field.fieldname] = values[field.fieldname];
 				});
+				if (guidedRecovery) {
+					delete args.save_recovery_kit;
+					args.backup_recovery_public_key = recoveryPublicKey;
+				}
 				if (timetableSlots) {
 					const pattern = cleanTimetableSlots(args.slots);
 					if (!pattern || !pattern.length ||
@@ -1877,7 +1976,21 @@ frappe.provide("toefl_house.role_desks");
 					args,
 					freeze: true,
 					freeze_message: text("Submitting guarded command"),
-					callback(response) {
+					async callback(response) {
+						if (initialRecovery) {
+							try {
+								await frappe.call({
+									method: "toefl_house.operations.owner_configuration.set_backup_enabled",
+									type: "POST",
+									args: { request_key: newRequestKey(), enabled: 1 },
+								});
+							} catch (error) {
+								dialog.hide();
+								frappe.msgprint(text("Recovery settings were saved. Turn backup on from Configuration before running your first backup."));
+								if (typeof currentReload === "function") currentReload();
+								return;
+							}
+						}
 						dialog.hide();
 						resultMessage(action.label, response.message);
 						if (typeof action.refresh === "function") action.refresh();
@@ -2439,4 +2552,3 @@ frappe.provide("toefl_house.role_desks");
 	toefl_house.role_desks.escapeText = escapeText;
 	toefl_house.role_desks.statusTone = statusTone;
 })();
-

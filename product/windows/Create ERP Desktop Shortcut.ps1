@@ -43,3 +43,40 @@ if (Test-Path -LiteralPath $destination) {
     }
 }
 Write-Output 'The TOEFL House ERP desktop shortcut is ready.'
+
+$startup = [Environment]::GetFolderPath('Startup')
+$worker = Join-Path $customer 'product\windows\Run TOEFL House ERP.ps1'
+$windowsPowerShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+if (-not $startup -or -not (Test-Path -LiteralPath $startup -PathType Container) -or
+    -not (Test-Path -LiteralPath $worker -PathType Leaf) -or
+    -not (Test-Path -LiteralPath $windowsPowerShell -PathType Leaf) -or
+    ((Get-Item -LiteralPath $startup).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw 'The current Windows sign-in shortcut location is unavailable.'
+}
+$startupLink = Join-Path $startup 'TOEFL House ERP - Start at sign-in.lnk'
+$startArguments = '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -File "' + $worker + '" -Action Start'
+$product = Join-Path $customer 'product'
+if (Test-Path -LiteralPath $startupLink) {
+    $existing = Get-Item -LiteralPath $startupLink -Force
+    if ($existing.PSIsContainer -or ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'The ERP startup shortcut path is already occupied.'
+    }
+    $saved = $shell.CreateShortcut($startupLink)
+    if ($saved.TargetPath -ine $windowsPowerShell -or $saved.Arguments -cne $startArguments -or
+        $saved.WorkingDirectory -ine $product) {
+        throw 'A different ERP startup shortcut already exists. It was preserved.'
+    }
+} else {
+    $signIn = $shell.CreateShortcut($startupLink)
+    $signIn.TargetPath = $windowsPowerShell
+    $signIn.Arguments = $startArguments
+    $signIn.WorkingDirectory = $product
+    $signIn.Description = 'Start TOEFL House ERP when the current Windows operator signs in.'
+    $signIn.Save()
+    $saved = $shell.CreateShortcut($startupLink)
+    if ($saved.TargetPath -ine $windowsPowerShell -or $saved.Arguments -cne $startArguments -or
+        $saved.WorkingDirectory -ine $product) {
+        throw 'Windows did not preserve the expected ERP startup shortcut.'
+    }
+}
+Write-Output 'The TOEFL House ERP will start when this Windows user signs in.'
