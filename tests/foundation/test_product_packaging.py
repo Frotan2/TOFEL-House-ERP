@@ -475,6 +475,8 @@ class LineEndingContract(unittest.TestCase):
             "product/web.cjs", "product/realtime.cjs",
             # Signed update engine + its container entrypoint (Issue #40).
             "product/update_engine.py", "product/update_host.py", "product/update_entrypoint.sh",
+            # Factory release verification and the pinned provider trust store.
+            "product/customer_release.py", "product/customer-release-trust.json",
             "tools/foundation/secure_weasyprint.py", "tools/foundation/secure_frappe_python.py",
             "tools/foundation/secure_hrms.py",
             "tools/foundation/hrms-locks", "tools/foundation/banking-locks",
