@@ -47,6 +47,7 @@ tools/foundation/*
 !tools/foundation/secure_uri_decoder.py
 !tools/foundation/decoder/
 !tools/foundation/decoder/**
+!tools/foundation/picomatch_build_boundary.py
 !tools/foundation/fix_setup_sidebar.py
 **/__pycache__
 **/*.pyc

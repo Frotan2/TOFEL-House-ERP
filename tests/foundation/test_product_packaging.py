@@ -487,6 +487,7 @@ class LineEndingContract(unittest.TestCase):
               "tools/foundation/secure_deepmerge.py", "tools/foundation/deepmerge-hashes.json",
             # Exact upstream decoder body plus legacy CommonJS compatibility adapter.
             "tools/foundation/secure_uri_decoder.py", "tools/foundation/decoder",
+            "tools/foundation/picomatch_build_boundary.py",
             # Setup wizard lacks sidebar DOM until native setup completes.
             "tools/foundation/fix_setup_sidebar.py",
         }
