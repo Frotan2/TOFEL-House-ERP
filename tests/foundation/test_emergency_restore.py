@@ -341,6 +341,33 @@ class EmergencyRestoreTests(unittest.TestCase):
                 self._run_authorized()
         native.assert_not_called()
 
+    def test_same_rsa_key_under_distinct_approver_bindings_is_refused(self):
+        store = json.loads(self.trust_path.read_text(encoding="utf-8"))
+        owner_modulus = base64.b64decode(store["keys"][0]["modulus_b64"])
+        # Even differently encoded copies of the same modulus represent one key.
+        store["keys"][1]["modulus_b64"] = base64.b64encode(
+            b"\x00" + owner_modulus).decode("ascii")
+        self.trust_path.write_text(json.dumps(store), encoding="utf-8")
+        now = datetime.now(timezone.utc)
+        document, sig1, sig2 = self._authorization(
+            signers=(self.owner, self.owner),
+            issued=(now - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            expires=(now + timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+        with (patch.object(self.restore, "_run_native_restore") as native,
+              patch.object(self.restore, "_probe_restore_artifacts") as probe,
+              patch.object(self.restore, "_append_audit") as audit):
+            with self.assertRaisesRegex(self.restore.RestoreInputError, "same RSA public key"):
+                self.restore._native_restore(
+                    self.site, self.target_set, SECRET_KEY, SECRET_DB, SECRET_ADMIN,
+                    target="production", pre_restore_backup_set=self.current_set,
+                    authorization=document, signature_1=sig1, signature_2=sig2)
+        native.assert_not_called()
+        probe.assert_not_called()
+        audit.assert_not_called()
+        self.assertFalse((self._state_dir() / ("a" * 32 + ".json")).exists())
+        self.assertFalse((self._state_dir() / "in-progress.json").exists())
+
     def test_wrong_purpose_key_is_refused(self):
         document, sig1, sig2 = self._authorization(
             approvals=[

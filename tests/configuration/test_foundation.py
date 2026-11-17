@@ -423,8 +423,8 @@ class ConfigurationAuditContractTests(unittest.TestCase):
         self.assertIn("Configuration audit events are append-only", event)
 
     def test_kinds_bind_exactly_the_registered_configuration_commands_to_business_policy(self):
-        # Every literal configuration command kind, including the four global
-        # Owner-operations commands, binds to the Course Owner authority.
+        # Owner operations and local backup configuration use the same
+        # Course Owner authority as the other configuration commands.
         source = (APP / "configuration/audit.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
         kinds = None
@@ -440,6 +440,7 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "set_owner_operations_policy_version": "business_policy",
             "set_owner_operations_policy_status": "business_policy",
             "validate_owner_operations_policy": "business_policy",
+            "configure_local_backup_policy": "business_policy",
             "set_backup_enabled": "business_policy",
             "create_assessment_policy": "business_policy",
             # Strict allowlist: new native grading-scale writes remain Owner-only.

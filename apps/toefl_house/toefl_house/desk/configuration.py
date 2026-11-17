@@ -21,6 +21,7 @@ from toefl_house.configuration import rules as foundation
 from toefl_house.enrollment.exits import governing_exit_terms
 from toefl_house.operations.owner_configuration import (backup_switch_state,
                                                      current_backup_policy)
+from toefl_house.setup_presets.provider_release import has_verified_factory_release
 from toefl_house.desk import (
     LIMIT_QUEUES,
     project_count,
@@ -186,7 +187,7 @@ def work():
     backup_title, backup_body = CURRENT_BACKUP_DOMAIN
     sections.append(section(
         "backup-recovery", backup_title, "queue",
-        items=[_backup_switch_item(), _owner_policy_item(today, backup_title, backup_body)],
+        items=[_backup_switch_item(), _backup_policy_item(today, backup_title, backup_body)],
         empty_title=backup_title, empty_body=backup_body))
     sections.append(
         section("owner-policies", "Course Owner Policy Controls", "queue",
@@ -322,28 +323,66 @@ def _backup_switch_item():
     }
 
 
+def _backup_policy_item(today, title, body):
+    backup = current_backup_policy(today)
+    configured = backup.get("configured") is True
+    guided_recovery = has_verified_factory_release()
+    saved_public_key = None
+    if guided_recovery:
+        from toefl_house.operations.owner_configuration import _validated_backup_terms
+
+        terms = _validated_backup_terms(today)
+        if terms:
+            saved_public_key = terms["backup_recovery_public_key"]
+    detail = (
+        f"Nightly at {backup['schedule_time']} local time; keep count "
+        f"{backup['retention_versions']}; retention behavior: {backup['retention_behavior']}."
+        if configured else
+        "Backup and activation fail closed until the local backup settings are validated "
+        "and backup is switched On. Owner decision D17: delete valid older sets beyond the keep count."
+    )
+    action = {
+        "endpoint": "toefl_house.operations.owner_configuration.configure_local_backup_policy",
+        "label": "Save and validate backup settings",
+        "args": {},
+    }
+    if guided_recovery:
+        action.update(guided_recovery=True, saved_recovery_public_key=saved_public_key)
+        if not saved_public_key:
+            action["label"] = "Save settings and turn backups on"
+    return {
+        "id": "backup-recovery", "person": title, "detail": detail,
+        "status": ("Backup policy configured" if configured else
+                   "Backup Off" if backup.get("status") == "OFF" else
+                   "Owner configuration required"),
+        "stage": "Owner configuration", "stage_definition": body,
+        "next": ("Save your protected recovery kit separately from this computer and the backup drive. "
+                 "Confirm backup settings, then choose Back Up Now in the Windows launcher."
+                 if guided_recovery else (
+            "The Course Owner enters the approved schedule, keep count and retention "
+            "behavior, public recovery key, custody requirements and quorum; no default is supplied. "
+            "Keep the private key outside the ERP and backup drive. Switch backup On and follow "
+            "the launch guide to use Back Up Now and Verify Backup in the Windows launcher, "
+            "with a separate physical backup drive. Follow the independent recovery approval procedure. "
+            "Saving new settings requires a new verified backup before activation."
+        )),
+        "next_role": "Course Owner", "waiting_since": None,
+        "action": action,
+    }
+
+
 def _owner_policy_item(today, title, body):
     """Project the canonical Course Owner carrier and its guarded commands."""
-    is_backup = title == "Backup & Recovery"
-    item_id = "backup-recovery" if is_backup else OWNER_POLICY
     policy = project_rows("configuration", OWNER_POLICY,
                           ["name", "code", "title", "status", "description"],
                           limit=1)
     if not policy:
-        detail = (
-            "The Owner decided the retention behavior on 2026-10-14 (decision D17: delete valid older sets beyond the keep count), but no policy exists yet, so no retention behavior is configured and backup and activation fail closed."
-            if is_backup else
-            "No owner policy exists yet; this domain has no governing terms.")
-        next_text = (
-            "Create the policy and enter the Owner-approved retention behavior from decision D17 together with the keep count; no default is supplied. Do not run the backup helper or proceed through activation until that policy is complete and validated."
-            if is_backup else
-            "Create TH Owner Operations Policy, then add and validate its first effective-dated version.")
         return {
-            "id": item_id, "person": title if is_backup else "TH Owner Operations Policy",
-            "detail": detail,
+            "id": OWNER_POLICY, "person": "TH Owner Operations Policy",
+            "detail": "No owner policy exists yet; this domain has no governing terms.",
             "status": "Owner configuration required", "stage": "Owner configuration",
             "stage_definition": body,
-            "next": next_text,
+            "next": "Create TH Owner Operations Policy, then add and validate its first effective-dated version.",
             "next_role": "Course Owner", "waiting_since": None,
             "action": {
                 "endpoint": "toefl_house.operations.owner_configuration.create_owner_operations_policy",
@@ -354,46 +393,14 @@ def _owner_policy_item(today, title, body):
     row = policy[0]
     if row["status"] != "Active":
         status_label = "Owner policy retired"
-        detail = "Owner policy is retired; its terms cannot govern the scheduled backup."
+        detail = "Owner Operations Policy is retired; its terms do not govern."
         next_text = "Reactivate the owner policy, then add and validate current effective-dated terms."
-    elif is_backup:
-        backup = current_backup_policy(today)
-        if backup.get("status") == "OFF":
-            status_label = "Backup Off"
-            detail = "Backup is switched Off; no backup or activation is authorized. Existing backup files are preserved."
-            next_text = "The Course Owner can turn backup On using the switch above. The full existing local backup policy and independent recovery approval will still be required."
-        elif backup.get("configured") is True:
-            status_label = "Backup policy configured"
-            detail = (f"Nightly at {backup['schedule_time']} local time; "
-                      f"configured keep count {backup['retention_versions']} "
-                      "(used only in the explicit deletion mode); retention behavior: "
-                      f"{backup['retention_behavior']}; the configured public recovery key "
-                      "encrypts the site-config recovery artifact.")
-            next_text = ("Keep the matching private recovery key under the Owner's separate custody requirement. The retention behavior must be an explicit Course Owner decision. Do not run Backup TOEFL House ERP.cmd or proceed through activation until the Owner Configuration policy is complete (keep count, nightly schedule, public recovery key, custody terms) and a verified backup exists; see the launch runbook.")
-        else:
-            status_label = "Owner backup configuration required"
-            detail = "Nightly schedule, multi-version retention count, explicit retention behavior (preserve all or authorize deletion beyond the keep count), or ASCII-armored public recovery key is missing or invalid. Backup activation remains refused."
-            next_text = (
-                "Complete every required Owner field with approved values "
-                "(reporting review, class capacity, tax, transfers/withdrawals, "
-                "calendar, nightly backup, retention count/behavior, public key, custody and "
-                "quorum); no defaults or placeholders. Set an effective-dated "
-                "version and validate it. Enter the retention behavior the "
-                "Owner approved on 2026-10-14 (decision D17: delete valid "
-                "older sets beyond the keep count) or the preserve-all "
-                "behavior the Owner later supersedes it with; there is no "
-                "default. Do not run Backup TOEFL House "
-                "ERP.cmd or proceed through activation until the policy is "
-                "complete and the implementation/docs agree; see the launch "
-                "runbook. Keep the matching private "
-                "key outside Frappe and the backup drive."
-            )
     else:
         status_label = "Owner policy active"
-        detail = "The Owner Operations fields for reporting, capacity target, tax, transfer/withdrawal and calendar are decision inputs only; native ERPNext tax settings and the separate Enrollment Exit Policy remain their canonical authorities. This policy's runtime-bound domain is the current local backup path; custody/quorum records do not prove a ceremony."
+        detail = "The Owner Operations fields for reporting, capacity target, tax, transfer/withdrawal and calendar are decision inputs only; native ERPNext tax settings and the separate Enrollment Exit Policy remain their canonical authorities. Configure new backup settings separately under Backup & Recovery."
         next_text = "Add or replace effective-dated terms, then validate the current policy."
     return {
-        "id": item_id, "person": title if is_backup else row["title"],
+        "id": OWNER_POLICY, "person": row["title"],
         "detail": detail, "status": status_label, "stage": "Owner configuration",
         "stage_definition": body, "next": next_text,
         "next_role": "Course Owner", "waiting_since": None,

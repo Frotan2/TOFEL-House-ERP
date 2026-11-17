@@ -9,7 +9,6 @@ Add-Type -AssemblyName System.Drawing
 
 $productRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $worker = Join-Path $PSScriptRoot "Run TOEFL House ERP.ps1"
-$guiPath = Join-Path $PSScriptRoot "TOEFL House ERP.ps1"
 $credentialFile = Join-Path $productRoot "data\sites\toeflhouse.localhost\private\first-run-credentials.txt"
 $guideFile = Join-Path $PSScriptRoot "OWNER ACCEPTANCE GUIDE.txt"
 $handbookFile = Join-Path $PSScriptRoot "OWNER HANDBOOK.txt"
@@ -29,7 +28,7 @@ $script:lastCheckPath = ""
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "TOEFL House ERP"
 $form.StartPosition = "CenterScreen"
-$form.ClientSize = New-Object System.Drawing.Size(720, 612)
+$form.ClientSize = New-Object System.Drawing.Size(720, 659)
 $form.MinimumSize = New-Object System.Drawing.Size(736, 651)
 $form.MaximizeBox = $false
 $form.FormBorderStyle = "FixedDialog"
@@ -91,12 +90,37 @@ $handbookButton = New-LauncherButton "Owner Handbook" 315 395 220
 # check for a signed release without any lifecycle action being reachable.
 $updateButton = New-LauncherButton "Check for Updates" 30 451 269
 $installUpdateButton = New-LauncherButton "Install Update" 309 451 220
+$backupButton = New-LauncherButton "Back Up Now" 30 507 269
+$verifyBackupButton = New-LauncherButton "Verify Backup" 309 507 220
+$internalTools = Test-Path -LiteralPath (Join-Path $productRoot 'prerequisites\vendor-downloads.json') -PathType Leaf
+# Visibility only. The application verifies the actual release signature and
+# backup before assigning the first Owner or enabling real operations.
+$customerDelivery = $internalTools -and
+    (Test-Path -LiteralPath (Join-Path $productRoot 'release\customer-release.json') -PathType Leaf) -and
+    (Test-Path -LiteralPath (Join-Path $productRoot 'release\customer-release.sig.json') -PathType Leaf)
+$prepareActivation = New-LauncherButton "Activation Request" 30 559 159
+$applyActivation = New-LauncherButton "Apply Approvals" 199 559 149
+$privateHttps = New-LauncherButton "Private HTTPS" 358 559 142
+$dariGuide = New-LauncherButton "Owner Guide - Dari" 510 559 172
+foreach ($button in @($prepareActivation, $applyActivation, $privateHttps, $dariGuide)) {
+    $button.Visible = $internalTools
+}
+if ($customerDelivery) {
+    $prepareActivation.Visible = $false
+    $applyActivation.Visible = $false
+}
+if ($internalTools) { $form.ClientSize = New-Object System.Drawing.Size(720, 703) }
 
 $disclaimer = New-Object System.Windows.Forms.Label
 $disclaimer.Text = "Windows setup uses the included installers. Real business use requires owner configuration and release approval."
 $disclaimer.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $disclaimer.ForeColor = [System.Drawing.Color]::FromArgb(96, 105, 119)
-$disclaimer.Location = New-Object System.Drawing.Point(30, 524)
+$disclaimer.Location = if ($internalTools) {
+    New-Object System.Drawing.Point(30, 629)
+} else { New-Object System.Drawing.Point(30, 583) }
+if ($internalTools) {
+    $disclaimer.Text = "Setup verifies Microsoft and Docker prerequisites. Use synthetic records until guarded activation is complete."
+}
 $disclaimer.Size = New-Object System.Drawing.Size(655, 47)
 $form.Controls.Add($disclaimer)
 
@@ -191,9 +215,17 @@ function Show-UpdateResult {
 }
 
 function Set-Busy([bool]$busy) {
-    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton, $handbookButton, $dailyGuideButton, $copyStatusButton, $updateButton, $installUpdateButton)) {
+    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton, $handbookButton, $dailyGuideButton, $copyStatusButton, $updateButton, $installUpdateButton, $backupButton, $verifyBackupButton)) {
         $button.Enabled = -not $busy
     }
+    $siteConfigured = Test-Path -LiteralPath (Join-Path $productRoot 'data\sites\toeflhouse.localhost\site_config.json') -PathType Leaf
+    $receiptPresent = Test-Path -LiteralPath (Join-Path $productRoot 'data\activation\backup-receipt.json') -PathType Leaf
+    $backupButton.Enabled = (-not $busy) -and $siteConfigured
+    $verifyBackupButton.Enabled = (-not $busy) -and $siteConfigured -and $receiptPresent
+    $prepareActivation.Enabled = (-not $customerDelivery) -and $verifyBackupButton.Enabled
+    $applyActivation.Enabled = $prepareActivation.Enabled
+    $privateHttps.Enabled = (-not $busy) -and $siteConfigured
+    $dariGuide.Enabled = -not $busy
     $credentials.Enabled = (-not $busy) -and (Test-Path -LiteralPath $credentialFile -PathType Leaf)
     $guideButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $guideFile -PathType Leaf)
     $handbookButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $handbookFile -PathType Leaf)
@@ -221,13 +253,13 @@ function Test-DockerClient {
     return $false
 }
 
-function Start-LauncherAction([string]$action) {
+function Start-LauncherAction([string]$action, [string]$backupDrive = "") {
     if ($null -ne $script:process) { return }
     # Any attempted lifecycle action invalidates the previous PC check.
     $script:lastCheckPath = ""
     Set-Busy $false
-    if ($action -ne "Check" -and $action -ne "Install" -and $action -ne "Prepare" -and -not (Test-DockerClient)) {
-        $status.Text = "Select Prepare This Computer to install the included Windows prerequisites."
+    if ($action -notin @("Check", "Install", "Prepare", "VerifyBackup") -and -not (Test-DockerClient)) {
+        $status.Text = "Docker Desktop is missing. Use Prepare This Computer, or Check This PC for details."
         return
     }
     if ($action -eq "Install" -and -not (Test-Path -LiteralPath (Join-Path $productRoot "release\toefl-house-erp-app.tar"))) {
@@ -250,6 +282,7 @@ function Start-LauncherAction([string]$action) {
         $args = @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
                   "-WindowStyle", "Hidden", "-File", ('"' + $worker + '"'),
                   "-Action", $action)
+        if ($backupDrive) { $args += @("-BackupDrive", $backupDrive) }
         $launch = @{
             FilePath = $powershellExe
             ArgumentList = $args
@@ -275,6 +308,27 @@ function Start-LauncherAction([string]$action) {
     }
 }
 
+function Start-InternalSetupForm([string]$FileName) {
+    if (-not $internalTools -or $script:process) { return }
+    $tool = Join-Path $PSScriptRoot $FileName
+    if (-not (Test-Path -LiteralPath $tool -PathType Leaf)) {
+        $status.Text = "A required setup form is missing. Verify this installer."
+        return
+    }
+    Start-Process -FilePath $powershellExe -WindowStyle Hidden -ArgumentList @(
+        '-NoLogo','-NoProfile','-STA','-File',('"' + $tool + '"')
+    )
+}
+
+$prepareActivation.Add_Click({ Start-InternalSetupForm 'Owner Activation Request.ps1' })
+$applyActivation.Add_Click({ Start-InternalSetupForm 'Apply Internal Activation.ps1' })
+$privateHttps.Add_Click({ Start-InternalSetupForm 'Private HTTPS Setup.ps1' })
+$dariGuide.Add_Click({
+    $guide = Join-Path $PSScriptRoot 'Owner Guide - Dari.md'
+    if (Test-Path -LiteralPath $guide -PathType Leaf) {
+        Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\notepad.exe') -ArgumentList ('"' + $guide + '"')
+    }
+})
 $install.Add_Click({ Start-LauncherAction "Install" })
 $open.Add_Click({ Start-LauncherAction "Start" })
 $repair.Add_Click({
@@ -294,6 +348,31 @@ $repair.Add_Click({
 })
 $stop.Add_Click({ Start-LauncherAction "Stop" })
 $checkButton.Add_Click({ Start-LauncherAction "Check" })
+$backupButton.Add_Click({
+    $receipt = Join-Path $productRoot 'data\activation\backup-receipt.json'
+    if (Test-Path -LiteralPath $receipt -PathType Leaf) {
+        $answer = [System.Windows.Forms.MessageBox]::Show(
+            'Create a verified encrypted backup on the existing approved disk?',
+            'Back Up Now', [System.Windows.Forms.MessageBoxButtons]::OKCancel)
+        if ($answer -eq [System.Windows.Forms.DialogResult]::OK) { Start-LauncherAction 'Backup' }
+        return
+    }
+    $picker = New-Object System.Windows.Forms.FolderBrowserDialog
+    try {
+        $picker.ShowNewFolderButton = $false
+        $picker.Description = 'Select the approved fixed backup disk. ERP saves backups in its own folder on this disk.'
+        if ($picker.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
+        $drive = [IO.Path]::GetPathRoot($picker.SelectedPath).TrimEnd('\')
+        if ($drive -notmatch '^[A-Za-z]:$') {
+            $status.Text = 'Choose a local Windows drive on a separate physical disk.'
+            return
+        }
+        Start-LauncherAction 'Backup' $drive
+    } finally {
+        $picker.Dispose()
+    }
+})
+$verifyBackupButton.Add_Click({ Start-LauncherAction "VerifyBackup" })
 $guideButton.Add_Click({
     # No data mutation or production operation: only open the local text guide.
     if (Test-Path -LiteralPath $guideFile -PathType Leaf) {
@@ -449,12 +528,36 @@ $timer.Add_Tick({
         Set-Busy $false
         if ($exitCode -eq 3010) {
             $status.Text = "Windows setup needs a restart. Save your work, restart Windows, then reopen TOEFL House ERP and click Install."
+            if ($completedAction -eq "Install" -and
+                -not (Test-Path -LiteralPath (Join-Path $productRoot 'data\.installation-claim')) -and
+                (Test-Path -LiteralPath (Join-Path $productRoot '..\.setup-sha256') -PathType Leaf)) {
+                # A prerequisite reboot happens before the database is
+                # claimed. Resume once under this same user's normal policy.
+                $resumeKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce'
+                $resumeName = 'TOEFLHouseERPSetup'
+                $launcherPath = Join-Path $PSScriptRoot 'TOEFL House ERP.ps1'
+                $resume = '"' + $powershellExe + '" -NoLogo -NoProfile -STA -WindowStyle Hidden -File "' + $launcherPath + '" -AutoInstall'
+                try {
+                    if (-not (Test-Path -LiteralPath $resumeKey)) {
+                        $null = New-Item -Path $resumeKey -Force
+                    }
+                    $old = (Get-ItemProperty -LiteralPath $resumeKey -ErrorAction Stop).$resumeName
+                    if ($old -and $old -cne $resume) { throw 'Another installation has a pending restart.' }
+                    New-ItemProperty -LiteralPath $resumeKey -Name $resumeName -Value $resume -PropertyType String -Force | Out-Null
+                    $status.Text = "Save your work and restart Windows. ERP setup will continue when you sign in again."
+                } catch {
+                    # The existing graphical resume instruction is safe if
+                    # the Windows profile disallows scheduling it.
+                }
+            }
             [System.Windows.Forms.MessageBox]::Show($status.Text, "Restart required") | Out-Null
         } elseif ($exitCode -eq 0) {
             if ($completedAction -eq "Prepare") {
                 $status.Text = "Windows prerequisites are prepared. Select Install to continue."
             } elseif ($completedAction -eq "Stop") {
                 $status.Text = "TOEFL House ERP has stopped safely. Your data remains stored."
+            } elseif ($completedAction -in @("Backup", "VerifyBackup")) {
+                $status.Text = "The current encrypted backup and its separate disk verified. Open View Details."
             } elseif ($completedAction -eq "Check") {
                 $script:lastCheckPath = $script:stdoutPath
                 Set-Busy $false
@@ -472,18 +575,10 @@ $timer.Add_Tick({
                     [System.Diagnostics.Process]::Start("http://127.0.0.1:8000/") | Out-Null
                 }
             } else {
-                if ($completedAction -eq "Install") {
-                    try {
-                        $shell = New-Object -ComObject WScript.Shell
-                        $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'TOEFL House ERP.lnk'))
-                        $shortcut.TargetPath = $powershellExe
-                        $shortcut.Arguments = '-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $guiPath + '" -AutoInstall'
-                        $shortcut.WorkingDirectory = $productRoot
-                        $shortcut.Save()
-                    } catch { # A restricted Desktop does not invalidate a successful installation.
-                    }
-                }
                 $status.Text = "TOEFL House ERP is ready. Opening in your browser."
+                if ($completedAction -eq "Install" -and @($tail -match '^\[TH_SHORTCUT\]').Count) {
+                    $status.Text = "ERP is ready. The desktop shortcut needs attention. Open View Details."
+                }
                 [System.Diagnostics.Process]::Start("http://127.0.0.1:8000/") | Out-Null
             }
         } else {
@@ -514,6 +609,9 @@ $form.Add_FormClosing({
 if ($SmokeTest) {
     if ($install.Text -ne "Install" -or $open.Text -ne "Open / Start" -or
         $repair.Text -ne "Repair" -or $stop.Text -ne "Stop" -or
+        $backupButton.Text -ne "Back Up Now" -or $verifyBackupButton.Text -ne "Verify Backup" -or
+        $prepareActivation.Text -ne "Activation Request" -or
+        $applyActivation.Text -ne "Apply Approvals" -or $privateHttps.Text -ne "Private HTTPS" -or
         $checkButton.Text -ne "Check This PC" -or
         $updateButton.Text -ne "Check for Updates" -or
         $installUpdateButton.Text -ne "Install Update" -or
@@ -556,6 +654,9 @@ if ($SmokeTest) {
     exit 0
 }
 Set-Busy $false
+if ($internalTools -and -not (Test-DockerClient)) {
+    $status.Text = "Docker Desktop is missing. Select Install on a new PC, or select Check This PC for details."
+}
 if ($AutoInstall) {
     $form.Add_Shown({
         if (Test-Path -LiteralPath (Join-Path $productRoot 'data\secrets\db.env')) {

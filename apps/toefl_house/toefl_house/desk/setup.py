@@ -24,8 +24,11 @@ from toefl_house.desk import (
     project_count,
     project_rows,
     require_desk_audience,
+    scope_filters,
     section,
 )
+from toefl_house.policy import clock_text
+from toefl_house.setup_presets.preset import load_preset
 
 SLUG = "th-academic-setup"
 
@@ -35,6 +38,7 @@ NATIVE_PROGRAM = "Program"
 DURATION = "TH Level Duration"
 ENROLLMENT = "Program Enrollment"
 YEAR = "Academic Year"
+TIMETABLE_TEMPLATE = "TH Timetable Template"
 FEE_CATEGORY = "Fee Category"
 FEE_STRUCTURE = "Fee Structure"
 FEE_ROW = "Fee Component"
@@ -616,6 +620,7 @@ def work():
                     empty_title="No discount rules yet",
                     empty_body="Define scholarship or discount rules under Policy A; "
                                "charges receive at most one discount according to configured precedence."),
+            _timetable_section(),
             section("years", "Academic years", "queue", items=year_items,
                     empty_title="No academic years yet",
                     empty_body="Define the first academic year from Setup actions; "
@@ -623,10 +628,91 @@ def work():
             section("grading", "Grading (owner decision D1)", "queue",
                     items=_grading_items(assessment_policies,
                                          assessment_versions, today),
-                    empty_title="Grading is undecided",
-                    empty_body="Owner decision D1 has not been made."),
+                    empty_title="No grading policies to configure",
+                    empty_body="Initialize the approved course catalog before configuring grading."),
         ],
     }
+
+
+def _timetable_section():
+    """Show patterns for the scoped Owner; slot children inherit parent visibility."""
+    max_slots = 40  # Bound the projection to the existing command's maximum.
+    templates = project_rows(
+        "setup", TIMETABLE_TEMPLATE,
+        ["name", "code", "title", "status", "program", "branch", "delivery_mode", "modified"],
+        order_by="modified desc, name asc", limit=LIMIT_QUEUES + 1)
+    visible = templates[:LIMIT_QUEUES]
+    slot_limit = len(visible) * max_slots
+    rows = project_rows(
+        "setup", "TH Timetable Slot",
+        ["name", "parent", "weekday", "from_time", "to_time", "course", "room", "instructor"],
+        filters={"parent": ("in", [row["name"] for row in visible]),
+                 "parenttype": TIMETABLE_TEMPLATE, "parentfield": "slots"},
+        order_by="parent asc, idx asc", limit=slot_limit + 1) if visible else []
+    by_template = {}
+    for row in rows:
+        by_template.setdefault(row["parent"], []).append(row)
+    actions = []
+    branch_limited = bool(scope_filters("setup").get("branch"))
+    if not branch_limited:
+        action = guided_action(
+            "Course Owner", "toefl_house.teaching.timetables.create_timetable_template",
+            "Create timetable template", {})
+        if action:
+            actions.append(action)
+    items = []
+    for row in visible:
+        active = row["status"] == "Active"
+        slots = by_template.get(row["name"], [])
+        complete = len(rows) <= slot_limit and len(slots) <= max_slots
+        try:
+            pattern = [{
+                "weekday": slot["weekday"],
+                "from_time": clock_text(slot["from_time"]), "to_time": clock_text(slot["to_time"]),
+                "course": slot["course"], "room": slot.get("room") or "",
+                "instructor": slot.get("instructor") or "",
+            } for slot in slots] if complete else []
+        except (KeyError, ValueError):
+            complete, pattern = False, []
+        if not complete:
+            next_step = "The full weekly pattern could not be read safely. Review the stored template before editing."
+        elif active:
+            next_step = ("Use Schedule session on the active class in Academic Desk. "
+                         "Generating a batch from the weekly pattern needs an approved Class Operations Policy."
+                         if slots else "Add the approved weekly slots.")
+        else:
+            next_step = "Reactivate this template before editing its pattern or generating sessions."
+        row_actions = []
+        if active and complete:
+            row_actions.append(guided_action(
+                "Course Owner", "toefl_house.teaching.timetables.set_timetable_slots",
+                "Edit weekly slots", {"template": row["code"], "slots": pattern}))
+        if row["status"] in ("Active", "Retired"):
+            row_actions.append(guided_action(
+                "Course Owner", "toefl_house.teaching.timetables.set_timetable_template_status",
+                "Retire template" if active else "Reactivate template",
+                {"template": row["code"], "active": "false" if active else "true"}))
+        items.append({
+            "id": row["code"], "person": row["title"], "status": row["status"],
+            "detail": " · ".join(str(part) for part in (
+                row.get("program") or "Any program", row.get("branch") or "Any branch",
+                row.get("delivery_mode"), f"{len(slots)} weekly slot(s)" if complete else "",
+            ) if part),
+            "stage": "Weekly pattern",
+            "stage_definition": "Pattern changes are audited and apply only to future generation; existing sessions remain unchanged.",
+            "next": next_step, "next_role": "Course Owner", "waiting_since": row.get("modified"),
+            "actions": [action for action in row_actions if action],
+        })
+    notes = []
+    if len(templates) > LIMIT_QUEUES:
+        notes.append(f"Showing the {LIMIT_QUEUES} most recently changed templates.")
+    if branch_limited:
+        notes.append("A Course Owner with institute-wide access can create a template. You can review templates in your assigned branches.")
+    return section("timetables", "Recurring timetables", "queue", items=items, actions=actions,
+                   empty_title="No templates in your scope",
+                   empty_body=("Record approved weekly patterns here. A scheduler can book an individual "
+                               "session from an active class in Academic Desk."),
+                   notes=" ".join(notes))
 
 
 def _current_year(years, today):
@@ -656,39 +742,42 @@ def _current_validation(policy_name, snapshot):
 
 
 def _grading_items(policies, versions, today):
-    """Assessment policies with computed readiness (D1 reference structure).
-
-    With no policies this is the explicit owner placeholder: D1 undecided,
-    nothing computes grades — plus the one action that can succeed (define
-    the first policy shell). With policies, each item states its computed
-    readiness and offers exactly the actions the server rule allows.
-    """
-    if not policies:
-        return [{
-            "id": "grading-policy",
-            "person": "Grading policy",
-            "detail": "This new site has no approved grading policy version yet.",
-            "status": "Not decided",
-            "stage": "Grading",
-            "stage_definition": ("Grade scales, cutoffs and assessment components "
-                               "must be configured and approved for this site. "
-                               "The guarded grading and progression commands "
-                               "exist, but no missing policy is inferred and "
-                               "native operational acceptance remains required."),
-            "next": ("Create a graded graded assessment policy and complete "
-                     "the numeric Owner setup. Do not publish grades until "
-                     "the native plan, permissions and results are verified."),
-            "next_role": "Course Owner",
-            "waiting_since": None,
+    """Show the actual policies and a separate next action for each missing family."""
+    items = []
+    graded_families = set()
+    for template in load_preset()["programs"]:
+        if template.get("progression_kind") != "sequential":
+            continue
+        code = template["code"]
+        families = project_rows("setup", PROGRAM, ["name", "title"],
+                                filters={"code": code, "status": "Active"}, limit=2)
+        if len(families) != 1:
+            continue
+        family = families[0]
+        graded_families.add(family["name"])
+        # A bounded general list is not proof that a family lacks a policy.
+        # Retired policies count here too: reactivate the existing policy.
+        if project_rows("setup", ASSESSMENT_POLICY, ["name"],
+                        filters={"family": family["name"]}, limit=1):
+            continue
+        title = family["title"]
+        items.append({
+            "id": f"grading-setup-{code}", "person": title,
+            "detail": "No assessment policy has been defined for this program.",
+            "status": "Not configured", "stage": "Grading",
+            "stage_definition": "Each approved graded program needs its own policy.",
+            "next": ("Define the policy, then complete and validate its numeric settings. "
+                     "This step does not publish grades."),
+            "next_role": "Course Owner", "waiting_since": None,
             "action": guided_action(
-                "Course Owner",
-                "toefl_house.academic.create_assessment_policy",
-                "Define assessment policy", {}),
-        }]
+                "Course Owner", "toefl_house.academic.create_assessment_policy",
+                "Define assessment policy", {"family": code,
+                                             "code": template["assessment_policy_code"],
+                                             "title": f"{template['title']} grading policy"}),
+        })
     versions_by_policy = {}
     for row in versions:
         versions_by_policy.setdefault(row.get("parent"), []).append(row)
-    items = []
     for policy in policies:
         rows = versions_by_policy.get(policy["name"], [])
         snapshot = configuration_rules.snapshot_digest(rows)
@@ -745,7 +834,7 @@ def _grading_items(policies, versions, today):
             "next_role": "Course Owner",
             "waiting_since": None,
         }
-        actions = _assessment_actions(policy, readiness)
+        actions = _assessment_actions(policy, readiness, graded=policy.get("family") in graded_families)
         if actions:
             item["action"] = actions[0]
             if len(actions) > 1:
@@ -781,7 +870,7 @@ FACET_ACTIONS = (
 )
 
 
-def _assessment_actions(policy, readiness):
+def _assessment_actions(policy, readiness, *, graded):
     """Exactly the version/facet/status/validate actions the server allows.
 
     Facet commands append versions under the same server rules as the
@@ -789,8 +878,6 @@ def _assessment_actions(policy, readiness):
     so they are offered everywhere the version action is.
     """
     code = policy["code"]
-    from toefl_house.setup_presets.owner_policy_forms import graded_template_family_codes
-    graded = policy.get("family") in graded_template_family_codes()
     retired = readiness == "retired"
     if retired:
         primary = guided_action(

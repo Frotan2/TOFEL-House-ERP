@@ -1,0 +1,28 @@
+# Replace all three documentation-only network values before use.
+# Use a hostname in institute-managed private DNS, a reserved staff LAN
+# IPv4 address on this Windows PC, and only the authorized staff LAN CIDR.
+{
+	admin off
+	persist_config off
+	auto_https disable_redirects
+	skip_install_trust
+	servers {
+		protocols h1 h2
+		strict_sni_host on
+	}
+	storage file_system {
+		root "C:/ProgramData/TOEFL House ERP/Private HTTPS/certificates"
+	}
+}
+
+https://erp-staff.example.invalid {
+	bind 192.0.2.250
+	tls internal
+
+	@excluded not remote_ip 192.0.2.0/24
+	respond @excluded 403
+
+	header Strict-Transport-Security "max-age=86400"
+	# The product's port 8000 includes the same-origin Socket.IO ingress.
+	reverse_proxy 127.0.0.1:8000
+}

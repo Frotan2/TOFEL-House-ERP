@@ -96,6 +96,8 @@ try {
         "product/windows/Stop TOEFL House ERP.cmd",
         "product/windows/Backup TOEFL House ERP.cmd",
         "product/windows/Backup TOEFL House ERP.ps1",
+        "product/windows/Test Local Docker.ps1",
+        "product/windows/Create ERP Desktop Shortcut.ps1",
         "product/windows/Repair TOEFL House ERP.cmd",
         "product/windows/Test Fresh Installation.ps1",
         "product/windows/Test Existing Installation.ps1",

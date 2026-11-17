@@ -136,6 +136,8 @@ COPY product/perf_baseline.py /product/perf_baseline.py
 # updater starts this image with the product folder mounted read-only; the
 # engine decides whether an already-downloaded release may be applied.
 COPY product/update_engine.py /product/update_engine.py
+COPY product/customer_release.py /product/customer_release.py
+COPY product/customer-release-trust.json /product/customer-release-trust.json
 COPY product/update_host.py /product/update_host.py
 COPY product/update_entrypoint.sh /product/update_entrypoint.sh
 # Fail the build if a Windows checkout or manually altered build context
@@ -224,11 +226,12 @@ COPY --from=builder /build/sites-seed /build/sites-seed
 COPY --from=builder /build/assets-seed /build/assets-seed
 COPY --from=builder /build/deepmerge-distribution.json /build/deepmerge-distribution.json
 COPY --from=builder /build/uri-decoder-distribution.json /build/uri-decoder-distribution.json
+ARG TOEFL_HOUSE_SOURCE_REVISION=unversioned
+ARG TOEFL_HOUSE_RELEASE_VERSION=unversioned
+RUN printf '%s\n' "$TOEFL_HOUSE_SOURCE_REVISION" > /product/customer-release-revision
 # Pillow/WeasyPrint must never reach Ghostscript (GHSA-r543-q48m-4c9j).
 # Check the shipped stage AFTER its installs and every cross-stage copy.
 RUN if command -v gs >/dev/null 2>&1; then echo "ghostscript present on PATH: GHSA-r543-q48m-4c9j precondition violated" >&2; exit 1; fi
-USER frappe
-
 # The compose bind mount (./data/sites) hides the bench's own sites/ files on a
 # fresh install; bootstrap.py restores them from /build/sites-seed before the
 # first bench call (bench resolves installed apps from sites/apps.txt).
@@ -236,12 +239,11 @@ USER frappe
 # created them: they are first-build-only footprint, never runtime state.
 
 ENV BENCH_DIR=/home/frappe/bench
-ARG TOEFL_HOUSE_SOURCE_REVISION=unversioned
-ARG TOEFL_HOUSE_RELEASE_VERSION=unversioned
 LABEL org.toefl-house.source-eol="lf-v1" \
       org.toefl-house.source-revision="${TOEFL_HOUSE_SOURCE_REVISION}" \
       org.toefl-house.release-version="${TOEFL_HOUSE_RELEASE_VERSION}"
 WORKDIR /home/frappe/bench
+USER frappe
 EXPOSE 8000 9000
 ENTRYPOINT ["/product/entrypoint.sh"]
 CMD []

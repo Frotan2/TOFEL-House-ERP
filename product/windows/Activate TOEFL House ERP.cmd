@@ -3,6 +3,8 @@ setlocal DisableDelayedExpansion
 rem Requires a separately authorized internal release and the verified secondary-drive copy.
 cd /d "%~dp0.."
 title Activating TOEFL House ERP
+powershell -NoProfile -NonInteractive -File "%~dp0Test Local Docker.ps1"
+if errorlevel 1 goto :notrunning
 docker compose exec web python3 /product/activate.py status
 if errorlevel 1 goto :notrunning
 powershell -NoProfile -File "%~dp0Verify Package Image.ps1" -VerifyLoadedImage

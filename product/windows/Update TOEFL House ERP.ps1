@@ -1448,6 +1448,15 @@ function Invoke-SmokeTest {
 
 if ($SmokeTest) { Invoke-SmokeTest }
 
+if ($Action -eq "Install") {
+    try {
+        . (Join-Path $PSScriptRoot 'Test Local Docker.ps1')
+        Assert-LocalDockerEngine
+    } catch {
+        [Console]::Error.WriteLine($_.Exception.Message)
+        exit $script:ExitRefused
+    }
+}
 Protect-UpdateFolder
 if (-not (Enter-UpdateLock)) {
     Stop-Update $script:ExitRefused "busy" "launcher" "updater.already_running"

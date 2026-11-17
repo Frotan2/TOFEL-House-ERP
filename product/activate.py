@@ -18,13 +18,16 @@ Commands:
   status                          print the current site mode
   activate --confirm SITE         runbook steps 0-6 (refuses without a fresh backup)
   internal-context --confirm SITE show the factory installation and backup identity
+  internal-enrollment --confirm SITE validate two public key records on stdin
   internal-activate --confirm SITE apply independent approvals and run the activation gates
+  customer-activate --confirm SITE apply a developer-authorized factory release after verified backup
   deactivate --confirm SITE       runbook step 8 (rollback to REFUSED)
   fee-item --confirm SITE CODE    runbook step 7 (existing native Item only)
 """
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -34,6 +37,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 
 _PRODUCT_DIR = Path(__file__).resolve().parent
 if str(_PRODUCT_DIR) not in sys.path:
@@ -52,6 +56,8 @@ ENV_PYTHON = BENCH_DIR / "env" / "bin" / "python"
 SYNTHETIC_SITES = {"placement-test.localhost", "placement-second.localhost"}
 ACTIVE_KEY = "toefl_house_production_active"
 SITE_KEY = "toefl_house_production_site"
+INTERNAL_CATALOG_SITE_KEY = "toefl_house_internal_catalog_site"
+CUSTOMER_RELEASE_ID_KEY = "toefl_house_customer_release_id"
 FEE_ITEM_KEY = "toefl_house_placement_fee_item"
 SYNTHETIC_KEYS = ("toefl_house_synthetic_only", "allow_tests")
 BACKUP_MAX_AGE_SECONDS = 24 * 3600
@@ -265,14 +271,15 @@ def check_preconditions(site: str, config: dict, receipt: object, now: float,
 
 
 def with_activation(config: dict, site: str) -> dict:
-    updated = dict(config)
+    updated = without_activation(config)
     updated[ACTIVE_KEY] = 1
     updated[SITE_KEY] = site
     return updated
 
 
 def without_activation(config: dict) -> dict:
-    return {key: value for key, value in config.items() if key not in (ACTIVE_KEY, SITE_KEY)}
+    return {key: value for key, value in config.items()
+            if key not in (ACTIVE_KEY, SITE_KEY, INTERNAL_CATALOG_SITE_KEY, CUSTOMER_RELEASE_ID_KEY)}
 
 
 def _recover_interrupted_activation(site: str, config: dict, log=print) -> dict:
@@ -305,7 +312,8 @@ def _recover_interrupted_activation(site: str, config: dict, log=print) -> dict:
     if any(config.get(key) != 1 for key in SYNTHETIC_KEYS):
         return config
     cleaned = {key: value for key, value in config.items()
-               if key not in (ACTIVE_KEY, SITE_KEY, *SYNTHETIC_KEYS)}
+               if key not in SYNTHETIC_KEYS}
+    cleaned = without_activation(cleaned)
     write_config(site, cleaned)
     log("Recovered an interrupted activation: removed the activation triple "
         "and test flags left by a previous run; re-running every gate.")
@@ -509,7 +517,8 @@ def require_confirm(site: str, confirm: str | None) -> None:
         raise Refused(f"confirmation must be the site name ({site})")
 
 
-def activate(site: str, log=print, *, expected_backup_sha256: str | None = None) -> None:
+def activate(site: str, log=print, *, expected_backup_sha256: str | None = None,
+             verified_internal_catalog: bool = False, customer_release_id: str | None = None) -> None:
     config = read_config(site)
     receipt = read_backup_receipt(expected_sha256=expected_backup_sha256)
     # Recovery writes site_config, so it needs the same fresh verified
@@ -551,6 +560,18 @@ def activate(site: str, log=print, *, expected_backup_sha256: str | None = None)
         if state["mode"] != "PRODUCTION" or state["flag"] != 0 or not state.get("mirror"):
             raise Refused(f"activation gates failed: {state}")
         _prove_mixed_mode_refused(site)
+        if verified_internal_catalog:
+            # Only the internal wrapper passes this after consuming a
+            # host/site/backup-bound, independently verified authorization.
+            approved = read_config(site)
+            approved[INTERNAL_CATALOG_SITE_KEY] = site
+            if customer_release_id is not None:
+                approved[CUSTOMER_RELEASE_ID_KEY] = customer_release_id
+            write_config(site, approved)
+            persisted = read_config(site)
+            if (persisted.get(INTERNAL_CATALOG_SITE_KEY) != site
+                    or persisted.get(CUSTOMER_RELEASE_ID_KEY) != customer_release_id):
+                raise Refused("the internal catalog authorization did not persist")
     except BaseException:
         # BaseException, not Exception: a Ctrl-C/SystemExit during the
         # gate sequence must roll back exactly like a failed gate, or the
@@ -619,8 +640,71 @@ def activate_internal(site: str, log=print) -> None:
         raise Refused("the internal activation approval was already used") from exc
     except OSError as exc:
         raise Refused("the internal activation approval could not be recorded") from exc
-    activate(site, log, expected_backup_sha256=context["backup_receipt_sha256"])
+    activate(site, log, expected_backup_sha256=context["backup_receipt_sha256"],
+             verified_internal_catalog=True)
     log("Internal activation approved for this installation. Public release status is unchanged.")
+
+
+def activate_customer(site: str, log=print) -> None:
+    from customer_release import verify
+
+    if probe(site)["mode"] != "REFUSED":
+        raise Refused("factory first-use activation requires a site in REFUSED mode")
+    release_id = verify(ACTIVATION_DIR)
+    context = internal_activation_context(site, datetime.now(timezone.utc))
+    activate(site, log, expected_backup_sha256=context["backup_receipt_sha256"],
+             verified_internal_catalog=True, customer_release_id=release_id)
+    log(f"Factory release {release_id} activated after verified Owner backup.")
+
+
+def validate_internal_enrollment(raw: bytes, now: datetime) -> tuple[bytes, list[dict]]:
+    """Validate purpose-bound public records and produce the combined trust bytes."""
+    from update_engine import load_json_file, load_trust_store, select_key
+
+    try:
+        documents = json.loads(raw.decode("ascii"))
+        if not isinstance(documents, list) or len(documents) != 2:
+            raise ValueError
+        records = [base64.b64decode(entry, validate=True) for entry in documents]
+        if any(not 1 <= len(entry) <= 8192 for entry in records):
+            raise ValueError
+    except (ValueError, TypeError, UnicodeError):
+        raise Refused("expected exactly two bounded public key records") from None
+
+    def comparison_name(name: str) -> str:
+        # Keep the registered spelling in the document. Ignore cosmetic
+        # variations when deciding whether enrollment names two people.
+        plain = unicodedata.normalize("NFKC", name).replace("\u200c", "").replace("\u200d", "")
+        return " ".join(plain.split()).casefold()
+
+    parsed = []
+    roles = ("course-owner", "general-manager")
+    with tempfile.TemporaryDirectory(prefix="toefl-public-enrollment-") as temp:
+        path = Path(temp) / "record.json"
+        original = []
+        for expected_role, record in zip(roles, records):
+            path.write_bytes(record)
+            store = load_trust_store(path, now=now)
+            if len(store["keys"]) != 1:
+                raise Refused("select one public key record for each approver")
+            key = select_key(store, store["keys"][0]["key_id"], "internal-activation", now=now)
+            identity = key["approver_identity"]
+            if (key["approver_role"] != expected_role or not any(char.isalpha() for char in identity)
+                    or any(not char.isprintable() and char not in "\u200c\u200d" for char in identity)):
+                raise Refused("the chosen record does not identify the expected approver role")
+            parsed.append(key)
+            original.append(load_json_file(path, "trust store", limit=8192))
+        owner, reviewer = parsed
+        if (owner["key_id"] == reviewer["key_id"] or owner["modulus"] == reviewer["modulus"]
+                or comparison_name(owner["approver_identity"]) == comparison_name(reviewer["approver_identity"])):
+            raise Refused("enrollment requires two different people and two different keys")
+        combined = {**original[0], "keys": [row["keys"][0] for row in original]}
+        encoded = (json.dumps(combined, sort_keys=True, ensure_ascii=True) + "\n").encode("ascii")
+        path.write_bytes(encoded)
+        load_trust_store(path, now=now)
+    summary = [{name: key[name] for name in ("approver_role", "approver_identity", "key_id")}
+               for key in parsed]
+    return encoded, summary
 
 
 def deactivate(site: str, log=print) -> None:
@@ -688,7 +772,8 @@ def main(argv=None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command", choices=("status", "activate", "deactivate", "fee-item",
-                                            "internal-context", "internal-activate"))
+                                            "internal-context", "internal-enrollment",
+                                            "internal-activate", "customer-activate"))
     parser.add_argument("--confirm")
     parser.add_argument("code", nargs="?")
     args = parser.parse_args(argv)
@@ -704,8 +789,16 @@ def main(argv=None) -> int:
         require_confirm(site, args.confirm)
         if args.command == "internal-context":
             print(json.dumps(internal_activation_context(site, datetime.now(timezone.utc))))
+        elif args.command == "internal-enrollment":
+            raw = sys.stdin.buffer.read(32769)
+            if len(raw) > 32768:
+                raise Refused("the public key enrollment input is too large")
+            encoded, summary = validate_internal_enrollment(raw, datetime.now(timezone.utc))
+            print(json.dumps({"trust_b64": base64.b64encode(encoded).decode("ascii"), "approvers": summary}))
         elif args.command == "internal-activate":
             activate_internal(site)
+        elif args.command == "customer-activate":
+            activate_customer(site)
         elif args.command == "activate":
             identity = ACTIVATION_DIR / "installed-image-identity.json"
             if identity.exists() or identity.is_symlink():

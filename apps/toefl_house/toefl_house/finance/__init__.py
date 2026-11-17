@@ -271,6 +271,12 @@ def resolved_billable_components(pe, fs_name):
             discount_rules, fee_category=c.fees_category,
             program=discount_family, student=pe.student)
         if winner:
+            from toefl_house.security import is_internal_production
+            if is_internal_production():
+                raise frappe.ValidationError(
+                    "Tuition was not issued: an active discount matches this charge, "
+                    "but discount approval is on hold for this internal delivery. "
+                    "Ask the Course Owner to review the award before billing.")
             gross = float(c.amount)
             # Native Fees sums component amounts into grand_total and
             # ignores the child discount field (verified against pinned

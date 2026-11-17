@@ -156,6 +156,8 @@ def _snapshot():
                 company_account_valid = bool(
                     plan_company and frappe.db.exists("Company", plan_company)
                     and receivable
+                    and frappe.db.get_value(
+                        "Company", plan_company, "default_receivable_account") == receivable
                     and frappe.db.get_value("Account", receivable, "company")
                     == plan_company)
                 if (int(structure.docstatus) == 0
@@ -208,6 +210,15 @@ def preview_owner_initial_setup():
     preset = load_preset()
     scale = preset["assessment"]["grading_scale"]
     preview["daily_timetable"] = preset.get("daily_timetable")
+    institution = preset["institution"]
+    preview["confirmed_settings"] = {
+        "display_name": institution["display_name"],
+        "currency": institution["currency"],
+        "time_zone": institution["timezone"],
+        "academic_calendar": institution["calendar"],
+        "friday_weekly_off": institution["friday_weekly_off"],
+        "academic_years": preset["academic_years"],
+    }
     preview["grading_scale_suggestion"] = {
         "grading_scale_name": scale["name"],
         "intervals": json.dumps([
@@ -216,11 +227,10 @@ def preview_owner_initial_setup():
         ], separators=(",", ":")),
         "exists": bool(frappe.db.exists("Grading Scale", scale["name"])),
     }
+    preview["plan_hash"] = None
     if preview["counts"]["review"] == 0:
         from toefl_house.setup_presets.catalog_plan import prepare_catalog_plan
-        from toefl_house.setup_presets.installer import preview_digest
         planned = prepare_catalog_plan(snapshot)
-        preview["plan_hash"] = preview_digest(snapshot)
         operations = {}
         for action in planned["actions"]:
             kind = action["operation"]
@@ -228,7 +238,6 @@ def preview_owner_initial_setup():
         preview["planned_actions_count"] = planned["count"]
         preview["planned_operation_counts"] = operations
     else:
-        preview["plan_hash"] = None
         preview["planned_actions_count"] = None
         preview["planned_operation_counts"] = {}
     # This GET remains read-only. It can authorize displaying the Owner's
@@ -241,13 +250,15 @@ def preview_owner_initial_setup():
     }
     if preview["counts"]["review"] == 0 and preview["planned_actions_count"]:
         from toefl_house.setup_presets.installer import (
-            _qualified_site, _finance_preconditions)
+            _qualified_site, _finance_preconditions, preview_digest)
         try:
             _qualified_site()
-            _finance_preconditions()
-        except (frappe.PermissionError, frappe.ValidationError):
-            pass
+            finance = _finance_preconditions()
+        except (frappe.PermissionError, frappe.ValidationError) as error:
+            preview["fresh_installation"]["message"] = str(error)
         else:
+            preview["plan_hash"] = preview_digest(planned, finance)
+            preview["fresh_installation"]["finance"] = finance
             preview["fresh_installation"]["can_initialize"] = True
             preview["fresh_installation"]["message"] = (
                 "Owner may explicitly initialize approved course masters and "

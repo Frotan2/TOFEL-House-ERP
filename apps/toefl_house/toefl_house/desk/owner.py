@@ -23,6 +23,7 @@ from toefl_house.desk import (
     DESKS,
     LIMIT_QUEUES,
     active_cohort_rows,
+    count_or_unknown,
     project_count,
     project_rows,
     require_desk_audience,
@@ -74,6 +75,72 @@ def _site_mode():
         return security.site_mode()
     except Exception:
         return "REFUSED"
+
+
+def _first_run_readiness(mode):
+    """Show verifiable configuration and the next permitted Owner action."""
+    try:
+        timezone = frappe.db.get_single_value("System Settings", "time_zone")
+    except Exception:
+        timezone = None
+    if timezone == "Asia/Kabul":
+        timezone_status = "Asia/Kabul"
+    else:
+        timezone_status = "Needs review" if timezone else "Not verified"
+
+    try:
+        from toefl_house.setup_presets.installer import _finance_preconditions
+        _finance_preconditions()
+        finance_status = "AFN fee accounting prerequisites present"
+    except frappe.ValidationError:
+        finance_status = "Company or tuition accounting setup incomplete"
+    except Exception:
+        finance_status = "Not verified"
+
+    try:
+        from toefl_house.operations.owner_configuration import current_backup_policy
+        policy = current_backup_policy()
+        if policy.get("configured") is True:
+            approved_schedule = (policy.get("schedule_time") == "02:30"
+                                 and policy.get("retention_versions") == 3)
+            backup_status = ("02:30 / 3 versions configured" if approved_schedule
+                             else "Review schedule or retained versions")
+        else:
+            backup_status = "Off" if policy.get("status") == "OFF" else "Incomplete"
+    except Exception:
+        backup_status = "Not verified"
+
+    programs = count_or_unknown("setup", "TH Academic Program")
+    levels = count_or_unknown("setup", "TH Program Level")
+    catalog_status = (f"{programs} programs / {levels} levels" if
+                      isinstance(programs, int) and isinstance(levels, int) else "Not verified")
+    return section("first-run", "First-run readiness", "facts", facts=[
+        {"label": "Institute time zone", "value": timezone_status,
+         "definition": "Ask your authorized administrator to set Asia/Kabul in System Settings. "
+                       "Review the Friday holiday and Solar Hijri dates separately.",
+         "owner": "System Manager"},
+        {"label": "Legal Company and accounting", "value": finance_status,
+         "definition": "Finance verifies the legal name, AFN accounts, and opening balances "
+                       "in the native Company and Accounts forms. The check covers the default receivable account, income account, and cost center.",
+         "owner": "Finance Manager"},
+        {"label": "Academic catalog", "value": catalog_status,
+         "definition": "Review approved programs, durations and draft tuition. Verify rooms, capacity, "
+                       "schedules and assessments in the academic desks.",
+         "drill": {"slug": "th-academic-setup", "label": "Open Academic Setup"}},
+        {"label": "Staff and private access", "value": "On-site checks required",
+         "definition": "Your administrator provisions separate User accounts. Verify each staff member's "
+                       "roles, branch scope and private HTTPS access from authorized devices.",
+         "owner": "System Manager"},
+        {"label": "Nightly encrypted backups", "value": backup_status,
+         "definition": "Review 02:30 Kabul time and three verified versions in Backup & Recovery. "
+                       "On Windows, verify the task, separate physical disk and recoverable encrypted copy.",
+         "drill": {"slug": "th-configuration", "label": "Open Configuration"}},
+        {"label": "Installation authorization", "value": mode,
+         "definition": "Complete the guarded activation using the Course Owner and General Manager approvals. "
+                       "Before opening to staff, review the verified site, backup and access evidence.",
+         "owner": "Course Owner"},
+    ])
+
 
 
 def _executive_analytics_sections():
@@ -514,12 +581,14 @@ def cockpit():
         if set(spec["roles"]) & held:
             desks_for_viewer.append({"slug": slug, "title": spec["title"]})
 
+    mode = _site_mode()
     analytics_sections = _executive_analytics_sections()
 
     return {
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
         "sections": [
+            _first_run_readiness(mode),
             *owner_sections(),
             *analytics_sections,
             section("business", "Business state", "facts", facts=business_facts,
@@ -540,7 +609,7 @@ def cockpit():
                     empty_title="No recorded actions yet",
                     empty_body="When staff complete an important action, the record appears here. The full trail stays with auditor roles."),
             section("posture", "Release posture (fail-closed facts)", "facts",
-                    facts=[dict(row, value=_site_mode() if row["value"] is None else row["value"])
+                    facts=[dict(row, value=mode if row["value"] is None else row["value"])
                            for row in RELEASE_POSTURE],
                     empty_title="Release posture is always stated",
                     empty_body="These facts come from the reviewed acceptance ledger, not from a live computation."),

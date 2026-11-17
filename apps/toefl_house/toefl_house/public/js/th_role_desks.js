@@ -701,10 +701,18 @@ frappe.provide("toefl_house.role_desks");
 	 * signature, adds a fresh idempotency key and submits to the same
 	 * whitelisted, guarded command the command pages use.
 	 */
+	const BACKUP_POLICY_FIELDS = [
+		{ fieldname: "reason", label: "Change reason", fieldtype: "Small Text", reqd: 1 },
+		{ fieldname: "backup_schedule_time", label: "Nightly backup time (local)", fieldtype: "Time", reqd: 1 },
+		{ fieldname: "backup_retention_versions", label: "Backup keep count for deletion mode (minimum 2)", description: "Used only if the Owner explicitly authorizes deletion beyond the count. Preservation mode retains all valid sets and does not rotate them.", fieldtype: "Int", reqd: 1 },
+		{ fieldname: "backup_retention_behavior", label: "Backup retention behavior (Owner decision; no default)", description: "Choose explicitly to preserve all valid sets on the separate local drive or authorize deletion of valid older sets on that drive beyond the keep count. Leaving this unset keeps backup and activation fail-closed.", fieldtype: "Select", options: "\nPreserve all valid backup sets\nDelete valid older sets beyond keep count", reqd: 1 },
+		{ fieldname: "backup_recovery_public_key", label: "Recovery public key (ASCII-armored; public only)", fieldtype: "Small Text", reqd: 1 },
+		{ fieldname: "custody_requirement", label: "Key custody requirement", fieldtype: "Small Text", reqd: 1 },
+		{ fieldname: "recovery_quorum", label: "Recovery quorum", fieldtype: "Int", reqd: 1 },
+	];
 	const OWNER_POLICY_VERSION_FIELDS = [
 		{ fieldname: "policy", label: "Owner policy", fieldtype: "Data", reqd: 1, read_only: 1 },
 		{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
-		{ fieldname: "reason", label: "Change reason", fieldtype: "Small Text", reqd: 1 },
 		{ fieldname: "reporting_review_days", label: "Reporting review interval (decision input only; days)", description: "No current report runner consumes this value.", fieldtype: "Int", reqd: 1 },
 		{ fieldname: "capacity_target", label: "Class capacity target (decision input only)", description: "Planning target only. Class membership enforcement uses native Student Group max_strength, not this value.", fieldtype: "Int", reqd: 1 },
 		{ fieldname: "tax_enabled", label: "Tax enabled (decision input only)", description: "No current tax runtime reads these fields. Native ERPNext tax configuration remains authoritative.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
@@ -713,12 +721,7 @@ frappe.provide("toefl_house.role_desks");
 		{ fieldname: "transfer_allowed", label: "Transfers allowed (decision input only)", description: "No current transfer command reads this value; it does not enable transfer behavior.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
 		{ fieldname: "withdrawal_allowed", label: "Withdrawals allowed (decision input only)", description: "Withdrawals and dismissals are governed by TH Enrollment Exit Policy; this field is not consumed by that resolver.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
 		{ fieldname: "calendar_notice_days", label: "Calendar notice (decision input only; days)", description: "No current calendar or lifecycle scheduler enforces this value.", fieldtype: "Int", reqd: 1 },
-		{ fieldname: "backup_schedule_time", label: "Nightly backup time (local)", fieldtype: "Time", reqd: 1 },
-		{ fieldname: "backup_retention_versions", label: "Backup keep count for deletion mode (minimum 2)", description: "Used only if the Owner explicitly authorizes deletion beyond the count. Preservation mode retains all valid sets and does not rotate them.", fieldtype: "Int", reqd: 1 },
-		{ fieldname: "backup_retention_behavior", label: "Backup retention behavior (Owner decision; no default)", description: "Choose explicitly to preserve all valid sets on the separate local drive or authorize deletion of valid older sets on that drive beyond the keep count. Leaving this unset keeps backup and activation fail-closed.", fieldtype: "Select", options: "\nPreserve all valid backup sets\nDelete valid older sets beyond keep count", reqd: 1 },
-		{ fieldname: "backup_recovery_public_key", label: "Recovery public key (ASCII-armored; public only)", fieldtype: "Small Text", reqd: 1 },
-		{ fieldname: "custody_requirement", label: "Key custody requirement", fieldtype: "Small Text", reqd: 1 },
-		{ fieldname: "recovery_quorum", label: "Recovery quorum", fieldtype: "Int", reqd: 1 },
+		...BACKUP_POLICY_FIELDS,
 	];
 	// Same reviewed numeric weights for first setup and later revisions.
 	const ACADEMIC_WEIGHT_FIELDS = Object.freeze([
@@ -732,6 +735,38 @@ frappe.provide("toefl_house.role_desks");
 		{ fieldname: "continuous_percent", label: "Continuous assessment share (%)", fieldtype: "Percent", default: 40, reqd: 1,
 			description: "Final exam receives the remainder. For 40, the final is 60%. This changes future grading only." },
 	]);
+
+	const TIMETABLE_SLOT_FIELDS = ["weekday", "from_time", "to_time", "course", "room", "instructor"];
+
+	function slotFields() {
+		return [
+			{ fieldname: "weekday", label: text("Weekday"), fieldtype: "Select", in_list_view: 1,
+				options: "\nMon\nTue\nWed\nThu\nFri\nSat\nSun", reqd: 1 },
+			{ fieldname: "from_time", label: text("From"), fieldtype: "Time", in_list_view: 1, reqd: 1 },
+			{ fieldname: "to_time", label: text("Until"), fieldtype: "Time", in_list_view: 1, reqd: 1 },
+			timetableReference("course", "Course", "Course", { in_list_view: 1, reqd: 1 }),
+			timetableReference("room", "Room (optional)", "Room"),
+			timetableReference("instructor", "Instructor (optional)", "Instructor"),
+		];
+	}
+
+	function timetableReference(fieldname, label, doctype, extra = {}) {
+		const model = frappe.model || {};
+		const canFind = (model.can_select && model.can_select(doctype)) ||
+			(model.can_read && model.can_read(doctype));
+		return { fieldname, label: text(label), fieldtype: canFind ? "Link" : "Data",
+			...(canFind ? { options: doctype } : { description: text("Use the exact name on the existing record.") }),
+			formatter: escapeText, ...extra };
+	}
+
+	function cleanTimetableSlots(rows) {
+		if (!Array.isArray(rows) || rows.length > 40 ||
+			rows.some((row) => !row || typeof row !== "object" ||
+				TIMETABLE_SLOT_FIELDS.some((field) => row[field] != null &&
+					(typeof row[field] !== "string" || row[field].length > 140)))) return null;
+		return rows.map((row) => Object.fromEntries(TIMETABLE_SLOT_FIELDS.map(
+			(field) => [field, (row[field] || "").trim()])));
+	}
 
 	const ACTION_FIELDS = Object.freeze({
 		"toefl_house.finance.cashier.reconcile_cashier_day": [
@@ -790,6 +825,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "enabled", label: "Backup On / Off", description: "Off stops future TOEFL House backup runs without deleting existing backup files. On still requires the verified backup configuration and separate recovery disk.", fieldtype: "Check" },
 		],
 		"toefl_house.operations.owner_configuration.set_owner_operations_policy_version": OWNER_POLICY_VERSION_FIELDS,
+		"toefl_house.operations.owner_configuration.configure_local_backup_policy": BACKUP_POLICY_FIELDS,
 		"toefl_house.operations.owner_configuration.validate_owner_operations_policy": [
 			{ fieldname: "policy", label: "Owner policy", fieldtype: "Data", reqd: 1, read_only: 1 },
 		],
@@ -1119,10 +1155,28 @@ frappe.provide("toefl_house.role_desks");
 				description: "One original exam and one retake are permitted. The higher valid score is retained. Academic Manager approves promotion." },
 		],
 		"toefl_house.academic.create_assessment_policy": [
-			{ fieldname: "family", label: "Choose an active program", fieldtype: "Select", options: "__owner_choice:program__", reqd: 1 },
-			{ fieldname: "code", label: "Policy code (stable)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "family", label: "Program", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "code", label: "Policy reference", fieldtype: "Data", reqd: 1, read_only: 1 },
 			{ fieldname: "title", label: "Title", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
+		],
+		"toefl_house.teaching.timetables.create_timetable_template": [
+			{ fieldname: "code", label: "Template code (letters, numbers and dashes)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Template name", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "delivery_mode", label: "Delivery mode", fieldtype: "Select", options: "\nOn-site\nOnline\nHybrid", reqd: 1 },
+			{ fieldname: "program", label: "Program (blank applies to all programs)", fieldtype: "Data" },
+			{ fieldname: "branch", label: "Branch (blank applies to all branches)", fieldtype: "Data" },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
+		],
+		"toefl_house.teaching.timetables.set_timetable_slots": [
+			{ fieldname: "template", label: "Template", fieldtype: "Data", read_only: 1, reqd: 1 },
+			{ fieldname: "slots", label: "Complete weekly pattern", fieldtype: "Table", reqd: 1,
+				description: "Review every row. Saving replaces the entire weekly pattern. Existing sessions never change." },
+			{ fieldname: "reason", label: "Reason for this pattern", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.timetables.set_timetable_template_status": [
+			{ fieldname: "template", label: "Template", fieldtype: "Data", read_only: 1, reqd: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Data", hidden: 1, read_only: 1 },
 		],
 		"toefl_house.academic.create_room": [
 			{ fieldname: "room_name", label: "Room name", fieldtype: "Data", reqd: 1 },
@@ -1370,6 +1424,71 @@ frappe.provide("toefl_house.role_desks");
 		dialog.show();
 	}
 
+	function openRecoveryKit(onSaved) {
+		let saving = false;
+		const dialog = new frappe.ui.Dialog({
+			title: text("Save your recovery kit"),
+			fields: [
+				{ fieldname: "passphrase", fieldtype: "Password", label: text("Recovery kit passphrase"), reqd: 1 },
+				{ fieldname: "confirm", fieldtype: "Password", label: text("Repeat passphrase"), reqd: 1 },
+				{ fieldname: "separate_copy", fieldtype: "Check", reqd: 1,
+					label: text("I will save this kit separately from this computer and the backup drive.") },
+			],
+			primary_action_label: text("Create and save recovery kit"),
+			async primary_action(values) {
+				if (saving) return;
+				if (values.passphrase.length < 16 || values.passphrase !== values.confirm || !values.separate_copy) {
+					frappe.msgprint(text("Enter matching passphrases of at least 16 characters and confirm separate storage."));
+					return;
+				}
+				if (typeof window.showSaveFilePicker !== "function") {
+					frappe.msgprint(text("Open ERP in Microsoft Edge or Chrome on this computer to save the kit directly."));
+					return;
+				}
+				saving = true;
+				try {
+					const destination = await window.showSaveFilePicker({
+						suggestedName: "TOEFL-House-Recovery-Kit.gpg",
+						types: [{ description: text("Encrypted recovery kit"), accept: { "application/octet-stream": [".gpg"] } }],
+					});
+					const response = await frappe.call({
+						method: "toefl_house.operations.recovery_kit.create_recovery_kit",
+						type: "POST",
+						args: { recovery_password: values.passphrase },
+					});
+					const kit = response.message;
+					if (!kit || typeof kit.kit_b64 !== "string" || !kit.kit_b64 || kit.kit_b64.length > 16384 ||
+						typeof kit.public_key !== "string" || !kit.public_key.startsWith("-----BEGIN PGP PUBLIC KEY BLOCK-----")) {
+						throw new Error("invalid recovery kit");
+					}
+					const bytes = Uint8Array.from(atob(kit.kit_b64), (character) => character.charCodeAt(0));
+					const output = await destination.createWritable();
+					try {
+						await output.write(bytes);
+						await output.close();
+					} catch (error) {
+						await output.abort().catch(() => {});
+						throw error;
+					} finally {
+						bytes.fill(0);
+					}
+					onSaved(kit.public_key);
+					dialog.hide();
+				} catch (error) {
+					if (error.name !== "AbortError") {
+						frappe.msgprint(text("The recovery kit could not be saved. Backup settings were not changed."));
+					}
+				} finally {
+					values.passphrase = values.confirm = "";
+					dialog.set_value("passphrase", "");
+					dialog.set_value("confirm", "");
+					saving = false;
+				}
+			},
+		});
+		dialog.show();
+	}
+
 	function openGuidedAction(action) {
 		if (action.endpoint === "toefl_house.finance.collections.get_collection_receipt") {
 			loadCollectionReceipt(action.args.payment_entry);
@@ -1378,6 +1497,49 @@ frappe.provide("toefl_house.role_desks");
 		const ownAttendance = action.endpoint === "toefl_house.teaching.record_instructor_attendance";
 		const cashClose = action.endpoint === "toefl_house.finance.cashier.reconcile_cashier_day";
 		let fields = ACTION_FIELDS[action.endpoint];
+		const guidedRecovery = action.guided_recovery === true &&
+			action.endpoint === "toefl_house.operations.owner_configuration.configure_local_backup_policy";
+		let recoveryPublicKey = guidedRecovery ? action.saved_recovery_public_key || "" : "";
+		const initialRecovery = guidedRecovery && !recoveryPublicKey;
+		if (guidedRecovery) {
+			fields = fields.filter((field) => field.fieldname !== "backup_recovery_public_key");
+			if (initialRecovery) {
+				const defaults = {
+					reason: "Owner accepted initial Windows recovery setup.",
+					backup_schedule_time: "02:30:00",
+					backup_retention_versions: 3,
+					backup_retention_behavior: "Delete valid older sets beyond keep count",
+					custody_requirement: "Owner confirms the protected recovery kit is held separately from the system and backup drives.",
+					recovery_quorum: 2,
+				};
+				fields = fields.map((field) => ({ ...field, default: defaults[field.fieldname] }));
+			}
+			if (initialRecovery) fields = [
+				{ fieldname: "save_recovery_kit", fieldtype: "Button", label: text("Create and save recovery kit"),
+					click: () => openRecoveryKit((publicKey) => {
+						recoveryPublicKey = publicKey;
+						frappe.show_alert({ message: text("Recovery kit saved. Continue to save backup settings."), indicator: "green" });
+					}) },
+				...fields,
+			];
+		}
+		const timetableSlots = action.endpoint === "toefl_house.teaching.timetables.set_timetable_slots";
+		const timetableStatus = action.endpoint === "toefl_house.teaching.timetables.set_timetable_template_status";
+		if (timetableSlots) {
+			const pattern = cleanTimetableSlots(action.args && action.args.slots);
+			if (!pattern) {
+				frappe.msgprint(text("The full pattern could not be loaded. Refresh Academic Setup before editing the timetable."));
+				return;
+			}
+			fields = fields.map((field) => field.fieldname === "slots" ?
+				{ ...field, fields: slotFields(), data: pattern, in_place_edit: true } : field);
+		}
+		if (action.endpoint === "toefl_house.teaching.timetables.create_timetable_template") {
+			fields = fields.map((field) => {
+				const doctype = { program: "Program", branch: "Branch" }[field.fieldname];
+				return doctype ? timetableReference(field.fieldname, field.label, doctype) : field;
+			});
+		}
 		if (cashClose) {
 			const drawers = action.args && action.args.drawers;
 			const accounts = Array.isArray(drawers) ? drawers.map((row) => row && row.account) : [];
@@ -1575,6 +1737,10 @@ frappe.provide("toefl_house.role_desks");
 			fields: [{ fieldname: "request_key", label: text("Request reference"), fieldtype: "Data", hidden: 1, read_only: 1, default: requestKey }, ...contextFields, ...fields],
 			primary_action_label: text(action.label),
 			primary_action(values) {
+				if (guidedRecovery && !recoveryPublicKey) {
+					frappe.msgprint(text("Create and save your recovery kit before saving backup settings."));
+					return;
+				}
 				const guard = ACTION_GUARDS[action.endpoint];
 				if (guard) {
 					const problem = guard(values);
@@ -1587,6 +1753,21 @@ frappe.provide("toefl_house.role_desks");
 				fields.forEach((field) => {
 					if (field.fieldname) args[field.fieldname] = values[field.fieldname];
 				});
+				if (guidedRecovery) {
+					delete args.save_recovery_kit;
+					args.backup_recovery_public_key = recoveryPublicKey;
+				}
+				if (timetableSlots) {
+					const pattern = cleanTimetableSlots(args.slots);
+					if (!pattern || !pattern.length ||
+						pattern.some((row) => !row.weekday || !row.from_time || !row.to_time || !row.course)) {
+						frappe.msgprint(text("Enter 1 to 40 complete weekly slots. Each needs a weekday, start time, end time and course."));
+						return;
+					}
+					// Pass only the six command fields, never grid metadata.
+					args.slots = JSON.stringify(pattern);
+				}
+				if (timetableStatus) args.active = action.args.active;
 				if (action.endpoint.startsWith("toefl_house.reception_intake.")) {
 					// Native Frappe Data/Small Text inputs may return null or
 					// undefined when cleared. An explicitly blank optional field
@@ -1795,7 +1976,21 @@ frappe.provide("toefl_house.role_desks");
 					args,
 					freeze: true,
 					freeze_message: text("Submitting guarded command"),
-					callback(response) {
+					async callback(response) {
+						if (initialRecovery) {
+							try {
+								await frappe.call({
+									method: "toefl_house.operations.owner_configuration.set_backup_enabled",
+									type: "POST",
+									args: { request_key: newRequestKey(), enabled: 1 },
+								});
+							} catch (error) {
+								dialog.hide();
+								frappe.msgprint(text("Recovery settings were saved. Turn backup on from Configuration before running your first backup."));
+								if (typeof currentReload === "function") currentReload();
+								return;
+							}
+						}
 						dialog.hide();
 						resultMessage(action.label, response.message);
 						if (typeof action.refresh === "function") action.refresh();
@@ -1830,6 +2025,14 @@ frappe.provide("toefl_house.role_desks");
 					// Closing cannot be undone through this workflow; make the
 					// operator explicitly confirm before sending the guarded POST.
 					frappe.confirm(text("Close this visitor inquiry? Future follow-ups will not be possible on this visit. The existing record will be retained."), submitAction);
+				} else if (timetableSlots) {
+					frappe.confirm(text(
+						"Replace the complete weekly pattern with these slots? This affects only future generation; existing class sessions stay as they are."
+					), submitAction);
+				} else if (timetableStatus) {
+					frappe.confirm(text(args.active === "true"
+						? "Reactivate this template for future generation? Existing class sessions stay as they are."
+						: "Retire this template to stop future generation? Existing class sessions stay as they are."), submitAction);
 				} else if (teachingContractForm) {
 					frappe.confirm(text(
 						action.endpoint === "toefl_house.teaching.compensation.revise_teaching_contract"
@@ -1888,7 +2091,8 @@ frappe.provide("toefl_house.role_desks");
 			}
 		}
 		fields.forEach((field) => {
-			if (values[field.fieldname] !== undefined && values[field.fieldname] !== null && values[field.fieldname] !== "") {
+			if (field.fieldtype !== "Table" && values[field.fieldname] !== undefined &&
+				values[field.fieldname] !== null && values[field.fieldname] !== "") {
 				dialog.set_value(field.fieldname, values[field.fieldname]);
 			}
 		});
@@ -2101,7 +2305,7 @@ frappe.provide("toefl_house.role_desks");
 		const steps = [
 			["1. Courses and tuition", "Check the four programs, eleven levels and approved full-semester AFN prices.", "th-academic-setup"],
 			["2. Academic and billing rules", "Choose percentages, waiting days, billing options and approval roles using forms.", "th-configuration"],
-			["3. Rooms, teachers and timetables", "Enter verified capacity and staff assignments; review sessions before students join.", "th-academic-desk"],
+			["3. Rooms and weekly patterns", "Enter verified room capacity and approved weekly slots. Schedule individual sessions in Academic Desk. Generate a range of sessions only after an approved Class Operations Policy is in effect.", "th-academic-setup"],
 			["4. Finance and daily work", "Use guided receivables, collections and approved instructor contracts, never source files.", "th-finance-desk"],
 			["5. Review before opening", "Check each staff role, backup recovery and operational readiness with the Owner.", "th-owner-cockpit"],
 		];
@@ -2145,6 +2349,33 @@ frappe.provide("toefl_house.role_desks");
 						text("Already correct") + ": " + Number(data.counts.match || 0) + "  ·  " +
 						text("Needs a decision") + ": " + Number(data.counts.review || 0)
 					).appendTo(output);
+					const settings = data.confirmed_settings || {};
+					$("<h4></h4>").text(text("Institute settings and native forms")).appendTo(output);
+					$("<p></p>").text([settings.display_name, settings.currency, settings.time_zone,
+						settings.academic_calendar].filter(Boolean).join(" · ")).appendTo(output);
+					(settings.academic_years || []).forEach((year) => {
+						$("<p></p>").text(text("Academic year") + " " + year.name +
+							" · " + year.start + " – " + year.end).appendTo(output);
+					});
+					if (settings.friday_weekly_off === true) {
+						$("<p></p>").text(text("Add Friday as the weekly day off in the native Holiday List.")).appendTo(output);
+					}
+					const native = $("<div class='th-route-group'></div>").appendTo(output);
+					const forms = [
+						["Company and AFN accounts", "List/Company"],
+						["Kabul time zone", "Form/System Settings/System Settings"],
+						["Accounting fiscal year", "List/Fiscal Year"],
+						["Weekly holidays", "List/Holiday List"],
+						["Staff identities and roles", "List/User"],
+					];
+					forms.forEach(([label, route]) => {
+						$("<button type='button' class='btn btn-secondary btn-sm'></button>")
+							.text(text(label)).on("click", () => routeToSource(route)).appendTo(native);
+					});
+					$("<p class='text-muted'></p>").text(text(
+						"Use the licensed Company and confirmed fiscal dates in the native forms. " +
+						"Finance enters verified opening balances. Create staff accounts only for real authorized staff."
+					)).appendTo(output);
 					const timetable = data.daily_timetable;
 					if (timetable && timetable.status === "OWNER_CONFIRMED" &&
 						Array.isArray(timetable.sessions) && timetable.sessions.length === 7) {
@@ -2203,17 +2434,23 @@ frappe.provide("toefl_house.role_desks");
 						});
 					}
 					// Fresh installs do not have prior course records. This control
-					// only appears when the SERVER has verified the two release
-					// switches, clean-site guard, finance prerequisites and plan.
+					// only appears after the server verifies release authorization,
+					// clean-site state, finance prerequisites and the exact plan.
 					// The POST independently rechecks all of them under a lock.
 					const fresh = data.fresh_installation || {};
 					if (fresh.profile === "FRESH_SITE_NO_PRIOR_COURSE_HISTORY") {
 						$("<p></p>").text(text(fresh.message || "")).appendTo(output);
 					}
-					if (fresh.can_initialize === true &&
+					const finance = fresh.finance || {};
+					if (fresh.can_initialize === true && finance.company && finance.receivable_account &&
+						finance.income_account && finance.cost_center &&
 						fresh.profile === "FRESH_SITE_NO_PRIOR_COURSE_HISTORY" &&
 						data.counts.review === 0 && data.planned_actions_count > 0 &&
 						typeof data.plan_hash === "string" && data.plan_hash.length > 0) {
+						$("<p></p>").text(text("Draft tuition Company") + ": " + finance.company +
+							" · " + text("Receivable ledger") + ": " + finance.receivable_account +
+							" · " + text("Income ledger") + ": " + finance.income_account +
+							" · " + text("Cost center") + ": " + finance.cost_center).appendTo(output);
 						const apply = $("<button type='button' class='btn btn-primary btn-sm'></button>")
 							.text(text("Initialize new course catalog")).appendTo(output);
 						apply.on("click", () => {
@@ -2315,4 +2552,3 @@ frappe.provide("toefl_house.role_desks");
 	toefl_house.role_desks.escapeText = escapeText;
 	toefl_house.role_desks.statusTone = statusTone;
 })();
-

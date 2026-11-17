@@ -8,7 +8,8 @@ def setup_wizard_success(args):
     Frappe/ERPNext grant broad default roles during setup, including Education
     portal identities. Those identities require canonical student/guardian
     records and must never be assigned to the installation administrator.
-    Business roles are provisioned independently after setup.
+    Only a verified customer release also enrolls the named administrator
+    as the first Course Owner.
     """
     if not frappe.flags.in_setup_wizard or frappe.session.user != "Administrator":
         raise frappe.PermissionError("Initial account qualification requires the native setup wizard")
@@ -23,6 +24,12 @@ def setup_wizard_success(args):
             or frappe.db.exists("Student", {"user": email})
             or frappe.db.exists("Guardian", {"user": email})):
         raise frappe.PermissionError("Initial setup account has an unexpected identity or role profile")
-    user.set("roles", [{"role": "System Manager"}])
+    roles = [{"role": "System Manager"}]
+    if "toefl_house" in frappe.get_installed_apps():
+        from toefl_house.setup_presets.provider_release import first_owner_enrollment_allowed
+
+        if first_owner_enrollment_allowed() is True:
+            roles.append({"role": "Course Owner"})
+    user.set("roles", roles)
     user.save()
     frappe.clear_cache(user=email)

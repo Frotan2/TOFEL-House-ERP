@@ -237,12 +237,12 @@ class SnapshotSafetyTests(unittest.TestCase):
         self.assertIn("1405", state["tuition"]["PRE-STARTER"])
         self.assertIsNone(state["tuition"]["PRE-STARTER"]["1405"])
 
-    def test_matching_tuition_requires_native_company_and_same_company_account(self):
+    def test_matching_tuition_requires_company_and_its_default_receivable_ledger(self):
         records = {
             "TH Program Level": [Row(name="L-1", code="STARTER",
                 title="Starter", family="F-1", native_program="N-1",
                 next_level="", status="Active")],
-            "Company": [Row(name="TOEFL House")],
+            "Company": [Row(name="TOEFL House", default_receivable_account="Receivable - TH")],
             "Account": [Row(name="Receivable - TH", company="TOEFL House")],
             "Fee Structure": [Row(name="FS-1", program="N-1",
                 academic_year="1405", docstatus=0,
@@ -252,6 +252,10 @@ class SnapshotSafetyTests(unittest.TestCase):
         }
         state = actual_snapshot_functions(FakeDB(records))["_snapshot"]()
         self.assertEqual(state["tuition"]["STARTER"]["1405"], 1000)
+        records["Company"][0]["default_receivable_account"] = "Another ledger"
+        mismatched = actual_snapshot_functions(FakeDB(records))["_snapshot"]()
+        self.assertIsNone(mismatched["tuition"]["STARTER"]["1405"])
+        records["Company"][0]["default_receivable_account"] = "Receivable - TH"
         records["Account"][0]["company"] = "Other Company"
         wrong = actual_snapshot_functions(FakeDB(records))["_snapshot"]()
         self.assertIsNone(wrong["tuition"]["STARTER"]["1405"])

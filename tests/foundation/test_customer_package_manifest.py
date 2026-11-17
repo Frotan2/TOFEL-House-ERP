@@ -374,7 +374,8 @@ class CustomerPackageManifestTests(unittest.TestCase):
         (self.source / "unrelated-note.txt").write_text("unrelated local note", encoding="utf-8")
         self.assertEqual(self.create()[2]["source_revision"], self.revision)
 
-    def run_verifier(self, package, *, loaded=False, record_factory=False, inspect=None, docker_exit=0):
+    def run_verifier(self, package, *, loaded=False, record_factory=False, inspect=None, docker_exit=0,
+                     verified_web=False, web_rows=(), container_rows=()):
         release = package / "product/release"
         if inspect is None:
             saved = json.loads((release / "release-manifest.json").read_text(encoding="utf-8"))
@@ -384,7 +385,8 @@ class CustomerPackageManifestTests(unittest.TestCase):
                        "RootFS": {"Layers": image_config["rootfs"]["diff_ids"]}}
         env = dict(os.environ, TH_TEST_VERIFY_SCRIPT=str(package / "product/windows/Verify Package Image.ps1"),
                    TH_TEST_RELEASE=str(release), TH_TEST_DOCKER_EXIT=str(docker_exit),
-                   TH_TEST_INSPECT=json.dumps(inspect) if not isinstance(inspect, str) else inspect)
+                   TH_TEST_INSPECT=json.dumps(inspect) if not isinstance(inspect, str) else inspect,
+                   TH_TEST_WEB_ROWS=json.dumps(web_rows), TH_TEST_WEB_INSPECT_ROWS=json.dumps(container_rows))
         # Python can inherit PowerShell 7's module path, which is incompatible
         # with the explicitly selected Windows PowerShell 5.1 subprocess.
         # Let that shell construct its own standard module search path.
@@ -393,18 +395,34 @@ class CustomerPackageManifestTests(unittest.TestCase):
                 del env[key]
         command = r"""
 function docker {
-    if ($args[0] -ne 'image' -or $args[1] -ne 'inspect' -or $args[2] -ne 'toefl-house-erp-app:local') {
-        throw 'Unexpected Docker command in verifier test'
+    if ($args[0] -eq 'image' -and $args[1] -eq 'inspect' -and $args[2] -eq 'toefl-house-erp-app:local') {
+        $global:LASTEXITCODE = [int]$env:TH_TEST_DOCKER_EXIT
+        Write-Output $env:TH_TEST_INSPECT
+        return
     }
-    $global:LASTEXITCODE = [int]$env:TH_TEST_DOCKER_EXIT
-    Write-Output $env:TH_TEST_INSPECT
+    $global:LASTEXITCODE = 0
+    if (($args -join ' ') -ceq 'compose ps -q web') {
+        if ((Get-Location).Path -ine (Split-Path -Parent $env:TH_TEST_RELEASE)) {
+            throw 'Verifier looked up the web service outside the installation'
+        }
+        foreach ($row in ($env:TH_TEST_WEB_ROWS | ConvertFrom-Json)) { Write-Output ([string]$row) }
+        return
+    }
+    $expectedWebRows = [string[]]($env:TH_TEST_WEB_ROWS | ConvertFrom-Json)
+    if ($args.Count -eq 5 -and $args[0] -ceq 'container' -and $args[1] -ceq 'inspect' -and
+        $args[2] -ceq $expectedWebRows[0] -and $args[3] -ceq '--format' -and
+        $args[4] -ceq '{{.Id}} {{.Image}} {{.State.Running}}') {
+        foreach ($row in ($env:TH_TEST_WEB_INSPECT_ROWS | ConvertFrom-Json)) { Write-Output ([string]$row) }
+        return
+    }
+    throw 'Unexpected Docker command in verifier test'
 }
 & $env:TH_TEST_VERIFY_SCRIPT -Archive ($env:TH_TEST_RELEASE + '/toefl-house-erp-app.tar') -Checksum ($env:TH_TEST_RELEASE + '/toefl-house-erp-app.tar.sha256') -Manifest ($env:TH_TEST_RELEASE + '/release-manifest.json')
 exit $LASTEXITCODE
 """
-        if loaded or record_factory:
-            switch = " -VerifyLoadedImage -RecordFactoryImage" if record_factory else " -VerifyLoadedImage"
-            command = command.replace("\nexit $LASTEXITCODE", switch + "\nexit $LASTEXITCODE")
+        flags = (" -VerifyLoadedImage" if loaded or record_factory else "") + (
+            " -RecordFactoryImage" if record_factory else "") + (" -GetVerifiedWebContainer" if verified_web else "")
+        command = command.replace("\nexit $LASTEXITCODE", flags + "\nexit $LASTEXITCODE")
         return subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
                                "-Command", command], env=env, capture_output=True, text=True, timeout=30)
 
@@ -540,6 +558,40 @@ exit 0
                 self.assertNotEqual(result.returncode, 0, result.stdout)
         result = self.run_verifier(package, loaded=True, docker_exit=1)
         self.assertNotEqual(result.returncode, 0)
+
+    @unittest.skipUnless(os.name == "nt", "Windows PowerShell verifier")
+    def test_windows_verifier_requires_one_running_web_with_verified_image(self):
+        package, _, manifest = self.create()
+        identity_dir = package / "product/data/activation"
+        identity_dir.mkdir(parents=True, exist_ok=True)
+        result = self.run_verifier(package, record_factory=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        container_id = "a" * 64
+        other_container = "b" * 64
+        image_id = manifest["image"]["config_digest"]
+        checked = f"{container_id} {image_id} true"
+        result = self.run_verifier(package, loaded=True, verified_web=True,
+                                   web_rows=[container_id], container_rows=[checked])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [container_id])
+        for web, rows in (
+            ([], []), ([container_id[:12]], [checked]), ([container_id, other_container], [checked]),
+            ([container_id], [f"{other_container} {image_id} true"]),
+            ([container_id], [f"{container_id} sha256:{'c' * 64} true"]),
+            ([container_id], [f"{container_id} {image_id} false"]),
+            ([container_id], [checked, checked]),
+        ):
+            with self.subTest(web=web, rows=rows):
+                result = self.run_verifier(package, loaded=True, verified_web=True,
+                                           web_rows=web, container_rows=rows)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("web container", result.stderr)
+        for flags in ({}, {"record_factory": True}):
+            with self.subTest(flags=flags):
+                result = self.run_verifier(package, verified_web=True, **flags)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn("requires only ordinary loaded-image verification", result.stderr)
 
     def run_windows_preparer(self, revision):
         labels = dict(self.labels, **{"org.toefl-house.source-revision": revision})

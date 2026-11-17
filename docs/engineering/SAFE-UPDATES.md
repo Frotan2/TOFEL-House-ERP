@@ -217,15 +217,16 @@ extra local state has to be trusted.
   Provisioning a second recovery key with its approver
   binding is a migration requirement for existing single-key installations:
   until then, migrating updates are refused, by design.
-* Emergency administrator recovery is separately controlled and is **not**
-  two-person approved.  Direct use of `product/restore.py` on the production
-  site, or any OS/container-level restore, bypasses application approvals
-  by construction; it must be treated as an emergency-admin action, performed
-  only under a separately documented Owner procedure, logged outside the
-  application, and never presented as an approved two-person recovery.
-  `product/restore.py` remains un-authenticated at its own layer and is used
-  in CI only against disposable synthetic sites; production recovery must go
-  through the two-person update-engine gate plus a disposable rehearsal.
+* Emergency restoration is separate from update authorization.
+  `product/restore.py` refuses a production restore without its own
+  single-use authorization from the Course Owner and an independent General
+  Manager or designated recovery authority. Their distinct trusted RSA keys
+  must be approved for `emergency-restore`, and the authorization binds the
+  selected artifacts and a fresh pre-restore preservation receipt. This
+  verifier is not a qualified Windows recovery workflow; the Owner recovery
+  hold in [the launch runbook](LAUNCH-RUNBOOK.md#7-restore-and-recovery--hold-no-owner-restore-is-authorized)
+  still applies. A manual OS or container restore outside the adapter bypasses
+  these checks and cannot be represented as two-person approved.
 * Every customer-visible message is a stable code with English and Dari text in
   `product/windows/updater-strings.json`; the Windows GUI only renders catalogue
   text and never free text from a log or result file.

@@ -1,5 +1,6 @@
 param(
-    [switch]$VerifyExisting
+    [switch]$VerifyExisting,
+    [ValidatePattern("^[A-Za-z]:$")][string]$BackupDrive
 )
 
 $ErrorActionPreference = "Stop"
@@ -81,6 +82,33 @@ function Get-BackupFileHash {
         return @{ Hash = [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace("-", "") }
     }
     finally { $hasher.Dispose(); $stream.Dispose() }
+}
+
+function Get-BackupPhysicalDiskNumber([string]$Drive) {
+    if ($Drive -notmatch '^[A-Za-z]:$') {
+        throw "Windows could not identify the fixed drive."
+    }
+    $partition = @(Get-Partition -DriveLetter $Drive.Substring(0, 1) -ErrorAction Stop)
+    if ($partition.Count -ne 1 -or $null -eq $partition[0].DiskNumber) {
+        throw "Windows could not verify a single disk for $Drive."
+    }
+    $disk = Get-Disk -Number $partition[0].DiskNumber -ErrorAction Stop
+    if ([string]$disk.BusType -in @("Unknown", "Virtual", "File Backed Virtual", "FileBackedVirtual", "Storage Spaces", "Spaces", "iSCSI")) {
+        throw "Windows could not confirm that $Drive is a separate physical disk."
+    }
+    return $partition[0].DiskNumber
+}
+
+function Assert-SeparateBackupDisk([string]$Source, [string]$Destination) {
+    if ((Get-BackupPhysicalDiskNumber $Source) -eq (Get-BackupPhysicalDiskNumber $Destination)) {
+        throw "Choose a different physical backup disk. Two letters on the same disk do not qualify."
+    }
+}
+
+function Assert-KabulBackupTimeZone {
+    if ([TimeZoneInfo]::Local.Id -notin @("Afghanistan Standard Time", "Asia/Kabul")) {
+        throw "Set the Windows time zone to Kabul in Date & time before using the nightly backup."
+    }
 }
 
 function Get-NextBackupStart {
@@ -414,7 +442,14 @@ function Test-ValidRotatableManifest {
             return $null
         }
         $created = [DateTimeOffset]::Parse([string]$manifest.created_utc).UtcDateTime
-        return [pscustomobject]@{ Directory = $Directory; CreatedUtc = $created }
+        return [pscustomobject]@{
+            Directory = $Directory
+            CreatedUtc = $created
+            PolicyHash = [string]$manifest.policy_hash
+            RecoveryKeyHash = [string]$manifest.recovery_key_sha256
+            SourceDrive = [string]$manifest.source_drive
+            BackupDrive = [string]$manifest.backup_drive
+        }
     }
     catch {
         return $null
@@ -451,6 +486,7 @@ function Write-BackupReceipt {
 }
 
 function Verify-ExistingBackup {
+    Assert-KabulBackupTimeZone
     $receiptPath = Join-Path $repoRoot "product\data\activation\backup-receipt.json"
     if (-not (Test-Path -LiteralPath $receiptPath -PathType Leaf)) {
         throw "No verified backup receipt exists. Run Backup TOEFL House ERP.cmd first."
@@ -495,6 +531,7 @@ function Verify-ExistingBackup {
     if (-not $backupDisk) {
         throw "The separate fixed local backup drive is unavailable."
     }
+    Assert-SeparateBackupDisk $receipt.source_drive $receipt.backup_drive
     $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     if (-not $task -or $task.State -eq "Disabled" -or
         @($task.Actions).Count -ne 1 -or @($task.Triggers).Count -ne 1) {
@@ -502,8 +539,9 @@ function Verify-ExistingBackup {
     }
     $expectedPowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
     $taskAction = $task.Actions[0]
+    $expectedTaskArgument = '-NoProfile -File "{0}"' -f $scriptPath
     if (-not ([string]$taskAction.Execute).Equals($expectedPowerShell, [StringComparison]::OrdinalIgnoreCase) -or
-        -not ([string]$taskAction.Arguments).Contains($scriptPath)) {
+        [string]$taskAction.Arguments -cne $expectedTaskArgument) {
         throw "The scheduled task action does not invoke this product's backup script."
     }
     $taskTrigger = $task.Triggers[0]
@@ -594,10 +632,36 @@ function Verify-ExistingBackup {
             throw "Backup receipt and manifest disagree for $($item.name)."
         }
     }
-    Write-Host "The separate local drive, current encrypted backup set, receipt and Owner policy all verify."
+    Write-Host "The separate local disk, current encrypted backup set, receipt and Owner policy all verify."
+    $retained = 0
+    $directories = @(Get-ChildItem -LiteralPath $expectedRoot -Directory -Force |
+        Sort-Object Name -Descending | Select-Object -First 100)
+    foreach ($directory in $directories) {
+        $verified = Test-ValidRotatableManifest $directory
+        if ($verified -and $verified.PolicyHash -ceq $policy.policy_hash -and
+            $verified.RecoveryKeyHash -ceq $policy.recovery_key_sha256 -and
+            $verified.SourceDrive -ieq $receipt.source_drive -and
+            $verified.BackupDrive -ieq $receipt.backup_drive) {
+            $retained++
+            if ($retained -ge [int]$policy.retention_versions) { break }
+        }
+    }
+    Write-Host "Retained encrypted copies verified against their manifests: $retained of $($policy.retention_versions) required by policy."
+    if ($retained -lt [int]$policy.retention_versions) {
+        Write-Host "The current backup verified. Retention has not yet reached the approved number."
+    }
 }
 
 try {
+    foreach ($bin in @("$env:ProgramFiles\Docker\Docker\resources\bin",
+                       "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin")) {
+        if (Test-Path -LiteralPath (Join-Path $bin 'docker.exe') -PathType Leaf) {
+            $env:PATH = $bin + ';' + $env:PATH
+            break
+        }
+    }
+    . (Join-Path $PSScriptRoot 'Test Local Docker.ps1')
+    Assert-LocalDockerEngine
     if (-not $mutex.WaitOne(0)) {
         throw "Another backup operation is already running."
     }
@@ -613,6 +677,7 @@ try {
         if ($repoRoot -notmatch "^[A-Za-z]:") {
             throw "Backup requires the TOEFL House product folder to be on a local Windows drive."
         }
+        Assert-KabulBackupTimeZone
         $sourceDrive = $repoRoot.Substring(0, 2).ToUpperInvariant()
         $sourceDisk = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" |
             Where-Object { $_.DeviceID -eq $sourceDrive } | Select-Object -First 1
@@ -676,16 +741,22 @@ try {
                 $destinationDrive = $null
             }
         }
-        if (-not $destinationDrive) {
+        if ($BackupDrive) {
+            if ($destinationDrive -and $destinationDrive.DeviceID -ine $BackupDrive) {
+                throw "Use the existing verified backup drive or follow the approved drive replacement procedure."
+            }
             $destinationDrive = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" |
-                Where-Object { $_.DeviceID -ne $sourceDrive -and $_.FreeSpace -gt 1073741824 } |
-                Sort-Object FreeSpace -Descending |
+                Where-Object { $_.DeviceID -ieq $BackupDrive -and $_.FreeSpace -gt 1073741824 } |
                 Select-Object -First 1
+        }
+        if (-not $destinationDrive -and -not $BackupDrive) {
+            throw "Select the approved separate backup drive from Back Up Now before creating the first backup."
         }
         if (-not $destinationDrive) {
             throw "Backup refused: no separate fixed local drive with at least 1 GiB free space was found."
         }
 
+        Assert-SeparateBackupDisk $sourceDrive $destinationDrive.DeviceID
         $backupRoot = Join-Path $destinationDrive.DeviceID "TOEFL-House-ERP-Backups"
         New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
         if (((Get-Item -LiteralPath $backupRoot).Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
@@ -914,8 +985,9 @@ try {
         Remove-Item -LiteralPath $siteConfigSidecarPath -Force
 
         $scheduleAt = Get-NextBackupStart -Time ([string]$policy.schedule_time)
+        $expectedTaskArgument = '-NoProfile -File "{0}"' -f $scriptPath
         $action = New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe") `
-            -Argument ("-NoProfile -ExecutionPolicy Bypass -File `"{0}`"" -f $scriptPath)
+            -Argument $expectedTaskArgument
         $trigger = New-ScheduledTaskTrigger -Daily -At $scheduleAt
         $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) `
             -LogonType Interactive -RunLevel Limited
@@ -942,7 +1014,7 @@ try {
             (Get-BackupTaskUserSid ([string]$registered.Principal.UserId)) -ne $expectedTaskUserSid -or
             [string]$registered.Principal.LogonType -ne "Interactive" -or
             -not ([string]$registered.Actions[0].Execute).Equals($expectedPowerShell, [StringComparison]::OrdinalIgnoreCase) -or
-            -not ([string]$registered.Actions[0].Arguments).Contains($scriptPath) -or
+            [string]$registered.Actions[0].Arguments -cne $expectedTaskArgument -or
             -not $registeredStart -or [int]$registeredTrigger.DaysInterval -ne 1 -or
             $registeredStart.ToString("HH:mm", [Globalization.CultureInfo]::InvariantCulture) -ne [string]$policy.schedule_time) {
             throw "The Windows scheduled backup task could not be verified for its configured action, time and interactive Docker user identity."
@@ -991,7 +1063,7 @@ try {
         $backupCompleted = $true
         Write-Host ""
         Write-Host "Backup completed, GPG-encryption verified, copied and SHA-256 verified."
-        Write-Host "Nightly task: $taskName at $($policy.schedule_time) local time"
+        Write-Host "Nightly task: $taskName at $($policy.schedule_time) Kabul time"
         Write-Host "Owner-selected retention behavior: $($policy.retention_behavior)"
         Write-Host "Configured version count: $($policy.retention_versions)"
         Write-Host "Separate local drive: $($destinationDrive.DeviceID)"

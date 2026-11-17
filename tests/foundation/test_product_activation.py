@@ -6,6 +6,7 @@ verified encrypted backup receipt on a separate local drive, matching the
 current Owner-configured schedule/retention policy. Release authorization stays
 REJECT regardless of operational site mode.
 """
+import base64
 import hashlib
 import importlib.util
 import json
@@ -169,10 +170,19 @@ class ActivationFlow(unittest.TestCase):
               patch("update_engine.validate_recovery_authorization", return_value=approval)):
             self.act.activate_internal(SITE, log=lambda *_: None)
             self.assertEqual(self.fake_probe(SITE)["mode"], "PRODUCTION")
+            self.assertEqual(self.config()[self.act.INTERNAL_CATALOG_SITE_KEY], SITE)
+            self.assertNotIn("toefl_house_customer_release_approved", self.config())
+            self.assertNotIn("toefl_house_owner_catalog_install_enabled", self.config())
             self.act.deactivate(SITE, log=lambda *_: None)
+            self.assertNotIn(self.act.INTERNAL_CATALOG_SITE_KEY, self.config())
             with self.assertRaisesRegex(self.act.Refused, "already used"):
                 self.act.activate_internal(SITE, log=lambda *_: None)
             self.assertEqual(self.fake_probe(SITE)["mode"], "REFUSED")
+
+    def test_general_activation_does_not_issue_catalog_authority(self):
+        self.fresh_backup()
+        self.act.activate(SITE, log=lambda *_: None)
+        self.assertNotIn(self.act.INTERNAL_CATALOG_SITE_KEY, self.config())
 
     @unittest.skipUnless(os.name == "posix",
                          "POSIX mode bits are enforced inside the Linux product container")
@@ -431,6 +441,38 @@ class ActivationConstantsMatchApp(unittest.TestCase):
         self.assertIn("!product/activate.py", (ROOT / ".dockerignore").read_text())
         self.assertIn("COPY product/activate.py /product/activate.py",
                       (ROOT / "product/app.Dockerfile").read_text())
+
+
+class InternalPublicKeyEnrollment(unittest.TestCase):
+    def test_only_two_distinct_approved_public_records_can_be_combined(self):
+        act = load_activate()
+        now = datetime(2026, 11, 15, tzinfo=timezone.utc)
+        def key(role, identity, modulus):
+            return {
+                "schema_version": 1, "document_type": "toefl-house-erp-update-trust-store",
+                "product": "TOEFL House ERP", "provisioned": True, "keys": [{
+                    "key_id": role + "-fixture", "algorithm": "rsa-pkcs1v15-sha256",
+                    "purposes": ["internal-activation"], "approver_identity": identity,
+                    "approver_role": role, "modulus_b64": base64.b64encode(modulus).decode("ascii"),
+                    "exponent_b64": "AQAB", "not_before_utc": "2026-01-01T00:00:00Z",
+                    "not_after_utc": "2027-01-01T00:00:00Z",
+                }],
+            }
+        def wire(*docs):
+            return json.dumps([base64.b64encode(json.dumps(item).encode()).decode()
+                               for item in docs]).encode("ascii")
+        owner = key("course-owner", "First Approver", b"\x91" * 256)
+        gm = key("general-manager", "Second Approver", b"\x93" * 256)
+        document, summary = act.validate_internal_enrollment(wire(owner, gm), now)
+        self.assertEqual(json.loads(document)["keys"], owner["keys"] + gm["keys"])
+        self.assertEqual([item["approver_role"] for item in summary], ["course-owner", "general-manager"])
+        for invalid in (wire(gm, owner), wire(owner, key("general-manager", "Second", b"\x91" * 256)),
+                        wire(owner, key("general-manager", "FIRST APPROVER", b"\x93" * 256)),
+                        wire(owner, key("general-manager", " FIRST  APPROVER ", b"\x93" * 256)),
+                        wire(owner, key("general-manager", "   ", b"\x93" * 256)),
+                        wire(owner), b'["not base64", "also invalid"]'):
+            with self.subTest(wire_length=len(invalid)), self.assertRaises(act.Refused):
+                act.validate_internal_enrollment(invalid, now)
 
 
 if __name__ == "__main__":

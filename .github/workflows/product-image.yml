@@ -2150,24 +2150,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Qualified kit download failed.' }
           gh run download $env:GITHUB_RUN_ID --repo $env:GITHUB_REPOSITORY --name "TOEFL-House-ERP-Offline-Runtime-$version" --dir $runtime
           if ($LASTEXITCODE -ne 0) { throw 'Pinned runtime download failed.' }
-      - name: Fetch hash-pinned official Windows prerequisites on the provider runner
+      - name: Fetch the qualified private HTTPS archive
         shell: pwsh
         run: |
-          $catalog = Get-Content -LiteralPath 'tools/release/windows-prerequisites.json' -Raw | ConvertFrom-Json
-          $destination = Join-Path $env:RUNNER_TEMP 'prerequisites'
-          New-Item -ItemType Directory -Path $destination -Force | Out-Null
-          foreach ($entry in @($catalog.wsl, $catalog.docker)) {
-            $file = Join-Path $destination $entry.filename
-            Invoke-WebRequest -Uri $entry.url -OutFile $file
-            if ((Get-FileHash -LiteralPath $file).Hash -ine $entry.sha256) { throw 'Official prerequisite checksum mismatch.' }
+          $file = Join-Path $env:RUNNER_TEMP 'caddy-windows-amd64.zip'
+          Invoke-WebRequest -Uri 'https://github.com/caddyserver/caddy/releases/download/v2.11.9/caddy_2.11.9_windows_amd64.zip' -OutFile $file
+          if ((Get-FileHash -LiteralPath $file).Hash -ine 'ad93112d335ee687100c4c9f11bced16ca590377976b7fe7883882b9e797e472') {
+            throw 'Qualified stock Caddy archive checksum mismatch.'
           }
       - name: Assemble the actual single-file offline TEST installer
         shell: powershell
         run: |
+          & 'tests/foundation/test_windows_private_https.ps1' -PinnedArchive (Join-Path $env:RUNNER_TEMP 'caddy-windows-amd64.zip')
           $destination = Join-Path $env:RUNNER_TEMP 'customer-installer'
           New-Item -ItemType Directory -Path $destination -Force | Out-Null
           $output = Join-Path $destination 'TOEFL-House-ERP-Setup-TEST.exe'
-          & 'tools/release/Build Customer Installer.ps1' -Package (Join-Path $env:RUNNER_TEMP 'qualified-kit') -RuntimeBundle (Join-Path $env:RUNNER_TEMP 'offline-runtime') -WslInstaller (Join-Path $env:RUNNER_TEMP 'prerequisites/wsl-x64.msi') -DockerInstaller (Join-Path $env:RUNNER_TEMP 'prerequisites/Docker Desktop Installer.exe') -OutputExe $output
+          & 'tools/release/Build Customer Installer.ps1' -Package (Join-Path $env:RUNNER_TEMP 'qualified-kit') -RuntimeBundle (Join-Path $env:RUNNER_TEMP 'offline-runtime') -InternalDelivery -PrivateHttpsArchive (Join-Path $env:RUNNER_TEMP 'caddy-windows-amd64.zip') -OutputExe $output
           if (-not (Test-Path -LiteralPath $output -PathType Leaf)) { throw 'Offline installer was not produced.' }
           $verification = Start-Process -FilePath $output -ArgumentList '--verify-payload' -Wait -PassThru
           if ($verification.ExitCode -ne 0) { throw 'Assembled executable payload verification failed.' }

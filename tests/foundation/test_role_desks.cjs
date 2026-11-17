@@ -244,6 +244,7 @@ const endpointFiles = {
 	"toefl_house.finance.collections": ["finance/collections.py"],
 	"toefl_house.teaching": ["teaching/__init__.py"],
 	"toefl_house.teaching.policies": ["teaching/policies.py"],
+	"toefl_house.teaching.timetables": ["teaching/timetables.py"],
 	"toefl_house.teaching.attendance_corrections": ["teaching/attendance_corrections.py"],
 	"toefl_house.teaching.adjustment_posting": ["teaching/adjustment_posting.py"],
 	"toefl_house.teaching.compensation": ["teaching/compensation.py"],
@@ -329,6 +330,8 @@ const allowedCalls = new Set([...Object.values(EXPECTED).map((shape) => shape.en
 	"toefl_house.setup_presets.api.preview_owner_initial_setup",
 	"toefl_house.setup_presets.owner_policy_forms.owner_form_options",
 	"toefl_house.setup_presets.installer.initialize_owner_catalog",
+	"toefl_house.operations.recovery_kit.create_recovery_kit",
+	"toefl_house.operations.owner_configuration.set_backup_enabled",
 	client.toefl_house.role_desks.registry,
 	...Object.keys(actionFields)]);
 for (const method of Object.keys(actionFields)) {
@@ -343,6 +346,12 @@ for (const method of Object.keys(actionFields)) {
 for (const [, method] of source.matchAll(/method:\s*"([\w.]+)"/g)) {
 	assert(allowedCalls.has(method), `desk client calls an unreviewed endpoint: ${method}`);
 }
+
+const recoveryKitSource = fs.readFileSync(path.join(APP, "operations/recovery_kit.py"), "utf8");
+assert(recoveryKitSource.includes('@frappe.whitelist(methods=["POST"])') &&
+	recoveryKitSource.includes('require_authority("business_policy")') &&
+	recoveryKitSource.includes("_verified_factory_release()"),
+	"recovery kit creation must remain a guarded Owner POST on an approved factory release");
 
 /* A reviewed, GET-only Course Owner setup preflight may be called.
  * The bridge must expose no mutation or write privilege. */
@@ -589,6 +598,10 @@ function runScenario({ workPayload, deskSlug = "th-reception-desk", failFirstWor
 				opts.callback({ message: { name: "INQ-TEST", status: opts.args.status } });
 				return;
 			}
+			if (opts.method.startsWith("toefl_house.teaching.timetables.")) {
+				opts.callback({ message: { name: opts.args.template || opts.args.code, status: "Active" } });
+				return;
+			}
 			if (opts.method === "toefl_house.admission.review_admission") {
 				opts.callback({ message: { name: HOSTILE, status: HOSTILE } });
 				return;
@@ -607,6 +620,66 @@ function runScenario({ workPayload, deskSlug = "th-reception-desk", failFirstWor
 	frappe.pages[deskSlug].on_page_load(body);
 	return { calls, dialogs, pendingLookups, pendingWorks, pendingRegistrations, confirmations, routed, printed, body, frappe,
 		get workCalls() { return workCalls; }, get logoutCalls() { return logoutCalls; } };
+}
+
+{
+	const scope = "toefl_house.teaching.timetables.";
+	const fullSlot = { weekday: "Sat", from_time: "08:00:00", to_time: "09:10:00",
+		course: "Native course", room: "", instructor: "" };
+	const setPattern = { endpoint: scope + "set_timetable_slots", label: "Edit weekly slots",
+		args: { template: "WEEKLY", slots: [fullSlot] } };
+	const changeStatus = { endpoint: scope + "set_timetable_template_status", label: "Retire template",
+		args: { template: "WEEKLY", active: "false" } };
+	const queue = [{ id: "WEEKLY", person: "Weekly pattern", status: "Active",
+		actions: [setPattern, changeStatus] }];
+	const payload = payloadWith(queue, "1");
+	const createEndpoint = scope + "create_timetable_template";
+	payload.sections.find((row) => row.id === "people").actions = [
+		{ endpoint: createEndpoint, label: "Create timetable template", args: {} },
+	];
+	const scenario = runScenario({ deskSlug: "th-academic-setup",
+		workPayload: payload, readableSources: ["Course"] });
+	for (const action of findAll(scenario.body, "th-queue-action")) action.click();
+	const edit = scenario.dialogs[0];
+	const retire = scenario.dialogs[1];
+	const grid = edit.opts.fields.find((field) => field.fieldname === "slots");
+	assert.strictEqual(grid.fieldtype, "Table", "the Owner edits a grid, not a JSON field");
+	assert.deepStrictEqual(JSON.parse(JSON.stringify(grid.data)), [fullSlot]);
+	assert.strictEqual(grid.fields.find((field) => field.fieldname === "course").fieldtype, "Link");
+	assert.strictEqual(grid.fields.find((field) => field.fieldname === "room").fieldtype, "Data",
+		"do not fetch records the Owner cannot read natively");
+	assert.strictEqual(grid.fields.find((field) => field.fieldname === "course").formatter(HOSTILE),
+		client.toefl_house.role_desks.escapeText(HOSTILE));
+	edit.submit({ template: "WEEKLY", slots: [], reason: "Approved" });
+	assert.strictEqual(scenario.confirmations.length, 0, "never replace the whole pattern with an empty grid");
+	edit.submit({ template: "WEEKLY", slots: [{ ...fullSlot, name: "skip metadata", idx: 1 }],
+		reason: "Approved" });
+	assert.strictEqual(scenario.calls.some((call) => call.method === setPattern.endpoint), false,
+		"replacing a pattern requires explicit confirmation");
+	assert(scenario.confirmations[0].message.includes("complete weekly pattern"));
+	scenario.confirmations[0].callback();
+	const request = scenario.calls.find((call) => call.method === setPattern.endpoint);
+	assert.deepStrictEqual(JSON.parse(request.args.slots), [fullSlot]);
+	assert.strictEqual(request.args.template, "WEEKLY");
+	assert.strictEqual(request.args.reason, "Approved");
+	assert(edit.hidden && scenario.workCalls === 2, "a successful write refreshes the scoped desk");
+	retire.submit({ template: "WEEKLY" });
+	assert(scenario.confirmations[1].message.includes("future generation"));
+	scenario.confirmations[1].callback();
+	assert.strictEqual(scenario.calls.find((call) => call.method === changeStatus.endpoint).args.active, "false");
+	findAll(scenario.body, "th-section-actions")[0].children[0].click();
+	const create = scenario.dialogs[2];
+	const mode = create.opts.fields.find((field) => field.fieldname === "delivery_mode");
+	assert(mode.reqd && mode.options.startsWith("\n") && !mode.default,
+		"the Owner makes an explicit delivery-mode choice");
+	assert(!create.opts.fields.some((field) => ["code", "slots"].includes(field.fieldname)),
+		"setup generates the stable reference and leaves the pattern empty");
+	create.submit({ title: "Next pattern", delivery_mode: "Hybrid",
+		program: "", branch: "", description: "" });
+	const creation = scenario.calls.find((call) => call.method === createEndpoint);
+	assert.strictEqual(creation.args.delivery_mode, "Hybrid");
+	assert.strictEqual(creation.args.code, "NEXT-PATTERN");
+	assert(!Object.hasOwn(creation.args, "slots"));
 }
 
 // Every staff desk, including a failed/denied projection, must offer native

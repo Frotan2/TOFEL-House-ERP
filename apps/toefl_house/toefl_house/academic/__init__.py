@@ -883,6 +883,13 @@ def set_discount_rule_status(request_key, code, active):
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
 
+        if flag:
+            from toefl_house.security import is_internal_production
+            if is_internal_production():
+                raise frappe.ValidationError(
+                    "Discount approval is on hold for this internal delivery. "
+                    "No discount can be activated until the approval workflow is verified.")
+
         doc = _discount_rule_doc(clean_code, for_update=True)
         if flag:
             if not doc.student:

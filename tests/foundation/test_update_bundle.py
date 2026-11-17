@@ -404,6 +404,86 @@ class RecoveryAuthorizationTests(UpdateBundleCase):
         self.assertEqual(result["sha256"], engine.sha256_file(document))
         self.assertEqual(result["request_id"], "b" * 32)
 
+    def test_offline_internal_signer_uses_an_encrypted_key_and_exact_request_bytes(self):
+        import hashlib
+        from importlib.machinery import SourceFileLoader
+        from importlib.util import module_from_spec, spec_from_loader
+
+        loader = SourceFileLoader("internal_signer", str(TOOL.with_name("Sign Internal Activation.pyw")))
+        spec = spec_from_loader(loader.name, loader)
+        gui = module_from_spec(spec)
+        loader.exec_module(gui)
+        installation = {
+            "source_revision": "a" * 40, "image_id": "sha256:" + "b" * 64,
+            "internal_setup_sha256": "c" * 64, "internal_installation_id": "d" * 32,
+        }
+        document = self.authorization(document_type="toefl-house-erp-internal-activation",
+                                      scope="internal-activation", operation="internal-activation",
+                                      installation=installation, windows_host_acceptance_verified=True)
+        request_bytes = document.read_bytes()
+        digest = hashlib.sha256(request_bytes).hexdigest()
+        output = self.tmp / "signatures"
+        output.mkdir()
+        protected_key = self.tmp / "encrypted-test-key.pem"
+        passphrase = b"isolated synthetic test passphrase"
+        openssl_path = shutil.which("openssl")
+        subprocess.run([openssl_path, "pkey", "-in", str(self.private_key), "-aes-256-cbc",
+                        "-passout", "stdin", "-out", str(protected_key)],
+                       input=passphrase + b"\n", check=True, capture_output=True)
+
+        key_records = self.tmp / "public-records"
+        key_records.mkdir()
+        with self.assertRaises(ValueError):
+            gui.export_public_record("Course Owner", "Synthetic Owner", "test-owner", protected_key,
+                                     Path(openssl_path), key_records, b"wrong test passphrase")
+        self.assertEqual(list(key_records.iterdir()), [])
+        record, record_digest = gui.export_public_record(
+            "Course Owner", "Synthetic Owner", "test-owner", protected_key,
+            Path(openssl_path), key_records, passphrase,
+        )
+        self.assertEqual(hashlib.sha256(record.read_bytes()).hexdigest(), record_digest)
+        current_trust = engine.load_trust_store(record, now=datetime.now(timezone.utc))
+        key = engine.select_key(current_trust, "test-owner", purpose="internal-activation",
+                                now=datetime.now(timezone.utc))
+        self.assertEqual((key["approver_role"], key["approver_identity"]), ("course-owner", "Synthetic Owner"))
+        self.assertNotIn(b"PRIVATE KEY", record.read_bytes())
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            gui.export_public_record("Course Owner", "Another name", "other-id", protected_key,
+                                     Path(openssl_path), key_records, passphrase)
+        self.assertEqual(hashlib.sha256(record.read_bytes()).hexdigest(), record_digest)
+
+        for bad_digest, bad_passphrase in (("0" * 64, passphrase), (digest, b"wrong test passphrase")):
+            with self.assertRaises(ValueError):
+                gui.sign_request(document, bad_digest, "Course Owner", protected_key,
+                                 Path(openssl_path), output, bad_passphrase)
+            self.assertEqual(list(output.iterdir()), [])
+
+        first = gui.sign_request(document, digest, "Course Owner", protected_key,
+                                 Path(openssl_path), output, passphrase)
+        saved = first.read_bytes()
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            gui.sign_request(document, digest, "Course Owner", protected_key,
+                             Path(openssl_path), output, passphrase)
+        self.assertEqual(first.read_bytes(), saved)
+        second = gui.sign_request(document, digest, "General Manager", self.other_key,
+                                  Path(openssl_path), output, b"")
+
+        trust = self.two_person_trust_store()
+        trust_document = json.loads(trust.read_text(encoding="utf-8"))
+        for key in trust_document["keys"]:
+            key["purposes"] = ["internal-activation"]
+        trust.write_text(json.dumps(trust_document), encoding="utf-8")
+        store = engine.load_trust_store(trust, now=NOW)
+        result = engine.validate_recovery_authorization(
+            document, first, store, site=engine.SITE_NAME, receipt_sha256="c" * 64,
+            now=NOW, max_age_hours=72, signature_path_2=second, internal_installation=installation)
+        self.assertEqual(result["sha256"], digest)
+        document.write_bytes(request_bytes + b" ")
+        with self.assertRaises(engine.UpdateError):
+            engine.validate_recovery_authorization(
+                document, first, store, site=engine.SITE_NAME, receipt_sha256="c" * 64,
+                now=NOW, max_age_hours=72, signature_path_2=second, internal_installation=installation)
+
     def test_an_authorization_for_another_backup_is_refused(self):
         document = self.authorization()
         first, second = self.sign_two_person(document)

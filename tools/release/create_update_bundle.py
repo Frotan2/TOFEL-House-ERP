@@ -91,29 +91,42 @@ def utc(value: datetime) -> str:
     return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def openssl(arguments: list[str], *, executable: str) -> bytes:
+def openssl(arguments: list[str], *, executable: str,
+            passphrase: bytes | None = None) -> bytes:
     found = shutil.which(executable)
     if found is None:
         raise fail("openssl is required for signing and was not found on PATH")
-    completed = subprocess.run([found, *arguments], capture_output=True, check=False)
+    options = {}
+    if passphrase is not None:
+        # Keep the passphrase out of the command line, environment and files.
+        options = {"input": passphrase + b"\n",
+                   "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)}
+    completed = subprocess.run([found, *arguments], capture_output=True, check=False, **options)
     if completed.returncode != 0:
         message = completed.stderr.decode("utf-8", "replace").strip().splitlines()
         raise fail("openssl failed: " + (message[-1] if message else str(completed.returncode)))
     return completed.stdout
 
 
-def public_key(private_key: Path, executable: str) -> tuple[int, int]:
-    der = openssl(["pkey", "-in", str(private_key), "-pubout", "-outform", "DER"], executable=executable)
+def public_key(private_key: Path, executable: str, *,
+               passphrase: bytes | None = None) -> tuple[int, int]:
+    args = ["pkey", "-in", str(private_key), "-pubout", "-outform", "DER"]
+    if passphrase is not None:
+        args.extend(("-passin", "stdin"))
+    der = openssl(args, executable=executable, passphrase=passphrase)
     return engine.parse_rsa_public_key(der)
 
 
-def sign_bytes(private_key: Path, payload: bytes, executable: str) -> bytes:
+def sign_bytes(private_key: Path, payload: bytes, executable: str, *,
+               passphrase: bytes | None = None) -> bytes:
     with tempfile.TemporaryDirectory(prefix="toefl-signature-") as folder:
         source = Path(folder) / "payload.bin"
         signed = Path(folder) / "signature.bin"
         write_bytes(source, payload)
-        openssl(["dgst", "-sha256", "-sign", str(private_key), "-out", str(signed), str(source)],
-                executable=executable)
+        args = ["dgst", "-sha256", "-sign", str(private_key), "-out", str(signed)]
+        if passphrase is not None:
+            args.extend(("-passin", "stdin"))
+        openssl([*args, str(source)], executable=executable, passphrase=passphrase)
         return signed.read_bytes()
 
 
@@ -127,10 +140,11 @@ def signature_envelope(document_type: str, key_id: str, signature: bytes) -> dic
     }
 
 
-def trust_store_document(private_key: Path, key_id: str, *, days: int, executable: str) -> dict:
+def trust_store_document(private_key: Path, key_id: str, *, days: int, executable: str,
+                         passphrase: bytes | None = None) -> dict:
     if not 1 <= days <= MAX_TRUST_DAYS:
         raise fail(f"trust key lifetime must be between 1 and {MAX_TRUST_DAYS} days")
-    modulus, exponent = public_key(private_key, executable)
+    modulus, exponent = public_key(private_key, executable, passphrase=passphrase)
     modulus_bytes = modulus.to_bytes((modulus.bit_length() + 7) // 8, "big")
     exponent_bytes = exponent.to_bytes((exponent.bit_length() + 7) // 8, "big")
     if exponent != 65537:
@@ -438,6 +452,15 @@ def command_bundle(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def passphrase_from_stdin(arguments: argparse.Namespace) -> bytes | None:
+    if not getattr(arguments, "passphrase_stdin", False):
+        return None
+    passphrase = sys.stdin.buffer.read(4097)
+    if len(passphrase) > 4096 or any(char in passphrase for char in (b"\r", b"\n", b"\0")):
+        raise fail("the signing passphrase exceeds the limit or contains an unsupported character")
+    return passphrase
+
+
 def command_trust_store(arguments: argparse.Namespace) -> int:
     key_id = check_key_id(arguments.key_id)
     now = datetime.now(timezone.utc).replace(microsecond=0)
@@ -446,7 +469,8 @@ def command_trust_store(arguments: argparse.Namespace) -> int:
         raise fail(f"refusing to overwrite an existing trust store: {out}")
     out.parent.mkdir(parents=True, exist_ok=True)
     document = trust_store_document(arguments.private_key, key_id,
-                                    days=arguments.days, executable=arguments.openssl)
+                                    days=arguments.days, executable=arguments.openssl,
+                                    passphrase=passphrase_from_stdin(arguments))
     if arguments.internal_approver_role or arguments.internal_approver_identity:
         if not arguments.internal_approver_role or not arguments.internal_approver_identity:
             raise fail("internal trust requires both the approver role and identity")
@@ -516,7 +540,8 @@ def command_sign(arguments: argparse.Namespace) -> int:
             raise fail("backup_receipt_sha256 must be the SHA-256 of the verified backup receipt")
     else:
         engine.validate_manifest(parsed, now=now)
-    signature = sign_bytes(arguments.private_key, payload, arguments.openssl)
+    passphrase = passphrase_from_stdin(arguments)
+    signature = sign_bytes(arguments.private_key, payload, arguments.openssl, passphrase=passphrase)
     envelope_type = (engine.DOCUMENT_UPDATE_SIGNATURE if arguments.document_type == "update-manifest"
                      else engine.DOCUMENT_RECOVERY_SIGNATURE)
     out = Path(arguments.out).resolve()
@@ -527,7 +552,7 @@ def command_sign(arguments: argparse.Namespace) -> int:
     with tempfile.TemporaryDirectory(prefix="toefl-trust-") as folder:
         store_path = Path(folder) / TRUST_STORE
         verification_store = trust_store_document(arguments.private_key, key_id, days=1,
-                                                  executable=arguments.openssl)
+                                                  executable=arguments.openssl, passphrase=passphrase)
         if arguments.document_type == "internal-activation":
             approver = next(entry for entry in parsed["approvals"] if entry["key_id"] == key_id)
             verification_store["keys"][0].update(
@@ -610,6 +635,8 @@ def build_parser() -> argparse.ArgumentParser:
     trust.add_argument("--openssl", default="openssl")
     trust.add_argument("--internal-approver-role", choices=sorted(engine.RECOVERY_APPROVER_ROLES))
     trust.add_argument("--internal-approver-identity")
+    trust.add_argument("--passphrase-stdin", action="store_true",
+                       help="read the key passphrase from standard input until EOF")
     trust.set_defaults(handler=command_trust_store)
 
     sign = subparsers.add_parser("sign", help="sign an update or recovery document")
@@ -620,6 +647,8 @@ def build_parser() -> argparse.ArgumentParser:
                       choices=["update-manifest", "recovery-authorization", "internal-activation"])
     sign.add_argument("--out", required=True, type=Path)
     sign.add_argument("--openssl", default="openssl")
+    sign.add_argument("--passphrase-stdin", action="store_true",
+                      help="read the signing key passphrase from standard input until EOF")
     sign.set_defaults(handler=command_sign)
     return parser
 

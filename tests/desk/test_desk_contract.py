@@ -260,6 +260,72 @@ def _literal_block(source, header):
     return ast.literal_eval("{" + block + "}")
 
 
+class TimetableSetupTests(unittest.TestCase):
+    @staticmethod
+    def template(name, *, branch="North", status="Active"):
+        return {"name": name, "code": name, "title": name, "branch": branch,
+                "delivery_mode": "Hybrid", "status": status}
+
+    @staticmethod
+    def slot(parent, name, *, parentfield="slots", weekday="Sat"):
+        from datetime import timedelta
+
+        return {"name": name, "parent": parent, "parenttype": "TH Timetable Template",
+                "parentfield": parentfield, "weekday": weekday, "course": "Approved course",
+                "from_time": timedelta(hours=8), "to_time": timedelta(hours=9, minutes=10)}
+
+    def setup_world(self, templates, slots, permissions=(), roles=("Course Owner",)):
+        setup = _import_desk("setup", roles=roles)
+        setup.frappe.get_all = desk_world_get_all("timetable", {
+            "TH Timetable Template": templates,
+            "TH Timetable Slot": slots,
+            "User Permission": list(permissions),
+        })
+        return setup
+
+    def test_branch_scoped_actions_prefill_only_complete_visible_patterns(self):
+        setup = self.setup_world(
+            [self.template("NORTH"), self.template("RETIRED", status="Retired"),
+             self.template("SOUTH", branch="South"), self.template("GLOBAL", branch=None)],
+            [self.slot("NORTH", "OK"), self.slot("NORTH", "OTHER", parentfield="unrelated"),
+             self.slot("SOUTH", "FOREIGN", weekday="Mon")],
+            [{"user": "desk-user@example.com", "allow": "Branch", "for_value": "North"}])
+        result = setup._timetable_section()
+        self.assertNotIn("actions", result, "branch restriction must not offer institute-wide template creation")
+        north, retired = result["items"]
+        self.assertEqual([north["id"], retired["id"]], ["NORTH", "RETIRED"])
+        edit, retire = north["actions"]
+        self.assertEqual(edit["endpoint"], "toefl_house.teaching.timetables.set_timetable_slots")
+        self.assertEqual(edit["args"], {"template": "NORTH", "slots": [
+            {"weekday": "Sat", "course": "Approved course", "from_time": "08:00:00",
+             "to_time": "09:10:00", "room": "", "instructor": ""}]})
+        self.assertEqual(retire["args"], {"template": "NORTH", "active": "false"})
+        self.assertEqual([action["args"] for action in retired["actions"]],
+                         [{"template": "RETIRED", "active": "true"}])
+
+    def test_creation_and_draft_edit_never_add_a_default_slot(self):
+        setup = self.setup_world([self.template("EMPTY")], [])
+        result = setup._timetable_section()
+        create, = result["actions"]
+        self.assertEqual(create["endpoint"], "toefl_house.teaching.timetables.create_timetable_template")
+        self.assertEqual(create["args"], {})
+        self.assertEqual(result["items"][0]["actions"][0]["args"], {"template": "EMPTY", "slots": []})
+
+    def test_corrupt_or_incomplete_patterns_cannot_be_overwritten_from_the_desk(self):
+        incomplete = self.slot("ACTIVE", "BROKEN")
+        incomplete["from_time"] = "unparseable"
+        for rows in ([incomplete], [self.slot("ACTIVE", str(i)) for i in range(41)]):
+            setup = self.setup_world([self.template("ACTIVE")], rows)
+            record, = setup._timetable_section()["items"]
+            self.assertIn("could not be read safely", record["next"])
+            self.assertNotIn("Edit weekly slots", [a["label"] for a in record["actions"]])
+
+    def test_academic_manager_cannot_read_the_owners_setup_projection(self):
+        setup = self.setup_world([], [], roles=("Academic Manager",))
+        with self.assertRaises(setup.frappe.PermissionError):
+            setup.work()
+
+
 class DeskGateTests(unittest.TestCase):
     """Every whitelisted endpoint gates on its audience, first."""
 
@@ -1314,7 +1380,7 @@ class SetupDeskWorldTests(unittest.TestCase):
     """
 
     def _run(self, *, mismatch=False, no_year=False, no_fee_types=False,
-             enrollment_history=False):
+             enrollment_history=False, grading_families=(), grading_policies=()):
         world = {
             "TH Academic Program": [{
                 "name": "PROG-GEN", "code": "GEN-ENG", "title": "General English",
@@ -1376,6 +1442,8 @@ class SetupDeskWorldTests(unittest.TestCase):
                 "modified": "2026-09-01 10:00:00",
             }],
         }
+        world["TH Academic Program"].extend(grading_families)
+        world["TH Assessment Policy"] = list(grading_policies)
 
         if no_year:
             world["Academic Year"] = []
@@ -1501,12 +1569,38 @@ class SetupDeskWorldTests(unittest.TestCase):
         self.assertIn("owner@example.com", item["next"])
         self.assertIn("initial", item["next"])
 
-    def test_grading_stays_an_explicit_owner_placeholder(self):
+    def test_grading_offers_owner_action_for_cataloged_family(self):
         payload = self._run()
         items = self._section(payload, "grading")["items"]
         self.assertEqual(len(items), 1)
-        self.assertEqual(items[0]["status"], "Not decided")
+        self.assertEqual(items[0]["status"], "Not configured")
         self.assertEqual(items[0]["next_role"], "Course Owner")
+        self.assertEqual(items[0]["action"]["args"]["family"], "GEN-ENG")
+
+    def test_ge_policy_does_not_hide_eap_setup_or_offer_specialist_defaults(self):
+        eap = {"name": "PROG-EAP", "code": "EAP", "title": "EAP", "status": "Active"}
+        specialist = {"name": "PROG-SS", "code": "SPECIAL-SPEAKING",
+                      "title": "Special Speaking", "status": "Active"}
+        ge = {"name": "GE-CURRENT", "family": "PROG-GEN", "code": "GE-CURRENT",
+              "title": "GE policy", "status": "Active"}
+        eap_retired = {"name": "EAP-PAST", "family": "PROG-EAP", "code": "EAP-PAST",
+                       "title": "EAP policy", "status": "Retired"}
+        create_method = "toefl_house.academic.create_assessment_policy"
+        for policies, expected in (((), {"GEN-ENG", "EAP"}), ((ge,), {"EAP"}),
+                                   ((ge, eap_retired), set())):
+            with self.subTest(policies=policies):
+                payload = self._run(grading_families=(eap, specialist),
+                                    grading_policies=policies)
+                items = self._section(payload, "grading")["items"]
+                by_family = {item["action"]["args"]["family"]: item["action"]["args"]["code"]
+                             for item in items if item.get("action")
+                             and item["action"]["endpoint"] == create_method}
+                self.assertEqual(set(by_family), expected)
+                if "EAP" in expected:
+                    self.assertEqual(by_family["EAP"], "EAP-ASSESS-01")
+                if eap_retired in policies:
+                    self.assertEqual(self._item(payload, "grading", "EAP-PAST")["action"]["label"],
+                                     "Reactivate policy")
 
     def test_discounts_section_and_health_fact(self):
         payload = self._run()
@@ -1651,11 +1745,14 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                          "toefl_house.operations.owner_configuration.set_backup_enabled")
         self.assertEqual(switch_item["action"]["args"], {"enabled": 1})
         backup_item = backup_section["items"][1]
-        self.assertEqual(backup_item["status"], "Owner configuration required")
+        self.assertEqual(backup_item["status"], "Backup Off")
+        self.assertEqual(backup_item["action"], {
+            "endpoint": "toefl_house.operations.owner_configuration.configure_local_backup_policy",
+            "label": "Save and validate backup settings", "args": {},
+        })
         self.assertIn("decision D17: delete valid older sets beyond the keep count", backup_item["detail"])
-        self.assertIn("backup and activation fail closed", backup_item["detail"])
-        self.assertIn("Owner-approved retention behavior from decision D17",
-                      backup_item["next"])
+        self.assertIn("Backup and activation fail closed", backup_item["detail"])
+        self.assertIn("Back Up Now and Verify Backup", backup_item["next"])
         self.assertIn("no default is supplied", backup_item["next"])
         self.assertIn("owner decision D17", backup_item["stage_definition"])
         # Reporting & Metrics is carried by the owner-operations policy.

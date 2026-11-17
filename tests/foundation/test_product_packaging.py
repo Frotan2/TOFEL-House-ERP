@@ -278,7 +278,9 @@ class DesktopContract(unittest.TestCase):
         self.assertIn("Win32_LogicalDisk", body)
         self.assertIn("DriveType=3", body)
         self.assertIn("FreeSpace -gt 1073741824", body)
-        self.assertIn("DeviceID -ne $sourceDrive", body)
+        # The drive-letter check was replaced by a physical disk check.
+        self.assertIn("Get-Partition -DriveLetter", body)
+        self.assertIn("Assert-SeparateBackupDisk", body)
         self.assertIn("encrypt_backup", body)
         self.assertIn('"/product/backup.py"', body)
         self.assertNotIn('"backup", "--with-files"', body)
@@ -473,6 +475,8 @@ class LineEndingContract(unittest.TestCase):
             "product/web.cjs", "product/realtime.cjs",
             # Signed update engine + its container entrypoint (Issue #40).
             "product/update_engine.py", "product/update_host.py", "product/update_entrypoint.sh",
+            # Factory release verification and the pinned provider trust store.
+            "product/customer_release.py", "product/customer-release-trust.json",
             "tools/foundation/secure_weasyprint.py", "tools/foundation/secure_frappe_python.py",
             "tools/foundation/secure_hrms.py",
             "tools/foundation/hrms-locks", "tools/foundation/banking-locks",
@@ -488,6 +492,9 @@ class LineEndingContract(unittest.TestCase):
         }
         self.assertEqual(sources, expected, "audit any new Dockerfile COPY source")
         self.assertEqual(len(copy_rows), len(expected), "COPY syntax must stay source/destination only")
+        context_rules = (ROOT / ".dockerignore").read_text().splitlines()
+        for source in ("product/customer_release.py", "product/customer-release-trust.json"):
+            self.assertIn("!" + source, context_rules, "factory release input must enter the build context")
 
         text_suffixes = {
             ".py", ".sh", ".js", ".cjs", ".json", ".css", ".md", ".txt", ".toml",

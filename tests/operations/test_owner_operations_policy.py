@@ -119,6 +119,7 @@ class OwnerOperationsCommandTests(unittest.TestCase):
         expected = (
             "create_owner_operations_policy",
             "set_owner_operations_policy_version",
+            "configure_local_backup_policy",
             "set_owner_operations_policy_status",
             "validate_owner_operations_policy",
         )
@@ -150,12 +151,13 @@ class OwnerOperationsCommandTests(unittest.TestCase):
     def test_configuration_desk_exposes_guarded_owner_commands(self):
         text = DESK.read_text(encoding="utf-8")
         client = (APP / "public" / "js" / "th_role_desks.js").read_text(encoding="utf-8")
-        self.assertIn("Complete every required Owner field with approved values", text)
-        self.assertIn("no defaults or placeholders", text)
-        self.assertIn("Backup TOEFL House ERP.cmd", text)
+        self.assertIn("Save and validate backup settings", text)
+        self.assertIn("no default is supplied", text)
+        self.assertIn("Back Up Now and Verify Backup", text)
         for endpoint in (
             "create_owner_operations_policy",
             "set_owner_operations_policy_version",
+            "configure_local_backup_policy",
             "set_owner_operations_policy_status",
             "validate_owner_operations_policy",
         ):

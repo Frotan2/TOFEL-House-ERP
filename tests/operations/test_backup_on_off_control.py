@@ -110,7 +110,7 @@ class BackupSwitchContracts(unittest.TestCase):
         desk = DESK.read_text(encoding="utf-8")
         js = CLIENT.read_text(encoding="utf-8")
         script = WINDOWS.read_text(encoding="utf-8")
-        self.assertIn("items=[_backup_switch_item(), _owner_policy_item(", desk)
+        self.assertIn("items=[_backup_switch_item(), _backup_policy_item(", desk)
         self.assertIn('"status": "On" if enabled else "Off (default)"', desk)
         self.assertIn('"label": "Turn backup Off" if enabled else "Turn backup On"', desk)
         self.assertIn('"args": {"enabled": 0 if enabled else 1}', desk)

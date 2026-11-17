@@ -17,18 +17,36 @@ class OfflineInstallerSigningTests(unittest.TestCase):
         self.assertIn("UNSIGNED TEST INSTALLER ONLY", BUILDER)
         self.assertIn("SigningCertificateThumbprint", BUILDER)
         self.assertIn("Set-AuthenticodeSignature", BUILDER)
-        self.assertIn("Get-AuthenticodeSignature -LiteralPath $partial", BUILDER)
-        self.assertIn("TimeStamperCertificate", BUILDER)
         self.assertIn("4294960000", BUILDER)
+        signing = BUILDER.index(
+            "Set-VerifiedFileSignature $partial $signingCertificate $TimestampServer"
+        )
         verification = BUILDER.index(
             "Start-Process -FilePath $partial -ArgumentList '--verify-payload' -Wait -PassThru"
         )
-        self.assertLess(BUILDER.index("Set-AuthenticodeSignature"), verification)
+        self.assertLess(signing, verification)
         self.assertLess(verification, BUILDER.index("if ($verification.ExitCode -ne 0)"))
         self.assertLess(BUILDER.index("if ($verification.ExitCode -ne 0)"),
                         BUILDER.index("[IO.File]::Move($partial, $output)"))
         self.assertIn("The assembled Windows installer failed self-verification.", BUILDER)
         self.assertIn("$manifest.source_revision", BUILDER)
+
+    def test_downloaded_powershell_scripts_are_signed_before_packaging(self):
+        normalize = BUILDER.index("[IO.File]::WriteAllText($scriptFile.FullName, $filtered")
+        sign_scripts = BUILDER.index(
+            "Set-VerifiedFileSignature $scriptFile.FullName $signingCertificate $TimestampServer"
+        )
+        package = BUILDER.index("[IO.Compression.ZipFile]::Open($payload")
+        self.assertLess(normalize, sign_scripts)
+        self.assertLess(sign_scripts, package)
+        self.assertIn("-File -Recurse -Filter '*.ps1'", BUILDER[normalize:sign_scripts])
+        verification = BUILDER.split("function Set-VerifiedFileSignature", 1)[1].split(
+            "\ntry {", 1
+        )[0]
+        self.assertIn("Get-AuthenticodeSignature -LiteralPath $Path", verification)
+        self.assertIn("$null -eq $identity.TimeStamperCertificate", verification)
+        self.assertIn("$identity.SignerCertificate.Thumbprint -ine $Certificate.Thumbprint",
+                      verification)
 
     def test_existing_installer_never_reinitializes_a_site(self):
         existing = SETUP.split("if (Directory.Exists(target)) {", 1)[1].split(

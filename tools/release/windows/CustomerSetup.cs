@@ -74,6 +74,9 @@ public class CustomerSetup {
                 }
                 string extracted = Path.Combine(staging, "p"); Directory.CreateDirectory(extracted);
                 ExtractPayload(payload, extracted);
+                // The Windows prerequisite check needs the post-extraction disk
+                // budget. Release the duplicate ZIP before the launcher starts.
+                File.Delete(payload);
 #if INTERNAL_UNSIGNED_SETUP
                 PreserveDownloadMarker(exe, extracted);
 #endif
@@ -87,11 +90,7 @@ public class CustomerSetup {
                 }
                 // Atomic publish: interrupted extraction cannot look installed.
                 Directory.Move(extracted, target);
-#if INTERNAL_UNSIGNED_SETUP
-                Launch(target, false);
-#else
                 Launch(target, true);
-#endif
             }
         } catch (Exception error) {
             Environment.ExitCode = 1;
@@ -278,7 +277,7 @@ public class CustomerSetup {
         ProcessStartInfo start = new ProcessStartInfo();
         start.FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
 #if INTERNAL_UNSIGNED_SETUP
-        start.Arguments = "-NoLogo -NoProfile -STA -WindowStyle Hidden -File \"" + script + "\"";
+        start.Arguments = "-NoLogo -NoProfile -STA -WindowStyle Hidden -File \"" + script + "\"" + (install ? " -AutoInstall" : "");
 #else
         start.Arguments = "-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + script + "\"" + (install ? " -AutoInstall" : "");
 #endif
@@ -286,10 +285,24 @@ public class CustomerSetup {
         // Let Windows PowerShell build its own module search path. A caller
         // running PowerShell 7 can otherwise supply incompatible modules.
         start.EnvironmentVariables.Remove("PSModulePath");
+#if INTERNAL_UNSIGNED_SETUP
+        // Honor the installed Windows policy, even when a developer shell
+        // launches Setup with a transient process policy.
+        start.EnvironmentVariables.Remove("PSExecutionPolicyPreference");
+#endif
         return start;
     }
 
     static void Launch(string target, bool install) {
+#if INTERNAL_UNSIGNED_SETUP
+        // An early policy refusal from hidden Windows PowerShell would otherwise
+        // leave the operator with an extracted package and no visible launcher.
+        using (Process launcher = Process.Start(CreateLauncherStartInfo(target, install))) {
+            if (launcher == null || (launcher.WaitForExit(3000) && launcher.ExitCode != 0))
+                throw new Exception("Windows could not open the ERP launcher. The verified files are in place. Ask the institute administrator to check the approved Windows policy for this internal installer, then reopen Setup.");
+        }
+#else
         Process.Start(CreateLauncherStartInfo(target, install));
+#endif
     }
 }
