@@ -226,6 +226,9 @@ COPY --from=builder /build/sites-seed /build/sites-seed
 COPY --from=builder /build/assets-seed /build/assets-seed
 COPY --from=builder /build/deepmerge-distribution.json /build/deepmerge-distribution.json
 COPY --from=builder /build/uri-decoder-distribution.json /build/uri-decoder-distribution.json
+ARG TOEFL_HOUSE_SOURCE_REVISION=unversioned
+ARG TOEFL_HOUSE_RELEASE_VERSION=unversioned
+RUN printf '%s\n' "$TOEFL_HOUSE_SOURCE_REVISION" > /product/customer-release-revision
 # Pillow/WeasyPrint must never reach Ghostscript (GHSA-r543-q48m-4c9j).
 # Check the shipped stage AFTER its installs and every cross-stage copy.
 RUN if command -v gs >/dev/null 2>&1; then echo "ghostscript present on PATH: GHSA-r543-q48m-4c9j precondition violated" >&2; exit 1; fi
@@ -236,9 +239,6 @@ RUN if command -v gs >/dev/null 2>&1; then echo "ghostscript present on PATH: GH
 # created them: they are first-build-only footprint, never runtime state.
 
 ENV BENCH_DIR=/home/frappe/bench
-ARG TOEFL_HOUSE_SOURCE_REVISION=unversioned
-ARG TOEFL_HOUSE_RELEASE_VERSION=unversioned
-RUN printf '%s\n' "$TOEFL_HOUSE_SOURCE_REVISION" > /product/customer-release-revision
 LABEL org.toefl-house.source-eol="lf-v1" \
       org.toefl-house.source-revision="${TOEFL_HOUSE_SOURCE_REVISION}" \
       org.toefl-house.release-version="${TOEFL_HOUSE_RELEASE_VERSION}"

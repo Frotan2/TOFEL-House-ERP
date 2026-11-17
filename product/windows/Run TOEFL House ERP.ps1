@@ -54,50 +54,6 @@ foreach ($bin in @("$env:ProgramFiles\Docker\Docker\resources\bin",
                    "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin")) {
     if (Test-Path -LiteralPath (Join-Path $bin 'docker.exe')) { $env:PATH = $bin + ';' + $env:PATH }
 }
-if ($Action -in @('Backup', 'VerifyBackup')) {
-    $backupPath = Join-Path $PSScriptRoot 'Backup TOEFL House ERP.ps1'
-    $backupArgs = @()
-    if ($Action -eq 'VerifyBackup') { $backupArgs += '-VerifyExisting' }
-    if ($Action -eq 'Backup' -and $BackupDrive) { $backupArgs += @('-BackupDrive', $BackupDrive) }
-    & (Join-Path $PSHOME 'powershell.exe') -NoLogo -NoProfile -NonInteractive -File $backupPath @backupArgs
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    $grant = Join-Path $PSScriptRoot '..\data\activation\customer-release.json'
-    if ($Action -eq 'Backup' -and (Test-Path -LiteralPath $grant -PathType Leaf)) {
-        . (Join-Path $PSScriptRoot 'Test Local Docker.ps1')
-        $activationLock = [System.Threading.Mutex]::new($false, 'Local\TOEFLHouseERP.InternalActivation')
-        $held = $false
-        try {
-            try { $held = $activationLock.WaitOne(0) }
-            catch [System.Threading.AbandonedMutexException] { $held = $true }
-            if (-not $held) { throw 'The ERP is completing another first-use operation.' }
-            Assert-LocalDockerEngine
-            $identityVerifier = Join-Path $PSScriptRoot 'Verify Package Image.ps1'
-            $web = @(& (Join-Path $PSHOME 'powershell.exe') -NoLogo -NoProfile -NonInteractive -File $identityVerifier -VerifyLoadedImage -GetVerifiedWebContainer)
-            if ($LASTEXITCODE -ne 0 -or $web.Count -ne 1 -or $web[0] -cnotmatch '^[a-f0-9]{64}$') {
-                throw 'The verified ERP service is unavailable.'
-            }
-            Assert-LocalDockerEngine
-            $arguments = @('exec', '--user', 'frappe', $web[0],
-                '/home/frappe/bench/env/bin/python', '/product/activate.py')
-            $siteStatus = @(& docker.exe @arguments status)
-            if ($LASTEXITCODE -ne 0) { throw 'The first-use status could not be verified.' }
-            # A routine backup on a site already in use is not an activation.
-            if ($siteStatus -ccontains 'Site operational mode: PRODUCTION') { exit 0 }
-            if ($siteStatus -cnotcontains 'Site operational mode: REFUSED') {
-                throw 'The current site mode cannot use first-use authorization.'
-            }
-            & docker.exe @arguments customer-activate --confirm toeflhouse.localhost
-            exit $LASTEXITCODE
-        } catch {
-            [Console]::Error.WriteLine('The backup succeeded. ERP first-use authorization could not finish: ' + $_.Exception.Message)
-            exit 1
-        } finally {
-            if ($held) { $activationLock.ReleaseMutex() }
-            $activationLock.Dispose()
-        }
-    }
-    exit 0
-}
 if ($Action -eq 'Install') {
     $productRoot = Join-Path $PSScriptRoot '..'
     foreach ($relative in @('data\secrets\db.env', 'data\sites\toeflhouse.localhost\site_config.json', 'data\.installation-claim')) {
@@ -185,6 +141,50 @@ if ($Action -eq 'Install' -or $Action -eq 'Prepare') {
         }
     }
     if ($Action -eq 'Prepare') { exit 0 }
+}
+if ($Action -in @('Backup', 'VerifyBackup')) {
+    $backupPath = Join-Path $PSScriptRoot 'Backup TOEFL House ERP.ps1'
+    $backupArgs = @()
+    if ($Action -eq 'VerifyBackup') { $backupArgs += '-VerifyExisting' }
+    if ($Action -eq 'Backup' -and $BackupDrive) { $backupArgs += @('-BackupDrive', $BackupDrive) }
+    & (Join-Path $PSHOME 'powershell.exe') -NoLogo -NoProfile -NonInteractive -File $backupPath @backupArgs
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $grant = Join-Path $PSScriptRoot '..\data\activation\customer-release.json'
+    if ($Action -eq 'Backup' -and (Test-Path -LiteralPath $grant -PathType Leaf)) {
+        . (Join-Path $PSScriptRoot 'Test Local Docker.ps1')
+        $activationLock = [System.Threading.Mutex]::new($false, 'Local\TOEFLHouseERP.InternalActivation')
+        $held = $false
+        try {
+            try { $held = $activationLock.WaitOne(0) }
+            catch [System.Threading.AbandonedMutexException] { $held = $true }
+            if (-not $held) { throw 'The ERP is completing another first-use operation.' }
+            Assert-LocalDockerEngine
+            $identityVerifier = Join-Path $PSScriptRoot 'Verify Package Image.ps1'
+            $web = @(& (Join-Path $PSHOME 'powershell.exe') -NoLogo -NoProfile -NonInteractive -File $identityVerifier -VerifyLoadedImage -GetVerifiedWebContainer)
+            if ($LASTEXITCODE -ne 0 -or $web.Count -ne 1 -or $web[0] -cnotmatch '^[a-f0-9]{64}$') {
+                throw 'The verified ERP service is unavailable.'
+            }
+            Assert-LocalDockerEngine
+            $arguments = @('exec', '--user', 'frappe', $web[0],
+                '/product/activate.py')
+            $siteStatus = @(& docker.exe @arguments status)
+            if ($LASTEXITCODE -ne 0) { throw 'The first-use status could not be verified.' }
+            # A routine backup on a site already in use is not an activation.
+            if ($siteStatus -ccontains 'Site operational mode: PRODUCTION') { exit 0 }
+            if ($siteStatus -cnotcontains 'Site operational mode: REFUSED') {
+                throw 'The current site mode cannot use first-use authorization.'
+            }
+            & docker.exe @arguments customer-activate --confirm toeflhouse.localhost
+            exit $LASTEXITCODE
+        } catch {
+            [Console]::Error.WriteLine('The backup succeeded. ERP first-use authorization could not finish: ' + $_.Exception.Message)
+            exit 1
+        } finally {
+            if ($held) { $activationLock.ReleaseMutex() }
+            $activationLock.Dispose()
+        }
+    }
+    exit 0
 }
 $scriptPath = Join-Path $PSScriptRoot $scriptNames[$Action]
 if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {

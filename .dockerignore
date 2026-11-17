@@ -24,6 +24,9 @@ docs/*
 !product/update_engine.py
 !product/update_host.py
 !product/update_entrypoint.sh
+# Factory release verifier and its public, image-pinned trust store.
+!product/customer_release.py
+!product/customer-release-trust.json
 !tools/
 tools/*
 !tools/foundation/

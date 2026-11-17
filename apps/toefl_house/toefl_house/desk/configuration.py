@@ -21,6 +21,7 @@ from toefl_house.configuration import rules as foundation
 from toefl_house.enrollment.exits import governing_exit_terms
 from toefl_house.operations.owner_configuration import (backup_switch_state,
                                                      current_backup_policy)
+from toefl_house.setup_presets.provider_release import has_verified_factory_release
 from toefl_house.desk import (
     LIMIT_QUEUES,
     project_count,
@@ -323,14 +324,13 @@ def _backup_switch_item():
 
 
 def _backup_policy_item(today, title, body):
-    from toefl_house.operations.owner_configuration import _validated_backup_terms
-    from toefl_house.setup_presets.provider_release import has_verified_factory_release
-
     backup = current_backup_policy(today)
     configured = backup.get("configured") is True
     guided_recovery = has_verified_factory_release()
     saved_public_key = None
     if guided_recovery:
+        from toefl_house.operations.owner_configuration import _validated_backup_terms
+
         terms = _validated_backup_terms(today)
         if terms:
             saved_public_key = terms["backup_recovery_public_key"]
@@ -341,29 +341,33 @@ def _backup_policy_item(today, title, body):
         "Backup and activation fail closed until the local backup settings are validated "
         "and backup is switched On. Owner decision D17: delete valid older sets beyond the keep count."
     )
+    action = {
+        "endpoint": "toefl_house.operations.owner_configuration.configure_local_backup_policy",
+        "label": "Save and validate backup settings",
+        "args": {},
+    }
+    if guided_recovery:
+        action.update(guided_recovery=True, saved_recovery_public_key=saved_public_key)
+        if not saved_public_key:
+            action["label"] = "Save settings and turn backups on"
     return {
         "id": "backup-recovery", "person": title, "detail": detail,
         "status": ("Backup policy configured" if configured else
                    "Backup Off" if backup.get("status") == "OFF" else
                    "Owner configuration required"),
         "stage": "Owner configuration", "stage_definition": body,
-        "next": (
+        "next": ("Save your protected recovery kit separately from this computer and the backup drive. "
+                 "Confirm backup settings, then choose Back Up Now in the Windows launcher."
+                 if guided_recovery else (
             "The Course Owner enters the approved schedule, keep count and retention "
             "behavior, public recovery key, custody requirements and quorum; no default is supplied. "
             "Keep the private key outside the ERP and backup drive. Switch backup On and follow "
             "the launch guide to use Back Up Now and Verify Backup in the Windows launcher, "
             "with a separate physical backup drive. Follow the independent recovery approval procedure. "
             "Saving new settings requires a new verified backup before activation."
-        ),
+        )),
         "next_role": "Course Owner", "waiting_since": None,
-        "action": {
-            "endpoint": "toefl_house.operations.owner_configuration.configure_local_backup_policy",
-            "label": ("Save settings and turn backups on" if guided_recovery and not saved_public_key
-                      else "Save and validate backup settings"),
-            "args": {},
-            "guided_recovery": guided_recovery,
-            "saved_recovery_public_key": saved_public_key,
-        },
+        "action": action,
     }
 
 

@@ -492,6 +492,9 @@ class LineEndingContract(unittest.TestCase):
         }
         self.assertEqual(sources, expected, "audit any new Dockerfile COPY source")
         self.assertEqual(len(copy_rows), len(expected), "COPY syntax must stay source/destination only")
+        context_rules = (ROOT / ".dockerignore").read_text().splitlines()
+        for source in ("product/customer_release.py", "product/customer-release-trust.json"):
+            self.assertIn("!" + source, context_rules, "factory release input must enter the build context")
 
         text_suffixes = {
             ".py", ".sh", ".js", ".cjs", ".json", ".css", ".md", ".txt", ".toml",

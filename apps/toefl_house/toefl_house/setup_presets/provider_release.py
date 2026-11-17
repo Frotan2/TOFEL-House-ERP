@@ -2,12 +2,13 @@
 from pathlib import Path
 import sys
 
-import frappe
-
-
 def has_verified_factory_release() -> bool:
     activation = Path("/run/activation")
-    if not (activation / "customer-release.json").is_file() or frappe.local.site != "toeflhouse.localhost":
+    if not (activation / "customer-release.json").is_file():
+        return False
+    import frappe
+
+    if frappe.local.site != "toeflhouse.localhost":
         return False
     # These modules are shipped by the read-only application image, not the
     # customer site. Sites without that image retain the normal wizard roles.
@@ -24,6 +25,8 @@ def has_verified_factory_release() -> bool:
 
 
 def first_owner_enrollment_allowed() -> bool:
+    import frappe
+
     if not frappe.flags.in_setup_wizard or frappe.session.user != "Administrator":
         return False
     from toefl_house.security import REFUSED, site_mode
