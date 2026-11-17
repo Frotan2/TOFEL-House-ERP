@@ -220,31 +220,41 @@ try {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'windows-prerequisites.json') -Destination (
             Join-Path $prerequisites 'vendor-downloads.json')
         $windowsTools = Join-Path $kit 'product\windows'
-        $operatorFiles = @(
-            'Owner Activation Request.ps1', 'Owner Activation Request.vbs', 'Prepare Internal Activation.ps1',
-            'Apply Internal Activation.ps1', 'Apply Internal Activation.vbs',
-            'Private HTTPS Setup.ps1', 'Private HTTPS Setup.cmd', 'Private HTTPS Setup.md', 'Caddyfile.template'
-        )
-        foreach ($name in $operatorFiles) {
-            Copy-Item -LiteralPath (Join-Path (Join-Path $PSScriptRoot 'windows') $name) -Destination $windowsTools
-        }
-        foreach ($name in @('Activate TOEFL House ERP.cmd', 'Deactivate TOEFL House ERP.cmd')) {
-            Copy-Item -LiteralPath (Join-Path (Join-Path $repoRoot 'product\windows') $name) -Destination $windowsTools
-        }
-        Copy-Item -LiteralPath $caddy.FullName -Destination (Join-Path $windowsTools 'caddy-windows-amd64.zip')
-        $dariSuffix = [string]([char]0x062F) + [char]0x0631 + [char]0x06CC
-        $dariGuides = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'docs\engineering') -File -Filter '*.md' |
-            Where-Object { $_.BaseName.EndsWith($dariSuffix) })
-        if ($dariGuides.Count -ne 1) { throw 'Expected one Dari Owner guide.' }
-        Copy-Item -LiteralPath $dariGuides[0].FullName -Destination (Join-Path $windowsTools 'Owner Guide - Dari.md')
+        $providerWindows = Join-Path $PSScriptRoot 'windows'
+        $sourceWindows = Join-Path $repoRoot 'product\windows'
+        $operatorFiles = @('Private HTTPS Setup.ps1', 'Private HTTPS Setup.cmd', 'Caddyfile.template')
+        $httpsGuide = 'Private HTTPS Setup.md'
+        if ($CustomerReleaseGrant) {
+            $dariGuide = Join-Path $providerWindows 'Factory Owner Guide - Dari.md'
+            $httpsGuide = 'Factory Private HTTPS Setup.md'
+            Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination $kit
+        } else {
+            $operatorFiles += @(
+                'Owner Activation Request.ps1', 'Owner Activation Request.vbs', 'Prepare Internal Activation.ps1',
+                'Apply Internal Activation.ps1', 'Apply Internal Activation.vbs'
+            )
+            Copy-Item -LiteralPath (Join-Path $sourceWindows 'Activate TOEFL House ERP.cmd') -Destination $windowsTools
+            $dariSuffix = [string]([char]0x062F) + [char]0x0631 + [char]0x06CC
+            $dariGuides = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'docs\engineering') -File -Filter '*.md' |
+                Where-Object { $_.BaseName.EndsWith($dariSuffix) })
+            if ($dariGuides.Count -ne 1) { throw 'Expected one Dari Owner guide.' }
+            $dariGuide = $dariGuides[0].FullName
 
-        $signing = Join-Path $kit 'Approval Signing'
-        foreach ($relative in @('tools/release/Sign Internal Activation.pyw','tools/release/create_update_bundle.py',
-                                 'product/update_engine.py','product/update_host.py','LICENSE')) {
-            $target = Join-Path $signing $relative
-            [void][IO.Directory]::CreateDirectory((Split-Path -Parent $target))
-            Copy-Item -LiteralPath (Join-Path $repoRoot $relative) -Destination $target
+            $signing = Join-Path $kit 'Approval Signing'
+            foreach ($relative in @('tools/release/Sign Internal Activation.pyw','tools/release/create_update_bundle.py',
+                                     'product/update_engine.py','product/update_host.py','LICENSE')) {
+                $target = Join-Path $signing $relative
+                [void][IO.Directory]::CreateDirectory((Split-Path -Parent $target))
+                Copy-Item -LiteralPath (Join-Path $repoRoot $relative) -Destination $target
+            }
         }
+        foreach ($name in $operatorFiles) {
+            Copy-Item -LiteralPath (Join-Path $providerWindows $name) -Destination $windowsTools
+        }
+        Copy-Item -LiteralPath (Join-Path $sourceWindows 'Deactivate TOEFL House ERP.cmd') -Destination $windowsTools
+        Copy-Item -LiteralPath $caddy.FullName -Destination (Join-Path $windowsTools 'caddy-windows-amd64.zip')
+        Copy-Item -LiteralPath $dariGuide -Destination (Join-Path $windowsTools 'Owner Guide - Dari.md')
+        Copy-Item -LiteralPath (Join-Path $providerWindows $httpsGuide) -Destination (Join-Path $windowsTools 'Private HTTPS Setup.md')
         $utf8 = New-Object Text.UTF8Encoding($false)
         foreach ($scriptFile in @(Get-ChildItem -LiteralPath $kit -File -Recurse |
             Where-Object Extension -in @('.ps1','.cmd','.vbs'))) {
@@ -375,8 +385,9 @@ TEST PACKAGE - NO REAL DATA. Production authorization remains REJECT.
             'Open Setup. Follow official Windows prerequisite and restart prompts.',
             'When the ERP opens, create your named administrator in its setup wizard.',
             'In the Owner Configuration desk, set up recovery and confirm the first encrypted backup.',
-            'Once that backup verifies, the installer applies the provider release authorization automatically.',
-            'Keep your recovery kit in separate custody. Never keep it on the same disk as your backups.'
+            'Once that backup verifies, the ERP applies the provider release authorization automatically.',
+            'Keep your recovery kit in separate custody. Never keep it on the same disk as your backups.',
+            'Select Owner Guide - Dari in the TOEFL House ERP launcher for step-by-step instructions.'
         ))
     }
     # Sign the bytes which will actually be compressed and installed. The
@@ -438,8 +449,13 @@ TEST PACKAGE - NO REAL DATA. Production authorization remains REJECT.
     # No partial installer is published at the customer-facing filename.
     [IO.File]::Move($partial, $output)
     $partial = $null
-    Write-Output ('Built offline TEST installer: ' + $output)
-    Write-Output 'Windows clean-machine acceptance is still required. Production authorization: REJECT.'
+    if ($CustomerReleaseGrant) {
+        Write-Output ('Built signed factory Windows installer: ' + $output)
+        Write-Output 'Publisher signature and payload verified. Qualify this exact executable on Windows before distribution.'
+    } else {
+        Write-Output ('Built offline TEST installer: ' + $output)
+        Write-Output 'Windows clean-machine acceptance is still required. Production authorization: REJECT.'
+    }
 } finally {
     if ($partial -and (Test-Path -LiteralPath $partial)) { Remove-Item -LiteralPath $partial -Force }
     if ($staging -and (Test-Path -LiteralPath $staging)) { Remove-Item -LiteralPath $staging -Recurse -Force }

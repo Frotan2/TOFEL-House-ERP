@@ -37,6 +37,9 @@ EXISTING_PREFLIGHT = read_utf8(WINDOWS / "Test Existing Installation.ps1")
 VERIFY = read_utf8(WINDOWS / "Verify Package Image.ps1")
 PS1_PACKAGER = read_utf8(WINDOWS / "Prepare Customer Package.ps1")
 PY_PACKAGER = read_utf8(ROOT / "tools" / "release" / "create_customer_package.py")
+FACTORY_BUILDER = read_utf8(ROOT / "tools" / "release" / "Build Customer Installer.ps1")
+FACTORY_DARI_GUIDE = "Factory Owner Guide - Dari.md"
+FACTORY_HTTPS_GUIDE = "Factory Private HTTPS Setup.md"
 UPDATE = read_utf8(WINDOWS / "Update TOEFL House ERP.ps1")
 CATALOG = json.loads(read_utf8(WINDOWS / "updater-strings.json"))
 HANDBOOK = read_utf8(WINDOWS / "OWNER HANDBOOK.txt")
@@ -133,6 +136,53 @@ class OwnerHandbookDeliveryTests(unittest.TestCase):
         # "no updater" wording must not contradict the shipped launcher.
         self.assertNotIn("Do not install an updater", HANDBOOK)
         self.assertNotIn("PR #46 remains", HANDBOOK)
+
+    def test_signed_factory_package_stages_customer_guide_without_internal_approval_tools(self):
+        staged_tools = FACTORY_BUILDER.split("$operatorFiles = @(", 1)[1].split(
+            "$utf8 = New-Object Text.UTF8Encoding", 1
+        )[0]
+        common, variants = staged_tools.split("if ($CustomerReleaseGrant) {", 1)
+        factory, engineering = variants.split("} else {", 1)
+        self.assertIn("Private HTTPS Setup.ps1", common)
+        self.assertIn("$httpsGuide = 'Private HTTPS Setup.md'", common)
+        self.assertIn(FACTORY_DARI_GUIDE, factory)
+        self.assertIn(FACTORY_HTTPS_GUIDE, factory)
+        self.assertIn("'LICENSE'", factory)
+        self.assertIn("'Owner Guide - Dari.md'", staged_tools)
+        for internal_tool in (
+            "Owner Activation Request.ps1",
+            "Prepare Internal Activation.ps1",
+            "Apply Internal Activation.ps1",
+            "'Activate TOEFL House ERP.cmd'",
+            "'Approval Signing'",
+        ):
+            self.assertNotIn(internal_tool, common + factory)
+            self.assertIn(internal_tool, engineering)
+        guide = read_utf8(ROOT / "tools" / "release" / "windows" / FACTORY_DARI_GUIDE)
+        for action in ("Course Owner", "Create and save recovery kit",
+                       "Back Up Now", "Verify Backup", "Private HTTPS"):
+            self.assertIn(action, guide)
+        for internal_action in ("Administrator Login", "Activation Request", "Apply Approvals"):
+            self.assertNotIn(internal_action, guide)
+
+        https_guide = read_utf8(ROOT / "tools" / "release" / "windows" / FACTORY_HTTPS_GUIDE)
+        for action in ("Prepare proxy files", "Export public CA certificate",
+                       "Windows Defender Firewall", "approved staff subnet"):
+            self.assertIn(action, https_guide)
+        for internal_action in ("Activation Request", "Apply Approvals"):
+            self.assertNotIn(internal_action, https_guide)
+
+    def test_factory_completion_distinguishes_builder_verification_from_windows_acceptance(self):
+        output = FACTORY_BUILDER.split("[IO.File]::Move($partial, $output)", 1)[1].split(
+            "} finally {", 1
+        )[0]
+        factory, engineering = output.split("} else {", 1)
+        self.assertIn("if ($CustomerReleaseGrant) {", factory)
+        self.assertIn("Built signed factory Windows installer", factory)
+        self.assertIn("Qualify this exact executable on Windows before distribution.", factory)
+        self.assertNotIn("Production authorization: REJECT", factory)
+        self.assertIn("Built offline TEST installer", engineering)
+        self.assertIn("Production authorization: REJECT", engineering)
 
 
 class LifecyclePreservationTests(unittest.TestCase):
