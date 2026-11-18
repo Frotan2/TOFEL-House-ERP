@@ -73,6 +73,39 @@ class CustomerReleaseTests(unittest.TestCase):
     def test_exact_provider_release(self):
         self.assertEqual(release.verify(self.instance, now=self.now), self.grant["release_id"])
 
+    def test_verified_archive_config_digest_authorizes_a_different_runtime_id(self):
+        self.identity["factory_release_image_id"] = self.grant["image_id"]
+        self.grant["oci_manifest_digest"] = "sha256:" + "c" * 64
+        self.identity["image_id"] = self.grant["oci_manifest_digest"]
+        self.write_signed_grant()
+        self.write_identity()
+        self.assertEqual(release.verify(self.instance, now=self.now), self.grant["release_id"])
+
+        self.identity["image_id"] = "sha256:" + "d" * 64
+        self.write_identity()
+        with self.assertRaisesRegex(UpdateError, "different factory image"):
+            release.verify(self.instance, now=self.now)
+
+    def test_present_archive_id_never_falls_back_to_the_runtime_id(self):
+        for archive_id in (None, "", "sha256:" + "c" * 64):
+            with self.subTest(archive_id=archive_id):
+                self.identity["factory_release_image_id"] = archive_id
+                self.write_identity()
+                with self.assertRaisesRegex(UpdateError, "different factory image"):
+                    release.verify(self.instance, now=self.now)
+
+    def test_archive_id_does_not_replace_runtime_identity_checks(self):
+        self.identity["factory_release_image_id"] = self.grant["image_id"]
+        for field, value in (("image_id", "invalid"), ("source_revision", "e" * 40),
+                             ("provenance", "signed-update")):
+            with self.subTest(field=field):
+                old_value = self.identity[field]
+                self.identity[field] = value
+                self.write_identity()
+                with self.assertRaisesRegex(UpdateError, "different factory image"):
+                    release.verify(self.instance, now=self.now)
+                self.identity[field] = old_value
+
     def test_no_provider_trust_stays_unapproved(self):
         self.write_trust()
         with self.assertRaisesRegex(UpdateError, "no provider release signing key"):

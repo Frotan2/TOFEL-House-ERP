@@ -126,8 +126,43 @@ function Read-TarMetadata {
     }
 }
 
+function Get-ArchiveOciManifestDigest {
+    param([string]$Path, [string]$ConfigDigest, [object[]]$LayerPaths)
+    $encoding = [System.Text.UTF8Encoding]::new($false, $true)
+    try { $indexBytes = Read-TarMetadata $Path 'index.json' }
+    catch { return $null }
+    $index = $encoding.GetString($indexBytes) | ConvertFrom-Json
+    $descriptors = @($index.manifests)
+    if ($index.schemaVersion -ne 2 -or $descriptors.Count -ne 1) { return $null }
+    $descriptor = $descriptors[0]
+    if ($descriptor.mediaType -cnotin @('application/vnd.oci.image.manifest.v1+json',
+            'application/vnd.docker.distribution.manifest.v2+json') -or
+        [string]$descriptor.digest -cnotmatch '^sha256:([0-9a-f]{64})$') { return $null }
+    $manifestBytes = Read-TarMetadata $Path ('blobs/sha256/' + $Matches[1])
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $manifestDigest = 'sha256:' + [BitConverter]::ToString($sha.ComputeHash($manifestBytes)).Replace('-', '').ToLowerInvariant()
+    } finally { $sha.Dispose() }
+    if ($manifestDigest -cne $descriptor.digest -or $manifestBytes.Length -ne $descriptor.size) {
+        throw 'The archive OCI manifest does not match its descriptor.'
+    }
+    $manifest = $encoding.GetString($manifestBytes) | ConvertFrom-Json
+    $layers = @($manifest.layers)
+    if ($manifest.schemaVersion -ne 2 -or $manifest.config.digest -cne $ConfigDigest -or
+        $layers.Count -ne $LayerPaths.Count) {
+        throw 'The archive OCI manifest differs from the verified image configuration or layer list.'
+    }
+    for ($index = 0; $index -lt $layers.Count; $index++) {
+        if ([string]$layers[$index].digest -cnotmatch '^sha256:([0-9a-f]{64})$' -or
+            [string]$LayerPaths[$index] -cne ('blobs/sha256/' + $Matches[1])) {
+            throw 'The archive OCI manifest layers differ from the verified Docker archive.'
+        }
+    }
+    return $manifestDigest
+}
+
 function Get-ArchiveIdentity {
-    param([string]$Path)
+    param([string]$Path, [switch]$IncludeOciIdentity)
     $encoding = [System.Text.UTF8Encoding]::new($false, $true)
     $text = $encoding.GetString((Read-TarMetadata $Path 'manifest.json'))
     $entries = $text | ConvertFrom-Json
@@ -161,9 +196,15 @@ function Get-ArchiveIdentity {
             throw "The verified release archive contains an invalid filesystem layer digest."
         }
     }
+    $configDigest = 'sha256:' + $digest
+    $ociDigest = $null
+    if ($IncludeOciIdentity -and $entries[0].Config.StartsWith('blobs/sha256/')) {
+        $ociDigest = Get-ArchiveOciManifestDigest $Path $configDigest @($entries[0].Layers)
+    }
     return [pscustomobject]@{
         tag = 'toefl-house-erp-app:local'
-        config_digest = 'sha256:' + $digest
+        config_digest = $configDigest
+        oci_manifest_digest = $ociDigest
         labels = $config.config.Labels
         rootfs_layers = $rootfs
     }
@@ -178,7 +219,7 @@ try {
         throw "Selecting the verified web container requires only ordinary loaded-image verification."
     }
     if ($ReadArchiveIdentity) {
-        Get-ArchiveIdentity $Archive | ConvertTo-Json -Depth 12 -Compress
+        Get-ArchiveIdentity $Archive -IncludeOciIdentity | ConvertTo-Json -Depth 12 -Compress
         exit 0
     }
     if (-not $ManifestChecksum) { $ManifestChecksum = "$Manifest.sha256" }
@@ -328,6 +369,13 @@ try {
                     if ($grants.Count -ne $customerFiles.Count -or -not $record.internal_setup_sha256) {
                         throw 'Factory release authorization is incomplete.'
                     }
+                    if ([string]$loaded.Id -cne $original.config_digest) {
+                        $ociIdentity = Get-ArchiveIdentity $Archive -IncludeOciIdentity
+                        if ([string]$loaded.Id -cne $ociIdentity.oci_manifest_digest) {
+                            throw 'The loaded Docker ID is not bound to the verified factory archive.'
+                        }
+                    }
+                    $record.factory_release_image_id = $original.config_digest
                     foreach ($grant in $grants) {
                         if ($grant.PSIsContainer -or ($grant.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
                             $grant.Length -lt 1 -or $grant.Length -gt 8192) {

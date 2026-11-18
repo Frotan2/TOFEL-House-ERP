@@ -169,13 +169,36 @@ try {
             }
             [IO.File]::Copy($file.FullName, (Join-Path $releaseDir $document.Name), $false)
         }
-        $imageId = [string]$manifest.image.config_digest
-        if ($imageId -cnotmatch '^sha256:[a-f0-9]{64}$' -or $staging.Contains(',')) {
+        $configDigest = [string]$manifest.image.config_digest
+        if ($configDigest -cnotmatch '^sha256:[a-f0-9]{64}$' -or $staging.Contains(',')) {
             throw 'Could not verify the exact provider image for this release.'
         }
         $docker = Get-Command docker.exe -CommandType Application -ErrorAction Stop
         . (Join-Path $packageRoot 'product\windows\Test Local Docker.ps1')
         Assert-LocalDockerEngine
+        $archiveDetails = & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $verify `
+            -Archive (Join-Path $release 'toefl-house-erp-app.tar') -ReadArchiveIdentity
+        if ($LASTEXITCODE -ne 0 -or -not $archiveDetails) { throw 'Could not read the verified release archive identity.' }
+        $archiveDetails = $archiveDetails | ConvertFrom-Json
+        if ($archiveDetails.config_digest -cne $configDigest) {
+            throw 'The release archive configuration differs from the verified manifest.'
+        }
+        $grant = Get-Content -LiteralPath (Join-Path $releaseDir 'customer-release.json') -Raw | ConvertFrom-Json
+        if ([string]$grant.oci_manifest_digest -cne [string]$archiveDetails.oci_manifest_digest) {
+            throw 'The production authorization must name the verified OCI manifest digest when present.'
+        }
+        # Classic Docker identifies an image by its config, while containerd
+        # identifies it by the OCI manifest verified against that same config.
+        $imageId = $null
+        foreach ($reference in @($configDigest, $archiveDetails.oci_manifest_digest)) {
+            if ($reference -cnotmatch '^sha256:[a-f0-9]{64}$') { continue }
+            $loadedId = @(& $docker.Source image inspect $reference --format '{{.Id}}' 2>$null)
+            if ($LASTEXITCODE -eq 0 -and $loadedId.Count -eq 1 -and $loadedId[0] -ceq $reference) {
+                $imageId = $reference
+                break
+            }
+        }
+        if (-not $imageId) { throw 'The verified release archive image is not loaded on the provider.' }
         $releaseCheck = Join-Path $staging 'release-check'
         [IO.Directory]::CreateDirectory($releaseCheck) | Out-Null
         foreach ($name in @('customer-release.json', 'customer-release.sig.json')) {
@@ -183,7 +206,8 @@ try {
         }
         $identity = @{
             schema_version=1; document_type='toefl-house-erp-installed-image'
-            provenance='factory'; source_revision=[string]$manifest.source_revision; image_id=$imageId
+            provenance='factory'; source_revision=[string]$manifest.source_revision
+            image_id=$imageId; factory_release_image_id=$configDigest
         } | ConvertTo-Json -Compress
         [IO.File]::WriteAllText((Join-Path $releaseCheck 'installed-image-identity.json'), $identity)
         $checkArgs = @('run', '--rm', '--pull', 'never', '--network', 'none', '--read-only',

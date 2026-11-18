@@ -37,7 +37,8 @@ def verify(activation_dir: Path, *, now: datetime | None = None) -> str:
         "source_revision", "image_id", "windows_acceptance_sha256",
         "production_authorization",
     }
-    if (grant.keys() != fields or type(grant["schema_version"]) is not int
+    if (grant.keys() not in (fields, fields | {"oci_manifest_digest"})
+            or type(grant["schema_version"]) is not int
             or grant["schema_version"] != 1 or grant["document_type"] != GRANT_KIND
             or grant["product"] != PRODUCT or grant["production_authorization"] != "AUTHORIZED"):
         raise UpdateError("release.manifest.invalid", "production release authorization is invalid")
@@ -51,11 +52,22 @@ def verify(activation_dir: Path, *, now: datetime | None = None) -> str:
             raise UpdateError("release.manifest.invalid", f"production release {name} is invalid")
     identity = load_json_file(activation_dir / "installed-image-identity.json",
                               "installed image identity", limit=4096)
+    runtime_image_id = identity.get("image_id")
+    # The runtime image ID can be an OCI descriptor on newer Docker engines.
+    # The release grant uses the verified archive config digest across engines.
+    factory_image_id = identity.get("factory_release_image_id", runtime_image_id)
+    accepted_image_ids = [grant["image_id"]]
+    if "oci_manifest_digest" in grant:
+        oci_digest = grant["oci_manifest_digest"]
+        if not isinstance(oci_digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", oci_digest):
+            raise UpdateError("release.manifest.invalid", "production release OCI manifest digest is invalid")
+        accepted_image_ids.append(oci_digest)
     if (type(identity.get("schema_version")) is not int or identity["schema_version"] != 1
             or identity.get("document_type") != "toefl-house-erp-installed-image"
             or identity.get("provenance") != "factory"
             or identity.get("source_revision") != grant["source_revision"]
-            or identity.get("image_id") != grant["image_id"]):
+            or runtime_image_id not in accepted_image_ids
+            or factory_image_id != grant["image_id"]):
         raise UpdateError("release.manifest.invalid", "production approval belongs to a different factory image")
     try:
         revision = REVISION_PATH.read_text(encoding="ascii").strip()

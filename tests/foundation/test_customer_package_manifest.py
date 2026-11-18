@@ -448,6 +448,55 @@ exit $LASTEXITCODE
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("does not match", result.stdout + result.stderr)
 
+    @unittest.skipUnless(os.name == "nt", "Windows PowerShell verifier")
+    def test_factory_release_records_only_a_verified_oci_loader_id(self):
+        def blob_path(digest):
+            return "blobs/sha256/" + digest.removeprefix("sha256:")
+
+        media_type = "application/vnd.oci.image.manifest.v1+json"
+        config = self.members[self.config_digest.removeprefix("sha256:") + ".json"]
+        layer = self.members["layer/layer.tar"]
+        layer_digest = "sha256:" + hashlib.sha256(layer).hexdigest()
+        oci_manifest = json.dumps({
+            "schemaVersion": 2, "mediaType": media_type,
+            "config": {"digest": self.config_digest, "size": len(config)},
+            "layers": [{"digest": layer_digest, "size": len(layer)}],
+        }).encode()
+        oci_digest = "sha256:" + hashlib.sha256(oci_manifest).hexdigest()
+        write_tar(self.image, {
+            "manifest.json": json.dumps([{
+                "Config": blob_path(self.config_digest), "RepoTags": [IMAGE_TAG],
+                "Layers": [blob_path(layer_digest)],
+            }]).encode(),
+            "index.json": json.dumps({
+                "schemaVersion": 2, "manifests": [{
+                    "mediaType": media_type, "digest": oci_digest, "size": len(oci_manifest),
+                }],
+            }).encode(),
+            blob_path(self.config_digest): config,
+            blob_path(oci_digest): oci_manifest,
+            blob_path(layer_digest): layer,
+        })
+        package, _, _ = self.create()
+        activation = package / "product/data/activation"
+        activation.mkdir(parents=True)
+        (package / ".setup-sha256").write_text("a" * 64, encoding="ascii")
+        for name in ("customer-release.json", "customer-release.sig.json"):
+            (package / "product/release" / name).write_bytes(b"synthetic receipt fixture")
+        inspect = {"Id": "sha256:" + "c" * 64, "RepoTags": [IMAGE_TAG],
+                   "Config": {"Labels": self.labels}, "RootFS": {"Layers": [layer_digest]}}
+        refused = self.run_verifier(package, record_factory=True, inspect=inspect)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("not bound", refused.stdout + refused.stderr)
+        self.assertEqual(list(activation.iterdir()), [])
+
+        inspect["Id"] = oci_digest
+        accepted = self.run_verifier(package, record_factory=True, inspect=inspect)
+        self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+        identity = json.loads((activation / "installed-image-identity.json").read_text(encoding="utf-8"))
+        self.assertEqual(identity["image_id"], oci_digest)
+        self.assertEqual(identity["factory_release_image_id"], self.config_digest)
+
     @unittest.skipUnless(os.name == "nt", "Windows built-in tar selection")
     def test_windows_verifier_prefers_builtin_tar_with_actual_git_tar_first_in_path(self):
         git = shutil.which("git.exe")
