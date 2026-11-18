@@ -16,9 +16,12 @@ fields:
 
 - `schema_version` is `1`.
 - `document_type` is `toefl-house-erp-customer-release` and `product` is
-  `toefl-house-erp`.
-- `release_id` identifies the approved release. `source_revision` and
-  `image_id` are the exact factory Git commit and Docker image ID.
+  `TOEFL House ERP`.
+- `release_id` identifies the approved release. `source_revision` is the
+  exact factory Git commit and `image_id` is the verified archive config digest.
+- If the archive includes a verified single OCI image manifest, include its
+  digest as `oci_manifest_digest`. Windows binds the engine's installed ID to
+  the config digest or the OCI manifest digest signed by the release issuer.
 - `windows_acceptance_sha256` is the digest of the independent Windows
   acceptance record for that image. `production_authorization` is
   `AUTHORIZED`.
