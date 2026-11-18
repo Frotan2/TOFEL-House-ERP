@@ -30,6 +30,9 @@ function owner(id){
  }]});
  const audit=JSON.parse(fs.readFileSync(process.env.FOUNDATION_AUDIT_REPORT));
  const rows=[...packages.values()];
+ if(rows.some(row=>row.name==='picomatch'&&row.rendered_bytes>0)){
+  throw new Error('Picomatch crossed the Education browser build boundary');
+ }
  const findings=Object.entries(audit.advisories).flatMap(([name,items])=>items.map(a=>({id:a.id,url:a.url,package:name,
   browser_artifact:rows.some(r=>r.name===name&&r.rendered_bytes>0)?'rendered-code-present':'no-rendered-package-code',
   exploit_reachability:'requires-advisory-specific-input-and-callsite-proof',

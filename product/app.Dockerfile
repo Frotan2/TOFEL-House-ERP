@@ -124,6 +124,7 @@ COPY tools/foundation/secure_deepmerge.py /product/secure_deepmerge.py
 COPY tools/foundation/deepmerge-hashes.json /product/deepmerge-hashes.json
 COPY tools/foundation/secure_uri_decoder.py /product/secure_uri_decoder.py
 COPY tools/foundation/decoder /product/decoder
+COPY tools/foundation/picomatch_build_boundary.py /product/picomatch_build_boundary.py
 COPY tools/foundation/fix_setup_sidebar.py /product/fix_setup_sidebar.py
 COPY tools/foundation/realtime-locks /product/realtime-locks
 # The performance baseline (finding 9) runs inside the deployed image:
@@ -211,13 +212,15 @@ RUN python3 /product/secure_uri_decoder.py /home/frappe/bench/apps
 RUN cd /home/frappe/bench && bench build \
     && python3 /product/secure_deepmerge.py /home/frappe/bench/apps --apps --verify --assets --report /build/deepmerge-distribution.json \
     && python3 /product/secure_uri_decoder.py /home/frappe/bench/apps --verify --report /build/uri-decoder-distribution.json \
+    && python3 /product/picomatch_build_boundary.py /home/frappe/bench/apps /home/frappe/bench/sites/assets \
     && /home/frappe/bench/env/bin/python -c 'import sys; sys.path.insert(0, "/product"); from bootstrap import export_prebuilt_assets; export_prebuilt_assets()' \
     && yarn cache clean && rm -rf /home/frappe/.cache
 
 # Copy only installed runtime trees. Build checkouts and intermediate chown /
 # package-install layers otherwise inflate docker save beyond release limits.
 # The common base retains native backup/print tools and the verified Node
-# runtime used by Socket.IO; no runtime dependency is stripped here.
+# runtime used by Socket.IO. The provider build above excludes Picomatch's
+# reviewed build-only copies before copying this bench into the customer image.
 FROM product-base AS runtime
 RUN useradd --create-home --home-dir /home/frappe --shell /bin/bash frappe
 COPY --from=builder --chown=frappe:frappe /home/frappe/bench /home/frappe/bench

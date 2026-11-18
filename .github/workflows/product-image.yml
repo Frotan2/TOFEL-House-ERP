@@ -116,6 +116,8 @@ on:
       - tools/foundation/deepmerge-hashes.json
       - tools/foundation/secure_uri_decoder.py
       - tools/foundation/decoder/**
+      - tools/foundation/picomatch_build_boundary.py
+      - tools/foundation/runtime_frontend_graph.cjs
       - tools/native/tuition_refund_accounting_probe.py
       - tools/foundation/fix_setup_sidebar.py
       - product/**

@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-17",
+  "kind": "additive_advisory_delta_no_register_mutation",
+  "basis": "Exact-main Foundation runtime 44179798419 at 5b0bd895a8d7bc74445e99e396665ef7d524d9f7 failed on the newly reviewed npm advisory 1247710. The installed versions were 2.3.1, 2.3.2 and 4.0.7. The Education frontend graph in Foundation artifact 14372483191 reports no rendered Picomatch code. Pinned dependency edges and provider build enforcement are documented in README.md.",
+  "packages": [
+    {
+      "package": "npm:picomatch@2.3.1,2.3.2,4.0.7",
+      "advisories": [
+        {
+          "id": "GHSA-fc5q-39xc-vjpf",
+          "aliases": ["CVE-2026-112366", "1247710"],
+          "severity": "high",
+          "vulnerable_range": "<=4.0.7",
+          "first_patched": "none published as of 2026-11-17",
+          "summary": "Repeated single-branch extglobs can make the JavaScript matcher take excessive time.",
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "The pinned consumers use Picomatch through Chokidar file watchers, fast-glob and Tailwind, Rollup plugin tooling, tinyglobby or Vite. The provider compiles repository-controlled inputs. No Picomatch code appeared in the exact Education production browser module graph. The product build checks the emitted browser assets and removes every reviewed installed Picomatch copy before exporting assets and copying the bench into the runtime image. Unknown package versions or parser bytes and recognized emitted matcher code fail the product build.",
+          "fix_path": "Review a published upstream fix when available. Keep the product build boundary and both dependency audits active. Reassess any version, consumer or asset compiler change that invalidates the current evidence."
+        }
+      ]
+    }
+  ]
+}
