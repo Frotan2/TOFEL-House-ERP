@@ -884,6 +884,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "program_enrollment", label: "Program enrollment", fieldtype: "Data", reqd: 1, read_only: 1 },
 			{ fieldname: "fee_structure", label: "Fee plan", fieldtype: "Data", reqd: 1, read_only: 1 },
 			{ fieldname: "posting_date", label: "Posting date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "backdate_reason", label: "Reason for earlier posting date", fieldtype: "Small Text", description: "Required when the posting date is earlier than today. Explain why this bill is being backdated (maximum 500 characters)." },
 			{ fieldname: "first_due_date", label: "First due date", fieldtype: "Date", reqd: 1 },
 			{ fieldname: "installments", label: "Installments (owner policy)", fieldtype: "Int", reqd: 1 },
 			{ fieldname: "shares", label: "Contractual shares % (optional, owner policy)", fieldtype: "Small Text", description: "Leave empty for an equal split. Negotiated unequal installments such as 60,40 must total 100% and are refused unless the governing Owner billing policy authorizes them. The plan always totals the full net tuition." },
@@ -1055,6 +1056,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "program_enrollment", label: "Program enrollment", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "fee_structure", label: "Fee structure", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "posting_date", label: "Posting date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "backdate_reason", label: "Reason for earlier posting date", fieldtype: "Small Text", description: "Required when the posting date is earlier than today. Explain why this bill is being backdated (maximum 500 characters)." },
 			{ fieldname: "due_date", label: "Due date", fieldtype: "Date", reqd: 1 },
 		],
 		"toefl_house.finance.corrections.configure_correction_policy": [

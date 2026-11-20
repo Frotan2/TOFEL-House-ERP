@@ -3641,7 +3641,8 @@ def main():
                 lambda:as_user('finance_officer',
                     lambda:fin_inst.issue_tuition_installment_plan(
                         'fin_inst_off_0000001',second['program_enrollment'],
-                        fin['fee_structure'],'2026-09-01','2026-10-01',3)),
+                        fin['fee_structure'],'2026-09-01','2026-10-01',3,
+                        backdate_reason='SYN historical disabled-installment fixture')),
                 'Installments are not authorized')
         check('finance-installments-off-by-default-denied',installments_off_by_default)
         def installments_wrong_role():
@@ -3673,7 +3674,10 @@ def main():
                 company='TOEFL House'))
             fs2.append('components',{'fees_category':'SYN-Tuition','amount':25000})
             fs2.insert()
-            return denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_wrongyear_00001',second['program_enrollment'],fs2.name,'2026-09-01','2026-09-30')))
+            return denied_because(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
+                'fin_wrongyear_00001',second['program_enrollment'],fs2.name,'2026-09-01','2026-09-30',
+                backdate_reason='SYN historical wrong-year structure fixture')),
+                'Fee structure does not match the enrollment program/year')
         check('finance-tuition-outside-year-structure-denied',wrong_year_structure)
         check('finance-tuition-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:fin_m.issue_tuition_fees('fin_out_tuition_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
         check('finance-tuition-enrollment-officer-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:fin_m.issue_tuition_fees('fin_enr_tuition_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
@@ -3692,7 +3696,10 @@ def main():
             assert value==fees1 and frappe.db.count(api.AUDIT)==count and frappe.db.count('Fees')==fees_count
             return {'same_result':True,'no_new_fees':True}
         check('finance-tuition-idempotent-replay',tuition_replay)
-        check('finance-tuition-duplicate-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_tuition_dup_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
+        check('finance-tuition-duplicate-denied',lambda:denied_because(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
+            'fin_tuition_dup_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30',
+            backdate_reason='SYN historical duplicate tuition fixture')),
+            'Tuition is already billed for this enrollment'))
         def tuition_direct_denied():
             frappe.set_user('Administrator')
             return denied(lambda:frappe.get_doc(dict(doctype='Fees',naming_series='EDU-FEE-.YYYY.-',
@@ -3711,7 +3718,7 @@ def main():
                 return original(*args,**kwargs)
             try:
                 with patch.object(frappe,'get_doc',side_effect=injected):
-                    fin_m.issue_tuition_fees('fin_tuition_atomic_01',enrolled['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30')
+                    fin_m.issue_tuition_fees('fin_tuition_atomic_01',enrolled['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30',backdate_reason='SYN historical atomic rollback fixture')
             except RuntimeError:frappe.db.rollback(save_point='fin_atomic')
             else:raise AssertionError('Failure injection did not execute')
             assert {dt:frappe.db.count(dt) for dt in old}==old
@@ -6077,7 +6084,7 @@ def main():
                 'odcp-activate-gen-000001','SYN-DISC-GEN',1))
             fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
                 'odcp-fee-scoped-live-01',odcp_learners['scope']['program_enrollment'],fsx['fs2'],
-                '2026-09-06','2026-10-06'))
+                '2026-09-06','2026-10-06',backdate_reason='SYN historical scoped discount fixture'))
             assert fees['grand_total']==15000.0,fees
             applied={d['fee_category']:d['rule_code'] for d in fees['discounts_applied']}
             assert applied=={'SYN-Tuition':'SYN-DISC-GEN','SYN-Books':'SYN-DISC-GEN'},applied
@@ -6108,7 +6115,7 @@ def main():
             assert float(frappe.db.get_value('Fees',fdisc['fees'],'grand_total'))==26000
             fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
                 'odcp-fee-post-retire-01',odcp_learners['retirement']['program_enrollment'],fs3.name,
-                '2026-09-07','2026-10-07'))
+                '2026-09-07','2026-10-07',backdate_reason='SYN historical discount retirement fixture'))
             assert 'discounts_applied' not in fees,fees
             assert fees['grand_total']==25000.0,fees
             assert denied(lambda:as_user('finance_officer',lambda:acm.set_discount_rule_status(
@@ -7611,7 +7618,7 @@ def main():
             assert frappe.db.count('Program Enrollment',{'student':prior.name,'docstatus':1})==2
             fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
                 's7_tuit00000000001',second['program_enrollment'],fin['fee_structure'],
-                '2026-09-01','2026-09-30'))
+                '2026-09-01','2026-09-30',backdate_reason='SYN historical returning-student fixture'))
             assert fees['student']==prior.name and float(fees['grand_total'])>0,fees
             frappe.db.commit()
             return {'student':prior.name,'customer':prior.customer,
@@ -7981,10 +7988,24 @@ def main():
             cases={}
             for label in ('s11a','s11b','s11c','s11d','s11e','s11f'):
                 cases[label]=as_user('publisher',lambda:api.create_case('s11_case_'+label+'_0001',subs[label]))['name']
-            bill=lambda key,case,post,due:as_user('finance_officer',lambda:fin_m.issue_placement_fee(key,case,payer,post,due))
+            bill=lambda key,case,post,due:as_user('finance_officer',lambda:fin_m.issue_placement_fee(
+                key,case,payer,post,due,backdate_reason=(
+                    'SYN billing-policy date boundary fixture' if post<today else '')))
             assert unavailable(lambda:bill('s11_back_out_000001',cases['s11a'],back91,today),'more than 90 days back')
+            assert unavailable(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee(
+                's11_reason_missing_01',cases['s11a'],payer,back90,today)),
+                'Backdated billing reason')
+            assert unavailable(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee(
+                's11_reason_blank_001',cases['s11a'],payer,back90,today,backdate_reason='  ')),
+                'Backdated billing reason')
             b1=bill('s11_back_edge_00001',cases['s11a'],back90,today)
             assert b1['case']==cases['s11a'],b1
+            assert b1['backdate_reason']=='SYN billing-policy date boundary fixture',b1
+            reason_op=frappe.db.get_value(api.OP,api.digest(['issue_placement_fee','s11_back_edge_00001']),
+                'result_json')
+            assert json.loads(reason_op)['backdate_reason']==b1['backdate_reason'],reason_op
+            if frappe.get_meta('Sales Invoice').has_field('remarks'):
+                assert b1['backdate_reason'] in frappe.db.get_value('Sales Invoice',b1['sales_invoice'],'remarks')
             assert unavailable(lambda:bill('s11_fwd_out_0000001',cases['s11b'],fwd31,fwd31),'more than 30 days forward')
             b2=bill('s11_fwd_edge_0000001',cases['s11b'],fwd30,fwd30)
             assert b2['case']==cases['s11b'],b2

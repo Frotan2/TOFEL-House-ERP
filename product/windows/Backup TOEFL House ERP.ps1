@@ -533,9 +533,9 @@ function Verify-ExistingBackup {
     }
     Assert-SeparateBackupDisk $receipt.source_drive $receipt.backup_drive
     $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    if (-not $task -or $task.State -eq "Disabled" -or
+    if (-not $task -or $task.State -eq "Disabled" -or -not $task.Settings.WakeToRun -or
         @($task.Actions).Count -ne 1 -or @($task.Triggers).Count -ne 1) {
-        throw "The Owner-configured Windows backup task is missing, disabled or incomplete."
+        throw "The Owner-configured Windows backup task is missing, disabled, incomplete or not configured to wake the computer."
     }
     $expectedPowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
     $taskAction = $task.Actions[0]
@@ -991,7 +991,7 @@ try {
         $trigger = New-ScheduledTaskTrigger -Daily -At $scheduleAt
         $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) `
             -LogonType Interactive -RunLevel Limited
-        $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
+        $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun `
             -ExecutionTimeLimit (New-TimeSpan -Hours 3)
         $taskRegistrationStarted = $true
         Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
@@ -1009,7 +1009,7 @@ try {
             try { $registeredStart = [DateTime]::Parse([string]$registeredTrigger.StartBoundary) }
             catch { $registeredStart = $null }
         }
-        if (-not $registered -or $registered.State -eq "Disabled" -or
+        if (-not $registered -or $registered.State -eq "Disabled" -or -not $registered.Settings.WakeToRun -or
             @($registered.Actions).Count -ne 1 -or @($registered.Triggers).Count -ne 1 -or
             (Get-BackupTaskUserSid ([string]$registered.Principal.UserId)) -ne $expectedTaskUserSid -or
             [string]$registered.Principal.LogonType -ne "Interactive" -or
@@ -1017,7 +1017,7 @@ try {
             [string]$registered.Actions[0].Arguments -cne $expectedTaskArgument -or
             -not $registeredStart -or [int]$registeredTrigger.DaysInterval -ne 1 -or
             $registeredStart.ToString("HH:mm", [Globalization.CultureInfo]::InvariantCulture) -ne [string]$policy.schedule_time) {
-            throw "The Windows scheduled backup task could not be verified for its configured action, time and interactive Docker user identity."
+            throw "The Windows scheduled backup task could not be verified for its configured wake setting, action, time and interactive Docker user identity."
         }
 
         if ([string]$policy.retention_behavior -eq $retentionDeleteBeyondKeep) {

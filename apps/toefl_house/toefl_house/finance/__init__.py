@@ -16,6 +16,7 @@ from toefl_house.api import _execute
 from toefl_house.policy import digest, validate_finance_dates
 from toefl_house.security import finance_command_active, is_production, require_operational
 from toefl_house.enrollment import deny_premature_invoice
+from toefl_house.finance import backdating
 
 FEES = "Fees"
 INVOICE = "Sales Invoice"
@@ -301,7 +302,7 @@ def resolved_billable_components(pe, fs_name):
 
 @frappe.whitelist(methods=["POST"])
 def issue_tuition_fees(request_key, program_enrollment, fee_structure,
-                       posting_date, due_date):
+                       posting_date, due_date, backdate_reason=""):
     """Bill one submitted Program Enrollment from a configured Fee Structure.
 
     Native Fees stays the receivable authority: enrollment/student match,
@@ -323,9 +324,12 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
             if not terms:
                 raise ValueError("No active billing policy governs this date; "
                                  "the Course Owner must set one first")
+            today = frappe.utils.today()
             billing_policies.check_posting_bounds(
-                posting, frappe.utils.today(),
+                posting, today,
                 terms["max_backdate_days"], terms["max_future_days"])
+            clean_backdate_reason = backdating.validate_backdate_reason(
+                posting, today, backdate_reason)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         frappe.db.sql("select name from `tabProgram Enrollment` where name=%s for update",
@@ -374,6 +378,7 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
             posting_date=posting, due_date=due,
             fee_structure=fs_name, receivable_account=fs.receivable_account,
             components=fee_components))
+        backdating.set_native_remarks(fees, clean_backdate_reason)
         fees.flags.ignore_permissions = True
         fees.insert(ignore_permissions=True)
         fees.flags.ignore_permissions = True
@@ -394,20 +399,23 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
             result["gross_total"] = gross_total
             result["discount_amount"] = round(result["gross_total"]
                                               - float(row.grand_total), 2)
-        return result, dict(target=fees.name,
-                            after_hash=digest([fees.name, pe_name, fs_name, posting, due,
-                                               {c["fees_category"]: float(c["amount"])
-                                                for c in fee_components},
-                                               applied_discounts]))
+        audit_values = backdating.receipt_and_audit(
+            result, [fees.name, pe_name, fs_name, posting, due,
+                     {c["fees_category"]: float(c["amount"])
+                      for c in fee_components}, applied_discounts],
+            clean_backdate_reason)
+        return result, dict(target=fees.name, after_hash=digest(audit_values))
 
     return _execute("issue_tuition_fees", request_key,
-                    {"program_enrollment": program_enrollment,
+                    backdating.request_payload({"program_enrollment": program_enrollment,
                      "fee_structure": fee_structure,
-                     "posting_date": posting_date, "due_date": due_date}, work)
+                     "posting_date": posting_date, "due_date": due_date},
+                     backdate_reason), work)
 
 
 @frappe.whitelist(methods=["POST"])
-def issue_placement_fee(request_key, case, customer, posting_date, due_date):
+def issue_placement_fee(request_key, case, customer, posting_date, due_date,
+                        backdate_reason=""):
     """Bill a placement case only when Finance has configured a charge.
 
     Chargeability is decided by the configured native price-list rate for the
@@ -431,9 +439,12 @@ def issue_placement_fee(request_key, case, customer, posting_date, due_date):
             if not terms:
                 raise ValueError("No active billing policy governs this date; "
                                  "the Course Owner must set one first")
+            today = frappe.utils.today()
             billing_policies.check_posting_bounds(
-                posting, frappe.utils.today(),
+                posting, today,
                 terms["max_backdate_days"], terms["max_future_days"])
+            clean_backdate_reason = backdating.validate_backdate_reason(
+                posting, today, backdate_reason)
             billing_policies.check_fee_timing(
                 case_name, terms["placement_fee_timing"])
         except ValueError as exc:
@@ -464,6 +475,7 @@ def issue_placement_fee(request_key, case, customer, posting_date, due_date):
             is_pos=0, th_placement_case=case_name,
             selling_price_list=PRICE_LIST,
             items=[dict(item_code=item_code, qty=1, rate=float(rate))]))
+        backdating.set_native_remarks(invoice, clean_backdate_reason)
         invoice.flags.ignore_permissions = True
         invoice.insert(ignore_permissions=True)
         invoice.flags.ignore_permissions = True
@@ -482,13 +494,15 @@ def issue_placement_fee(request_key, case, customer, posting_date, due_date):
             "outstanding_amount": float(row.outstanding_amount), "currency": row.currency,
             "posting_date": posting, "due_date": due,
         }
-        return result, dict(target=invoice.name,
-                            after_hash=digest([invoice.name, case_name, customer_name,
-                                               posting, due, float(row.grand_total)]))
+        audit_values = backdating.receipt_and_audit(
+            result, [invoice.name, case_name, customer_name,
+                     posting, due, float(row.grand_total)], clean_backdate_reason)
+        return result, dict(target=invoice.name, after_hash=digest(audit_values))
 
     return _execute("issue_placement_fee", request_key,
-                    {"case": case, "customer": customer,
-                     "posting_date": posting_date, "due_date": due_date}, work)
+                    backdating.request_payload({"case": case, "customer": customer,
+                     "posting_date": posting_date, "due_date": due_date},
+                     backdate_reason), work)
 
 
 def _name(value, label):
