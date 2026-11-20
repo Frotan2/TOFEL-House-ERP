@@ -53,7 +53,7 @@ services:
         NODE_TARBALL_SHA256: "fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6"
     image: toefl-house-erp-app:local
     container_name: toefl-house-erp-web
-    user: root
+    user: "1000:1000"
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -65,9 +65,15 @@ services:
         condition: service_healthy
     # The bootstrap service completes all privileged initialization before the
     # web process starts; this long-lived service never sees the DB root file.
-    # Runs as root only to chown Windows bind mounts; drops to frappe inside
-    # the entrypoint before any bench/gunicorn work.
-    entrypoint: ["/product/entrypoint.sh", "web"]
+    # Bootstrap owns bind-mount preparation. Web and one-off backup commands
+    # share UID/GID 1000 so private backup files remain readable by frappe.
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        python3 -c 'import sys; sys.path.insert(0, "/product"); from bootstrap import wait_for_endpoints; wait_for_endpoints()'
+        python3 -c 'import sys; sys.path.insert(0, "/product"); from bootstrap import ensure_web_assets; ensure_web_assets()'
+        exec node /product/web.cjs
     ports:
       - "127.0.0.1:8000:8000"
     volumes:

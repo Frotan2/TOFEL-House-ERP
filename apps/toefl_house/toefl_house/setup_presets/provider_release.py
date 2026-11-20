@@ -24,8 +24,12 @@ def has_verified_factory_release() -> bool:
     return True
 
 
-def first_owner_enrollment_allowed() -> bool:
+def first_owner_enrollment_allowed(candidate_user: str) -> bool:
     import frappe
+
+    if (not isinstance(candidate_user, str) or not candidate_user
+            or candidate_user in ("Administrator", "Guest")):
+        return False
 
     if not frappe.flags.in_setup_wizard or frappe.session.user != "Administrator":
         return False
@@ -37,6 +41,11 @@ def first_owner_enrollment_allowed() -> bool:
     # query uses a locking read so it sees committed rows after the wait.
     if not frappe.db.get_value("User", "Administrator", "name", for_update=True):
         return False
+    # Native setup temporarily gives its candidate every non-excluded role.
+    # Only another user's Course Owner grant can block first-owner enrollment.
     return not frappe.db.get_value(
-        "Has Role", {"parenttype": "User", "role": "Course Owner"}, "name", for_update=True,
+        "Has Role",
+        {"parenttype": "User", "role": "Course Owner",
+         "parent": ["!=", candidate_user]},
+        "name", for_update=True,
     )

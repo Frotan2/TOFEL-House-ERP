@@ -28,7 +28,7 @@ def setup_wizard_success(args):
     if "toefl_house" in frappe.get_installed_apps():
         from toefl_house.setup_presets.provider_release import first_owner_enrollment_allowed
 
-        if first_owner_enrollment_allowed() is True:
+        if first_owner_enrollment_allowed(email) is True:
             roles.append({"role": "Course Owner"})
     user.set("roles", roles)
     user.save()
