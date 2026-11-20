@@ -31,3 +31,24 @@ Keep the previous graphical installation and isolated recovery evidence for `f8a
 All five workflows passed on `baebb2d` and assembled its checksum-bearing Windows qualification installer. The subsequent graphical proxy preparation and certificate export change requires its own five receipts. The packaging job checks the staging feature using the same pinned Caddy archive bundled into that executable.
 
 The backup-only Owner setup passed its disposable-site lifecycle test on `e5b5d14`. Qualify the complete revision again after wiring the new record into the standard permission, validation and audit registries. The new settings leave unrelated business policies unset and keep backup enablement and activation under their existing controls.
+
+## Existing HP ENVY corrected-release request — 2026-11-20
+
+The Owner authorized a targeted corrected release in the existing source checkout,
+without reinstalling over the preserved institute site. This candidate fixes the
+native wizard's transient first-Owner role exclusion, makes one-off backup
+producers run as the same unprivileged identity as their consumers, requests wake
+for the AC-protected Windows backup task, and requires an auditable reason for
+new backdated bills while preserving completed-request replay and native finance
+authorization. Placement chargeability and normal installment defaults are
+unchanged. Existing Windows acceptance and backups remain preserved evidence for
+their original image and scope.
+
+The first combined follow-up revision's hosted Owned Suite found a stale guided
+tuition signature expectation. The contract now includes the optional reason
+and also checks the installment endpoint. Qualify the complete revision containing
+this request on all five workflows; earlier successful receipts do not qualify
+this revision. This is an engineering build request, not a production GO, an
+authorization to replace the live installation, or a substitute for recovery-key
+custody, verified staff identities/scopes, and permitted staff-device HTTPS
+acceptance.
