@@ -15,7 +15,6 @@ import itertools
 import io
 import json
 from pathlib import Path
-import sys
 import tarfile
 import tempfile
 import unittest
