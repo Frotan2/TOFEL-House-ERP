@@ -31,6 +31,18 @@ VOLUME = "toefl-house-erp_db-data"
 CONTAINERS = {name: "toefl-house-erp-" + name.replace("_", "-")
               for name in ("db", "redis_cache", "redis_queue", "web", "worker", "scheduler", "socketio")}
 MAX_BYTES = 1024 * 1024
+HOST_SERVICE_FILES = (
+    "docker-compose.yml",
+    "windows/Backup TOEFL House ERP.ps1",
+    "windows/Update TOEFL House ERP.ps1",
+    "windows/Owner Host Servicing.ps1",
+    "windows/updater-strings.json",
+    "updates/servicing/update_engine.py",
+    "updates/servicing/update_host.py",
+    "updates/servicing/update_entrypoint.sh",
+    "updates/servicing/bootstrap.json",
+    "updates/servicing/bootstrap.sig.json",
+)
 
 
 class ObservationError(Exception):
@@ -77,6 +89,47 @@ def read_file(path: Path) -> bytes:
     if not path.is_file() or path.stat().st_size > MAX_BYTES:
         raise ObservationError("Installation file unavailable")
     return path.read_bytes()
+
+
+def rootfs_layers(image: dict) -> list[str] | None:
+    """Observe layer identities independently of a containerd descriptor ID.
+
+    Older protocol clients do not need this optional observation. A client
+    authorizing a descriptor/config bridge must require a complete list and
+    compare it with the verified image archive; labels alone are insufficient.
+    """
+    rootfs = image.get("RootFS")
+    if rootfs is None:
+        return None
+    if (not isinstance(rootfs, dict) or rootfs.get("Type") != "layers"
+            or not isinstance(rootfs.get("Layers"), list)
+            or not 1 <= len(rootfs["Layers"]) <= 1024
+            or any(not isinstance(value, str)
+                   or not re.fullmatch(r"sha256:[0-9a-f]{64}", value)
+                   for value in rootfs["Layers"])):
+        raise ObservationError("Image filesystem identity unavailable")
+    return list(rootfs["Layers"])
+
+
+def host_service_files() -> dict[str, str | None]:
+    """Read only fixed code paths; the broker never accepts an arbitrary path.
+
+    None means a genuinely absent new host file, not an unreadable file. Any
+    symlink or unreadable existing file refuses the complete observation.
+    """
+    result = {}
+    for relative in HOST_SERVICE_FILES:
+        path = PRODUCT_ROOT / relative
+        for parent in (path, *path.parents):
+            if parent.is_symlink():
+                raise ObservationError("Unsafe host servicing path")
+            if parent == PRODUCT_ROOT:
+                break
+        if not path.exists():
+            result[relative] = None
+            continue
+        result[relative] = hashlib.sha256(read_file(path)).hexdigest()
+    return result
 
 
 def collect() -> dict:
@@ -135,6 +188,9 @@ def collect() -> dict:
                      "credentials_sha256": hashlib.sha256(credentials).hexdigest(),
                      "site_config_sha256": hashlib.sha256(site_config).hexdigest()},
         "tag_image_id": target.get("Id"), "tag_image_labels": target.get("Config", {}).get("Labels"),
+        "image_rootfs_layers": rootfs_layers(original),
+        "tag_rootfs_layers": rootfs_layers(target),
+        "host_files": host_service_files(),
         "states": states,
         "journal": {key: journal.get(key) for key in ("phase", "version", "transaction_id")},
     }

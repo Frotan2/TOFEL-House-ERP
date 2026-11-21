@@ -20,7 +20,10 @@ param(
     [ValidateSet("Check", "Install")]
     [string]$Action = "Check",
     [switch]$ConfirmationAccepted,
-    [switch]$SmokeTest
+    [switch]$SmokeTest,
+    [string]$TargetProductRoot = "",
+    [string]$OfflineBundleRoot = "",
+    [string]$BootstrapRoot = ""
 )
 $ErrorActionPreference = "Stop"
 
@@ -43,6 +46,7 @@ function Get-ProductFileSha256 {
     }
 }
 
+$script:HostUpdaterVersion = '2026.11.22'
 $script:ExitAllowed = 0
 $script:ExitRefused = 3
 $script:ExitRequestInvalid = 4
@@ -50,6 +54,12 @@ $script:ExitFailed = 5
 $script:ExitRecoveryRequired = 6
 
 $productRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+if ($TargetProductRoot) {
+    $productRoot = [IO.Path]::GetFullPath($TargetProductRoot).TrimEnd('\','/')
+    $expectedProductRoot = [IO.Path]::GetFullPath((Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'TOEFL House ERP/Customer/product')).TrimEnd('\','/')
+    if (-not $productRoot.Equals($expectedProductRoot,[StringComparison]::OrdinalIgnoreCase)) { throw 'The servicing target is not this existing Windows installation.' }
+}
+$windowsRoot = Join-Path $productRoot "windows"
 $dataRoot = Join-Path $productRoot "data"
 $updatesRoot = Join-Path $dataRoot "updates"
 $runsRoot = Join-Path $updatesRoot "runs"
@@ -68,7 +78,7 @@ $recoverySignaturePath = Join-Path $updatesRoot "recovery-authorization.sig"
 # refuses a migrating update unless both signatures are present and valid.
 $recoverySignature2Path = Join-Path $updatesRoot "recovery-authorization-2.sig"
 $composeFile = Join-Path $productRoot "docker-compose.yml"
-$catalogPath = Join-Path $PSScriptRoot "updater-strings.json"
+$catalogPath = Join-Path $windowsRoot "updater-strings.json"
 $siteName = "toeflhouse.localhost"
 $imageTag = "toefl-house-erp-app:local"
 $volumeName = "toefl-house-erp_db-data"
@@ -91,6 +101,27 @@ $script:BackupDirRelative = ""
 $script:ActiveTransactionId = ""
 $script:EngineImage = ""
 $script:RecoveryCheckpoint = ""
+$script:ServicingRuntime = $null
+$script:HostTransaction = $null
+$script:DatabaseIdentitySHA256 = ""
+$script:ReportedUpdateWarnings = @{}
+if ($OfflineBundleRoot) { $offlineInbox = [IO.Path]::GetFullPath($OfflineBundleRoot) }
+# Explicit signed enrollment is the only opt-in; caller flags grant no authority.
+$ownerPolicyPath = Join-Path $updatesRoot 'owner-policy.json'
+$ownerChannelPath = Join-Path $updatesRoot 'owner-channel.json'
+$runtimeRoot = if ($BootstrapRoot) { [IO.Path]::GetFullPath($BootstrapRoot) } else { Join-Path $productRoot 'updates/servicing' }
+if (Test-Path -LiteralPath (Join-Path $runtimeRoot 'bootstrap.json') -PathType Leaf) {
+    $helperPath = if ($BootstrapRoot) { Join-Path $runtimeRoot 'Owner Host Servicing.ps1' } else { Join-Path $windowsRoot 'Owner Host Servicing.ps1' }
+    $helperSignature = Get-AuthenticodeSignature -LiteralPath $helperPath
+    if ([string]$helperSignature.Status -cne 'Valid' -or $null -eq $helperSignature.SignerCertificate -or
+        [string]$helperSignature.SignerCertificate.Thumbprint -cne 'C7A6E773E0F6FA66C8CA0F4EC2E9A0C1931D1722') {
+        throw 'The enrolled host servicing helper has no valid publisher signature.'
+    }
+    . $helperPath
+    $script:ServicingRuntime = Get-VerifiedOwnerServicingRuntime $runtimeRoot
+    if (Test-Path -LiteralPath $ownerChannelPath -PathType Leaf) { $channelPath = $ownerChannelPath }
+} elseif ($BootstrapRoot) { throw 'The explicit servicing runtime is missing.' }
+
 
 # ---------------------------------------------------------------------------
 # English message catalogue, result document and stage output
@@ -114,6 +145,11 @@ function Get-Catalog {
 }
 
 function Get-Text([string]$Section, [string]$Key) {
+    # The first new authorization occurs before the old host catalog is
+    # transactionally replaced. This truthful new warning must still render.
+    if ($Section -ceq 'messages' -and $Key -ceq 'warning.separate_key_custody_pending') {
+        return [pscustomobject]@{en='The existing recovery key remains usable, but separate protected custody has not yet been verified.'}
+    }
     $catalog = Get-Catalog
     $entries = $catalog.$Section
     if ($null -eq $entries) { return $null }
@@ -407,7 +443,13 @@ function Get-DriveFreeBytes([string]$Path) {
 }
 
 function Invoke-Compose([string[]]$ComposeArguments) {
-    $all = @("compose", "--file", $composeFile) + $ComposeArguments
+    $all = @("compose", "--file", $composeFile)
+    # Keep the accepted deployment overlay used by daily Start.
+    foreach ($overlay in @('docker-compose.override.yml','docker-compose.override.yaml','docker-compose.hp-local.yml','docker-compose.hp-local.yaml')) {
+        $overlayPath = Join-Path $productRoot $overlay
+        if (Test-Path -LiteralPath $overlayPath -PathType Leaf) { $all += @('--file',$overlayPath) }
+    }
+    $all += $ComposeArguments
     return (Invoke-DockerVerbose $all)
 }
 
@@ -475,6 +517,16 @@ function New-InstalledIdentity($Facts) {
     }
     $sequence = $null
     try { $sequence = ConvertTo-ReleaseSequence $version } catch { $sequence = $null }
+    if ($null -eq $sequence -and $script:ServicingRuntime -and (Test-Path -LiteralPath $ownerPolicyPath -PathType Leaf)) {
+        # Request hint only: the engine revalidates its signature and live binding.
+        $policy = Read-JsonFile $ownerPolicyPath 'The enrolled Owner policy' $maxJsonBytes
+        if ($policy.transition.source_version -ceq $version -and
+            $policy.transition.source_revision -ceq $revision -and
+            $policy.transition.source_image_id -ceq [string]$Facts.image_id) { $sequence = $policy.transition.source_sequence }
+        elseif ($policy.transition.target_version -ceq $version -and
+            $policy.transition.target_revision -ceq $revision -and
+            $policy.transition.target_image_id -ceq [string]$Facts.image_id) { $sequence = $policy.transition.target_sequence }
+    }
     return [pscustomobject][ordered]@{
         version = $version
         release_sequence = $sequence
@@ -487,6 +539,22 @@ function New-InstalledIdentity($Facts) {
 # ---------------------------------------------------------------------------
 # Trusted channel download
 # ---------------------------------------------------------------------------
+
+function Get-EngineChannelRelativePath {
+    # The engine must read the same fixed channel selected by this launcher.
+    # An absent Owner channel retains the factory channel and its disabled state.
+    if ([string]::Equals($channelPath, $ownerChannelPath, [StringComparison]::OrdinalIgnoreCase)) {
+        if (-not $script:ServicingRuntime -or -not (Test-Path -LiteralPath $ownerChannelPath -PathType Leaf)) {
+            throw 'The selected Owner channel is not available through an authenticated runtime.'
+        }
+        return 'data/updates/owner-channel.json'
+    }
+    $factoryChannelPath = Join-Path $productRoot 'updates/channel.json'
+    if (-not [string]::Equals($channelPath, $factoryChannelPath, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'The selected update channel is outside the fixed configuration paths.'
+    }
+    return 'updates/channel.json'
+}
 
 function Get-Channel {
     if (-not (Test-Path -LiteralPath $channelPath -PathType Leaf)) {
@@ -609,9 +677,9 @@ function Resolve-ChannelUrl($Channel, [string]$Name) {
 }
 
 function Save-OfflineFile([string]$Name, [string]$Path, [int64]$MaximumBytes) {
-    if ($Name -cnotin @("index.json", "update.json", "update.json.sig", "toefl-house-erp-app.tar")) {
-        throw "The offline update file name is invalid."
-    }
+    $allowedOfflineNames = @("index.json", "update.json", "update.json.sig", "toefl-house-erp-app.tar")
+    if ($script:ServicingRuntime) { $allowedOfflineNames += 'toefl-house-erp-host.zip' }
+    if ($Name -cnotin $allowedOfflineNames) { throw "The offline update file name is invalid." }
     foreach ($folder in @($updatesRoot, $offlineInbox)) {
         $directory = Get-Item -LiteralPath $folder -Force
         if (-not $directory.PSIsContainer -or ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
@@ -621,6 +689,18 @@ function Save-OfflineFile([string]$Name, [string]$Path, [int64]$MaximumBytes) {
     $file = Get-Item -LiteralPath (Join-Path $offlineInbox $Name) -Force
     if ($file.PSIsContainer -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
         throw "The offline update asset must be a regular file."
+    }
+    if ($file.Length -le 0 -or $file.Length -gt $MaximumBytes) { throw 'The offline update file size is invalid.' }
+    if ($script:ServicingRuntime -and $Name -ceq 'toefl-house-erp-app.tar' -and
+        [IO.Path]::GetPathRoot($file.FullName).Equals([IO.Path]::GetPathRoot([IO.Path]::GetFullPath($Path)),[StringComparison]::OrdinalIgnoreCase)) {
+        # One verified immutable archive, two ordinary NTFS names. This is not
+        # a reparse point and does not substitute another volume's free space.
+        # All bytes are still independently hashed by authorize/recheck/apply.
+        if (Test-Path -LiteralPath $Path) { throw 'The run archive already exists.' }
+        New-Item -ItemType HardLink -Path $Path -Target $file.FullName -ErrorAction Stop | Out-Null
+        $linked=Get-Item -LiteralPath $Path -Force
+        if ($linked.Length -ne $file.Length -or ($linked.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'The ordinary archive hardlink is invalid.' }
+        return
     }
     $partial = $Path + ".part"
     $created = $false
@@ -659,12 +739,13 @@ function Invoke-UpdateEngine([string]$Mode) {
     if (-not (Test-Path -LiteralPath $engineStateRoot -PathType Container)) {
         New-Item -ItemType Directory -Path $engineStateRoot -Force | Out-Null
     }
+    $engineEntrypoint = if ($script:ServicingRuntime) { '/bin/sh' } else { '/product/update_entrypoint.sh' }
     $arguments = @(
         "run", "--rm", "--user", "root",
         "--volume", ($productRoot + ":" + $containerProductRoot + ":ro"),
         "--volume", ($script:WorkDir + ":" + $containerWorkRoot),
         "--volume", ($engineStateRoot + ":" + $containerEngineState),
-        "--entrypoint", "/product/update_entrypoint.sh"
+        "--entrypoint", $engineEntrypoint
     )
     if ($script:UseObserver) {
         $arguments += @("--mount", "type=bind,source=/var/run/docker.sock,target=/run/th-update-docker.sock,readonly")
@@ -682,9 +763,16 @@ function Invoke-UpdateEngine([string]$Mode) {
             $arguments += @("--volume", ($script:BackupMount + ":" + $containerProductRoot + "/" + $script:BackupDirRelative + ":ro"))
         }
     }
+    if ($script:ServicingRuntime) {
+        $script:ServicingRuntime = Get-VerifiedOwnerServicingRuntime $script:ServicingRuntime.Root
+        foreach ($source in $script:ServicingRuntime.Files) {
+            $arguments += @('--volume',($source.Path + ':/product/' + $source.Name + ':ro'))
+        }
+    }
     # Pin the engine container too: a mutable tag cannot select a different
     # image between independent observation and container creation.
     if ($script:EngineImage) { $arguments += $script:EngineImage } else { $arguments += $imageTag }
+    if ($script:ServicingRuntime) { $arguments += '/product/update_entrypoint.sh' }
     return (Invoke-DockerVerbose $arguments)
 }
 
@@ -751,7 +839,18 @@ function Invoke-EngineStep([string]$Mode, $Request, [string]$Version) {
 
 function Assert-EngineAllowed($Response, [string]$Version) {
     $blockers = @(Get-BlockerCodes $Response)
-    if ($Response.decision -ceq "allow") { return $blockers }
+    if ($Response.decision -ceq "allow") {
+        if ($Response.PSObject.Properties['warnings']) {
+            foreach ($warning in @($Response.warnings)) {
+                $code=[string]$warning.code
+                if ($code -and -not $script:ReportedUpdateWarnings.ContainsKey($code)) {
+                    Write-Message 'messages' $code
+                    $script:ReportedUpdateWarnings[$code]=$true
+                }
+            }
+        }
+        return $blockers
+    }
     $onlyDowngrade = ($blockers.Count -gt 0)
     foreach ($code in $blockers) {
         if ($code -cne "compat.downgrade") { $onlyDowngrade = $false }
@@ -837,7 +936,7 @@ function Invoke-UpdateCheck {
     # Pin the original image, and expose the root-only observer just for an
     # installed engine that actually contains the hardened observation broker.
     $script:EngineImage = [string]$installed.image_id
-    $script:UseObserver = Test-ImageRequiresObserver $script:EngineImage
+    $script:UseObserver = if ($script:ServicingRuntime) { $true } else { Test-ImageRequiresObserver $script:EngineImage }
 
     # A verified independent backup must exist before any bytes are downloaded.
     # The engine re-verifies the same receipt and every artifact hash; this
@@ -948,9 +1047,9 @@ function Invoke-UpdateCheck {
         now_utc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
         site = $siteName
         product_root = $containerProductRoot
-        host_updater_version = [string]$installed.version
+        host_updater_version = $script:HostUpdaterVersion
         trust_store = "data/updates/trust-store.json"
-        channel = "updates/channel.json"
+        channel = Get-EngineChannelRelativePath
         manifest = $workRelative + "/manifest.json"
         signature = $workRelative + "/signature.json"
         archive = ""
@@ -1012,6 +1111,11 @@ function Invoke-UpdateCheck {
     # Phase B: bind the downloaded image to the manifest decision.  The engine
     # re-reads every mutable fact and issues a short-lived authorization; apply
     # accepts nothing else.
+    if ($response.target.PSObject.Properties['host_service'] -and $null -ne $response.target.host_service) {
+        $hostPlan = $response.target.host_service
+        if ([string]$hostPlan.archive -cne 'toefl-house-erp-host.zip') { throw 'Unsupported host archive.' }
+        Save-ChannelFile $channel ([string]$hostPlan.archive) (Join-Path $script:WorkDir 'toefl-house-erp-host.zip') 16777216
+    }
     $request.action = "authorize"
     $request.archive = $archiveRelative
     $request.transaction = $manifestTransaction
@@ -1052,7 +1156,7 @@ function Invoke-UpdateCheck {
 function Invoke-UpdateStart([string]$ExpectedImageId) {
     # Never let Compose silently recreate missing storage after any update.
     try {
-        . (Join-Path $PSScriptRoot "Test Existing Installation.ps1")
+        . (Join-Path $windowsRoot "Test Existing Installation.ps1")
         Test-ExistingInstallation -ProductRoot $productRoot
     } catch { return $false }
     $image = Get-InstalledImage
@@ -1112,6 +1216,64 @@ function Save-OfflineRecoveryCheckpoint($Check, $Transaction) {
     $script:RecoveryCheckpoint = $Check.RunFolder + "/recovery-checkpoint.json"
 }
 
+function Get-AuthorizedRuntimeImageId($Image) {
+    if ($Image.PSObject.Properties['runtime_id']) { return [string]$Image.runtime_id }
+    return [string]$Image.config_digest
+}
+
+function Repair-OwnerApplicationMetadata([string]$ImageId) {
+    if (-not $script:HostTransaction -or $script:HostTransaction.Phase -cne 'committed' -or
+        $ImageId -cnotmatch '^sha256:[0-9a-f]{64}$') { throw 'Authorized committed host transaction required for UID migration.' }
+    $repair = @(
+        'import os',
+        'for root in (''/home/frappe/bench/sites'',''/home/frappe/bench/logs''):',
+        '    if os.path.islink(root) or not os.path.isdir(root): raise RuntimeError(''Unsafe application storage root'')',
+        '    os.chown(root,1000,1000)',
+        '    for base,dirs,files in os.walk(root,followlinks=False):',
+        '        for name in dirs+files:',
+        '            path=os.path.join(base,name)',
+        '            if not os.path.islink(path): os.chown(path,1000,1000)',
+        'print(''Authorized UID metadata migration completed; no file bytes changed.'')'
+    ) -join [char]10
+    $result = Invoke-Docker @('run','--rm','--network','none','--user','root',
+        '--volume',($sitesRoot+':/home/frappe/bench/sites'),
+        '--volume',($logsRoot+':/home/frappe/bench/logs'),
+        '--entrypoint','python3',$ImageId,'-c',$repair)
+    if ($result.Code -ne 0) { throw 'Application UID metadata migration failed.' }
+}
+
+function Get-PreservedDatabaseIdentity {
+    $db=Invoke-Docker @('container','inspect','toefl-house-erp-db','--format','{{.Id}}|{{.Image}}|{{json .Mounts}}')
+    $volume=Invoke-Docker @('volume','inspect',$volumeName,'--format','{{.Name}}|{{.CreatedAt}}|{{.Mountpoint}}')
+    if($db.Code -ne 0 -or $volume.Code -ne 0){throw 'The original database storage cannot be independently observed.'}
+    $dbText=(@($db.Output|ForEach-Object{[string]$_}) -join [char]10).Trim()
+    $volumeText=(@($volume.Output|ForEach-Object{[string]$_}) -join [char]10).Trim()
+    $parts=$dbText -split '\|',3
+    if($parts.Count -ne 3 -or $parts[0] -cnotmatch '^[0-9a-f]{64}$' -or $parts[1] -cnotmatch '^sha256:[0-9a-f]{64}$'){throw 'Database container identity is malformed.'}
+    $mounts=@($parts[2]|ConvertFrom-Json)
+    if($mounts.Count -ne 1 -or $mounts[0].Type -cne 'volume' -or $mounts[0].Name -cne $volumeName -or $mounts[0].Destination -cne '/var/lib/mysql' -or
+        -not $volumeText.StartsWith($volumeName+'|',[StringComparison]::Ordinal)){throw 'Database mount identity differs from this installation.'}
+    $hash=[Security.Cryptography.SHA256]::Create()
+    try{return [BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($dbText+[char]10+$volumeText))).Replace('-','').ToLowerInvariant()}finally{$hash.Dispose()}
+}
+
+function Restore-OwnerNonmigratingCode($Check,[string]$PreviousImageId,$Report) {
+    if(-not $script:HostTransaction -or $null -eq $Report -or $Report.status -cne 'succeeded' -or
+        $PreviousImageId -cnotmatch '^sha256:[0-9a-f]{64}$' -or $Check.Installed.image_id -cne $PreviousImageId -or
+        $Check.Response.plan.database_migration -cne 'none' -or $Check.Response.plan.reversible -ne $true -or
+        $script:DatabaseIdentitySHA256 -cnotmatch '^[0-9a-f]{64}$' -or
+        (Get-PreservedDatabaseIdentity) -cne $script:DatabaseIdentitySHA256){throw 'No verified nonmigrating code-only rollback is available.'}
+    if($script:HostTransaction.Phase -cne 'rolled-back'){Undo-OwnerHostServiceTransaction $script:HostTransaction}
+    if((Invoke-DockerVerbose @('tag',$PreviousImageId,$imageTag)) -ne 0){throw 'The preserved prior image is unavailable.'}
+    if(-not(Invoke-UpdateStart $PreviousImageId) -or -not(Wait-ForApplication 18)){throw 'The preserved prior application could not become ready.'}
+    if((Get-PreservedDatabaseIdentity) -cne $script:DatabaseIdentitySHA256){throw 'Database identity changed during code rollback.'}
+    # The old factory identity is still the protected installed-image record.
+    # Its daily Start requires an idle journal. The separate permanent host
+    # transaction remains rolled-back with all hashes and authorization ID.
+    Set-JournalState 'idle' ([string]$Check.Installed.version)
+    Save-Result -Status 'rolled-back' -Section 'launcher' -Key 'updater.failed' -Version $Check.Version
+}
+
 function Invoke-UpdateInstall($Check) {
     if (-not $ConfirmationAccepted) {
         Stop-Update $script:ExitRefused "cancelled" "launcher" "updater.cancelled"
@@ -1119,7 +1281,7 @@ function Invoke-UpdateInstall($Check) {
     Write-Stage "updater.applying"
 
     $previousImageId = [string]$Check.Installed.image_id
-    $candidateImageId = [string]$Check.Response.target.image.config_digest
+    $candidateImageId = Get-AuthorizedRuntimeImageId $Check.Response.target.image
     if ($candidateImageId -cnotmatch '^sha256:[0-9a-f]{64}$') {
         Stop-Update $script:ExitRefused "refused" "launcher" "updater.package_invalid" $Check.Version
     }
@@ -1142,7 +1304,7 @@ function Invoke-UpdateInstall($Check) {
     $oldAuthorization = Invoke-EngineStep "authorize" $oldRequest $Check.Version
     [void](Assert-EngineAllowed $oldAuthorization $Check.Version)
     if ([string]$oldAuthorization.transaction.phase -cne "authorized" -or
-        [string]$oldAuthorization.target.image.config_digest -cne $candidateImageId) {
+        (Get-AuthorizedRuntimeImageId $oldAuthorization.target.image) -cne $candidateImageId) {
         Stop-Update $script:ExitRefused "refused" "launcher" "updater.package_invalid" $Check.Version
     }
     if ($Check.Transport -ceq "offline") {
@@ -1194,6 +1356,16 @@ function Invoke-UpdateInstall($Check) {
     $recheck = Invoke-EngineStep "recheck" $recheckRequest $Check.Version
     [void](Assert-EngineAllowed $recheck $Check.Version)
     $script:ActiveTransactionId = [string]$freshAuthorization.transaction.transaction_id
+    if ($freshAuthorization.target.PSObject.Properties['host_service'] -and $null -ne $freshAuthorization.target.host_service) {
+        if (-not $script:ServicingRuntime) { throw 'Authenticated host servicing runtime is required.' }
+        $script:HostTransaction = New-OwnerHostServiceTransaction $freshAuthorization.target.host_service `
+            (Join-Path $script:WorkDir 'toefl-house-erp-host.zip') $productRoot $script:WorkDir $script:ActiveTransactionId
+    }
+    $script:DatabaseIdentitySHA256=Get-PreservedDatabaseIdentity
+    if($script:HostTransaction){
+        $script:HostTransaction|Add-Member -NotePropertyName DatabaseIdentitySHA256 -NotePropertyValue $script:DatabaseIdentitySHA256
+        Write-OwnerHostTransaction $script:HostTransaction
+    }
     Set-JournalState "prepared" $Check.Version
     Write-Stage "updater.verifying"
     $stopped = Invoke-Compose @("stop", "web", "worker", "scheduler", "socketio")
@@ -1225,7 +1397,7 @@ function Invoke-UpdateInstall($Check) {
         recovery_signature_2 = ""
         sites_dir = "/home/frappe/bench/sites"
         bench = "/build/tools/bin/bench"
-        host_updater_version = [string]$Check.Installed.version
+        host_updater_version = $script:HostUpdaterVersion
         migrate_replays = 2
         command_timeout_seconds = 1800
     }
@@ -1272,8 +1444,25 @@ function Invoke-UpdateInstall($Check) {
         exit $script:ExitRecoveryRequired
     }
 
+    if ($script:HostTransaction) {
+        try {
+            Complete-OwnerHostServiceTransaction $script:HostTransaction
+            Repair-OwnerApplicationMetadata $candidateImageId
+        } catch {
+            try { Restore-OwnerNonmigratingCode $Check $previousImageId $report } catch { Set-JournalState 'recovery-required' $Check.Version }
+            throw 'Host servicing did not complete. Exact prior code was restored when possible; database was not replaced.'
+        }
+    }
     Write-Stage "updater.applying"
+    if ((Get-PreservedDatabaseIdentity) -cne $script:DatabaseIdentitySHA256) {
+        Set-JournalState 'recovery-required' $Check.Version
+        throw 'The preserved database container or volume changed; no new application was started.'
+    }
     if (-not (Invoke-UpdateStart $candidateImageId)) {
+        if($script:HostTransaction){
+            try{Restore-OwnerNonmigratingCode $Check $previousImageId $report;throw 'The new application did not start; exact prior code was restored.'}
+            catch{if((Get-JournalState) -cne 'idle'){Set-JournalState 'recovery-required' $Check.Version};throw}
+        }
         Set-JournalState "recovery-required" $Check.Version
         Save-Result -Status "recovery-required" -Section "launcher" -Key "updater.recovery_required" -Version $Check.Version
         Write-Host ""
@@ -1281,18 +1470,26 @@ function Invoke-UpdateInstall($Check) {
         exit $script:ExitRecoveryRequired
     }
     if (-not (Wait-ForApplication 180)) {
+        if($script:HostTransaction){
+            try{Restore-OwnerNonmigratingCode $Check $previousImageId $report;throw 'The new application did not become healthy; exact prior code was restored.'}
+            catch{if((Get-JournalState) -cne 'idle'){Set-JournalState 'recovery-required' $Check.Version};throw}
+        }
         Set-JournalState "recovery-required" $Check.Version
         Save-Result -Status "recovery-required" -Section "launcher" -Key "updater.recovery_required" -Version $Check.Version
         Write-Host ""
         Write-Message "launcher" "updater.recovery_required"
         exit $script:ExitRecoveryRequired
     }
+    if ((Get-PreservedDatabaseIdentity) -cne $script:DatabaseIdentitySHA256) {
+        Set-JournalState 'recovery-required' $Check.Version
+        throw 'The preserved database identity changed after application startup.'
+    }
     # The candidate was authenticated by the signed-update engine and is now
     # running healthy. Record its exact Docker ID before completing the journal.
     # If this fails, leave the update in recovery-required state; do not
     # silently fall back to the old factory manifest on the next daily Start.
     & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (
-        Join-Path $PSScriptRoot 'Verify Package Image.ps1'
+        Join-Path $windowsRoot 'Verify Package Image.ps1'
     ) -VerifyLoadedImage -RecordSignedUpdateImage -ExpectedUpdatedImageId $candidateImageId `
        -ExpectedUpdatedVersion $Check.Version -ExpectedUpdatedRevision ([string]$Check.Response.target.source_revision)
     if ($LASTEXITCODE -ne 0) {
@@ -1450,7 +1647,7 @@ if ($SmokeTest) { Invoke-SmokeTest }
 
 if ($Action -eq "Install") {
     try {
-        . (Join-Path $PSScriptRoot 'Test Local Docker.ps1')
+        . (Join-Path $windowsRoot 'Test Local Docker.ps1')
         Assert-LocalDockerEngine
     } catch {
         [Console]::Error.WriteLine($_.Exception.Message)
