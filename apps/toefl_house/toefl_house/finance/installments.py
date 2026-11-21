@@ -35,6 +35,7 @@ from toefl_house.api import _execute
 from toefl_house.finance import (COMPANY, FEES, FEE_STRUCTURE, PROGRAM_ENROLLMENT,
                                  _name, resolved_billable_components)
 from toefl_house.finance import policies as billing_policies
+from toefl_house.finance import backdating
 from toefl_house.finance import shamsi
 from toefl_house.policy import digest, validate_finance_dates
 
@@ -321,7 +322,7 @@ def _shares(value, installments):
 @frappe.whitelist(methods=["POST"])
 def issue_tuition_installment_plan(request_key, program_enrollment, fee_structure,
                                    posting_date, first_due_date, installments,
-                                   shares=None):
+                                   shares=None, backdate_reason=""):
     """Bill one submitted enrollment as an owner-authorized native schedule.
 
     Produces N submitted ``Fees`` documents, one per installment, each posting
@@ -352,9 +353,12 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
             if not terms:
                 raise ValueError("No active billing policy governs this date; "
                                  "the Course Owner must set one first")
+            today = frappe.utils.today()
             billing_policies.check_posting_bounds(
-                posting, frappe.utils.today(),
+                posting, today,
                 terms["max_backdate_days"], terms["max_future_days"])
+            clean_backdate_reason = backdating.validate_backdate_reason(
+                posting, today, backdate_reason)
             count, interval, due_dates = plan_terms(
                 terms, installments, posting, due)
             requested_shares = _shares(shares, count)
@@ -425,6 +429,7 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
                 fee_structure=fs_name, receivable_account=fs.receivable_account,
                 th_installment_sequence=index, th_installment_count=count,
                 components=rows))
+            backdating.set_native_remarks(fees, clean_backdate_reason)
             fees.flags.ignore_permissions = True
             fees.insert(ignore_permissions=True)
             fees.flags.ignore_permissions = True
@@ -463,19 +468,19 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
         if len(issued) != count:
             raise frappe.ValidationError(
                 "The plan did not produce every installment; nothing is billed")
-        return result, dict(
-            target=issued[0]["fees"],
-            after_hash=digest([pe_name, fs_name, posting, count, interval,
+        audit_values = backdating.receipt_and_audit(
+            result, [pe_name, fs_name, posting, count, interval,
                                result["installment_cadence"],
                                result["payment_grace_days"],
                                result["installment_due_day"],
                                result["installment_shares"],
                                [row["fees"] for row in issued],
                                [row["grand_total"] for row in issued],
-                               applied_discounts]))
+                               applied_discounts], clean_backdate_reason)
+        return result, dict(target=issued[0]["fees"], after_hash=digest(audit_values))
 
     return _execute("issue_tuition_installment_plan", request_key,
-                    {"program_enrollment": program_enrollment,
+                    backdating.request_payload({"program_enrollment": program_enrollment,
                      "fee_structure": fee_structure,
                      "posting_date": posting_date,
                      "first_due_date": first_due_date,
@@ -483,4 +488,4 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
                      # Normalized so the same logical request replays under
                      # its idempotency key whether the shares arrived as a
                      # JSON string, a comma list or an array.
-                     "shares": _shares(shares, installments)}, work)
+                     "shares": _shares(shares, installments)}, backdate_reason), work)

@@ -798,7 +798,8 @@ class AcceptanceRehearsalTests(unittest.TestCase):
             # Finance issues tuition fees for Student A
             # (Consumes only the activated named award; not global templates)
             fees_res_1 = finance.issue_tuition_fees("R" * 24, "ENR-001", fee_plan["fee_structure"],
-                                                    "2026-08-02", "2026-08-30")
+                                                    "2026-08-02", "2026-08-30",
+                                                    backdate_reason="Rehearsal historical semester billing")
             fees_1 = fake.store["Fees"][fees_res_1["fees"]]
             self.assertEqual(float(fees_1.grand_total), 4500.0)  # 5000 - 10% scholarship = 4500
             self.assertEqual(len(fees_res_1.get("discounts_applied", [])), 1)
@@ -825,7 +826,8 @@ class AcceptanceRehearsalTests(unittest.TestCase):
 
             # Student B billed under new configuration
             fees_res_2 = finance.issue_tuition_fees("K" * 24, "ENR-002", updated_plan["fee_structure"],
-                                                    "2026-09-02", "2026-09-30")
+                                                    "2026-09-02", "2026-09-30",
+                                                    backdate_reason="Rehearsal historical semester billing")
             fees_2 = fake.store["Fees"][fees_res_2["fees"]]
             self.assertEqual(float(fees_2.grand_total), 6000.0)  # Not eligible for Student A award
 

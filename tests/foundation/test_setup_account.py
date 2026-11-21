@@ -41,7 +41,7 @@ class SetupAccountTests(unittest.TestCase):
             "toefl_house.setup_presets.provider_release": O(first_owner_enrollment_allowed=gate),
         }):
             self.run_hook()
-        gate.assert_called_once_with()
+        gate.assert_called_once_with("initial@example.test")
         self.user.set.assert_called_once_with(
             "roles", [{"role": "System Manager"}, {"role": "Course Owner"}])
         self.user.save.assert_called_once_with()
@@ -53,7 +53,7 @@ class SetupAccountTests(unittest.TestCase):
             "toefl_house.setup_presets.provider_release": O(first_owner_enrollment_allowed=gate),
         }):
             self.run_hook()
-        gate.assert_called_once_with()
+        gate.assert_called_once_with("initial@example.test")
         self.user.set.assert_called_once_with("roles", [{"role": "System Manager"}])
 
     def test_verified_release_cannot_promote_a_portal_identity(self):

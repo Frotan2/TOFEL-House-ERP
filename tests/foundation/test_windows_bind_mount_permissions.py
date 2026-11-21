@@ -11,11 +11,12 @@ Root cause (production failure of record):
   frappe operation that touches the sites volume fail with "Permission
   denied".
 
-Fix (root-init + privilege drop):
-  All app services run as `user: root` in docker-compose.yml. The universal
-  entrypoint (product/entrypoint.sh) chowns the bind-mounted directories to
-  frappe:frappe as root, then drops to the frappe user via `su -s /bin/sh
-  frappe -c` for all service work (bench, gunicorn, node). No chmod 0777.
+Fix (root-init + unprivileged application work):
+  Bootstrap and the non-web app services use the universal root entrypoint
+  to chown bind mounts before dropping to frappe. Web starts as UID/GID 1000
+  after bootstrap. This base identity also applies when the signed backup
+  launcher overrides web's entrypoint with Python, so new private artifacts
+  remain readable by the unprivileged activation/restore consumer. No chmod 0777.
 
 These tests are in-sandbox verified: they parse the entrypoint script and
 docker-compose.yml, and exercise bootstrap.py's path-handling against
@@ -49,10 +50,9 @@ class WindowsBindMountPermissionContract(unittest.TestCase):
         self.compose = COMPOSE.read_text()
         self.entrypoint = ENTRYPOINT.read_text()
 
-    def test_all_app_services_run_as_root_for_bind_mount_chown(self):
-        """Every app service must have user: root so it can chown
-        Windows bind mounts before dropping to frappe."""
-        for svc in ("bootstrap", "web", "worker", "scheduler", "socketio"):
+    def test_bootstrap_and_non_web_services_keep_root_bind_mount_preparation(self):
+        """Privileged preparation remains available before application work."""
+        for svc in ("bootstrap", "worker", "scheduler", "socketio"):
             block = re.search(
                 rf"^  {svc}:\n(.*?)(?=^  [^ \n]+:\n)", self.compose,
                 flags=re.M | re.S,
@@ -85,8 +85,8 @@ class WindowsBindMountPermissionContract(unittest.TestCase):
         self.assertIn('spawn("/home/frappe/bench/env/bin/gunicorn"', web)
 
     def test_entrypoint_passes_service_name_argument(self):
-        """Each service passes its name to the universal entrypoint."""
-        for svc in ("bootstrap", "web", "worker", "scheduler", "socketio"):
+        """Root-prepared services pass their name to the universal entrypoint."""
+        for svc in ("bootstrap", "worker", "scheduler", "socketio"):
             block = re.search(
                 rf"^  {svc}:\n(.*?)(?=^  [^ \n]+:\n)", self.compose,
                 flags=re.M | re.S,
@@ -96,6 +96,22 @@ class WindowsBindMountPermissionContract(unittest.TestCase):
                 block.group(1),
                 f"{svc} must pass its service name to the entrypoint",
             )
+
+    def test_signed_backup_entrypoint_override_inherits_unprivileged_base_user(self):
+        """An explicit -f backup must not rely on an ignored generated override."""
+        backup = (PRODUCT / "windows" / "Backup TOEFL House ERP.ps1").read_text()
+        self.assertIn('$compose = @("compose", "-f", "product/docker-compose.yml")', backup)
+        self.assertIn('"run", "--rm", "--no-deps", "--entrypoint",', backup)
+        self.assertIn('"web", "/product/backup.py"', backup)
+        web = re.search(r"^  web:\n(.*?)(?=^  [^ \n]+:\n)",
+                        self.compose, flags=re.M | re.S).group(1)
+        self.assertIn('user: "1000:1000"', web)
+        self.assertNotIn("user: root", web)
+        self.assertIn("bootstrap:\n        condition: service_completed_successfully", web)
+        self.assertIn("      - /bin/sh\n      - -ec\n      - |", web)
+        self.assertNotIn("su -s", web)
+        self.assertLess(web.index("ensure_web_assets; ensure_web_assets()"),
+                        web.index("exec node /product/web.cjs"))
 
     def test_bootstrap_stays_one_shot_with_isolated_db_secret(self):
         """Bootstrap is restart: "no", mounts db.env read-only only to itself."""

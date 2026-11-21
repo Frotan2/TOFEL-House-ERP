@@ -994,13 +994,14 @@ class RecoveryContract(unittest.TestCase):
 
 
 class EntrypointContract(unittest.TestCase):
-    def test_all_app_services_use_the_universal_entrypoint_with_root_init(self):
+    def test_privileged_preparation_is_separate_from_web_and_backup_work(self):
         compose = COMPOSE.read_text()
         entrypoint_text = (PRODUCT / "entrypoint.sh").read_text()
 
-        # Every app service runs as root (to chown Windows bind mounts) and
-        # uses the universal entrypoint with its service name argument.
-        for svc in ("bootstrap", "web", "worker", "scheduler", "socketio"):
+        # Bootstrap and the non-web services retain bind-mount preparation.
+        # Web's base identity also governs one-off backups whose entrypoint is
+        # overridden, so it must already be unprivileged before that override.
+        for svc in ("bootstrap", "worker", "scheduler", "socketio"):
             block = re.search(rf"^  {svc}:\n(.*?)(?=^  [^ \n]+:\n)",
                               compose, flags=re.M | re.S).group(1)
             self.assertIn("user: root", block, f"{svc} must run as root for bind-mount chown")
@@ -1030,6 +1031,10 @@ class EntrypointContract(unittest.TestCase):
         web = re.search(r"^  web:\n(.*?)(?=^  [^ \n]+:\n)",
                         compose, flags=re.M | re.S).group(1)
         self.assertIn("condition: service_completed_successfully", web)
+        self.assertIn('user: "1000:1000"', web)
+        self.assertNotIn("user: root", web)
+        self.assertNotIn("su -s", web)
+        self.assertIn("exec node /product/web.cjs", web)
         self.assertNotIn("source: ./data/secrets/db.env", web)
         self.assertNotIn("./data/secrets:/run/secrets", web)
         self.assertNotIn("./data/secrets/db.env", web)
@@ -1187,9 +1192,16 @@ class BootstrapLogicContract(unittest.TestCase):
             self.assertEqual(bootstrap.ensure_built_assets(sites, apps), [])
 
     def test_web_entrypoint_reconciles_assets_before_serving(self):
-        entrypoint = (PRODUCT / "entrypoint.sh").read_text()
+        # Inspect the entrypoint actually selected by base Compose, rather
+        # than the legacy root/drop web branch that Compose no longer uses.
+        entrypoint = re.search(r"^  web:\n(.*?)(?=^  [^ \n]+:\n)",
+                               COMPOSE.read_text(), flags=re.M | re.S).group(1)
+        self.assertIn("from bootstrap import wait_for_endpoints; wait_for_endpoints()",
+                      entrypoint)
         self.assertIn("from bootstrap import ensure_web_assets; ensure_web_assets()",
                       entrypoint)
+        self.assertLess(entrypoint.index("wait_for_endpoints; wait_for_endpoints()"),
+                        entrypoint.index("ensure_web_assets; ensure_web_assets()"))
         self.assertLess(entrypoint.index("ensure_web_assets; ensure_web_assets()"),
                         entrypoint.index("exec node /product/web.cjs"))
 
