@@ -225,6 +225,9 @@
     },
     "apply.journal_unsafe": {
       "en": "Another update is not finished yet. Nothing was migrated; wait for it or start Check for Updates again."
+    },
+    "warning.separate_key_custody_pending": {
+      "en": "The existing recovery key remains usable, but separate protected custody has not yet been verified."
     }
   },
   "launcher": {

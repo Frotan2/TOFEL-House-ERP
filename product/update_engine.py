@@ -56,6 +56,7 @@ import secrets
 import subprocess
 import sys
 import tarfile
+import zipfile
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path, PurePosixPath
@@ -74,6 +75,24 @@ DOCUMENT_RECOVERY_SIGNATURE = "toefl-house-erp-recovery-authorization-signature"
 DOCUMENT_TRUST = "toefl-house-erp-update-trust-store"
 DOCUMENT_CHANNEL = "toefl-house-erp-update-channels"
 DOCUMENT_RESPONSE = "toefl-house-erp-update-engine-response"
+DOCUMENT_OWNER_POLICY = "toefl-house-erp-owner-update-policy"
+DOCUMENT_OWNER_APPROVAL = "toefl-house-erp-owner-update-approval"
+OWNER_POLICY_MODE = "single-owner-nonmigrating"
+OWNER_POLICY_PATH = "data/updates/owner-policy.json"
+OWNER_POLICY_SIGNATURE_PATH = OWNER_POLICY_PATH + ".sig"
+OWNER_POLICY_DECISION_PATH = "data/updates/owner-policy-decision.json"
+WINDOWS_SID = re.compile(r"^S-1-(?:[0-9]+-){1,14}[0-9]+$")
+PUBLISHER_THUMBPRINT = re.compile(r"^[0-9A-F]{40}$")
+HOST_SERVICE_ARCHIVE = "toefl-house-erp-host.zip"
+HOST_SERVICE_PATHS = frozenset((
+    "docker-compose.yml", "windows/Backup TOEFL House ERP.ps1",
+    "windows/Update TOEFL House ERP.ps1", "windows/Owner Host Servicing.ps1",
+    "windows/updater-strings.json",
+    "updates/servicing/update_engine.py", "updates/servicing/update_host.py",
+    "updates/servicing/update_entrypoint.sh", "updates/servicing/bootstrap.json",
+    "updates/servicing/bootstrap.sig.json",
+))
+MAX_HOST_SERVICE_BYTES = 64 * 1024 ** 2
 ENGINE_SCHEMA_VERSION = 1
 MANIFEST_SCHEMA_VERSION = 1
 TRUST_SCHEMA_VERSION = 1
@@ -130,7 +149,7 @@ AUTHORIZATIONS = ("REJECT", "AUTHORIZED")
 MIGRATION_MODES = ("supported", "none")
 SIGNATURE_ALGORITHMS = ("rsa-pkcs1v15-sha256",)
 KEY_PURPOSES = ("update-manifest", "recovery-authorization", "internal-activation",
-                "customer-installation-release")
+                "customer-installation-release", "update-policy", "owner-update-authorization")
 SAFE_HOST = re.compile(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}")
 SAFE_ASSET = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 # Business records that must never shrink across a supported migration.  These
@@ -333,6 +352,7 @@ MESSAGE_CODES = frozenset({
     "engine.unexpected",
     "warning.backup_age_near_limit",
     "warning.not_rollback_safe",
+    "warning.separate_key_custody_pending",
 })
 
 
@@ -627,7 +647,8 @@ def _load_trust_store(path: Path, *, now: datetime) -> dict:
         entry = _require_object(entry, "trust key")
         _require_exact_keys(entry, ("key_id", "algorithm", "purposes", "modulus_b64", "exponent_b64",
                                     "not_before_utc", "not_after_utc",
-                                    "approver_identity", "approver_role"),
+                                    "approver_identity", "approver_role", "approver_windows_sid",
+                                    "publisher_thumbprint"),
                             ("key_id", "algorithm", "purposes", "modulus_b64", "exponent_b64",
                              "not_before_utc", "not_after_utc"), "trust key", code="trust.invalid")
         key_id = _text(entry["key_id"], "trust.key_id", pattern=KEY_ID, maximum=64)
@@ -644,6 +665,15 @@ def _load_trust_store(path: Path, *, now: datetime) -> dict:
             approver_identity = _text(approver_identity, "trust.approver_identity", maximum=140)
             if approver_role not in RECOVERY_APPROVER_ROLES:
                 raise refuse("trust.invalid", "a trust key approver role is not supported")
+        windows_sid = entry.get("approver_windows_sid")
+        if windows_sid is not None:
+            if approver_identity is None:
+                raise refuse("trust.invalid", "a Windows-bound key also needs an approver identity")
+            windows_sid = _text(windows_sid, "trust.approver_windows_sid", pattern=WINDOWS_SID, maximum=184)
+        publisher = entry.get("publisher_thumbprint")
+        if publisher is not None:
+            publisher = _text(publisher, "trust.publisher_thumbprint", pattern=PUBLISHER_THUMBPRINT,
+                              maximum=40)
         if key_id in seen:
             raise refuse("trust.invalid", "trust store contains a duplicate key id")
         seen.add(key_id)
@@ -687,6 +717,10 @@ def _load_trust_store(path: Path, *, now: datetime) -> dict:
             "not_before": not_before,
             "not_after": not_after,
         })
+        if windows_sid is not None:
+            parsed[-1]["approver_windows_sid"] = windows_sid
+        if publisher is not None:
+            parsed[-1]["publisher_thumbprint"] = publisher
     return {"provisioned": True, "keys": parsed, "now": now}
 
 
@@ -827,7 +861,7 @@ def _validate_manifest(manifest: object, *, now: datetime) -> dict:
     _require_exact_keys(manifest, (
         "schema_version", "document_type", "product", "channel", "version", "release_sequence",
         "source_revision", "release_status", "production_authorization", "issued_utc", "notes",
-        "requirements", "database", "image", "updater", "signature",
+        "requirements", "database", "image", "updater", "signature", "legacy_bridge", "host_service",
     ), (
         "schema_version", "document_type", "product", "channel", "version", "release_sequence",
         "source_revision", "release_status", "production_authorization", "issued_utc",
@@ -931,7 +965,7 @@ def _validate_manifest(manifest: object, *, now: datetime) -> dict:
                          "the recovery authorization age limit is outside the engine policy")
 
     image = _require_object(manifest["image"], "manifest.image")
-    _require_exact_keys(image, ("tag", "archive", "sha256", "size_bytes", "config_digest", "labels"),
+    _require_exact_keys(image, ("tag", "archive", "sha256", "size_bytes", "config_digest", "labels", "runtime_id"),
                         ("tag", "archive", "sha256", "size_bytes", "config_digest", "labels"),
                         "manifest.image", code="release.manifest.invalid")
     if image["tag"] != IMAGE_TAG:
@@ -942,6 +976,8 @@ def _validate_manifest(manifest: object, *, now: datetime) -> dict:
     image_hash = _text(image["sha256"], "image.sha256", pattern=HEX64, maximum=64)
     image_size = _integer(image["size_bytes"], "image.size_bytes", MIN_ARCHIVE_BYTES, MAX_ARCHIVE_BYTES)
     config_digest = _text(image["config_digest"], "image.config_digest", pattern=SHA256_TAG, maximum=71)
+    runtime_id = image.get("runtime_id", config_digest)
+    runtime_id = _text(runtime_id, "image.runtime_id", pattern=SHA256_TAG, maximum=71)
     labels = _require_object(image["labels"], "image.labels")
     _require_exact_keys(labels, ("org.toefl-house.source-eol", "org.toefl-house.source-revision",
                                  "org.toefl-house.release-version"),
@@ -965,7 +1001,31 @@ def _validate_manifest(manifest: object, *, now: datetime) -> dict:
     if signature["algorithm"] not in SIGNATURE_ALGORITHMS:
         raise refuse("release.manifest.invalid", "signature algorithm is not supported")
 
-    return {
+    legacy_bridge = None
+    if "legacy_bridge" in manifest:
+        bridge = _require_object(manifest["legacy_bridge"], "legacy_bridge")
+        fields = ("source_version", "source_revision", "source_image_id", "source_sequence", "target_sequence")
+        _require_exact_keys(bridge, fields, fields, "legacy_bridge", code="release.manifest.invalid")
+        legacy_bridge = {
+            "source_version": _text(bridge["source_version"], "bridge.source_version", pattern=SAFE_VERSION, maximum=64),
+            "source_revision": _text(bridge["source_revision"], "bridge.source_revision", pattern=HEX40, maximum=40),
+            "source_image_id": _text(bridge["source_image_id"], "bridge.source_image_id", pattern=SHA256_TAG, maximum=71),
+            "source_sequence": _integer(bridge["source_sequence"], "bridge.source_sequence", 0, MAX_SEQUENCE),
+            "target_sequence": _integer(bridge["target_sequence"], "bridge.target_sequence", 1, MAX_SEQUENCE),
+        }
+        if (legacy_bridge["target_sequence"] != sequence
+                or sequence <= legacy_bridge["source_sequence"]
+                or database["migration"] != "none" or not reversible):
+            raise refuse("release.manifest.invalid", "legacy bridge must be an increasing nonmigrating reversible transition")
+        # A long-lived policy establishes the exact legacy identity mapping;
+        # it is never the short-lived approval for an update attempt. Keep
+        # these protections non-waivable even for a correctly signed manifest.
+        if not (backup_required and restore_required and requires_backup and recovery_required):
+            raise refuse("release.manifest.invalid",
+                         "legacy Owner bridges must require a fresh verified backup, "
+                         "restore evidence and a signed per-attempt Owner approval")
+    host_service = _parse_host_service(manifest.get("host_service"))
+    normalized = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "version": version,
         "release_sequence": sequence,
@@ -1001,12 +1061,18 @@ def _validate_manifest(manifest: object, *, now: datetime) -> dict:
             "sha256": image_hash,
             "size_bytes": image_size,
             "config_digest": config_digest,
+            "runtime_id": runtime_id,
             "labels": {key: labels[key] for key in sorted(labels)},
         },
         "updater": {"engine_schema": updater["engine_schema"], "strings_schema": updater["strings_schema"]},
         "signature": {"key_id": key_id, "algorithm": signature["algorithm"]},
         "raw_sha256": None,
     }
+    if legacy_bridge is not None:
+        normalized["legacy_bridge"] = legacy_bridge
+    if host_service is not None:
+        normalized["host_service"] = host_service
+    return normalized
 
 
 def _load_signature_envelope(path: Path, document_type: str, *, code: str, label: str = "release signature") -> dict:
@@ -1145,6 +1211,29 @@ def inspect_image_archive(path: Path, *, expected: Mapping[str, object] | None =
                             hasher.update(chunk)
                     if "sha256:" + hasher.hexdigest() != expected_id:
                         raise refuse("release.archive.identity_mismatch", "image layer content changed")
+            runtime_id = "sha256:" + config_hash
+            wanted_runtime = expected.get("runtime_id", runtime_id) if expected is not None else runtime_id
+            if not isinstance(wanted_runtime, str) or not SHA256_TAG.fullmatch(wanted_runtime):
+                raise refuse("release.archive.identity_mismatch", "signed runtime image identity is invalid")
+            if wanted_runtime != runtime_id:
+                # Containerd can expose the OCI manifest digest as Docker Id.
+                # Bind that digest to this exact config and verified layer
+                # graph; a caller-supplied second image ID is not sufficient.
+                manifest_bytes = read("blobs/sha256/" + wanted_runtime.removeprefix("sha256:"))
+                if "sha256:" + hashlib.sha256(manifest_bytes).hexdigest() != wanted_runtime:
+                    raise refuse("release.archive.identity_mismatch", "OCI runtime manifest digest differs")
+                oci = json.loads(manifest_bytes.decode("utf-8"))
+                if (not isinstance(oci, dict) or oci.get("schemaVersion") != 2
+                        or not isinstance(oci.get("config"), dict)
+                        or oci["config"].get("digest") != "sha256:" + config_hash
+                        or oci["config"].get("size") != len(config_bytes)
+                        or not isinstance(oci.get("layers"), list) or len(oci["layers"]) != len(layers)):
+                    raise refuse("release.archive.identity_mismatch", "OCI runtime manifest is not this image config")
+                for descriptor, layer, diff_id in zip(oci["layers"], layers, rootfs["diff_ids"]):
+                    if (not isinstance(descriptor, dict) or descriptor.get("digest") != diff_id
+                            or descriptor.get("size") != regular(layer, MAX_ARCHIVE_BYTES).size):
+                        raise refuse("release.archive.identity_mismatch", "OCI runtime layer graph differs")
+                runtime_id = wanted_runtime
     except UpdateError:
         raise
     except (tarfile.TarError, UnicodeError, json.JSONDecodeError, OSError):
@@ -1155,6 +1244,8 @@ def inspect_image_archive(path: Path, *, expected: Mapping[str, object] | None =
         "labels": {key: labels[key] for key in sorted(labels)},
         "archive_sha256": digest,
         "size_bytes": size,
+        "runtime_id": runtime_id,
+        "rootfs_layers": list(rootfs["diff_ids"]),
     }
     if expected is not None:
         if identity["config_digest"] != expected["config_digest"]:
@@ -1221,7 +1312,7 @@ def _block(code: str, detail: str = "") -> dict:
 
 
 def evaluate_compatibility(manifest: dict, installed: Mapping[str, object] | None,
-                           host_updater_version: str) -> list[dict]:
+                           host_updater_version: str, owner_policy: dict | None = None) -> list[dict]:
     blockers: list[dict] = []
     requirements = manifest["requirements"]
     try:
@@ -1243,6 +1334,37 @@ def evaluate_compatibility(manifest: dict, installed: Mapping[str, object] | Non
     _require_exact_keys(installed, ("version", "release_sequence", "source_revision", "image_labels", "image_id"),
                         ("version", "release_sequence", "source_revision", "image_labels", "image_id"),
                         "installed", code="compat.installed_version_unknown")
+    if manifest.get("legacy_bridge") is not None:
+        # Only an independently verified, installation-bound local policy may
+        # establish ordering for these exact historical nonnumeric labels.
+        # The signed manifest alone does not create that authority.
+        if owner_policy is None:
+            return blockers + [_block("compat.installed_version_unknown", "legacy bridge needs its signed Owner policy")]
+        bridge = manifest["legacy_bridge"]
+        labels = installed.get("image_labels")
+        if (installed.get("version") != bridge["source_version"]
+                or installed.get("source_revision") != bridge["source_revision"]
+                or installed.get("image_id") != bridge["source_image_id"]
+                or (installed.get("release_sequence") is not None and
+                    (not _is_int(installed.get("release_sequence")) or
+                     installed.get("release_sequence") != bridge["source_sequence"]))
+                or not isinstance(labels, Mapping)
+                or labels.get("org.toefl-house.release-version") != bridge["source_version"]
+                or labels.get("org.toefl-house.source-revision") != bridge["source_revision"]
+                or labels.get("org.toefl-house.source-eol") != "lf-v1"):
+            blockers.append(_block("compat.installed_version_unknown", "live source differs from the signed legacy transition"))
+        if (requirements["minimum_installed_version"] != bridge["source_version"]
+                or manifest["release_sequence"] <= bridge["source_sequence"]):
+            blockers.append(_block("compat.downgrade", "legacy transition ordering is not established"))
+        for field, lower in (("minimum_installed_sequence", True), ("maximum_installed_sequence", False)):
+            limit = requirements[field]
+            if limit is not None and ((bridge["source_sequence"] < limit) if lower else (bridge["source_sequence"] > limit)):
+                blockers.append(_block("compat.sequence_gap", "legacy source is outside the signed sequence window"))
+        if requirements["minimum_installed_version"] != owner_policy["transition"]["source_version"]:
+            blockers.append(_block("compat.installed_too_old", "legacy source is outside its Owner policy"))
+        if manifest["database"]["minimum_source_schema_version"] not in (None, bridge["source_version"]):
+            blockers.append(_block("compat.schema_unsupported", "legacy schema is outside the signed source path"))
+        return blockers
     try:
         installed_version = _text(installed["version"], "installed.version", pattern=SAFE_VERSION, maximum=64)
         installed_key = version_key(installed_version)
@@ -1309,6 +1431,100 @@ def evaluate_compatibility(manifest: dict, installed: Mapping[str, object] | Non
 # --------------------------------------------------------------------------
 # Evidence: verified encrypted backup and signed recovery authorization
 # --------------------------------------------------------------------------
+
+def _parse_host_service(value: object) -> dict | None:
+    if value is None:
+        return None
+    plan = _require_object(value, "host_service")
+    fields = ("archive", "sha256", "size_bytes", "files")
+    _require_exact_keys(plan, fields, fields, "host_service", code="release.manifest.invalid")
+    if plan["archive"] != HOST_SERVICE_ARCHIVE:
+        raise refuse("release.manifest.invalid", "host servicing archive name is not supported")
+    digest = _text(plan["sha256"], "host_service.sha256", pattern=HEX64, maximum=64)
+    size = _integer(plan["size_bytes"], "host_service.size_bytes", 1, MAX_HOST_SERVICE_BYTES)
+    files = plan["files"]
+    if not isinstance(files, list) or not 1 <= len(files) <= len(HOST_SERVICE_PATHS):
+        raise refuse("release.manifest.invalid", "host servicing file list is invalid")
+    parsed = []
+    seen = set()
+    for entry in files:
+        entry = _require_object(entry, "host servicing file")
+        keys = ("path", "old_sha256", "new_sha256", "size_bytes")
+        _require_exact_keys(entry, keys, keys, "host servicing file", code="release.manifest.invalid")
+        path = entry["path"]
+        if not isinstance(path, str) or path not in HOST_SERVICE_PATHS or path in seen:
+            raise refuse("release.manifest.invalid", "host servicing path is unsupported or duplicated")
+        seen.add(path)
+        old = entry["old_sha256"]
+        if old is not None:
+            old = _text(old, "host old hash", pattern=HEX64, maximum=64)
+        parsed.append({"path": path, "old_sha256": old,
+                       "new_sha256": _text(entry["new_sha256"], "host new hash", pattern=HEX64, maximum=64),
+                       "size_bytes": _integer(entry["size_bytes"], "host file size", 1, MAX_HOST_SERVICE_BYTES)})
+    if sum(entry["size_bytes"] for entry in parsed) > MAX_HOST_SERVICE_BYTES:
+        raise refuse("release.manifest.invalid", "host servicing expanded code exceeds its fixed budget")
+    return {"archive": HOST_SERVICE_ARCHIVE, "sha256": digest, "size_bytes": size, "files": parsed}
+
+
+def _unlinked_product_path(root: Path, relative: object, label: str) -> Path:
+    resolved = resolve_inside(root, relative, label)
+    raw = root / str(relative)
+    for path in (raw, *raw.parents):
+        if path.is_symlink():
+            raise refuse("apply.evidence_mismatch", f"{label} contains a symbolic link")
+        if path == root:
+            break
+    return resolved
+
+
+def _validate_host_service_archive(product_root: Path, manifest: dict,
+                                   manifest_path: Path | None = None, *,
+                                   require_archive: bool = True) -> dict | None:
+    """Verify the bounded code ZIP and exact pre-update files without writing."""
+    plan = manifest.get("host_service")
+    if plan is None:
+        return None
+    if manifest_path is None:
+        raise refuse("release.manifest.invalid", "host servicing needs the signed manifest location")
+    relative = (manifest_path.parent / plan["archive"]).relative_to(product_root.resolve()).as_posix()
+    archive = _unlinked_product_path(product_root, relative, "host servicing archive")
+    details = {"plan_sha256": hashlib.sha256(canonical_manifest_bytes(plan)).hexdigest(),
+               "archive_sha256": plan["sha256"]}
+    for entry in plan["files"]:
+        path = _unlinked_product_path(product_root, entry["path"], "host servicing path")
+        actual = sha256_file(path) if path.is_file() else None
+        if path.exists() and not path.is_file():
+            raise refuse("release.archive.identity_mismatch", "host servicing source is not a regular file")
+        if actual != entry["old_sha256"]:
+            raise refuse("apply.evidence_mismatch", "host code changed before servicing authorization")
+    if not archive.exists() and not require_archive:
+        # Manifest phase binds the signed plan and old source files before
+        # downloading. Authorize/recheck/apply must inspect the actual ZIP.
+        return details
+    if (not archive.is_file() or archive.stat().st_size != plan["size_bytes"]
+            or sha256_file(archive) != plan["sha256"]):
+        raise refuse("release.archive.hash_mismatch", "host servicing archive differs from the signed manifest")
+    entries = {entry["path"]: entry for entry in plan["files"]}
+    try:
+        with zipfile.ZipFile(archive) as z:
+            items = z.infolist()
+            if len(items) != len(entries) or len({i.filename for i in items}) != len(items):
+                raise refuse("release.archive.identity_mismatch", "host servicing archive file set differs")
+            for item in items:
+                entry = entries.get(item.filename)
+                if (entry is None or item.is_dir() or ((item.external_attr >> 16) & 0o170000) not in (0, 0o100000)
+                        or item.file_size != entry["size_bytes"]):
+                    raise refuse("release.archive.identity_mismatch", "host servicing archive contains an unsafe entry")
+                with z.open(item) as handle:
+                    h = hashlib.sha256()
+                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                        h.update(chunk)
+                if h.hexdigest() != entry["new_sha256"]:
+                    raise refuse("release.archive.hash_mismatch", "host servicing code hash differs")
+    except (OSError, zipfile.BadZipFile, RuntimeError):
+        raise refuse("release.archive.identity_mismatch", "host servicing archive is unreadable") from None
+    return details
+
 
 def _load_activate_module():
     """Import the product's existing guarded activation receipt validator.
@@ -1535,6 +1751,169 @@ def validate_recovery_authorization(path: Path, signature_path: Path, store: dic
 # Preflight decision
 # --------------------------------------------------------------------------
 
+def _signed_owner_document(path: Path, signature_path: Path, store: dict, *,
+                           document_type: str, purpose: str, now: datetime) -> tuple[dict, bytes, dict]:
+    document, raw = _read_json_file(path, "recovery authorization")
+    envelope = _load_signature_envelope(signature_path, document_type + "-signature",
+                                        code="preflight.recovery.authorization_invalid",
+                                        label="recovery signature")
+    if envelope["key_id"] != document.get("key_id"):
+        raise refuse("preflight.recovery.authorization_invalid", "Owner document signer differs from its key binding")
+    key = select_key(store, envelope["key_id"], purpose, now=now)
+    if not rsa_pkcs1v15_sha256_verify(key["modulus"], key["exponent"], raw, envelope["signature"]):
+        raise refuse("preflight.recovery.authorization_invalid", "Owner document signature did not verify")
+    return document, raw, key
+
+
+def validate_owner_update_policy(product_root: Path, store: dict, manifest: dict, *,
+                                 installed: Mapping[str, object], host_identity: dict,
+                                 now: datetime) -> dict:
+    """Authenticate a separately enrolled, exact one-Owner legacy transition.
+
+    This never upgrades or excuses the existing two-person recovery format.
+    It needs a new signed policy and the real explicit decision record on disk.
+    """
+    path = _unlinked_product_path(product_root, OWNER_POLICY_PATH, "Owner policy")
+    signature_path = _unlinked_product_path(product_root, OWNER_POLICY_SIGNATURE_PATH, "Owner policy signature")
+    doc, raw, key = _signed_owner_document(path, signature_path, store,
+                                          document_type=DOCUMENT_OWNER_POLICY,
+                                          purpose="update-policy", now=now)
+    fields = ("schema_version", "document_type", "product", "site", "mode", "policy_id", "key_id",
+              "owner_identity", "owner_role", "owner_windows_sid", "publisher_thumbprint",
+              "issued_utc", "expires_utc", "approval_record_sha256", "installation", "transition")
+    _require_exact_keys(doc, fields, fields, "Owner policy", code="preflight.recovery.authorization_invalid")
+    if (not _is_int(doc["schema_version"]) or doc["schema_version"] != 1 or doc["document_type"] != DOCUMENT_OWNER_POLICY
+            or doc["product"] != PRODUCT or doc["site"] != SITE_NAME or doc["mode"] != OWNER_POLICY_MODE):
+        raise refuse("preflight.recovery.authorization_invalid", "Owner policy header is unsupported")
+    _text(doc["policy_id"], "Owner policy id", pattern=RECOVERY_REQUEST_ID, maximum=32)
+    _text(doc["owner_identity"], "Owner identity", maximum=140)
+    _text(doc["owner_windows_sid"], "Owner Windows SID", pattern=WINDOWS_SID, maximum=184)
+    _text(doc["publisher_thumbprint"], "Owner publisher", pattern=PUBLISHER_THUMBPRINT, maximum=40)
+    if (doc["key_id"] != manifest["signature"]["key_id"] or doc["owner_role"] != "course-owner"
+            or key.get("approver_role") != "course-owner"
+            or key.get("approver_identity") != doc["owner_identity"]
+            or key.get("approver_windows_sid") != doc["owner_windows_sid"]
+            or key.get("publisher_thumbprint") != doc["publisher_thumbprint"]):
+        raise refuse("preflight.recovery.approval_invalid", "Owner policy does not match the enrolled Owner and publisher")
+    # One existing key is enrolled for these distinct, explicit purposes. A
+    # factory-only or manifest-only key cannot acquire either authority here.
+    select_key(store, doc["key_id"], "owner-update-authorization", now=now)
+    select_key(store, doc["key_id"], "update-manifest", now=now)
+    issued = parse_utc(doc["issued_utc"], "Owner policy issued")
+    expires = parse_utc(doc["expires_utc"], "Owner policy expires")
+    if (issued > now + timedelta(minutes=10) or expires <= issued
+            or expires - issued > timedelta(days=31)):
+        raise refuse("preflight.recovery.authorization_invalid", "Owner policy validity is unsupported")
+    if expires <= now:
+        raise refuse("preflight.recovery.authorization_expired", "Owner policy expired")
+    decision_path = _unlinked_product_path(product_root, OWNER_POLICY_DECISION_PATH, "Owner decision")
+    decision, decision_raw = _read_json_file(decision_path, "recovery authorization")
+    decision_hash = _text(doc["approval_record_sha256"], "Owner decision hash", pattern=HEX64, maximum=64)
+    if (hashlib.sha256(decision_raw).hexdigest() != decision_hash
+            or decision.get("status") != "EXPLICIT_OWNER_POLICY_CHANGE_APPROVED"
+            or decision.get("owner_email") != doc["owner_identity"]
+            or decision.get("windows_sid") != doc["owner_windows_sid"]
+            or decision.get("existing_recovery_key_must_be_preserved") is not True):
+        raise refuse("preflight.recovery.binding_mismatch", "actual Owner policy decision is missing or differs")
+    install = _require_object(doc["installation"], "Owner installation")
+    hashes = ("storage_sha256", "credentials_sha256", "site_config_sha256")
+    _require_exact_keys(install, hashes, hashes, "Owner installation", code="preflight.recovery.binding_mismatch")
+    for name in hashes:
+        _text(install[name], "Owner installation hash", pattern=HEX64, maximum=64)
+    if install != host_identity:
+        raise refuse("preflight.recovery.binding_mismatch", "Owner policy belongs to a different live installation")
+    trans = _require_object(doc["transition"], "Owner transition")
+    transition_fields = ("source_version", "source_revision", "source_image_id", "source_sequence",
+                         "target_version", "target_revision", "target_image_config_digest", "target_image_id",
+                         "target_archive_sha256", "target_sequence")
+    _require_exact_keys(trans, transition_fields, transition_fields, "Owner transition",
+                        code="preflight.recovery.binding_mismatch")
+    _integer(trans["source_sequence"], "Owner source sequence", 0, MAX_SEQUENCE)
+    _integer(trans["target_sequence"], "Owner target sequence", 1, MAX_SEQUENCE)
+    bridge = manifest.get("legacy_bridge")
+    if bridge is None or manifest["database"]["migration"] != "none" or not manifest["database"]["reversible"]:
+        raise refuse("preflight.recovery.binding_mismatch", "Owner policy is limited to its nonmigrating reversible bridge")
+    wanted = {**bridge, "target_version": manifest["version"], "target_revision": manifest["source_revision"],
+              "target_image_config_digest": manifest["image"]["config_digest"],
+              "target_image_id": manifest["image"].get("runtime_id", manifest["image"]["config_digest"]),
+              "target_archive_sha256": manifest["image"]["sha256"]}
+    if (trans != wanted or installed.get("version") != trans["source_version"]
+            or installed.get("source_revision") != trans["source_revision"]
+            or installed.get("image_id") != trans["source_image_id"]
+            or installed.get("release_sequence") not in (None, trans["source_sequence"])):
+        raise refuse("preflight.recovery.binding_mismatch", "Owner policy does not bind this exact source and target")
+    return {**doc, "sha256": hashlib.sha256(raw).hexdigest(),
+            "signature_sha256": sha256_file(signature_path)}
+
+
+def validate_owner_update_approval(path: Path, signature_path: Path, store: dict, *,
+                                   policy: dict, manifest: dict, product_root: Path,
+                                   receipt_sha256: str, now: datetime,
+                                   state_dir: Path | None = None) -> dict:
+    doc, raw, key = _signed_owner_document(path, signature_path, store,
+                                          document_type=DOCUMENT_OWNER_APPROVAL,
+                                          purpose="owner-update-authorization", now=now)
+    fields = ("schema_version", "document_type", "product", "site", "operation", "scope",
+              "policy_id", "policy_sha256", "request_id", "key_id", "owner_identity", "owner_role",
+              "owner_windows_sid", "issued_utc", "expires_utc", "manifest_sha256", "backup_receipt_sha256",
+              "existing_recovery_key_access_verified", "separate_key_custody_verified", "restore_rehearsal")
+    _require_exact_keys(doc, fields, fields, "Owner approval", code="preflight.recovery.authorization_invalid")
+    if (not _is_int(doc["schema_version"]) or doc["schema_version"] != 1 or doc["document_type"] != DOCUMENT_OWNER_APPROVAL
+            or doc["product"] != PRODUCT or doc["site"] != SITE_NAME or doc["operation"] != "site-update"
+            or doc["scope"] != "exact-legacy-nonmigrating-update"):
+        raise refuse("preflight.recovery.authorization_invalid", "Owner approval header is unsupported")
+    for name in ("policy_id", "key_id", "owner_identity", "owner_role", "owner_windows_sid"):
+        if doc[name] != policy[name]:
+            raise refuse("preflight.recovery.binding_mismatch", "Owner approval differs from its signed policy")
+    if (key.get("approver_identity") != doc["owner_identity"] or key.get("approver_role") != "course-owner"
+            or key.get("approver_windows_sid") != doc["owner_windows_sid"]
+            or doc["policy_sha256"] != policy["sha256"]
+            or doc["manifest_sha256"] != manifest["raw_sha256"]
+            or doc["backup_receipt_sha256"] != receipt_sha256):
+        raise refuse("preflight.recovery.binding_mismatch", "Owner approval is bound to different release or backup evidence")
+    request_id = _text(doc["request_id"], "Owner request id", pattern=RECOVERY_REQUEST_ID, maximum=32)
+    issued = parse_utc(doc["issued_utc"], "Owner approval issued")
+    expires = parse_utc(doc["expires_utc"], "Owner approval expires")
+    if issued > now + timedelta(minutes=10) or expires <= issued or expires - issued > timedelta(minutes=30):
+        raise refuse("preflight.recovery.authorization_invalid", "Owner approval validity is unsupported")
+    if expires <= now:
+        raise refuse("preflight.recovery.authorization_expired", "Owner approval expired")
+    if (issued < parse_utc(policy["issued_utc"], "Owner policy issued")
+            or expires > parse_utc(policy["expires_utc"], "Owner policy expires")):
+        raise refuse("preflight.recovery.authorization_invalid", "Owner approval is outside its policy validity")
+    if doc["existing_recovery_key_access_verified"] is not True:
+        raise refuse("preflight.recovery.key_custody_unverified", "existing recovery key access was not verified")
+    custody = _boolean(doc["separate_key_custody_verified"], "separate key custody")
+    restore = _require_object(doc["restore_rehearsal"], "prior restore")
+    restore_fields = ("report", "report_sha256", "backup_set", "verified_utc", "source_revision", "source_image_id", "verified")
+    _require_exact_keys(restore, restore_fields, restore_fields, "prior restore",
+                        code="preflight.recovery.rehearsal_unverified")
+    if (restore["verified"] is not True or restore["source_revision"] != policy["transition"]["source_revision"]
+            or restore["source_image_id"] != policy["transition"]["source_image_id"]):
+        raise refuse("preflight.recovery.rehearsal_unverified", "prior restore does not prove this unchanged source")
+    verified_at = parse_utc(restore["verified_utc"], "prior restore date")
+    if verified_at > issued or verified_at > now:
+        raise refuse("preflight.recovery.rehearsal_unverified", "prior restore date is after Owner approval")
+    if now - verified_at > timedelta(hours=MAX_RECOVERY_MAX_AGE_HOURS):
+        raise refuse("preflight.recovery.rehearsal_unverified", "prior restore evidence is too old for this update")
+    _text(restore["backup_set"], "prior restored set", maximum=180)
+    report_path = _unlinked_product_path(product_root, restore["report"], "prior restore report")
+    report, report_raw = _read_json_file(report_path, "recovery authorization")
+    expected_report = {name: restore[name] for name in ("backup_set", "verified_utc", "source_revision", "source_image_id")}
+    if (hashlib.sha256(report_raw).hexdigest() != restore["report_sha256"]
+            or report.get("status") != "PASS" or report.get("verified") is not True
+            or any(report.get(name) != value for name, value in expected_report.items())):
+        raise refuse("preflight.recovery.rehearsal_unverified", "prior restore report is missing or changed")
+    marker = _recovery_consumed_marker(state_dir, request_id)
+    if marker is not None and marker.exists():
+        raise refuse("preflight.recovery.request_replayed", "this Owner update approval was already used")
+    return {"sha256": hashlib.sha256(raw).hexdigest(), "signature_sha256": sha256_file(signature_path),
+            "request_id": request_id, "authorization_mode": OWNER_POLICY_MODE,
+            "policy_sha256": policy["sha256"], "policy_signature_sha256": policy["signature_sha256"],
+            "restore_evidence_sha256": restore["report_sha256"], "separate_key_custody_verified": custody,
+            "approvals": [{"approver_identity": doc["owner_identity"], "approver_role": "course-owner", "key_id": doc["key_id"]}]}
+
+
 def _host_facts(request: Mapping[str, object]) -> dict:
     facts = _require_object(request.get("host"), "host facts")
     _require_exact_keys(facts, ("disk_free_bytes", "volume_present", "volume_verified", "services",
@@ -1624,11 +2003,21 @@ def _live_identity(request: Mapping[str, object], manifest: dict, *,
             raise refuse("apply.journal_unsafe", "the actual journal belongs to another update phase")
         if identity != transaction.get("host_identity"):
             raise refuse("apply.host_unsafe", "actual storage or site credentials changed after authorization")
-        expected_image = transaction["target"].get("image_config_digest")
+        expected_image = transaction["target"].get("image_runtime_id", transaction["target"].get("image_config_digest"))
         expected_labels = manifest["image"]["labels"]
     if (observation.get("tag_image_id") != expected_image
             or observation.get("tag_image_labels") != expected_labels):
         raise refuse("apply.installed_mismatch", "the actual tagged image does not match this update phase")
+    if transaction is not None and expected_image != transaction["target"].get("image_config_digest"):
+        expected_layers = transaction["target"].get("image_rootfs_layers")
+        if not expected_layers or observation.get("tag_rootfs_layers") != expected_layers:
+            raise refuse("apply.installed_mismatch", "actual OCI image filesystems differ from the authorized archive")
+    if manifest.get("host_service") is not None:
+        host_files = observation.get("host_files")
+        if not isinstance(host_files, dict) or any(
+                entry["path"] not in host_files or host_files[entry["path"]] != entry["old_sha256"]
+                for entry in manifest["host_service"]["files"]):
+            raise refuse("apply.host_unsafe", "independent host code observation differs from the authorized servicing source")
     return dict(identity)
 
 
@@ -1797,7 +2186,28 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
         except UpdateError as error:
             blockers.append(_block(error.code, error.detail))
 
-    blockers.extend(evaluate_compatibility(manifest, request.get("installed"), host_version))
+    owner_policy = None
+    if manifest.get("legacy_bridge") is not None:
+        try:
+            live_identity = _live_identity(request, manifest)
+            owner_policy = validate_owner_update_policy(
+                product_root, store, manifest, installed=request.get("installed"),
+                host_identity=live_identity, now=now)
+        except UpdateError as error:
+            blockers.append(_block(error.code, error.detail))
+        except (OSError, ValueError):
+            blockers.append(_block("preflight.recovery.authorization_invalid", "Owner policy could not be read"))
+    host_service_details = None
+    if manifest.get("host_service") is not None:
+        try:
+            host_service_details = _validate_host_service_archive(
+                product_root, manifest, resolve_inside(product_root, request["manifest"], "request.manifest"),
+                require_archive=require_archive)
+        except UpdateError as error:
+            blockers.append(_block(error.code, error.detail))
+        except (OSError, ValueError):
+            blockers.append(_block("release.archive.identity_mismatch", "host servicing code could not be verified"))
+    blockers.extend(evaluate_compatibility(manifest, request.get("installed"), host_version, owner_policy))
 
     journal_state = request.get("journal_state", "idle")
     if journal_state not in JOURNAL_TERMINAL_STATES:
@@ -1869,7 +2279,25 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
     recovery_needed = (manifest["database"]["migration"] == "supported"
                        or requirements["recovery_required"])
     if recovery_needed:
-        if (not request.get("recovery_authorization") or not request.get("recovery_signature")
+        if owner_policy is not None:
+            try:
+                if not request.get("recovery_authorization") or not request.get("recovery_signature"):
+                    raise refuse("preflight.recovery.approval_missing", "signed Owner approval is missing")
+                if receipt_details is None:
+                    raise refuse("preflight.recovery.binding_mismatch", "Owner approval needs an authenticated backup")
+                recovery_details = validate_owner_update_approval(
+                    _unlinked_product_path(product_root, request["recovery_authorization"], "Owner approval"),
+                    _unlinked_product_path(product_root, request["recovery_signature"], "Owner approval signature"),
+                    store, policy=owner_policy, manifest=manifest, product_root=product_root,
+                    receipt_sha256=receipt_details["sha256"], now=now, state_dir=state_dir)
+                if not recovery_details["separate_key_custody_verified"]:
+                    warnings.append(_block("warning.separate_key_custody_pending",
+                                           "existing key access is verified; separate secure custody remains pending"))
+            except UpdateError as error:
+                blockers.append(_block(error.code, error.detail))
+            except (OSError, ValueError):
+                blockers.append(_block("preflight.recovery.authorization_invalid", "Owner approval could not be read"))
+        elif (not request.get("recovery_authorization") or not request.get("recovery_signature")
                 or not request.get("recovery_signature_2")):
             blockers.append(_block("preflight.recovery.approval_missing",
                                    "two-person recovery authorization is not present: "
@@ -1900,6 +2328,9 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
         host_identity = _live_identity(request, manifest)
         context = _build_context(request, product_root, manifest, identity, receipt_details,
                                  recovery_details, now)
+        if host_service_details is not None:
+            context["evidence"]["host_service_plan_sha256"] = host_service_details["plan_sha256"]
+            context["evidence"]["host_service_archive_sha256"] = host_service_details["archive_sha256"]
         context["host_identity"] = host_identity
         if require_archive and (identity is None or context is None):
             blockers.append(_block("release.archive.missing", "the downloaded image archive is required here"))
@@ -1935,7 +2366,7 @@ def _build_context(request: Mapping[str, object], product_root: Path, manifest: 
     """Everything a later phase must prove again before it may act."""
     installed = request.get("installed") if isinstance(request.get("installed"), dict) else {}
     signature_path = resolve_inside(product_root, request.get("signature"), "request.signature")
-    return {
+    context = {
         "now": now,
         "site": SITE_NAME,
         "installed": {
@@ -1954,6 +2385,8 @@ def _build_context(request: Mapping[str, object], product_root: Path, manifest: 
             "archive_sha256": None if identity is None else identity["archive_sha256"],
             "archive_size_bytes": None if identity is None else identity["size_bytes"],
             "image_config_digest": None if identity is None else identity["config_digest"],
+            "image_runtime_id": manifest["image"].get("runtime_id", manifest["image"]["config_digest"]),
+            "image_rootfs_layers": None if identity is None else identity.get("rootfs_layers"),
         },
         "evidence": {
             "backup_receipt_sha256": None if receipt_details is None else receipt_details["sha256"],
@@ -1967,6 +2400,11 @@ def _build_context(request: Mapping[str, object], product_root: Path, manifest: 
             "target_schema_version": manifest["database"]["target_schema_version"],
         },
     }
+    if recovery_details is not None and recovery_details.get("authorization_mode") == OWNER_POLICY_MODE:
+        for key in ("authorization_mode", "signature_sha256", "policy_sha256", "policy_signature_sha256",
+                    "restore_evidence_sha256", "separate_key_custody_verified"):
+            context["evidence"][key] = recovery_details[key]
+    return context
 
 
 def _state_directory(state_dir: Path | None) -> Path | None:
@@ -2347,7 +2785,7 @@ def _bind_transaction(transaction: dict, context: dict) -> None:
         if transaction[section] != context[section]:
             raise refuse("transaction.mismatch",
                          f"the update transaction does not match the current {section} evidence")
-    image_fields = ("archive_sha256", "archive_size_bytes", "image_config_digest")
+    image_fields = ("archive_sha256", "archive_size_bytes", "image_config_digest", "image_rootfs_layers")
     for name, value in context["target"].items():
         if value is None:
             continue
@@ -2388,6 +2826,8 @@ def _decision(blockers: list[dict], warnings: list[dict], manifest: dict | None,
             "production_authorization": manifest["production_authorization"],
             "notes": manifest["notes"],
             "image": identity,
+            "host_service": manifest.get("host_service"),
+            "legacy_bridge": manifest.get("legacy_bridge"),
         },
         "plan": {
             "phases": list(PLAN_PHASES),
@@ -2768,7 +3208,7 @@ def apply_update(request: Mapping[str, object], *, now: datetime,
         if blockers:
             return _apply_report("failed", "pre-migrate", blockers=blockers,
                                  target_version=manifest["version"])
-        _rebind_apply(request, product_root, transaction, manifest, store, now)
+        _rebind_apply(request, product_root, transaction, manifest, store, now, state_dir=state_dir)
     except UpdateError as error:
         return _apply_report("failed", "pre-migrate", blockers=[_block(error.code, error.detail)],
                              target_version=target_version)
@@ -2911,7 +3351,7 @@ def _strict_hashes(values: object, phase: str) -> dict[str, str]:
 
 
 def _rebind_apply(request: Mapping[str, object], product_root: Path, transaction: dict,
-                  manifest: dict, store: dict, now: datetime) -> None:
+                  manifest: dict, store: dict, now: datetime, *, state_dir: Path | None = None) -> None:
     """Prove the apply request acts on exactly the authorized transaction."""
     target = transaction["target"]
     if target.get("manifest_sha256") != manifest.get("raw_sha256"):
@@ -2932,7 +3372,9 @@ def _rebind_apply(request: Mapping[str, object], product_root: Path, transaction
     identity = inspect_image_archive(archive, expected=manifest["image"], verify_layers=True)
     if (identity["archive_sha256"] != target.get("archive_sha256")
             or identity["size_bytes"] != target.get("archive_size_bytes")
-            or identity["config_digest"] != target.get("image_config_digest")):
+            or identity["config_digest"] != target.get("image_config_digest")
+            or identity["runtime_id"] != target.get("image_runtime_id", target.get("image_config_digest"))
+            or (target.get("image_rootfs_layers") is not None and identity["rootfs_layers"] != target["image_rootfs_layers"])):
         raise refuse("apply.archive_mismatch", "the image identity does not match the authorized release")
 
     evidence = transaction["evidence"]
@@ -2959,7 +3401,21 @@ def _rebind_apply(request: Mapping[str, object], product_root: Path, transaction
                                             "request.recovery_authorization")
         if sha256_file(authorization_path) != evidence.get("recovery_authorization_sha256"):
             raise refuse("apply.evidence_mismatch", "the recovery authorization changed after authorization")
-    if evidence.get("recovery_authorization_sha256") is not None:
+    if evidence.get("recovery_authorization_sha256") is not None and evidence.get("authorization_mode") == OWNER_POLICY_MODE:
+        policy = validate_owner_update_policy(
+            product_root, store, manifest, installed=transaction["installed"],
+            host_identity=transaction["host_identity"], now=now)
+        revalidated = validate_owner_update_approval(
+            authorization_path,
+            _unlinked_product_path(product_root, request["recovery_signature"], "Owner approval signature"),
+            store, policy=policy, manifest=manifest, product_root=product_root,
+            receipt_sha256=evidence["backup_receipt_sha256"], now=now, state_dir=state_dir)
+        for key in ("request_id", "authorization_mode", "signature_sha256", "policy_sha256",
+                    "policy_signature_sha256", "restore_evidence_sha256", "separate_key_custody_verified"):
+            expected_key = "recovery_request_id" if key == "request_id" else key
+            if revalidated[key] != evidence.get(expected_key):
+                raise refuse("apply.evidence_mismatch", "Owner authorization evidence changed after authorization")
+    elif evidence.get("recovery_authorization_sha256") is not None:
         if not request.get("recovery_signature_2"):
             raise refuse("preflight.recovery.approval_missing",
                          "the second recovery approval signature is missing at apply time")
@@ -2973,6 +3429,13 @@ def _rebind_apply(request: Mapping[str, object], product_root: Path, transaction
         if revalidated.get("request_id") != evidence.get("recovery_request_id"):
             raise refuse("apply.evidence_mismatch",
                          "the recovery request changed after authorization")
+
+    host_service = _validate_host_service_archive(
+        product_root, manifest, resolve_inside(product_root, request["manifest"], "request.manifest"))
+    if host_service is not None:
+        if (host_service["plan_sha256"] != evidence.get("host_service_plan_sha256")
+                or host_service["archive_sha256"] != evidence.get("host_service_archive_sha256")):
+            raise refuse("apply.evidence_mismatch", "host servicing plan changed after authorization")
 
     # No host, installed-image or journal snapshot is accepted in apply JSON.
     # Query the independently authenticated broker after all evidence hashing.

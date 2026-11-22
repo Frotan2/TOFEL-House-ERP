@@ -49,10 +49,17 @@ class OfflineInstallerSigningTests(unittest.TestCase):
                       verification)
 
     def test_existing_installer_never_reinitializes_a_site(self):
-        existing = SETUP.split("if (Directory.Exists(target)) {", 1)[1].split(
+        self.assertIn("bool existing = Directory.Exists(target);", SETUP)
+        existing = SETUP.split("if (existing) {", 1)[1].split(
             "Directory.CreateDirectory(parent);", 1)[0]
         self.assertIn("Launch(target, false);", existing)
         self.assertNotIn("Launch(target, true);", existing)
+        servicing = SETUP.split("if (existing) {", 2)[2].split(
+            'File.WriteAllText(Path.Combine(extracted, ".payload-sha256")', 1)[0]
+        self.assertIn("if (!HasServicingPayload(extracted))", servicing)
+        self.assertIn("ServiceExisting(target, extracted, exe);", servicing)
+        self.assertIn("Launch(target, false);", servicing)
+        self.assertNotIn("Launch(target, true);", servicing)
         self.assertIn("Launch(target, true);", SETUP)
 
     def test_archive_validation_runs_before_extracting_any_file(self):
