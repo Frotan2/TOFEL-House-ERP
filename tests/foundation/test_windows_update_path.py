@@ -98,9 +98,12 @@ class UpdateWorkflowTests(unittest.TestCase):
         self.assertIn("/product/update_entrypoint.sh", engine_call)
         # The site and log folders are only shared with the migrating engine.
         self.assertIn('if ($Mode -ceq "apply")', engine_call)
-        apply_branch = engine_call[engine_call.index('if ($Mode -ceq "apply")'):engine_call.index("} else {")]
+        mode_branches = engine_call[engine_call.index('if ($Mode -ceq "apply")'):]
+        apply_branch, check_branch = mode_branches.split("} else {", 1)
         self.assertIn("sitesRoot", apply_branch)
-        self.assertNotIn("sitesRoot", engine_call[engine_call.index("} else {"):])
+        self.assertIn("logsRoot", apply_branch)
+        self.assertNotIn("sitesRoot", check_branch)
+        self.assertNotIn("logsRoot", check_branch)
 
     def test_legacy_and_hardened_engine_observer_selection_is_pinned(self):
         """New installs need broker on Check; legacy installs must not get the socket."""
@@ -116,7 +119,9 @@ class UpdateWorkflowTests(unittest.TestCase):
         check = UPDATE[UPDATE.index("function Invoke-UpdateCheck"):
                        UPDATE.index("function Invoke-UpdateStart")]
         self.assertIn('$script:EngineImage = [string]$installed.image_id', check)
-        self.assertIn('$script:UseObserver = Test-ImageRequiresObserver $script:EngineImage', check)
+        self.assertIn('$script:UseObserver = if ($script:ServicingRuntime) { $true } else { '
+                      'Test-ImageRequiresObserver $script:EngineImage }', check)
+        self.assertIn('$script:ServicingRuntime = Get-VerifiedOwnerServicingRuntime $runtimeRoot', UPDATE)
         self.assertIn('ObserverRequired = [bool]$script:UseObserver', check)
         install = UPDATE[UPDATE.index("function Invoke-UpdateInstall"):
                          UPDATE.index("function Invoke-SmokeTest")]

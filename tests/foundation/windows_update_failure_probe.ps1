@@ -77,6 +77,7 @@ try {
     try { Test-ImageRequiresObserver $imageId; throw 'Probe infrastructure failure was accepted' }
     catch { if ($_.Exception.Message -cne 'updater.guard_blocked') { throw } }
 
+    . (Import-ProbeFunction 'Get-AuthorizedRuntimeImageId')
     . (Import-ProbeFunction 'Invoke-UpdateInstall' $true)
     function Invoke-EngineStep {
         param($Mode, $Request, $Version)
@@ -90,6 +91,9 @@ try {
         return $script:ApplyReport
     }
     function Get-InstalledImage { return [pscustomobject]@{Id=('sha256:' + ('b' * 64))} }
+    # This probe substitutes Docker throughout. Model the unchanged observed
+    # database identity; its actual observation has separate focused coverage.
+    function Get-PreservedDatabaseIdentity { return ('e' * 64) }
     function Assert-EngineAllowed { param($Response, $Version)
         if ($Response.decision -cne 'allow') { throw 'not allowed' }
     }
