@@ -391,9 +391,17 @@ function Protect-UpdateFolder {
 # ---------------------------------------------------------------------------
 
 function Invoke-Docker([string[]]$DockerArguments) {
-    $output = @(& docker @DockerArguments 2>&1)
-    $code = $LASTEXITCODE
-    return [pscustomobject]@{ Code = [int]$code; Output = $output }
+    $previousPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell 5.1 represents native stderr progress as
+        # ErrorRecords. Capture it as text and retain the actual exit code.
+        $ErrorActionPreference = 'Continue'
+        $global:LASTEXITCODE = $null
+        $output = @(& docker @DockerArguments 2>&1)
+        $code = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $previousPreference }
+    if ($null -eq $code) { throw 'Docker did not report a native exit code.' }
+    return [pscustomobject]@{ Code = [int]$code; Output = @($output | ForEach-Object { [string]$_ }) }
 }
 
 function Invoke-DockerVerbose([string[]]$DockerArguments) {
