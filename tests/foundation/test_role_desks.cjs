@@ -156,6 +156,18 @@ const commandPages = fs.readFileSync(path.join(APP, "public/js/th_command_pages.
 assert(commandPages.includes('roster: "toefl_house.teaching.attendance_roster"'),
 	"the Attendance Recorder must mark students from the class list");
 assert(!/json\("statuses"/.test(commandPages), "attendance marks must never be typed as JSON");
+// Assessment facets are configured through the Owner's numeric forms
+// (configure_initial_assessment / revise_grading_weights); raw JSON facet
+// editors stay server-only and are never offered on a desk.
+for (const facet of ["components", "weights", "pass_rules", "rubrics", "progression", "retakes", "mapping"]) {
+	assert(!client.toefl_house.role_desks.actionFields[`toefl_house.academic.set_assessment_${facet}`],
+		`no desk may offer a raw-JSON ${facet} editor`);
+}
+for (const [endpoint, fields] of Object.entries(client.toefl_house.role_desks.actionFields)) {
+	for (const field of fields) {
+		assert(!/\bJSON\b/.test(field.label || ""), `${endpoint}.${field.fieldname} asks staff to type JSON`);
+	}
+}
 
 assert.deepStrictEqual(Object.keys(surfaces).sort(), Object.keys(EXPECTED).sort(),
 	"the desk surface set changed");

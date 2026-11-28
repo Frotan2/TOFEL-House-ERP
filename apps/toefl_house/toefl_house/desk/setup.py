@@ -859,17 +859,6 @@ def _assessment_next(policy, readiness, governing):
     return f"{code} is retired; it governs nothing."
 
 
-FACET_ACTIONS = (
-    ("toefl_house.academic.set_assessment_components", "Set components"),
-    ("toefl_house.academic.set_assessment_weights", "Set weights"),
-    ("toefl_house.academic.set_assessment_pass_rules", "Set pass rules"),
-    ("toefl_house.academic.set_assessment_rubrics", "Set rubrics"),
-    ("toefl_house.academic.set_assessment_progression", "Set progression"),
-    ("toefl_house.academic.set_assessment_retakes", "Set retakes"),
-    ("toefl_house.academic.set_assessment_mapping", "Set level mapping"),
-)
-
-
 def _assessment_actions(policy, readiness, *, graded):
     """Exactly the version/facet/status/validate actions the server allows.
 

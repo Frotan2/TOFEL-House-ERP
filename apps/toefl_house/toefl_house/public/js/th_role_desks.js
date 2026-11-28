@@ -1211,48 +1211,6 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "reason", label: "Why the grading rule is changing", fieldtype: "Small Text", reqd: 1 },
 			{ fieldname: "grading_scale", label: "New grade scale (optional; blank keeps the old one)", fieldtype: "Select", options: "__owner_choice:grading_scale__" },
 		],
-		"toefl_house.academic.set_assessment_components": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "components", label: "Components (JSON list of code, title, maximum score, optional native criteria; empty list withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
-		"toefl_house.academic.set_assessment_weights": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "weights", label: "Weights (JSON list of component code with a non-negative number; empty list withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
-		"toefl_house.academic.set_assessment_pass_rules": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "pass_rules", label: "Pass rules (JSON object with per-component and overall minima, each a percent or a grade code; empty object withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
-		"toefl_house.academic.set_assessment_rubrics": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "rubrics", label: "Rubrics (JSON list of code, title, optional component, required evidence list, optional rating levels; empty list withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
-		"toefl_house.academic.set_assessment_progression": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "progression", label: "Progression (JSON object with required evidence list and target level; empty object withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
-		"toefl_house.academic.set_assessment_retakes": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "retakes", label: "Retakes (JSON object with attempt limit, wait, scope and governing attempt, all explicit; empty object withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
-		"toefl_house.academic.set_assessment_mapping": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "mapping", label: "Level mapping (JSON object with the governed level codes; empty object withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
 		"toefl_house.academic.set_assessment_policy_status": [
 			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "active", label: "Active", fieldtype: "Select", options: "1\n0", reqd: 1, description: "0 retires the policy; it governs nothing while retired." },
@@ -1332,9 +1290,10 @@ frappe.provide("toefl_house.role_desks");
 		 * desk's Teaching compensation section prefills these dialogs from
 		 * the native contract/instructor facts. The dialogs mirror the
 		 * reviewed command signatures; the server validates everything.
-		 * Skill terms and adjustments are structured owner-entered JSON
-		 * (max 10 rows each); the default empty list is what a Fixed Salary
-		 * contract records. */
+		 * Skill terms and adjustments are entered as ordinary rows (see
+		 * teachingContractForm) and serialized by the client; these
+		 * placeholders only mirror the command signature. An empty list
+		 * is what a Fixed Salary contract records. */
 		"toefl_house.teaching.compensation.create_teaching_contract": [
 			{ fieldname: "instructor", label: "Instructor", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "employee", label: "Employee (payroll record)", fieldtype: "Data", reqd: 1 },
@@ -1344,8 +1303,8 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "effective_start", label: "Effective start", fieldtype: "Date", reqd: 1 },
 			{ fieldname: "effective_end", label: "Effective end (blank = open)", fieldtype: "Date" },
 			{ fieldname: "conditions", label: "Conditions", fieldtype: "Small Text" },
-			{ fieldname: "skill_terms", label: "Skill terms (JSON list: skill, unit_of_payment, rate, payable_quantity, optional minimum_amount/maximum_amount; required for Skill-Based and Hybrid, empty list for Fixed Salary)", fieldtype: "Small Text", default: "[]" },
-			{ fieldname: "adjustments", label: "Adjustments (JSON list: adjustment_type Bonus or Deduction, amount, effective_date, approver, reason)", fieldtype: "Small Text", default: "[]" },
+			{ fieldname: "skill_terms", label: "Skill terms (built from the pay-skill rows; never shown)", fieldtype: "Small Text", default: "[]" },
+			{ fieldname: "adjustments", label: "Adjustments (built from the adjustment rows; never shown)", fieldtype: "Small Text", default: "[]" },
 			{ fieldname: "earning_basis", label: "Skill earning basis", fieldtype: "Select", options: "One-off\nSolar Hijri Monthly", default: "One-off", reqd: 1 },
 		],
 		"toefl_house.teaching.compensation.revise_teaching_contract": [
@@ -1356,8 +1315,8 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "effective_start", label: "Effective start (must start after the replaced contract)", fieldtype: "Date", reqd: 1 },
 			{ fieldname: "effective_end", label: "Effective end (blank = open)", fieldtype: "Date" },
 			{ fieldname: "conditions", label: "Conditions", fieldtype: "Small Text" },
-			{ fieldname: "skill_terms", label: "Skill terms (JSON list: skill, unit_of_payment, rate, payable_quantity, optional minimum_amount/maximum_amount; required for Skill-Based and Hybrid, empty list for Fixed Salary)", fieldtype: "Small Text", default: "[]" },
-			{ fieldname: "adjustments", label: "Adjustments (JSON list: adjustment_type Bonus or Deduction, amount, effective_date, approver, reason)", fieldtype: "Small Text", default: "[]" },
+			{ fieldname: "skill_terms", label: "Skill terms (built from the pay-skill rows; never shown)", fieldtype: "Small Text", default: "[]" },
+			{ fieldname: "adjustments", label: "Adjustments (built from the adjustment rows; never shown)", fieldtype: "Small Text", default: "[]" },
 			{ fieldname: "earning_basis", label: "Skill earning basis (blank keeps the existing basis)", fieldtype: "Select", options: "\nOne-off\nSolar Hijri Monthly" },
 		],
 		"toefl_house.teaching.compensation.calculate_teaching_compensation": [

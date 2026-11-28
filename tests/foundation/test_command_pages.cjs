@@ -269,3 +269,96 @@ assert(!dialogs[0].hidden, "RPC error must not close a retryable command dialog"
 }
 
 console.log("D10 native-dialog client smoke OK");
+
+// Placement authoring builders: authors fill ordinary fields and the page
+// assembles the exact structure the server validator accepts. No raw JSON
+// editor may reappear, and a malformed entry never reaches the server.
+{
+	assert(!/fieldtype: "Code"/.test(source), "command pages must not expose a raw code/JSON editor");
+	const authorButtons = [];
+	const authorDialogs = [];
+	const authorCalls = [];
+	const messages = [];
+	function authorJq(markup) {
+		const chain = {
+			on(event, callback) { if (event === "click" && String(markup).startsWith("<button")) authorButtons.push(callback); return chain; },
+			prop() { return chain; }, attr() { return chain; }, addClass() { return chain; },
+			text() { return chain; }, appendTo() { return chain; }, empty() { return chain; }, append() { return chain; },
+		};
+		return chain;
+	}
+	class AuthorDialog {
+		constructor(options) { this.options = options; authorDialogs.push(this); }
+		show() { this.shown = true; }
+		hide() { this.hidden = true; }
+	}
+	const author = {
+		__: (label) => label,
+		window: { crypto: { getRandomValues(bytes) { for (let i = 0; i < bytes.length; i++) bytes[i] = i + 7; return bytes; } } },
+		$: authorJq,
+		frappe: {
+			pages: { "th-placement-author": { tagName: "DIV" } }, user_roles: ["Placement Author"],
+			provide(dotted) { let target = author; for (const part of dotted.split(".")) target = target[part] ||= {}; },
+			require(_paths, callback) { if (callback) callback(); },
+			ui: { make_app_page() { return { main: authorJq("<main") }; }, Dialog: AuthorDialog },
+			msgprint(message) { messages.push(message); },
+			show_alert() {},
+			call(options) { authorCalls.push(options); },
+		},
+	};
+	vm.runInNewContext(source, author, { filename: SCRIPT });
+	author.frappe.pages["th-placement-author"].on_page_load({});
+	const open = (label) => {
+		const before = authorDialogs.length;
+		for (const click of authorButtons) {
+			click();
+			if (authorDialogs.length > before && authorDialogs.at(-1).options.title === label) return authorDialogs.at(-1);
+		}
+		throw new Error(`no dialog titled ${label}`);
+	};
+	const fieldnames = (dialog) => dialog.options.fields.map((field) => field.fieldname).filter(Boolean);
+
+	const item = open("Create item draft");
+	assert(!fieldnames(item).includes("content"), "the question carrier must not be shown");
+	assert(fieldnames(item).includes("q_option_a") && fieldnames(item).includes("q_answer"));
+	const question = { request_key: "K".repeat(24), family: "SYN-FAM", revision: 1, q_skill: "Grammar",
+		q_difficulty: "Core", q_type: "Single Choice", q_prompt: "SYNTHETIC: Choose the verb.",
+		q_option_a: "run ", q_option_b: "blue", q_option_c: "", q_answer: "A" };
+	item.options.primary_action({ ...question, q_answer: "C" });
+	assert.strictEqual(authorCalls.length, 0, "an answer pointing at a blank option must be refused client-side");
+	assert(/filled options/.test(messages.at(-1)));
+	item.options.primary_action({ ...question, q_option_c: "", q_option_d: "gap" });
+	assert.strictEqual(authorCalls.length, 0, "option gaps must be refused client-side");
+	item.options.primary_action(question);
+	assert.strictEqual(authorCalls.at(-1).method, "toefl_house.api.create_draft");
+	assert.deepStrictEqual(Object.keys(authorCalls.at(-1).args).sort(), ["content", "family", "request_key", "revision"]);
+	assert.deepStrictEqual(JSON.parse(authorCalls.at(-1).args.content), {
+		skill: "Grammar", difficulty: "Core", question_type: "Single Choice", prompt: "SYNTHETIC: Choose the verb.",
+		options: [{ id: "a", text: "run" }, { id: "b", text: "blue" }], answer: "a" });
+	item.options.primary_action({ ...question, q_type: "True False", q_answer: "False" });
+	assert.deepStrictEqual(JSON.parse(authorCalls.at(-1).args.content).options,
+		[{ id: "true", text: "True" }, { id: "false", text: "False" }]);
+	assert.strictEqual(JSON.parse(authorCalls.at(-1).args.content).answer, "false");
+
+	const config = open("Create configuration draft");
+	const base = { request_key: "C".repeat(24), code: "SYN-BP", revision: 1 };
+	config.options.primary_action({ ...base, config: "blueprint", bp_mode: "Digital", bp_sections: [
+		{ idx: 1, name: "row1", id: "reading", skill: "Reading", minutes: 30, item_count: 10 },
+		{ idx: 2, name: "row2", id: "grammar", skill: "Grammar", minutes: "20", item_count: 15 },
+		{ idx: 3, name: "blank" }] });
+	assert.deepStrictEqual(JSON.parse(authorCalls.at(-1).args.definition), { mode: "Digital", total_minutes: 50, sections: [
+		{ id: "reading", skill: "Reading", minutes: 30, item_count: 10 },
+		{ id: "grammar", skill: "Grammar", minutes: 20, item_count: 15 }] });
+	const calls = authorCalls.length;
+	config.options.primary_action({ ...base, config: "blueprint", bp_mode: "Digital",
+		bp_sections: [{ id: "Reading", skill: "Reading", minutes: 30, item_count: 10 }] });
+	assert.strictEqual(authorCalls.length, calls, "invalid section IDs must be refused client-side");
+	config.options.primary_action({ ...base, config: "policy", pol_result_validity_days: 180, pol_retest_wait_days: 0,
+		pol_release_working_days: 3, pol_appeal_working_days: 5, pol_retention_years: 7 });
+	assert.deepStrictEqual(JSON.parse(authorCalls.at(-1).args.definition), { result_validity_days: 180,
+		retest_wait_days: 0, release_working_days: 3, appeal_working_days: 5, retention_years: 7 });
+	config.options.primary_action({ ...base, config: "course_map", cm_entries: [{ internal_level: "SYN-L1", course_code: "SYN-C1" }] });
+	assert.deepStrictEqual(JSON.parse(authorCalls.at(-1).args.definition), { algorithm: "course-map-v1",
+		entries: [{ internal_level: "SYN-L1", course_code: "SYN-C1", match: "any_correct" }] });
+	console.log("Placement authoring builders OK");
+}
