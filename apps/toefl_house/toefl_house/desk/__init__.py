@@ -311,6 +311,13 @@ PROJECTION_FIELDS = {
     ("management", "Has Role"): [
         "name", "parent", "role", "parenttype",
     ],
+    # Teacher identity readiness (same native chain the Teacher desk uses).
+    ("management", "Employee"): [
+        "name", "employee_name", "status", "user_id",
+    ],
+    ("management", "Instructor"): [
+        "name", "instructor_name", "employee", "status",
+    ],
     ("management", "User"): [
         "name",
     ],

@@ -18,6 +18,7 @@ from toefl_house.desk import (
     project_rows,
     report_section,
     require_desk_audience,
+    scope_filters,
     section,
     viewer_roles,
 )
@@ -132,6 +133,76 @@ def _role_items(counts):
         "next_role": "Course Owner" if count == 0 else None,
         "waiting_since": None,
     } for role, count in counts.items()]
+
+
+def _teacher_link_items():
+    """Instructor logins the Teacher desk cannot resolve, before they log in.
+
+    Mirrors desk.teacher._resolve_instructor: an enabled login holding the
+    Instructor role needs exactly one Active Employee whose User ID is that
+    login, and exactly one non-Left Instructor on that Employee. Anything
+    else leaves the teacher with an empty desk and no attendance access.
+
+    Only an unscoped (HQ) viewer gets these rows: a Company/Branch-scoped
+    viewer cannot see other branches' Employees, so every teacher there
+    would be falsely reported as unlinked.
+    """
+    if scope_filters("management"):
+        return []
+    holders = sorted({row["parent"]
+                      for row in project_rows("management", "Has Role",
+                                              ["name", "parent", "role", "parenttype"],
+                                              filters={"role": "Instructor", "parenttype": "User"},
+                                              order_by="parent asc", limit=BOUNCE_WINDOW)
+                      if row.get("parent") not in (None, "Administrator", "Guest", "")})
+    if not holders:
+        return []
+    enabled = [row["name"] for row in project_rows(
+        "management", "User", ["name"], filters={"name": ("in", holders), "enabled": 1},
+        order_by="name asc", limit=BOUNCE_WINDOW)]
+    if not enabled:
+        return []
+    employees = {}
+    for row in project_rows("management", "Employee", ["name", "employee_name", "status", "user_id"],
+                            filters={"user_id": ("in", enabled), "status": "Active"},
+                            order_by="name asc", limit=BOUNCE_WINDOW):
+        employees.setdefault(row.get("user_id"), []).append(row)
+    single = sorted(rows[0]["name"] for rows in employees.values() if len(rows) == 1)
+    instructors = {}
+    if single:
+        for row in project_rows("management", "Instructor", ["name", "instructor_name", "employee", "status"],
+                                filters={"employee": ("in", single)}, order_by="name asc",
+                                limit=BOUNCE_WINDOW):
+            if row.get("status") != "Left":
+                instructors.setdefault(row.get("employee"), []).append(row)
+    items = []
+    for user in enabled:
+        rows = employees.get(user, [])
+        if not rows:
+            problem = "No active Employee record has this login as its User ID."
+        elif len(rows) > 1:
+            problem = "More than one active Employee record uses this login."
+        else:
+            employee = rows[0]["name"]
+            linked = len(instructors.get(employee, []))
+            if linked == 1:
+                continue
+            problem = (f"Employee {employee} has no active Instructor record." if not linked
+                       else f"Employee {employee} has more than one active Instructor record.")
+        items.append({
+            "id": "teacher-link-" + user,
+            "person": user,
+            "detail": problem,
+            "status": "Not linked",
+            "stage": "Teacher login",
+            "stage_definition": ("A teacher sees classes and records attendance only when the "
+                                 "login, one active Employee and one active Instructor are linked."),
+            "next": ("On the Employee record set User ID to this login, then select that "
+                     "Employee on exactly one active Instructor record."),
+            "next_role": "Course Owner",
+            "waiting_since": None,
+        })
+    return items
 
 
 def _age_label(value):
@@ -668,7 +739,7 @@ def work():
                     items=_recorded_action_items(),
                     empty_title="No recorded actions yet",
                     empty_body="When staff complete an important action, the record appears here. The full trail stays with auditor roles."),
-            section("staffing", "Role coverage", "queue", items=_role_items(staff_counts),
+            section("staffing", "Role coverage", "queue", items=_role_items(staff_counts) + _teacher_link_items(),
                     empty_title="No operational roles",
                     empty_body="No shipped operational role is assigned to an enabled user."),
             section("health", "System health (native facts)", "queue", items=health_items,

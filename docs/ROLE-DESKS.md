@@ -362,6 +362,12 @@ Reception (find person) → record_applicant → create_admission
   role list, exactly the check native `query_report` performs. No report
   rights are granted by the desk; give a user the native role (e.g.
   Accounts User, Academics User) if a report should appear.
+- **Teacher login readiness.** For an unscoped (HQ) viewer, *Role coverage*
+  on the General Manager desk and Owner cockpit lists every enabled
+  Instructor login the Teacher desk cannot resolve (no active Employee with
+  that User ID, several, or no single active Instructor on it), with the
+  native fix. Branch-scoped viewers do not get these rows, because they
+  cannot see other branches' Employees.
 - **Attendance and placement authoring never ask for JSON.** The Attendance
   Recorder marks students from the class list; Placement Authors fill
   question, blueprint, policy and course-map forms.

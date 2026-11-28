@@ -43,7 +43,7 @@ except Exception:  # pragma: no cover
 from toefl_house.desk import lifecycle
 from toefl_house.desk.operations import (
     _staff_counts, _role_items, _age_label, _recorded_action_items,
-    _funnel_and_exceptions, _system_health,
+    _funnel_and_exceptions, _system_health, _teacher_link_items,
 )
 
 SLUG = "th-owner-cockpit"
@@ -623,7 +623,7 @@ def cockpit():
             section("health", "System health counts", "facts", facts=health_facts,
                     empty_title="No health facts yet",
                     empty_body="Health counts appear once the native scheduler tables exist. Failed-job detail lives on the General Manager desk; tracebacks stay on the native forms."),
-            section("staffing", "Role coverage", "queue", items=_role_items(_staff_counts()),
+            section("staffing", "Role coverage", "queue", items=_role_items(_staff_counts()) + _teacher_link_items(),
                     empty_title="No operational roles",
                     empty_body="No shipped operational role is assigned to an enabled user."),
             section("desks", "Your desks", "links", items=desks_for_viewer,

@@ -2061,6 +2061,57 @@ class ManagementCorrectionsWorldTests(unittest.TestCase):
         self.assertNotIn("COR-3", items, "only pending requests are exceptions")
 
 
+class TeacherLinkReadinessWorldTests(unittest.TestCase):
+    """Role coverage flags Instructor logins the Teacher desk cannot resolve."""
+
+    def _items(self):
+        def role(user):
+            return {"name": "HR-" + user, "parent": user, "role": "Instructor", "parenttype": "User"}
+        world = {
+            "Has Role": [role(u) for u in ("ok@x.test", "noemp@x.test", "twoemp@x.test",
+                                           "noinst@x.test", "left@x.test", "off@x.test")],
+            "User": [{"name": u, "enabled": 0 if u == "off@x.test" else 1}
+                     for u in ("ok@x.test", "noemp@x.test", "twoemp@x.test", "noinst@x.test",
+                               "left@x.test", "off@x.test")],
+            "Employee": [
+                {"name": "EMP-OK", "employee_name": "Ok", "status": "Active", "user_id": "ok@x.test"},
+                {"name": "EMP-A", "employee_name": "A", "status": "Active", "user_id": "twoemp@x.test"},
+                {"name": "EMP-B", "employee_name": "B", "status": "Active", "user_id": "twoemp@x.test"},
+                {"name": "EMP-NI", "employee_name": "Ni", "status": "Active", "user_id": "noinst@x.test"},
+                {"name": "EMP-L", "employee_name": "L", "status": "Active", "user_id": "left@x.test"},
+                {"name": "EMP-GONE", "employee_name": "Gone", "status": "Left", "user_id": "noemp@x.test"},
+            ],
+            "Instructor": [
+                {"name": "INS-OK", "instructor_name": "Ok", "employee": "EMP-OK", "status": "Active"},
+                {"name": "INS-L", "instructor_name": "L", "employee": "EMP-L", "status": "Left"},
+            ],
+        }
+        world_get_all = desk_world_get_all("teacher link world", world)
+        module = _import_desk("operations", roles={"General Manager"})
+        module.frappe.get_all = world_get_all
+        module.frappe.db.get_all = world_get_all
+        staffing = next(sect for sect in module.work()["sections"] if sect["id"] == "staffing")
+        return {item["person"]: item for item in staffing["items"] if item["stage"] == "Teacher login"}
+
+    def test_only_unresolvable_enabled_teacher_logins_are_flagged(self):
+        items = self._items()
+        self.assertEqual(set(items), {"noemp@x.test", "twoemp@x.test", "noinst@x.test", "left@x.test"})
+        self.assertIn("No active Employee", items["noemp@x.test"]["detail"])
+        self.assertIn("More than one active Employee", items["twoemp@x.test"]["detail"])
+        self.assertIn("EMP-NI has no active Instructor", items["noinst@x.test"]["detail"])
+        self.assertIn("EMP-L has no active Instructor", items["left@x.test"]["detail"])
+        self.assertTrue(all(item["next_role"] == "Course Owner" for item in items.values()))
+
+    def test_branch_scoped_viewer_gets_no_false_unlinked_rows(self):
+        def world_get_all(doctype, filters=None, fields=None, **kwargs):
+            if doctype == "User Permission":
+                return ["Kabul Branch"] if (filters or {}).get("allow") == "Branch" else []
+            raise AssertionError(f"a scoped viewer must not read {doctype} for teacher links")
+        module = _import_desk("operations", roles={"General Manager"})
+        module.frappe.get_all = world_get_all
+        self.assertEqual(module._teacher_link_items(), [])
+
+
 class AcademicClassActionsWorldTests(unittest.TestCase):
     """U1: the classes section drives the real teaching commands.
 

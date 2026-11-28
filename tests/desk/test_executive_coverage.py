@@ -345,6 +345,7 @@ def run_owner_cockpit(*, deny_counts=False, deny_operational=False):
         "_staff_counts": lambda: [],
         "position_facts": lambda: [],
         "report_section": lambda reports: [],
+        "_teacher_link_items": lambda: [],
         "FINANCE_REPORTS": (),
         "ACADEMIC_REPORTS": (),
         "_recorded_action_items": lambda: [],
