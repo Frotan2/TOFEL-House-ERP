@@ -21,6 +21,7 @@ Commands:
   internal-enrollment --confirm SITE validate two public key records on stdin
   internal-activate --confirm SITE apply independent approvals and run the activation gates
   customer-activate --confirm SITE apply a developer-authorized factory release after verified backup
+  owner-activate --confirm SITE --owner NAME  Windows Owner activation after verified backup
   deactivate --confirm SITE       runbook step 8 (rollback to REFUSED)
   fee-item --confirm SITE CODE    runbook step 7 (existing native Item only)
 """
@@ -645,6 +646,50 @@ def activate_internal(site: str, log=print) -> None:
     log("Internal activation approved for this installation. Public release status is unchanged.")
 
 
+OWNER_ACTIVATION_RECORD = "owner-activation.json"
+
+
+def _owner_name(value: object) -> str:
+    name = " ".join(str(value or "").split())
+    if (not 2 <= len(name) <= 140 or not any(char.isalpha() for char in name)
+            or any(not char.isprintable() and char not in "\u200c\u200d" for char in name)):
+        raise Refused("type the Owner's full name to confirm activation")
+    return name
+
+
+def activate_owner(site: str, owner_name: object, log=print) -> None:
+    """Owner activation at the institute's own Windows host.
+
+    For one institute's internal use the trust boundary is the host itself:
+    anyone who can run this already controls site_config. Proportionate
+    gates are kept and enforced here: a verified factory installation, a
+    fresh verified encrypted backup on the separate drive matching the
+    Owner backup policy, a REFUSED site, every activation gate proof with
+    automatic rollback, and the Owner's typed name. The decision is recorded
+    in the site's private folder.
+    """
+    name = _owner_name(owner_name)
+    now = datetime.now(timezone.utc)
+    context = internal_activation_context(site, now)
+    if probe(site)["mode"] != "REFUSED":
+        raise Refused("activation requires a site in REFUSED mode")
+    activate(site, log, expected_backup_sha256=context["backup_receipt_sha256"],
+             verified_internal_catalog=True)
+    record_path = config_path(site).parent / "private" / OWNER_ACTIVATION_RECORD
+    entry = {"activated_at": now.isoformat(), "owner": name, "site": site,
+             "installation": context["installation"],
+             "backup_receipt_sha256": context["backup_receipt_sha256"]}
+    try:
+        history = json.loads(record_path.read_text(encoding="utf-8")) if record_path.is_file() else []
+        if not isinstance(history, list):
+            history = []
+        record_path.parent.mkdir(mode=0o700, exist_ok=True)
+        record_path.write_text(json.dumps(history + [entry], indent=1) + "\n", encoding="utf-8")
+    except (OSError, ValueError) as exc:
+        log(f"WARNING: activation succeeded but its record could not be written ({exc}).")
+    log(f"Activated for daily use by {name}. Keep the encrypted backup drive safe.")
+
+
 def activate_customer(site: str, log=print) -> None:
     from customer_release import verify
 
@@ -773,8 +818,10 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command", choices=("status", "activate", "deactivate", "fee-item",
                                             "internal-context", "internal-enrollment",
-                                            "internal-activate", "customer-activate"))
+                                            "internal-activate", "customer-activate",
+                                            "owner-activate"))
     parser.add_argument("--confirm")
+    parser.add_argument("--owner")
     parser.add_argument("code", nargs="?")
     args = parser.parse_args(argv)
     site = SITE_NAME
@@ -797,12 +844,14 @@ def main(argv=None) -> int:
             print(json.dumps({"trust_b64": base64.b64encode(encoded).decode("ascii"), "approvers": summary}))
         elif args.command == "internal-activate":
             activate_internal(site)
+        elif args.command == "owner-activate":
+            activate_owner(site, args.owner)
         elif args.command == "customer-activate":
             activate_customer(site)
         elif args.command == "activate":
             identity = ACTIVATION_DIR / "installed-image-identity.json"
             if identity.exists() or identity.is_symlink():
-                raise Refused("Windows installations require separately authorized internal activation")
+                raise Refused("Windows installations are activated with owner-activate")
             activate(site)
         elif args.command == "deactivate":
             deactivate(site)
