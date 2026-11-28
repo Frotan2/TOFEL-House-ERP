@@ -437,6 +437,6 @@ def work():
                     empty_body="Recorded assessment results for my classes appear here exactly as recorded."),
             section("compensation", "Compensation facts", "queue", items=pay_items,
                     empty_title="No contracts on file",
-                    empty_body="Teaching contracts for this instructor appear here as identity and window facts; pay itself stays on native payroll."),
+                    empty_body="Your teaching contracts and their dates appear here. Pay itself is calculated in HR Payroll."),
         ],
     }

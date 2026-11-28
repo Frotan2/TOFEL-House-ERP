@@ -1,0 +1,34 @@
+/*
+ * The TOEFL House brand on the native desk and sign-in page: red on white.
+ * Only Frappe's own theme variables are set (light theme), so native
+ * components keep their structure and a Frappe upgrade cannot break them.
+ * The colour matches --th-accent in th_design_system.css.
+ */
+:root,
+:root[data-theme="light"] {
+	--th-brand: #c8102e;
+	--th-brand-hover: #a00d25;
+	--btn-primary: var(--th-brand);
+	--primary: var(--th-brand);
+	--primary-color: var(--th-brand);
+}
+
+:root[data-theme="light"] .btn.btn-primary,
+.page-card .btn.btn-primary {
+	color: #ffffff;
+}
+
+:root[data-theme="light"] .btn.btn-primary:hover,
+:root[data-theme="light"] .btn.btn-primary:focus-visible {
+	background-color: var(--th-brand-hover);
+	color: #ffffff;
+}
+
+/* A thin brand rule on the top bar and the sign-in card. */
+.navbar {
+	border-top: 3px solid var(--th-brand);
+}
+
+.page-card {
+	border-top: 4px solid var(--th-brand);
+}

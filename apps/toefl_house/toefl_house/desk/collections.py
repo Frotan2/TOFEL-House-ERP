@@ -64,7 +64,7 @@ def reception_sections(students=None):
                 dict(fees=row["name"], outstanding=row["outstanding_amount"], currency=row["currency"]))
         bills.append(item)
     collection = section("collections", "Collect tuition", "queue", items=bills,
-        empty_title="No tuition due in this preview", empty_body="Search for a student to find their submitted bills beyond this preview.")
+        empty_title="No tuition due in this list", empty_body="Search for a student to find all of their bills.")
     if students is not None:
         return [collection]
     receipts = [dict(id=row["name"], person=row["party"],
@@ -95,7 +95,7 @@ def finance_sections():
                 "Accept cash handover", dict(payment_entries=json.dumps(names), receipt_list="\n".join(names),
                     expected_amount=float(total), currency=currency))))
     return [section("reception-handovers", "Reception cash handovers", "queue", items=items,
-        empty_title="No unhanded receipts in this preview", empty_body="Each batch lists its exact receipts. Accepting cash moves it to main Cash without charging the student again.",
+        empty_title="No receipts waiting for handover", empty_body="Each batch lists its exact receipts. Accepting cash moves it to main Cash without charging the student again.",
         notes="This bounded preview is not the complete counter ledger. Hand over only the listed receipts.")]
 
 

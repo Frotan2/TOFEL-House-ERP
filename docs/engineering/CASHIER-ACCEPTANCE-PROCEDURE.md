@@ -42,9 +42,10 @@ authorization stays **REJECTED** until the Owner gates are separately closed.
 ## 1. Preconditions and safety rules
 
 Do all of this on a **separate, clean, disposable Windows 10/11 64-bit PC**
-with Docker Desktop (WSL 2). Follow the packaged
-`product/windows/OWNER ACCEPTANCE GUIDE.txt` steps 7–16 first (install, login,
-password change, synthetic records, stop/start, reboot persistence, repair).
+with Docker Desktop (WSL 2). Install, sign-in, stop/start, reboot persistence and repair were already
+accepted on the Owner PC; the packaged
+`product/windows/OWNER ACCEPTANCE GUIDE.txt` now lists only the remaining
+targeted checks.
 
 Stop immediately and do not proceed if any of the following is true:
 

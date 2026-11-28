@@ -70,14 +70,16 @@
 	--th-line-strong: #cdd5e0;
 	--th-line-faint: #eef2f7;
 
-	/* Brand accent - used for emphasis only, never as large fill, so the
-	 * eye is drawn to the next action rather than to decoration. */
-	--th-accent: #1f5fa8;
-	--th-accent-hover: #164a85;
+	/* Brand accent - The TOEFL House red on white. Used for emphasis only,
+	 * never as large fill, so the eye is drawn to the next action rather
+	 * than to decoration. White on this red is 5.9:1 (WCAG AA). The same
+	 * value is used by th_brand.css for the rest of the desk. */
+	--th-accent: #c8102e;
+	--th-accent-hover: #a00d25;
 	--th-accent-ink: #ffffff;
-	--th-accent-soft: #eaf1fa;
-	--th-accent-border: #c5d9f0;
-	--th-accent-muted: #4a7ab8;
+	--th-accent-soft: #fcebee;
+	--th-accent-border: #f2b8c2;
+	--th-accent-muted: #d9475f;
 
 	/* Status vocabulary - exactly five tones. The same tone always means the
 	 * same thing on every page, which is what makes a glance trustworthy. */
@@ -107,9 +109,9 @@
 	--th-shadow-1: 0 1px 2px rgba(27, 36, 48, 0.06), 0 1px 3px rgba(27, 36, 48, 0.05);
 	--th-shadow-2: 0 4px 12px rgba(27, 36, 48, 0.08);
 	--th-shadow-3: 0 8px 24px rgba(27, 36, 48, 0.10);
-	--th-shadow-focus: 0 0 0 3px rgba(31, 95, 168, 0.20);
+	--th-shadow-focus: 0 0 0 3px rgba(200, 16, 46, 0.20);
 
-	--th-focus-ring: 0 0 0 3px rgba(31, 95, 168, 0.35);
+	--th-focus-ring: 0 0 0 3px rgba(200, 16, 46, 0.35);
 	--th-focus-ring-inset: inset 0 0 0 2px var(--th-accent);
 
 	--th-duration: 140ms;

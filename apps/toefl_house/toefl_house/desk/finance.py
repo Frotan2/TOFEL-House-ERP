@@ -847,7 +847,7 @@ def work():
         "stage": "Teaching assignment",
         "stage_definition": ("An instructor skill assignment. The contract determines "
                              "one-off or Solar Hijri monthly earnings through native payroll."),
-        "next": "Run native payroll for the covering period. This desk does not calculate pay.",
+        "next": "Run payroll for this period in HR Payroll. This screen does not calculate pay.",
         "next_role": "Finance Officer",
         "waiting_since": row.get("effective_start"),
     } for row in assignments]
@@ -881,7 +881,7 @@ def work():
             book_shop = [section(
                 "book-shop", "Book sales and stock", "links", items=links,
                 empty_title="No book-shop shortcuts",
-                empty_body="Book sales require the native Books item group and stock.",
+                empty_body="Book sales start once the Books item group and its stock are set up.",
             )]
 
     cash_section, tax_section, history_section = _cash_close_sections(day)
@@ -899,25 +899,25 @@ def work():
                     empty_body="No payment has been received for today. Payments appear here the moment they are posted."),
             section("facts", "Money facts", "facts", facts=money_facts,
                     empty_title="No money facts yet",
-                    empty_body="Facts appear once the native billing and payment records exist."),
+                    empty_body="Totals appear once bills and payments are recorded."),
             section("outstanding", "Outstanding receivables", "queue",
                     items=[money_item(row, "Sales Invoice") for row in outstanding_invoices]
                           + [money_item(row, "Fees") for row in outstanding_fees],
                     empty_title="Nothing is outstanding",
-                    empty_body="No submitted invoice or fee carries an outstanding amount for your scope."),
+                    empty_body="No invoice or tuition bill you can see has money still owing."),
             section("placement-fees", "Placement fees to bill", "queue",
                     items=_placement_fee_items(),
                     empty_title="No placement case awaits a fee",
-                    empty_body="Every open placement case in this preview already has a placement invoice."),
+                    empty_body="Every open placement case shown here already has a placement invoice."),
             section("billing", "Awaiting billing", "queue", items=billing_items,
-                    empty_title="No billing action in this preview",
-                    empty_body="No currently visible submitted enrollment requires billing. This bounded desk preview is not a complete audit of all records."),
+                    empty_title="Nothing waiting to be billed",
+                    empty_body="No enrolled student shown here is waiting for a tuition bill. This list shows the most recent records only."),
             section("policy", "Correction policy", "facts", facts=policy_facts,
                     empty_title="No correction policy yet",
-                    empty_body="No correction policy version is recorded; new correction requests fail closed until a Finance Officer records the first version."),
+                    empty_body="No correction rules are set yet. Bill corrections are refused until a Finance Officer records the first rules."),
             section("policy-versions", "Policy versions", "queue", items=version_items,
                     empty_title="No policy versions",
-                    empty_body="No correction policy version is recorded; new correction requests fail closed until a Finance Officer records the first version."),
+                    empty_body="No correction rules are set yet. Bill corrections are refused until a Finance Officer records the first rules."),
             section("corrections", "Correction queue", "queue",
                     items=_correction_items(corrections, policies),
                     empty_title="No correction requests",
@@ -925,7 +925,7 @@ def work():
             section("assignments", "Teaching assignments (native payroll)", "queue",
                     items=assignment_items,
                     empty_title="No teaching assignments",
-                    empty_body="No instructor skill assignment is on file. Assignments appear here from teaching scheduling; pay stays on native payroll."),
+                    empty_body="No teacher is assigned to a class yet. Assignments appear here from class scheduling; pay is calculated in HR Payroll."),
             section("compensation", "Teaching compensation", "queue",
                     items=_compensation_items(contracts, instructors),
                     empty_title="No teaching compensation work yet",
@@ -1159,8 +1159,8 @@ def _cash_close_sections(day):
 
     cash = section("cash-close", "Cash close", "queue", items=items,
                    facts=facts,
-                   empty_title="No cash drawer in scope",
-                   empty_body="This company has no native physical Cash account yet. Bank balances require a separate bank-statement reconciliation.")
+                   empty_title="No cash drawer set up",
+                   empty_body="This company has no Cash account yet. Bank balances are checked separately against the bank statement.")
 
     history_items = [{
         "id": row["name"],
@@ -1226,7 +1226,7 @@ def _cash_close_sections(day):
     tax_section = section(
         "tax", "Tax configuration", "facts", facts=tax_facts,
         empty_title="No company tax state",
-        empty_body="No company is visible in your scope, so no native tax configuration can be reported.")
+        empty_body="No company is assigned to you, so there is no tax setting to show.")
 
     return cash, tax_section, history_section
 

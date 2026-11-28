@@ -44,7 +44,7 @@ frappe.provide("toefl_house.role_desks");
 		"th-finance-desk": {
 			endpoint: "toefl_house.desk.finance.work",
 			title: "TOEFL House Finance Desk",
-			description: "Today's collections, outstanding receivables, enrollments awaiting billing, teaching assignments for native payroll, and the correction queue.",
+			description: "Today's collections, money still owing, students waiting for a bill, teacher assignments for payroll, and bill corrections.",
 		},
 		"th-operations-desk": {
 			endpoint: "toefl_house.desk.operations.work",
@@ -64,7 +64,7 @@ frappe.provide("toefl_house.role_desks");
 		"th-teacher-desk": {
 			endpoint: "toefl_house.desk.teacher.work",
 			title: "TOEFL House Teacher Desk",
-			description: "My classes, today's sessions, attendance, students, academic work and compensation facts — assigned classes only, resolved through the native identity chain.",
+			description: "My classes, today's sessions, attendance, students, marks and pay details — only the classes assigned to me.",
 		},
 		"th-configuration": {
 			endpoint: "toefl_house.desk.configuration.work",
@@ -719,14 +719,14 @@ frappe.provide("toefl_house.role_desks");
 	const OWNER_POLICY_VERSION_FIELDS = [
 		{ fieldname: "policy", label: "Owner policy", fieldtype: "Data", reqd: 1, read_only: 1 },
 		{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
-		{ fieldname: "reporting_review_days", label: "Reporting review interval (decision input only; days)", description: "No current report runner consumes this value.", fieldtype: "Int", reqd: 1 },
-		{ fieldname: "capacity_target", label: "Class capacity target (decision input only)", description: "Planning target only. Class membership enforcement uses native Student Group max_strength, not this value.", fieldtype: "Int", reqd: 1 },
-		{ fieldname: "tax_enabled", label: "Tax enabled (decision input only)", description: "No current tax runtime reads these fields. Native ERPNext tax configuration remains authoritative.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
-		{ fieldname: "tax_rate", label: "Tax rate (decision input only; %)", description: "No current tax runtime reads this value. Native ERPNext tax configuration remains authoritative.", fieldtype: "Percent", reqd: 1 },
-		{ fieldname: "tax_inclusive", label: "Tax inclusive (decision input only)", description: "No current tax runtime reads this value. Native ERPNext tax configuration remains authoritative.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
-		{ fieldname: "transfer_allowed", label: "Transfers allowed (decision input only)", description: "No current transfer command reads this value; it does not enable transfer behavior.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
-		{ fieldname: "withdrawal_allowed", label: "Withdrawals allowed (decision input only)", description: "Withdrawals and dismissals are governed by TH Enrollment Exit Policy; this field is not consumed by that resolver.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
-		{ fieldname: "calendar_notice_days", label: "Calendar notice (decision input only; days)", description: "No current calendar or lifecycle scheduler enforces this value.", fieldtype: "Int", reqd: 1 },
+		{ fieldname: "reporting_review_days", label: "Reporting review interval (for reference, not enforced; days)", description: "No current report runner consumes this value.", fieldtype: "Int", reqd: 1 },
+		{ fieldname: "capacity_target", label: "Class capacity target (for reference, not enforced)", description: "Planning target only. The real limit is each class's maximum size.", fieldtype: "Int", reqd: 1 },
+		{ fieldname: "tax_enabled", label: "Tax enabled (for reference, not enforced)", description: "Not used for billing. Tax is set up in ERPNext accounting.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
+		{ fieldname: "tax_rate", label: "Tax rate (for reference, not enforced; %)", description: "Not used for billing. Tax is set up in ERPNext accounting.", fieldtype: "Percent", reqd: 1 },
+		{ fieldname: "tax_inclusive", label: "Tax inclusive (for reference, not enforced)", description: "Not used for billing. Tax is set up in ERPNext accounting.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
+		{ fieldname: "transfer_allowed", label: "Transfers allowed (for reference, not enforced)", description: "No current transfer command reads this value; it does not enable transfer behavior.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
+		{ fieldname: "withdrawal_allowed", label: "Withdrawals allowed (for reference, not enforced)", description: "Withdrawals and dismissals are governed by TH Enrollment Exit Policy; this field is not consumed by that resolver.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
+		{ fieldname: "calendar_notice_days", label: "Calendar notice (for reference, not enforced; days)", description: "No current calendar or lifecycle scheduler enforces this value.", fieldtype: "Int", reqd: 1 },
 		...BACKUP_POLICY_FIELDS,
 	];
 	// Same reviewed numeric weights for first setup and later revisions.
@@ -1673,7 +1673,7 @@ frappe.provide("toefl_house.role_desks");
 			fields = [...fields, ...drawers.flatMap((drawer, index) => [
 				{ fieldname: "drawer_name_" + index, label: "Count drawer " + (index + 1),
 					fieldtype: "Data", read_only: 1, default: drawer.account },
-				{ fieldname: "drawer_expected_" + index, label: "Native ledger balance (AFN, view only)",
+				{ fieldname: "drawer_expected_" + index, label: "Ledger balance (AFN, view only)",
 					fieldtype: "Currency", read_only: 1, default: drawer.expected },
 				{ fieldname: "drawer_counted_" + index, label: "Actual counted amount (AFN) — use 0 if empty",
 					fieldtype: "Currency", description: "Enter your own physical count, never an assumed ledger amount. No payment or cash movement is created." },

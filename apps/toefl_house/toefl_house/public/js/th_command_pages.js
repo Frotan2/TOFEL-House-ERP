@@ -61,7 +61,7 @@ frappe.provide("toefl_house.command_pages");
 			admin: true,
 			roles: ["Course Owner", "General Manager"],
 			title: "TOEFL House Administration Control Centre",
-			description: "Review fail-closed release attention and navigate to native identity, role, branch and permission authorities. This surface grants no permission and creates no parallel ledger.",
+			description: "Review items that need attention and open user, role, branch and permission settings. This page does not change anyone's access by itself.",
 		},
 		"th-command-centre": {
 			title: "TOEFL House Command Centre",
@@ -193,7 +193,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-admission-officer": {
 			role: "Admission Officer",
 			title: "TOEFL House Admission Intake",
-			description: "Run the thin admission intake and officer transitions over native Student Applicant and Student authorities. The page does not create an enrollment or a billing record.",
+			description: "Record new applicants and move them through admission. This page does not enroll or bill anyone.",
 			commands: [
 				{ label: "Record applicant", method: "toefl_house.admission.record_applicant", dispatches: ["record_applicant"], fields: [data("placement_decision", "Released placement decision", { reqd: 1 }), data("first_name", "First name", { reqd: 1 }), data("program", "Program", { reqd: 1 }), data("academic_year", "Academic year", { reqd: 1 }), data("branch", "Branch", { description: "Blank: the recording officer's own branch." }), data("last_name", "Family name (optional)"), data("email", "Email (optional)", { description: "Leave blank if the learner has no email. Never invent an address." })] },
 				{ label: "Create admission decision", method: "toefl_house.admission.create_admission", dispatches: ["create_admission"], fields: [data("student_applicant", "Student applicant", { reqd: 1 }), data("placement_decision", "Released placement decision", { reqd: 1 }), data("existing_student", "Existing student"), data("program", "Program", { description: "Returning journeys only; blank inherits the applicant record." }), data("academic_year", "Academic year", { description: "Returning journeys only; blank inherits the applicant record." }), data("academic_term", "Academic term", { description: "Returning journeys only; blank inherits the applicant record." })] },
@@ -213,7 +213,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-admission-approval": {
 			role: "Admission Approver",
 			title: "TOEFL House Admission Approval",
-			description: "Run the existing admission decision, condition satisfaction, revocation and native Student conversion commands. Eligibility and transition controls remain server-side.",
+			description: "Decide admissions, mark conditions as met, revoke a decision, or turn an admitted applicant into a student. The system checks eligibility.",
 			commands: [
 				{ label: "Decide admission", method: "toefl_house.admission.decide_admission", dispatches: ["decide_admission"], fields: [data("name", "Admission decision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 }), select("outcome", "Outcome", ADMISSION_OUTCOMES, { reqd: 1 }), note("reason", "Reason", { reqd: 1 }), note("conditions", "Conditions")] },
 				{ label: "Satisfy conditions", method: "toefl_house.admission.satisfy_conditions", dispatches: ["satisfy_conditions"], fields: [data("name", "Admission decision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 }), note("evidence", "Verification evidence", { reqd: 1 })] },
@@ -224,7 +224,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-enrollment": {
 			role: "Enrollment Officer",
 			title: "TOEFL House Enrollment",
-				description: "Submit one eligible native Program Enrollment through the guarded enrollment command. The server enforces actor separation from the admission decision. Withdrawals and dismissal decisions end a registration through the guarded exit commands.",
+				description: "Enroll an admitted student in a program. The person who enrolls must be different from the person who admitted. Withdrawals and dismissals end an enrollment here too.",
 			commands: [
 				{ label: "Enroll in program", method: "toefl_house.enrollment.enroll_in_program", dispatches: ["enroll_in_program"], fields: [data("admission_decision", "Admission decision", { reqd: 1 })] },
 				{ label: "Withdraw enrollment", method: "toefl_house.enrollment.exits.withdraw_enrollment", dispatches: ["withdraw_enrollment"], fields: [data("program_enrollment", "Program enrollment", { reqd: 1 }), date("exit_date", "Exit date", { reqd: 1 }), note("reason", "Reason", { reqd: 1 })] },
@@ -236,7 +236,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-teaching-scheduling": {
 			role: "Teaching Scheduler",
 			title: "TOEFL House Teaching Scheduling",
-			description: "Create native class, session, roster and skill-assignment facts through guarded commands. The page performs no native list or link lookup.",
+			description: "Create classes and sessions, add students to a class, and assign teachers.",
 			commands: [
 				{ label: "Create student group", method: "toefl_house.teaching.create_student_group", dispatches: ["create_student_group"], fields: [data("group_name", "Synthetic group name", { reqd: 1 }), data("program", "Program", { reqd: 1 }), data("academic_year", "Academic year", { reqd: 1 }), data("academic_term", "Academic term"), integer("max_strength", "Maximum strength", { reqd: 1 }), date("class_start_date", "Class start date"), date("class_end_date", "Class end date (blank = use level duration policy)"), select("delivery_mode", "Delivery mode", DELIVERY_MODES, { default: "On-site" }), data("branch", "Branch"), data("students", "Student IDs (optional)", { description: "Comma-separated Student IDs with submitted enrollments; leave blank for the full intake." })] },
 				{ label: "Add class member", method: "toefl_house.teaching.add_class_member", dispatches: ["add_class_member"], fields: [data("student_group", "Student group", { reqd: 1 }), data("student", "Student", { reqd: 1 }), data("override", "Capacity override (only when full)")] },
@@ -262,7 +262,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-attendance-recording": {
 			role: "Attendance Recorder",
 			title: "TOEFL House Attendance Recording",
-			description: "Record submitted native Student Attendance for a scheduled session: enter the session, then choose Present, Absent or Leave for each student on the class list. Corrections run as request/approve/deny inside the owner policy window.",
+			description: "Take attendance for a scheduled session: enter the session, then choose Present, Absent or Leave for each student. Corrections are requested and approved within the allowed time window.",
 			commands: [
 				// statuses is generated from the per-student choices of the
 				// roster step (rosterAttendance), never typed by hand.
@@ -294,7 +294,7 @@ frappe.provide("toefl_house.command_pages");
 			title: text("Manage TOEFL role assignment"),
 			fields: [
 				requestKeyField(),
-				data("user", "User", { reqd: 1, description: "Native User name or email; no user search is performed." }),
+				data("user", "User", { reqd: 1, description: "The person's login email." }),
 				select("role", "Managed role", ADMIN_MANAGED_ROLES, { reqd: 1 }),
 				{ fieldname: "enabled", label: "Assign role", fieldtype: "Check", default: 1 },
 			],
