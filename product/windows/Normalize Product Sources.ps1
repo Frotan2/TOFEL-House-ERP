@@ -128,7 +128,16 @@ try {
                        $path -match "[\\/]app\.Dockerfile$"
 
         if (-not $isKnownText) {
-            if ($hasUtf8Bom -or $hasUtf16Bom -or $hasUtf32Bom -or $hasCr) {
+            if ($hasUtf16Bom -or $hasUtf32Bom) {
+                throw "Unclassified Dockerfile source contains a BOM or CR byte: $path"
+            }
+            # An actual binary asset (for example the logo images) is not UTF-8
+            # text and is copied byte-for-byte; a PNG signature itself contains
+            # CR. Same rule as the packaging EOL contract test.
+            $isUtf8 = $true
+            try { [void]$utf8Strict.GetString($bytes) } catch { $isUtf8 = $false }
+            if (-not $isUtf8) { continue }
+            if ($hasUtf8Bom -or $hasCr) {
                 throw "Unclassified Dockerfile source contains a BOM or CR byte: $path"
             }
             continue

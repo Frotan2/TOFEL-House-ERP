@@ -152,6 +152,21 @@ class WindowsBrandTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn("/win32icon:", read(path))
 
+    def test_source_normalizer_copies_binary_logo_assets_unchanged(self):
+        # PNG/JPEG bytes contain CR; the developer/provider source normalizer
+        # must treat non-UTF-8 assets as binary (as the packaging EOL test
+        # does) while still refusing CR/BOM in unclassified UTF-8 text.
+        normalizer = read("product/windows/Normalize Product Sources.ps1")
+        block = normalizer.split("if (-not $isKnownText) {", 1)[1].split("\n        }\n", 1)[0]
+        self.assertIn("$utf8Strict.GetString($bytes)", block)
+        self.assertIn("if (-not $isUtf8) { continue }", block)
+        self.assertIn("if ($hasUtf8Bom -or $hasCr) {", block)
+        self.assertIn("if ($hasUtf16Bom -or $hasUtf32Bom) {", block)
+        for path in IMAGES.iterdir():
+            with self.subTest(path=path.name):
+                with self.assertRaises(UnicodeDecodeError):
+                    path.read_bytes().decode("utf-8")
+
     def test_updater_host_allowlist_is_unchanged(self):
         # Branding never widens the signed host-servicing file set.
         engine = read("product/update_engine.py")
