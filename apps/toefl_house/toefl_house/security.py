@@ -92,6 +92,10 @@ KIND_ROLES = {
     "record_reception_collection": "Reception",
     "accept_reception_handover": "Finance Officer",
     "correct_reception_collection": "Course Owner",
+    # Operating expenses (finance.expenses): a Finance Officer records the
+    # paid expense; a different Finance Manager voids a mistaken one.
+    "record_expense": "Finance Officer",
+    "void_expense": "Finance Manager",
     # D2 teaching compensation: contracts and payroll calculation are the
     # finance/payroll side; skill-area assignment facts stay teaching ops.
     "create_teaching_contract": "Finance Officer",

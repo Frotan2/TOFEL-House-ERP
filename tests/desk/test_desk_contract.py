@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "apps/toefl_house/toefl_house"
 DESK = APP / "desk"
 
-DESK_MODULES = ("__init__", "lifecycle", "collections", "tuition_refunds", "reception", "academic", "finance",
+DESK_MODULES = ("__init__", "lifecycle", "collections", "expenses", "tuition_refunds", "reception", "academic", "finance",
                 "operations", "owner", "setup", "teacher", "configuration")
 
 SENSITIVE_FIELDS = {
@@ -387,7 +387,7 @@ class DeskReadBoundaryTests(unittest.TestCase):
         forbidden_calls = ("frappe.get_all", "frappe.get_list", "frappe.db.get_list",
                            "frappe.db.get_all", "frappe.db.sql", "frappe.get_doc",
                            "frappe.db.insert", "frappe.db.delete", "frappe.db.count")
-        for name in ("collections", "reception", "academic", "finance", "operations", "owner",
+        for name in ("collections", "expenses", "reception", "academic", "finance", "operations", "owner",
                      "setup", "teacher", "configuration"):
             for node in ast.walk(self.trees[name]):
                 if isinstance(node, ast.Call):
@@ -408,7 +408,7 @@ class DeskReadBoundaryTests(unittest.TestCase):
                                      f"{name} looks like it mutates a document: {line.strip()}")
 
     def test_every_projection_call_names_explicit_fields_and_a_limit(self):
-        for name in ("collections", "reception", "academic", "finance", "operations", "owner",
+        for name in ("collections", "expenses", "reception", "academic", "finance", "operations", "owner",
                      "setup", "teacher", "configuration"):
             for node in ast.walk(self.trees[name]):
                 if not (isinstance(node, ast.Call) and ast.unparse(node.func) in (
@@ -596,7 +596,7 @@ class DeskSchemaFidelityTests(unittest.TestCase):
             assert_columns_real(f"PROJECTION_FIELDS[{desk},{doctype}]", doctype, fields)
 
     def test_every_desk_query_site_uses_real_columns(self):
-        for name in ("collections", "reception", "academic", "finance", "operations", "owner",
+        for name in ("collections", "expenses", "reception", "academic", "finance", "operations", "owner",
                      "setup", "teacher", "configuration"):
             tree = self.trees[name]
             strings, lists = {}, {}

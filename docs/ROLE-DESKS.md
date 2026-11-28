@@ -183,6 +183,23 @@ Sections:
   credit notes surface through the native statuses only.
 - **Awaiting billing** — submitted `Program Enrollment` records with no
   `Fees` row yet (definition: enrollment submitted, zero Fees referencing it).
+- **Expenses (this Solar Hijri month)** — operating expenses (rent,
+  utilities, supplies, maintenance…) recorded by `finance.expenses`. Each is
+  ONE submitted native `Journal Entry` (Cash Entry or Bank Entry): the chosen
+  Expense account is debited and main Cash or a Bank account is credited, so
+  the general ledger stays the only financial record. A Finance Officer
+  records ("Record an expense"); a *different* Finance Manager voids a
+  mistaken one with a reason (native cancel, original and reversal stay in
+  history). Reception counter drawers cannot pay expenses, cash may not go
+  negative, cash expenses on or before a closed cashier day are refused, the
+  posting date follows the billing policy backdate window (today only when no
+  policy is active), and bank payments need a reference. Native Desk/REST
+  create, cancel, amend and delete of an expense journal are refused.
+- **This month at a glance** — Income, Expenses and Net result for the
+  current Solar Hijri month, per company and in the company currency, read
+  from native `GL Entry` by Account root type (cancelled and opening rows
+  excluded). A failed read shows "—", never zero. The Owner cockpit shows the
+  same facts.
 - **Correction queue** — `TH Correction Request` by status (pending /
   approved / denied), each with its invoice, requested amount and state.
 - **Teaching assignments** — `TH Teaching Assignment` identity and window
@@ -263,6 +280,9 @@ classes. Sections follow the daily path:
 
 Everything the GM desk shows, plus:
 
+- **This month at a glance** — Income, Expenses and Net result for the
+  current Solar Hijri month from the native general ledger (same facts as
+  the Finance desk).
 - **Governance attention** — the fail-closed release facts (production REJECT,
   SEC-DEPS-01 upstream-blocked) from the same static, reviewed constants the
   administration control centre uses. Not new policy — the same recorded state.

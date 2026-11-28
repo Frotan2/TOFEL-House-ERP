@@ -222,6 +222,12 @@ PROJECTION_FIELDS = {
         "posting_date", "docstatus", "paid_to", "paid_to_account_currency",
         "th_reception_collector", "th_collection_fees", "th_collection_handover",
     ],
+    # Operating expenses (finance.expenses): payee, description, amount and
+    # recorder of the command-written native expense journals only.
+    ("finance", "Journal Entry"): [
+        "name", "company", "posting_date", "pay_to_recd_from", "user_remark",
+        "total_debit", "docstatus", "th_expense_recorder", "voucher_type", "cheque_no",
+    ],
     ("finance", "TH Correction Request"): [
         "name", "sales_invoice", "fees", "correction_policy", "reason",
         "requested_amount", "status",

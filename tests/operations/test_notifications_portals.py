@@ -31,6 +31,12 @@ def _load_real(modname, path):
     spec = importlib.util.spec_from_file_location(modname, path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[modname] = module
+    # Bind the child on its (possibly reused) parent package like the import
+    # system does; otherwise `from toefl_house import observability` keeps
+    # returning a module an earlier test imported (order-dependent failure).
+    parent, _, child = modname.rpartition(".")
+    if parent in sys.modules:
+        setattr(sys.modules[parent], child, module)
     spec.loader.exec_module(module)
     return module
 

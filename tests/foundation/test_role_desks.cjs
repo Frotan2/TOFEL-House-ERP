@@ -148,10 +148,14 @@ assert(teacherSource.includes("toefl_house.teaching.record_instructor_attendance
 const teacherSecurity = fs.readFileSync(path.join(APP, "security.py"), "utf8");
 assert(teacherSecurity.includes('"record_instructor_attendance": "Instructor"'),
     "Instructor command must have a distinct role gate");
-const recorderFields = client.toefl_house.role_desks.actionFields["toefl_house.teaching.record_attendance"];
-assert(recorderFields && recorderFields.some((field) => field.fieldname === "course_schedule")
-	&& recorderFields.some((field) => field.fieldname === "statuses"),
-	"authorized Attendance Recorder needs a session and bounded roster marks");
+// The Attendance Recorder records on its command page from the guarded
+// class-list read (per-student choices); no desk offers a raw-JSON form.
+assert(!client.toefl_house.role_desks.actionFields["toefl_house.teaching.record_attendance"],
+	"no desk may offer a typed-JSON attendance form");
+const commandPages = fs.readFileSync(path.join(APP, "public/js/th_command_pages.js"), "utf8");
+assert(commandPages.includes('roster: "toefl_house.teaching.attendance_roster"'),
+	"the Attendance Recorder must mark students from the class list");
+assert(!/json\("statuses"/.test(commandPages), "attendance marks must never be typed as JSON");
 
 assert.deepStrictEqual(Object.keys(surfaces).sort(), Object.keys(EXPECTED).sort(),
 	"the desk surface set changed");
@@ -242,6 +246,7 @@ const endpointFiles = {
 	"toefl_house.finance.installments": ["finance/installments.py"],
 	"toefl_house.finance.cashier": ["finance/cashier.py"],
 	"toefl_house.finance.collections": ["finance/collections.py"],
+	"toefl_house.finance.expenses": ["finance/expenses.py"],
 	"toefl_house.teaching": ["teaching/__init__.py"],
 	"toefl_house.teaching.policies": ["teaching/policies.py"],
 	"toefl_house.teaching.timetables": ["teaching/timetables.py"],
@@ -326,6 +331,7 @@ const allowedCalls = new Set([...Object.values(EXPECTED).map((shape) => shape.en
 	"toefl_house.desk.academic.attendance_records",
 	"toefl_house.desk.academic.enrollment_records",
 	"toefl_house.finance.collections.get_collection_receipt",
+	"toefl_house.finance.expenses.expense_options",
 	"toefl_house.teaching.compensation.get_contract_revision_form",
 	"toefl_house.setup_presets.api.preview_owner_initial_setup",
 	"toefl_house.setup_presets.owner_policy_forms.owner_form_options",

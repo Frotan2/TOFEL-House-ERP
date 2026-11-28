@@ -701,6 +701,58 @@ def record_attendance(request_key, course_schedule, statuses):
         command_kind="record_attendance")
 
 
+ROSTER_READ_LIMIT = 200
+
+
+@frappe.whitelist(methods=["GET"])
+def attendance_roster(course_schedule):
+    """Roster of one session for the Attendance Recorder's guided form.
+
+    Returns the session facts and the active roster members who have no
+    attendance recorded yet (Student ID and display name only), so the
+    recorder chooses Present/Absent/Leave per student instead of typing JSON.
+    The same role and Branch/Company scope as ``record_attendance`` apply;
+    the write command still re-validates everything under lock.
+    """
+    from toefl_house.command_scope import authorize_command_scope
+    from toefl_house.security import KIND_ROLES, authorize
+
+    require_operational()
+    actor = authorize(KIND_ROLES["record_attendance"])
+    schedule_name = _bounded_name(course_schedule, "Course Schedule")
+    if not frappe.db.exists(SCHEDULE, schedule_name):
+        raise frappe.ValidationError("Unknown course schedule")
+    authorize_command_scope("record_attendance", {"course_schedule": schedule_name}, actor)
+    session = frappe.db.get_value(SCHEDULE, schedule_name,
+                                  ["student_group", "schedule_date", "from_time", "to_time", "course", "room"],
+                                  as_dict=True)
+    group = frappe.db.get_value(GROUP, session.student_group,
+                                ["student_group_name", "disabled", "th_class_status"], as_dict=True)
+    if not group or group.disabled or group.th_class_status != "Active":
+        raise frappe.ValidationError("Attendance is closed unless this student group is Active")
+    if str(session.schedule_date or "") > frappe.utils.today():
+        raise frappe.ValidationError("Attendance cannot be recorded for a future session")
+    session_rules.assert_session_open_for_attendance(schedule_name)
+    members = frappe.get_all("Student Group Student", filters={"parent": session.student_group, "active": 1},
+                             fields=["student", "student_name"], order_by="idx asc",
+                             limit_page_length=ROSTER_READ_LIMIT + 1)
+    if len(members) > ROSTER_READ_LIMIT:
+        raise frappe.ValidationError("This class roster is too large for the guided form")
+    marked = {row.get("student") for row in frappe.get_all(
+        ATTENDANCE, filters={"course_schedule": schedule_name, "docstatus": ("!=", 2)},
+        fields=["student"], limit_page_length=ROSTER_READ_LIMIT + 1)}
+    return {
+        "course_schedule": schedule_name,
+        "class": group.student_group_name or session.student_group,
+        "date": str(session.schedule_date),
+        "time": f"{session.from_time or ''}–{session.to_time or ''}",
+        "course": session.course or "",
+        "already_marked": len(marked),
+        "roster": [{"student": row.get("student"), "name": row.get("student_name") or row.get("student")}
+                   for row in members if row.get("student") not in marked],
+    }
+
+
 @frappe.whitelist(methods=["POST"])
 def record_instructor_attendance(request_key, course_schedule, statuses):
     """Instructor-only own-session, current-assignment attendance entry.

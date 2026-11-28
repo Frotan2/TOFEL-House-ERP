@@ -17,6 +17,7 @@ program/level/instructor/period breakdowns where the underlying data permits.
 import frappe
 from frappe.utils import today
 from toefl_house.desk.collections import owner_sections
+from toefl_house.desk.expenses import position_facts
 
 from toefl_house.desk import (
     BOUNCE_WINDOW,
@@ -589,6 +590,9 @@ def cockpit():
         "title": DESKS[SLUG]["title"],
         "sections": [
             _first_run_readiness(mode),
+            section("month-position", "This month at a glance", "facts", facts=position_facts(),
+                    empty_title="No postings yet",
+                    empty_body="Income, expenses and the net result appear once money is posted."),
             *owner_sections(),
             *analytics_sections,
             section("business", "Business state", "facts", facts=business_facts,

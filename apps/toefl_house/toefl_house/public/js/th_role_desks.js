@@ -783,6 +783,28 @@ frappe.provide("toefl_house.role_desks");
 				description: "F is automatically assigned to scores below this minimum, down to zero." },
 			{ fieldname: "reason", label: "Reason for this grading scale", fieldtype: "Small Text", reqd: 1 },
 		],
+		// Operating expenses: the three choice lists are filled from the
+		// guarded expense_options read (account names only) when the form
+		// opens; the server re-validates every choice and the cash cover.
+		"toefl_house.finance.expenses.record_expense": [
+			{ fieldname: "company", label: "Company", fieldtype: "Select", options: "__expense_choice:companies__", reqd: 1 },
+			{ fieldname: "posting_date", label: "Payment date", fieldtype: "Date", reqd: 1,
+				description: "The day the money left the institute. Future dates are refused." },
+			{ fieldname: "expense_account", label: "Expense category", fieldtype: "Select", options: "__expense_choice:categories__", reqd: 1,
+				description: "Rent, utilities, supplies… Categories are the Expense accounts in the chart of accounts." },
+			{ fieldname: "paid_from", label: "Paid from", fieldtype: "Select", options: "__expense_choice:paying_accounts__", reqd: 1,
+				description: "Main cash or a bank account. Reception counter drawers cannot pay expenses." },
+			{ fieldname: "amount", label: "Amount paid", fieldtype: "Currency", reqd: 1 },
+			{ fieldname: "payee", label: "Paid to (person or business)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "What was paid for", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "reference", label: "Bank transfer / cheque / bill number", fieldtype: "Data",
+				description: "Required for bank payments; optional for cash." },
+		],
+		"toefl_house.finance.expenses.void_expense": [
+			{ fieldname: "journal_entry", label: "Expense entry", fieldtype: "Data", read_only: 1, reqd: 1 },
+			{ fieldname: "reason", label: "Why this expense is void", fieldtype: "Small Text", reqd: 1,
+				description: "The original stays in the ledger with its reversal. Record the correct expense separately." },
+		],
 		"toefl_house.finance.collections.record_reception_collection": [
 			{ fieldname: "fees", label: "Tuition bill", fieldtype: "Data", read_only: 1, reqd: 1 },
 			{ fieldname: "amount", label: "Cash received", fieldtype: "Currency", reqd: 1, description: "Issue only after counting the cash. The student's balance falls immediately." },
@@ -811,10 +833,6 @@ frappe.provide("toefl_house.role_desks");
 			// Exact native command signature; value is generated from
 			// per-student selects below, never manually typed.
 			{ fieldname: "statuses", label: "Submitted marks", fieldtype: "Small Text", hidden: 1, read_only: 1 },
-		],
-		"toefl_house.teaching.record_attendance": [
-			{ fieldname: "course_schedule", label: "Scheduled session", fieldtype: "Data", read_only: 1, reqd: 1 },
-			{ fieldname: "statuses", label: "Student attendance (JSON)", fieldtype: "Small Text", reqd: 1, description: "Enter a JSON object of Student IDs and Present, Absent or Leave (example: {\"EDU-STU-00001\":\"Present\"}). Only on-roster students are accepted." },
 		],
 		"toefl_house.operations.owner_configuration.create_owner_operations_policy": [
 			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
@@ -1722,7 +1740,56 @@ frappe.provide("toefl_house.role_desks");
 				});
 			});
 		}
-		const contextKeys = ["outstanding", "expected_amount", "currency", "receipt_list",
+		// Operating expenses: load the permitted companies, categories and
+		// paying accounts (names only) through the guarded read first.
+		const expenseFields = fields.filter((field) => typeof field.options === "string" &&
+			/^__expense_choice:[a-z_]+__$/.test(field.options));
+		if (expenseFields.length) {
+			if (!action._expense_choices) {
+				frappe.call({
+					method: "toefl_house.finance.expenses.expense_options",
+					type: "GET",
+					callback(response) {
+						const options = response.message;
+						const companies = options && Array.isArray(options.companies) ? options.companies : null;
+						if (!companies || !companies.length || companies.length > 50) {
+							frappe.msgprint(text("No company is available for expense recording with your Finance permissions. Nothing was recorded."));
+							return;
+						}
+						const clean = (names) => Array.isArray(names) && names.length <= 200 &&
+							names.every((name) => typeof name === "string" && name && name.length <= 140 && !/[\r\n]/.test(name));
+						const choices = { companies: [], categories: [], paying_accounts: [] };
+						for (const row of companies) {
+							const paying = Array.isArray(row && row.paying_accounts) ? row.paying_accounts.map((item) => item && item.name) : null;
+							if (!row || !clean([row.company]) || !clean(row.categories) || !clean(paying)) {
+								frappe.msgprint(text("The expense choices are invalid. Nothing was recorded."));
+								return;
+							}
+							choices.companies.push(row.company);
+							choices.categories.push(...row.categories);
+							choices.paying_accounts.push(...paying);
+						}
+						if (!choices.categories.length || !choices.paying_accounts.length) {
+							frappe.msgprint(text("Ask the Course Owner to set up Expense accounts and a main Cash or Bank account first."));
+							return;
+						}
+						openGuidedAction(Object.assign({}, action, { _expense_choices: choices,
+							args: Object.assign({}, action.args || {},
+								choices.companies.length === 1 ? { company: choices.companies[0] } : {}) }));
+					},
+					error() {
+						frappe.msgprint(text("Expense choices could not be loaded with your Finance permissions. Nothing was recorded."));
+					},
+				});
+				return;
+			}
+			fields = fields.map((field) => {
+				if (typeof field.options !== "string" || !/^__expense_choice:[a-z_]+__$/.test(field.options)) return field;
+				const kind = field.options.slice("__expense_choice:".length, -2);
+				return Object.assign({}, field, { options: ["", ...(action._expense_choices[kind] || [])].join("\n") });
+			});
+		}
+		const contextKeys = ["outstanding", "expected_amount", "currency", "receipt_list", "summary",
 			"recipient", "tuition_bill", "refund_amount", "refund_reason", "supporting_evidence", "approved_by", "approval_evidence",
 			"placement_course_code", "placement_level"];
 		const contextFacts = contextKeys.filter((key) => action.args && action.args[key] !== undefined)
@@ -2018,7 +2085,11 @@ frappe.provide("toefl_house.role_desks");
 					},
 				});
 				};
-				if (cashClose) {
+				if (action.endpoint === "toefl_house.finance.expenses.record_expense") {
+					frappe.confirm(text("Post this expense to the general ledger now? A posted expense can only be voided by a different Finance Manager."), submitAction);
+				} else if (action.endpoint === "toefl_house.finance.expenses.void_expense") {
+					frappe.confirm(text("Void this expense? The payment is reversed in the ledger and the original stays visible in the history."), submitAction);
+				} else if (cashClose) {
 					frappe.confirm(text(
 						"Submit the actual counts and close this company's entire business day? This close cannot be edited; no payment or cash movement is created."
 					), submitAction);

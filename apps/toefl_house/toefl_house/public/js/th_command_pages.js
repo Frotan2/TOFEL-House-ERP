@@ -255,9 +255,11 @@ frappe.provide("toefl_house.command_pages");
 		"th-attendance-recording": {
 			role: "Attendance Recorder",
 			title: "TOEFL House Attendance Recording",
-			description: "Record submitted native Student Attendance facts for a scheduled session through the guarded command. Supply the complete status JSON required by the server. Corrections run as request/approve/deny inside the owner policy window.",
+			description: "Record submitted native Student Attendance for a scheduled session: enter the session, then choose Present, Absent or Leave for each student on the class list. Corrections run as request/approve/deny inside the owner policy window.",
 			commands: [
-				{ label: "Record attendance", method: "toefl_house.teaching.record_attendance", dispatches: ["record_attendance"], fields: [data("course_schedule", "Course schedule", { reqd: 1 }), json("statuses", "Statuses JSON", { reqd: 1 })] },
+				// statuses is generated from the per-student choices of the
+				// roster step (rosterAttendance), never typed by hand.
+				{ label: "Record attendance", method: "toefl_house.teaching.record_attendance", dispatches: ["record_attendance"], roster: "toefl_house.teaching.attendance_roster", fields: [data("course_schedule", "Course schedule", { reqd: 1 }), { fieldname: "statuses", label: "Marks", fieldtype: "Small Text", hidden: 1, read_only: 1 }] },
 				{ label: "Request attendance correction", method: "toefl_house.teaching.attendance_corrections.request_attendance_correction", dispatches: ["request_attendance_correction"], fields: [data("attendance", "Student attendance", { reqd: 1 }), select("requested_status", "Requested mark", ATTENDANCE_MARKS, { reqd: 1 }), note("reason", "Reason", { reqd: 1 })] },
 				{ label: "Approve attendance correction", method: "toefl_house.teaching.attendance_corrections.approve_attendance_correction", dispatches: ["approve_attendance_correction"], fields: [data("request", "Correction request", { reqd: 1 })] },
 				{ label: "Deny attendance correction", method: "toefl_house.teaching.attendance_corrections.deny_attendance_correction", dispatches: ["deny_attendance_correction"], fields: [data("request", "Correction request", { reqd: 1 })] },
@@ -469,7 +471,69 @@ frappe.provide("toefl_house.command_pages");
 		});
 	}
 
+	// Attendance Recorder: load the session's class list through the guarded
+	// roster read, then show one Present/Absent/Leave choice per student. No
+	// mark is defaulted; every listed student must be chosen.
+	function rosterAttendance(command) {
+		const lookup = new frappe.ui.Dialog({
+			title: text(command.label),
+			fields: [data("course_schedule", "Course schedule", { reqd: 1, description: "The session ID shown on the class timetable." })],
+			primary_action_label: text("Load class list"),
+			primary_action(values) {
+				frappe.call({
+					method: command.roster,
+					type: "GET",
+					args: { course_schedule: values.course_schedule },
+					callback(response) {
+						const session = response.message || {};
+						const roster = Array.isArray(session.roster) ? session.roster : null;
+						if (!roster || roster.length > 200 || roster.some((row) => !row || typeof row.student !== "string" ||
+							!row.student || row.student.length > 140)) {
+							frappe.msgprint(text("The class list could not be loaded safely. Nothing was recorded."));
+							return;
+						}
+						if (!roster.length) {
+							frappe.msgprint(text("Every student on this class list already has attendance for this session."));
+							return;
+						}
+						lookup.hide();
+						const marks = roster.map((row, index) => select("mark_" + index, String(row.name || row.student) + " (" + row.student + ")",
+							["", ...ATTENDANCE_MARKS], { reqd: 1 }));
+						const summary = [session.class, session.date, session.time, session.course].filter(Boolean).join(" · ");
+						const dialog = new frappe.ui.Dialog({
+							title: text(command.label),
+							fields: [requestKeyField(), { fieldname: "session_summary", fieldtype: "HTML",
+								options: `<p class='th-card-hint'>${escapeText(summary)}</p>` }, ...marks],
+							primary_action_label: text("Record attendance"),
+							primary_action(chosen) {
+								const statuses = {};
+								roster.forEach((row, index) => { statuses[row.student] = chosen["mark_" + index]; });
+								frappe.call({
+									method: command.method,
+									args: { request_key: chosen.request_key, course_schedule: session.course_schedule,
+										statuses: JSON.stringify(statuses) },
+									freeze: true,
+									freeze_message: text("Submitting guarded command"),
+									callback(result) {
+										dialog.hide();
+										resultMessage(command.label, result.message);
+									},
+								});
+							},
+						});
+						dialog.show();
+					},
+				});
+			},
+		});
+		lookup.show();
+	}
+
 	function runCommand(command) {
+		if (command.roster) {
+			rosterAttendance(command);
+			return;
+		}
 		const dialog = new frappe.ui.Dialog({
 			title: text(command.label),
 			fields: [requestKeyField(), ...resolveFields(command.fields)],
