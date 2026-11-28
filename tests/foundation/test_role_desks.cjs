@@ -255,6 +255,7 @@ const endpointFiles = {
 	"toefl_house.finance.tuition_refund_commands": ["finance/tuition_refund_commands.py"],
 	"toefl_house.academic": ["academic/__init__.py"],
 	"toefl_house.academic.catalog_linkage": ["academic/catalog_linkage.py"],
+	"toefl_house.academic.progression": ["academic/progression.py"],
 	"toefl_house.admission.policies": ["admission/policies.py"],
 	"toefl_house.enrollment.exits": ["enrollment/exits.py"],
 	"toefl_house.finance": ["finance/__init__.py"],
@@ -269,6 +270,10 @@ const endpointFiles = {
 	"toefl_house.teaching.attendance_corrections": ["teaching/attendance_corrections.py"],
 	"toefl_house.teaching.adjustment_posting": ["teaching/adjustment_posting.py"],
 	"toefl_house.teaching.compensation": ["teaching/compensation.py"],
+	"toefl_house.teaching.class_operations": ["teaching/class_operations.py"],
+	"toefl_house.teaching.calendars": ["teaching/calendars.py"],
+	"toefl_house.teaching.transfers": ["teaching/transfers.py"],
+	"toefl_house.teaching.capacity": ["teaching/capacity.py"],
 };
 function signatureOf(method) {
 	const parts = method.split(".");
@@ -308,6 +313,24 @@ for (const [method, fields] of Object.entries(actionFields)) {
 		// so UI-created scales keep the server default ("formal", 60% enforced).
 		// Specialist scales are created only by a direct Owner call with scope.
 		assert.deepStrictEqual(signature.slice(1), ["grading_scale_name", "intervals", "reason", "scope"]);
+		continue;
+	}
+	if (method === "toefl_house.teaching.class_operations.set_class_operations_policy_version") {
+		// Term inputs are ordinary fields assembled into the one terms object.
+		const names = Array.from(fields, (field) => field.fieldname);
+		assert.deepStrictEqual(names.slice(0, 3), ["policy", "effective_from", "reason"]);
+		assert.deepStrictEqual(signature.slice(1), ["policy", "effective_from", "reason", "terms"]);
+		const serverSource = fs.readFileSync(path.join(APP, "teaching/class_operations.py"), "utf8");
+		const serverTerms = /^TERM_KEYS = \(([^)]*)\)/m.exec(serverSource)[1]
+			.match(/"([a-z_]+)"/g).map((name) => name.slice(1, -1));
+		const formTerms = names.slice(3).map((name) => {
+			assert(name.startsWith("term_"), `unexpected class-operations field ${name}`);
+			return name.slice(5);
+		});
+		const dayTerms = formTerms.filter((name) => name.startsWith("day_"));
+		assert.strictEqual(dayTerms.length, 7, "every weekday must be selectable");
+		assert.deepStrictEqual(["teaching_days", ...formTerms.filter((name) => !name.startsWith("day_"))].sort(),
+			serverTerms.slice().sort(), "class-operations form must carry exactly the server term set");
 		continue;
 	}
 	// Calls use named arguments; related UI fields may have a different display order.

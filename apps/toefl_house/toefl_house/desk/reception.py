@@ -20,6 +20,7 @@ from toefl_house.desk import (
     project_count,
     project_rows,
     require_desk_audience,
+    scope_filters,
     section,
 )
 try:
@@ -51,6 +52,7 @@ INSTRUCTOR = "Instructor"
 ASSIGNMENT = "TH Teaching Assignment"
 SUSPENSION = "TH Class Suspension"
 TRANSFER = "TH Class Transfer"
+WAITING = "TH Class Waiting List"
 GROUP_COHORT_FIELDS = [
     "name", "student_group_name", "program", "academic_year",
     "academic_term", "th_branch", "disabled", "th_class_status",
@@ -715,6 +717,9 @@ def work():
             section("people", "People in the admission process", "queue", items=people,
                     empty_title="No applications awaiting a decision",
                     empty_body="Visitors can be registered above before any placement result exists."),
+            section("waiting-lists", "Class waiting lists", "queue", items=_waiting_items(),
+                    empty_title="Nobody is waiting",
+                    empty_body="Find an enrolled student above and add them to a full class's waiting list."),
             *reception_sections(),
             section("funnel", "Applicant funnel", "facts", facts=_funnel(len(handover)),
                     empty_title="The funnel is empty",
@@ -722,6 +727,37 @@ def work():
         ],
     }
 
+
+
+def _waiting_items():
+    """Open waiting-list entries, limited to the viewer's classes when scoped."""
+    rows = project_rows("reception", WAITING,
+                        ["name", "student", "student_group", "status", "priority",
+                         "requested_on", "offer_expires_on"],
+                        filters={"status": ("in", ["Waiting", "Offered"])},
+                        order_by="priority asc, requested_on asc", limit=LIMIT_QUEUES)
+    if rows and scope_filters("reception"):
+        visible = {row["name"] for row in project_rows(
+            "reception", GROUP, ["name"],
+            filters={"name": ("in", sorted({row["student_group"] for row in rows}))},
+            order_by="name asc", limit=LIMIT_QUEUES)}
+        rows = [row for row in rows if row.get("student_group") in visible]
+    items = []
+    for row in rows:
+        offered = row.get("status") == "Offered"
+        items.append({
+            "id": row["name"], "person": row.get("student") or "",
+            "detail": f"Waiting for {row.get('student_group')}"
+                      + (f" · seat held until {row.get('offer_expires_on')}" if offered else ""),
+            "status": "Seat offered" if offered else "Waiting",
+            "stage": "Waiting list",
+            "stage_definition": "Students wait in order; Teaching Scheduling offers freed seats.",
+            "next": "Tell the student a seat is held." if offered else "Wait for a seat offer.",
+            "next_role": "Teaching Scheduler", "waiting_since": row.get("requested_on"),
+            "action": guided_action("Reception", "toefl_house.teaching.capacity.leave_waiting_list",
+                                    "Remove from waiting list", {"entry": row["name"]}),
+        })
+    return items
 
 
 def _upcoming_session_state(row, now):
@@ -1304,6 +1340,11 @@ def lookup(query):
                 "next": stage["next"],
                 "next_role": stage["role"],
                 "waiting_since": (enrollment or row).get("enrollment_date") or row.get("creation"),
+                "actions": [extra for extra in (
+                    guided_action("Reception", "toefl_house.teaching.capacity.join_waiting_list",
+                                  "Add to a class waiting list",
+                                  {"student": row["name"], "student_group": "", "note": ""}),
+                ) if extra] if enrollment and not inactive else [],
             })
 
     # Exact printed inquiry ID first: the front counter must not lose

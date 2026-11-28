@@ -14,6 +14,7 @@ from toefl_house.desk import (
     FINANCE_REPORTS,
     LIMIT_QUEUES,
     _assert_projection,
+    guided_action,
     project_count,
     project_rows,
     report_section,
@@ -118,6 +119,49 @@ def _staff_counts():
             enabled = len(rows)
         counts[role] = enabled
     return counts
+
+
+def _progression_items():
+    """Published results without a progression decision.
+
+    The Academic Manager records the normal decision on the course assessment
+    page. When the configured evidence is not met but the institute still
+    promotes or completes a learner, only the General Manager may record a
+    reasoned override; the evidence itself is never edited.
+    """
+    results = project_rows("management", "TH Academic Result",
+                           ["name", "student", "student_group", "outcome",
+                            "overall_percent", "passed", "status", "published_on"],
+                           filters={"status": "Published"},
+                           order_by="published_on asc", limit=LIMIT_QUEUES)
+    if not results:
+        return []
+    decided = {row.get("academic_result") for row in project_rows(
+        "management", "TH Progression Decision", ["name", "academic_result"],
+        filters={"academic_result": ("in", [row["name"] for row in results])},
+        order_by="name asc", limit=LIMIT_QUEUES)}
+    items = []
+    for row in results:
+        if row["name"] in decided:
+            continue
+        items.append({
+            "id": row["name"], "person": row.get("student") or "",
+            "detail": "{0} \u00b7 {1} \u00b7 {2}%".format(
+                row.get("student_group") or "", row.get("outcome") or "",
+                row.get("overall_percent") or 0),
+            "status": "Awaiting decision", "stage": "Progression",
+            "stage_definition": "A published result with no Promote, Repeat, Retake or Complete decision.",
+            "next": ("The Academic Manager decides on the course assessment page. Use an override "
+                     "only when the evidence is not met and the institute still promotes or "
+                     "completes this learner; the unmet evidence stays on record."),
+            "next_role": "Academic Manager", "waiting_since": row.get("published_on"),
+            "action": guided_action("General Manager",
+                                    "toefl_house.academic.progression.override_progression",
+                                    "Record override",
+                                    {"academic_result": row["name"], "decision": "Promote",
+                                     "reason": ""}),
+        })
+    return items
 
 
 def _role_items(counts):
@@ -735,6 +779,10 @@ def work():
                     items=exception_items,
                     empty_title="No exception preview items",
                     empty_body="Check the scoped source counts and deadline evidence before concluding there are no exceptions."),
+            section("progression", "Progression decisions not yet recorded", "queue",
+                    items=_progression_items(),
+                    empty_title="Every published result has a progression decision",
+                    empty_body="Published results appear here until the Academic Manager records Promote, Repeat, Retake or Complete."),
             section("activity", "Recent recorded actions", "queue",
                     items=_recorded_action_items(),
                     empty_title="No recorded actions yet",

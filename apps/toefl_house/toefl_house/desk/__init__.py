@@ -147,6 +147,10 @@ PROJECTION_FIELDS = {
         "name", "student", "from_group", "to_group", "transfer_kind",
         "status", "effective_date",
     ],
+    ("reception", "TH Class Waiting List"): [
+        "name", "student", "student_group", "status", "priority",
+        "requested_on", "offer_expires_on",
+    ],
     ("reception", "Instructor"): [
         "name", "instructor_name", "status",
     ],
@@ -181,6 +185,12 @@ PROJECTION_FIELDS = {
     # The class lifecycle fact is the governed th_class_status custom field;
     # the pinned native Student Group (education 93bc70757533) has no
     # `active` column — `disabled` is its native archive flag.
+    ("academic", "TH Class Transfer"): ["name", "student", "from_group", "to_group", "transfer_kind",
+                                        "effective_date", "reason", "requested_by", "requested_on", "status"],
+    ("academic", "TH Capacity Approval"): ["name", "student_group", "student", "seats", "status", "reason",
+                                           "approved_by", "expires_on"],
+    ("academic", "TH Class Waiting List"): ["name", "student", "student_group", "status", "priority",
+                                            "requested_on", "offer_expires_on"],
     ("academic", "Student Group"): [
         "name", "student_group_name", "program", "academic_year", "academic_term",
         "max_strength", "course", "disabled", "th_class_status",
@@ -240,6 +250,7 @@ PROJECTION_FIELDS = {
     # Validation evidence is matched by count, never projected: the hash
     # stays in the filter (read-boundary discipline, same as the
     # configuration desk).
+    ("finance", "TH Placement Case"): ["name", "subject", "status", "creation"],
     ("finance", "TH Placement Audit Event"): [
         "name",
     ],
@@ -284,6 +295,9 @@ PROJECTION_FIELDS = {
     ("management", "Student"): [
         "name",
     ],
+    ("management", "TH Academic Result"): ["name", "student", "student_group", "outcome",
+                                           "overall_percent", "passed", "status", "published_on"],
+    ("management", "TH Progression Decision"): ["name", "academic_result"],
     ("management", "TH Correction Request"): [
         "name", "sales_invoice", "fees", "reason", "requested_amount", "status",
         "modified",
@@ -487,6 +501,10 @@ PROJECTION_FIELDS = {
     ("configuration", "TH Roster Change Policy"): ["name", "code", "title", "status", "description", "modified"],
     ("configuration", "TH Attendance Correction Policy"): ["name", "code", "title", "status", "description", "modified"],
     ("configuration", "TH Adjustment Posting Policy"): ["name", "code", "title", "status", "description", "modified"],
+    ("configuration", "TH Class Operations Policy"): ["name", "code", "title", "status", "description", "modified"],
+    ("configuration", "TH Academic Calendar"): ["name", "code", "title", "status", "academic_year", "branch",
+                                                "description", "modified"],
+    ("configuration", "TH Academic Calendar Day"): ["name", "parent", "parenttype", "date", "kind", "description"],
     ("configuration", "TH Assessment Policy"): [
         "name", "family", "code", "title", "status", "description",
         "modified",

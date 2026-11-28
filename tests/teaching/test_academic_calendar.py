@@ -125,7 +125,7 @@ class CalendarPlanningTests(unittest.TestCase):
         self.ops.seed_calendar(days=[{"date": "2026-09-24", "kind": "Holiday"}])
         self.site.user = COURSE_OWNER
         self.calendars.set_academic_calendar_status(
-            "calendar-status-0001", "CAL-2026", False)
+            "calendar-status-0001", "CAL-2026", "0")  # as a desk form posts it
         self.assertEqual(self.calendars.calendar_plan(
             "2026-09-21", "2026-09-30", "2026-27", ""), {})
         stored = self.site.get("TH Academic Calendar", "CAL-2026")

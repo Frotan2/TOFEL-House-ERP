@@ -124,6 +124,10 @@ class PolicyTermTests(unittest.TestCase):
                  waiting_list_enabled="yes"))
         self.assertFalse(terms["allow_postponement"])
         self.assertTrue(terms["waiting_list_enabled"])
+        terms = self.ops.class_operations.validate_terms(
+            dict(self.terms, allow_postponement="0", waiting_list_enabled="1"))
+        self.assertFalse(terms["allow_postponement"])
+        self.assertTrue(terms["waiting_list_enabled"])
 
 
 class PolicyLifecycleTests(unittest.TestCase):
@@ -157,6 +161,29 @@ class PolicyLifecycleTests(unittest.TestCase):
             self.policy.create_class_operations_policy(
                 "create-policy-0002", "TH-CLASS-OPS-2", "Second", "")
         self.assertIn("already exists; version it instead", str(ctx.exception))
+
+    def test_the_desk_form_payload_configures_a_version(self):
+        """The Configuration desk posts terms as one JSON string of form values."""
+        import json
+        self.site.add("TH Class Operations Policy", code="TH-CLASS-OPS",
+                      title="Class operations", status="Active", description="")
+        self.site.user = COURSE_OWNER
+        self.ops.frappe.session.user = COURSE_OWNER
+        form = {key: (1 if value is True else 0 if value is False else value)
+                for key, value in self.ops.policy_terms().items()}
+        form["teaching_days"] = "Sat,Sun,Mon,Tue,Wed,Thu"
+        self.policy.set_class_operations_policy_version(
+            "desk-policy-version-0001", "TH-CLASS-OPS", "2026-09-01",
+            "Configure class operations", json.dumps(form))
+        terms = self.policy.governing_operations("2026-09-05")
+        self.assertEqual(terms["teaching_days"], ("Mon", "Tue", "Wed", "Thu", "Sat", "Sun"))
+        with self.assertRaises(ValidationError):
+            self.policy.set_class_operations_policy_version(
+                "desk-policy-version-0002", "TH-CLASS-OPS", "2026-10-01",
+                "Broken form", "{not json")
+        self.policy.set_class_operations_policy_status(
+            "desk-policy-status-0001", "TH-CLASS-OPS", "0")
+        self.assertEqual(self.policy.governing_operations("2026-09-05"), {})
 
     def test_versions_are_append_only_and_the_previous_row_is_closed(self):
         self.ops.seed_policy(effective_from="2026-09-01")

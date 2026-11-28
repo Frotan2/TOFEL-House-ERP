@@ -108,6 +108,24 @@ function makeHarness(roles, state) {
 	await approved.flush();
 	assert(!approved.buttons.some((button) => button.label === "Correct"), "approved books use the published correction process");
 
+	const published = makeHarness(["Academic Manager"], { ...book, status: "Published",
+		results: [{ name: "RES-1", student: "STU-1", status: "Published", outcome: "Pass", overall_percent: 70 },
+			{ name: "RES-0", student: "STU-2", status: "Superseded", outcome: "Fail", overall_percent: 40 }] });
+	published.buttons.find((button) => button.label === "Load book").click();
+	await published.flush();
+	const fixes = published.buttons.filter((button) => button.label === "Correct published result");
+	assert.strictEqual(fixes.length, 1, "only the current published revision can be corrected");
+	fixes[0].click();
+	const fix = published.prompts.at(-1);
+	fix.callback({ component: "FINAL", mark: 101, reason: "Re-marked" });
+	assert.strictEqual(published.posts.length, 0, "out-of-range published corrections never reach the server");
+	fix.callback({ component: "FINAL", mark: 75, reason: "Re-marked" });
+	await published.flush();
+	assert.strictEqual(published.posts[0].url, "/api/method/toefl_house.academic.assessment.correct_published_result");
+	const { request_key: _key, ...fixArgs } = published.posts[0].body;
+	assert.deepStrictEqual(fixArgs, { book: "TH-AB-0001", student: "STU-1",
+		marks: [{ component: "FINAL", mark: 75 }], reason: "Re-marked" });
+
 	console.log("Course assessment page smoke OK");
 })().catch((error) => {
 	console.error(error);

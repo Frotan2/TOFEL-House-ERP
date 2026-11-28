@@ -774,6 +774,42 @@ frappe.provide("toefl_house.role_desks");
 			(field) => [field, (row[field] || "").trim()])));
 	}
 
+	// Class-operations policy terms as ordinary form fields. The server
+	// requires every term explicitly; these are suggested starting values the
+	// Course Owner reviews before saving, never server-side defaults.
+	const CLASS_OPERATION_DAYS = ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"];
+	const CLASS_OPERATION_TERMS = Object.freeze([
+		...CLASS_OPERATION_DAYS.map((day) => [
+			"day_" + day, "Teaching day: " + day, "Check", day === "Fri" ? 0 : 1]),
+		["default_session_minutes", "Normal session length (minutes)", "Int", 90],
+		["min_session_minutes", "Shortest allowed session (minutes)", "Int", 30],
+		["max_session_minutes", "Longest allowed session (minutes)", "Int", 180],
+		["max_sessions_per_day", "Most sessions per class per day", "Int", 2],
+		["timetable_horizon_days", "Generate sessions up to this many days ahead", "Int", 120],
+		["allow_postponement", "Sessions may be postponed", "Check", 1],
+		["postpone_max_days", "Postpone at most this many days", "Int", 14],
+		["allow_session_cancellation", "Sessions may be cancelled", "Check", 1],
+		["allow_replacement_sessions", "Make-up sessions allowed", "Check", 1],
+		["replacement_approver_role", "Make-up sessions approved by", "Link", "Academic Manager", { options: "Role" }],
+		["replacement_window_days", "Make-up within this many days", "Int", 30],
+		["allow_class_suspension", "Whole classes may be suspended", "Check", 0],
+		["class_suspension_max_days", "Class suspension limit (days)", "Int", 0],
+		["allow_student_suspension", "Students may be suspended", "Check", 0],
+		["student_suspension_max_days", "Student suspension limit (days)", "Int", 0],
+		["waiting_list_enabled", "Use waiting lists for full classes", "Check", 1],
+		["waiting_offer_valid_days", "A freed seat is held for this many days", "Int", 3],
+		["remove_member_allowed", "Students may be removed from a class", "Check", 1],
+		["capacity_override_role", "Extra seats approved by (empty = never)", "Link", "Academic Manager", { options: "Role" }],
+		["capacity_override_max_seats", "Most extra seats per class", "Int", 2],
+		["capacity_override_expiry_days", "Extra-seat approval expires after (days)", "Int", 14],
+		["allow_transfers", "Students may change class", "Check", 1],
+		["allow_program_transfers", "Students may change program", "Check", 0],
+		["allow_branch_transfers", "Students may change branch", "Check", 0],
+		["transfer_approver_role", "Class changes approved by", "Link", "Academic Manager", { options: "Role" }],
+		["transfer_window_days", "Class changes allowed up to this many days after the new class starts", "Int", 30],
+		["direct_moves_allowed", "Direct class moves allowed without a transfer request", "Check", 0],
+	]);
+
 	const ACTION_FIELDS = Object.freeze({
 		"toefl_house.finance.cashier.reconcile_cashier_day": [
 			{ fieldname: "company", label: "Company", fieldtype: "Data", read_only: 1, reqd: 1 },
@@ -970,6 +1006,85 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
 			{ fieldname: "active", label: "Active", fieldtype: "Check" },
 		],
+		"toefl_house.teaching.class_operations.create_class_operations_policy": [
+			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.class_operations.set_class_operations_policy_version": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "effective_from", label: "Effective from (tomorrow or later)", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason for these rules", fieldtype: "Small Text", reqd: 1 },
+			...CLASS_OPERATION_TERMS.map(([key, label, fieldtype, value, extra]) =>
+				Object.assign({ fieldname: "term_" + key, label, fieldtype, default: value },
+					fieldtype === "Int" ? { reqd: 1 } : {}, extra || {})),
+		],
+		"toefl_house.teaching.class_operations.set_class_operations_policy_status": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Check" },
+		],
+		"toefl_house.teaching.transfers.approve_class_transfer": [
+			{ fieldname: "transfer", label: "Class change request", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "override", label: "Extra-seat approval (only if the new class is full)", fieldtype: "Data",
+				description: "Filled in automatically when an approved extra seat exists for this student and class." },
+		],
+		"toefl_house.teaching.transfers.deny_class_transfer": [
+			{ fieldname: "transfer", label: "Class change request", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.capacity.join_waiting_list": [
+			{ fieldname: "student", label: "Student ID", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "student_group", label: "Class ID", fieldtype: "Data", reqd: 1,
+				description: "The full class the student wants to join, as shown on the class list." },
+			{ fieldname: "note", label: "Note (e.g. preferred time)", fieldtype: "Small Text" },
+		],
+		"toefl_house.teaching.capacity.leave_waiting_list": [
+			{ fieldname: "entry", label: "Waiting-list entry", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.capacity.offer_waiting_list_seat": [
+			{ fieldname: "entry", label: "Waiting-list entry", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "expires_on", label: "Hold the seat until (empty = policy limit)", fieldtype: "Date" },
+		],
+		"toefl_house.teaching.capacity.admit_from_waiting_list": [
+			{ fieldname: "entry", label: "Waiting-list entry", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "override", label: "Extra-seat approval (only if the class is full)", fieldtype: "Data" },
+			{ fieldname: "queue_jump_reason", label: "Reason for admitting before a seat offer (if any)", fieldtype: "Small Text" },
+		],
+		"toefl_house.teaching.capacity.create_capacity_override": [
+			{ fieldname: "student_group", label: "Class", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "student", label: "Student ID", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "seats", label: "Extra seats", fieldtype: "Int", default: 1, reqd: 1, read_only: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "expires_on", label: "Approval expires on (empty = policy limit)", fieldtype: "Date" },
+		],
+		"toefl_house.teaching.capacity.revoke_capacity_override": [
+			{ fieldname: "override", label: "Extra-seat approval", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.calendars.create_academic_calendar": [
+			{ fieldname: "code", label: "Calendar code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Calendar name", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "academic_year", label: "Academic year (empty = every year)", fieldtype: "Link", options: "Academic Year" },
+			{ fieldname: "branch", label: "Branch (empty = whole institute)", fieldtype: "Link", options: "Branch" },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
+		],
+		"toefl_house.teaching.calendars.add_academic_calendar_day": [
+			{ fieldname: "calendar", label: "Calendar", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "day", label: "Date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "kind", label: "Kind", fieldtype: "Select", options: "Holiday\nClosed\nWorking Day", default: "Holiday", reqd: 1,
+				description: "Holiday and Closed block teaching. Working Day reopens a date another calendar closed." },
+			{ fieldname: "description", label: "Name of the day (e.g. Nowruz)", fieldtype: "Data" },
+		],
+		"toefl_house.teaching.calendars.remove_academic_calendar_day": [
+			{ fieldname: "calendar", label: "Calendar", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "day", label: "Date to remove", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.calendars.set_academic_calendar_status": [
+			{ fieldname: "calendar", label: "Calendar", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "active", label: "Keep calendar in use", fieldtype: "Check" },
+		],
 		"toefl_house.teaching.adjustment_posting.create_adjustment_posting_policy": [
 			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
@@ -1094,13 +1209,34 @@ frappe.provide("toefl_house.role_desks");
 		],
 		"toefl_house.finance.corrections.validate_correction_policy": [],
 		"toefl_house.finance.corrections.approve_invoice_correction": [
-			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1, read_only: 1 },
 		],
 		"toefl_house.finance.corrections.approve_fees_correction": [
-			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1, read_only: 1 },
 		],
 		"toefl_house.finance.corrections.deny_fees_correction": [
-			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1, read_only: 1 },
+		],
+		"toefl_house.finance.corrections.deny_invoice_correction": [
+			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1, read_only: 1 },
+		],
+		"toefl_house.academic.progression.override_progression": [
+			{ fieldname: "academic_result", label: "Published result", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "decision", label: "Decision", fieldtype: "Select", options: "Promote\nComplete", reqd: 1 },
+			{ fieldname: "reason", label: "Why the institute overrides the unmet evidence", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.finance.issue_placement_fee": [
+			{ fieldname: "case", label: "Placement case", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "customer", label: "Payer (Customer)", fieldtype: "Link", options: "Customer", reqd: 1 },
+			{ fieldname: "posting_date", label: "Invoice date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "due_date", label: "Due date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "backdate_reason", label: "Reason for an earlier invoice date", fieldtype: "Small Text",
+				description: "Only needed when the invoice date is before today." },
+		],
+		"toefl_house.finance.corrections.request_invoice_correction": [
+			{ fieldname: "sales_invoice", label: "Invoice", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "requested_amount", label: "Amount to reverse (full invoice)", fieldtype: "Float", reqd: 1, read_only: 1 },
+			{ fieldname: "reason", label: "Why this invoice was wrong", fieldtype: "Small Text", reqd: 1 },
 		],
 		"toefl_house.finance.tuition_refund_commands.request_tuition_refund": [
 			{ fieldname: "student", label: "Student ID on the original tuition bill", fieldtype: "Data", reqd: 1 },
@@ -1125,9 +1261,9 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "reason", label: "Reason for withdrawing this approval", fieldtype: "Small Text", reqd: 1 },
 		],
 		"toefl_house.finance.corrections.request_fees_correction": [
-			{ fieldname: "fees", label: "Fees", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "reason", label: "Reason", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "requested_amount", label: "Requested amount", fieldtype: "Float", reqd: 1 },
+			{ fieldname: "fees", label: "Tuition bill", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "requested_amount", label: "Amount to reverse (full bill)", fieldtype: "Float", reqd: 1, read_only: 1 },
+			{ fieldname: "reason", label: "Why this bill was wrong", fieldtype: "Small Text", reqd: 1 },
 		],
 		"toefl_house.academic.create_program": [
 			{ fieldname: "code", label: "Program code (stable, e.g. GEN-ENG)", fieldtype: "Data", reqd: 1 },
@@ -1802,6 +1938,22 @@ frappe.provide("toefl_house.role_desks");
 					args.slots = JSON.stringify(pattern);
 				}
 				if (timetableStatus) args.active = action.args.active;
+				if (action.endpoint === "toefl_house.teaching.class_operations.set_class_operations_policy_version") {
+					const terms = {};
+					CLASS_OPERATION_TERMS.forEach(([key, , fieldtype]) => {
+						const value = args["term_" + key];
+						delete args["term_" + key];
+						if (key.startsWith("day_")) return;
+						terms[key] = fieldtype === "Check" ? (value ? 1 : 0)
+							: fieldtype === "Int" ? Number(value) : String(value || "").trim();
+					});
+					terms.teaching_days = CLASS_OPERATION_DAYS.filter((day) => values["term_day_" + day]).join(",");
+					if (!terms.teaching_days) {
+						frappe.msgprint(text("Choose at least one teaching day."));
+						return;
+					}
+					args.terms = JSON.stringify(terms);
+				}
 				if (action.endpoint.startsWith("toefl_house.reception_intake.")) {
 					// Native Frappe Data/Small Text inputs may return null or
 					// undefined when cleared. An explicitly blank optional field
@@ -2343,7 +2495,7 @@ frappe.provide("toefl_house.role_desks");
 		const steps = [
 			["1. Courses and tuition", "Check the four programs, eleven levels and approved full-semester AFN prices.", "th-academic-setup"],
 			["2. Academic and billing rules", "Choose percentages, waiting days, billing options and approval roles using forms.", "th-configuration"],
-			["3. Rooms and weekly patterns", "Enter verified room capacity and approved weekly slots. Schedule individual sessions in Academic Desk. Generate a range of sessions only after an approved Class Operations Policy is in effect.", "th-academic-setup"],
+			["3. Rooms and weekly patterns", "Enter verified room capacity and approved weekly slots. Schedule individual sessions in Academic Desk. Generate a range of sessions only after an approved Class Operations Policy is in effect (Configuration → Course Owner Policy Controls → Class Operations; holidays under Holidays and Closures).", "th-academic-setup"],
 			["4. Finance and daily work", "Use guided receivables, collections and approved instructor contracts, never source files.", "th-finance-desk"],
 			["5. Review before opening", "Check each staff role, backup recovery and operational readiness with the Owner.", "th-owner-cockpit"],
 		];

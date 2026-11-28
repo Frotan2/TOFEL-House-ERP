@@ -182,6 +182,25 @@ frappe.pages["th-course-assessment"].on_page_load = function (wrapper) {
             for (const result of state.results) {
                 const block = $("<div class='border rounded p-3 mb-2'></div>").appendTo(content);
                 $("<p></p>").text([result.student, result.name, result.outcome, result.overall_percent + "%", result.grade_code || ""].join(" · ")).appendTo(block);
+                if (academic && state.status === "Published" && result.status === "Published") button(block, "Correct published result", () => frappe.prompt([
+                    {fieldname: "component", label: __("Component"), fieldtype: "Select", reqd: 1,
+                        options: (state.components || []).map(component => component.code).join("\n")},
+                    {fieldname: "mark", label: __("Corrected mark"), fieldtype: "Float"},
+                    {fieldname: "missing_reason", label: __("Or: reason the mark is missing"), fieldtype: "Data"},
+                    {fieldname: "reason", label: __("Why this published result is corrected"), fieldtype: "Small Text", reqd: 1},
+                ], values => {
+                    const component = (state.components || []).find(row => row.code === values.component);
+                    const hasMark = values.mark !== undefined && values.mark !== null && String(values.mark) !== "";
+                    const missing = String(values.missing_reason || "").trim();
+                    if (!component || hasMark === Boolean(missing)) { notice.text(__("Enter either a corrected mark or a missing reason.")); return; }
+                    const value = hasMark ? Number(values.mark) : null;
+                    if (value != null && (!Number.isFinite(value) || value < 0 || value > component.maximum_score)) {
+                        notice.text(__("Marks must be within the displayed maximum."));
+                        return;
+                    }
+                    const row = hasMark ? {component: component.code, mark: value} : {component: component.code, missing_reason: missing};
+                    transition("correct_published_result", {student: result.student, marks: [row], reason: values.reason});
+                }, __("Correct published result — {0}", [result.student]), __("Publish corrected result")));
                 if (academic) button(block, "Decide progression", () => frappe.prompt([
                     {fieldname: "decision", label: __("Decision"), fieldtype: "Select", options: "Promote\nRepeat\nRetake\nComplete", reqd: 1},
                     {fieldname: "reason", label: __("Decision evidence"), fieldtype: "Small Text", reqd: 1},

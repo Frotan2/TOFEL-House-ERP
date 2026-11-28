@@ -140,6 +140,11 @@ def _correction_items(rows, policies=()):
                         if is_fees else "toefl_house.finance.corrections.approve_invoice_correction")
             item["action"] = guided_action(approver_role, endpoint,
                                            "Approve correction", {"request": row["name"]})
+            deny = guided_action(approver_role,
+                                 "toefl_house.finance.corrections.deny_fees_correction" if is_fees
+                                 else "toefl_house.finance.corrections.deny_invoice_correction",
+                                 "Deny correction", {"request": row["name"]})
+            item["actions"] = [deny] if deny else []
         elif pending:
             # No active policy: the command would deny every approval. Say so
             # instead of showing a button that can only fail.
@@ -671,6 +676,18 @@ def work():
             "waiting_since": row.get("due_date") or row.get("posting_date"),
             "amount": row.get("grand_total") or 0,
             "currency": row.get("currency") or "",
+            # A bill issued in error is reversed through the correction
+            # framework (full amount, inside the policy window, approved by
+            # a different person). The command enforces every rule.
+            "actions": [extra for extra in (
+                guided_action("Finance Officer",
+                              "toefl_house.finance.corrections.request_fees_correction"
+                              if kind == "Fees" else
+                              "toefl_house.finance.corrections.request_invoice_correction",
+                              "Request correction",
+                              {("fees" if kind == "Fees" else "sales_invoice"): row["name"],
+                               "requested_amount": row.get("grand_total") or 0}),
+            ) if extra] if state in ("Outstanding", "Overdue", "Unpaid") else [],
         }
 
     payment_items = [{
@@ -888,6 +905,10 @@ def work():
                           + [money_item(row, "Fees") for row in outstanding_fees],
                     empty_title="Nothing is outstanding",
                     empty_body="No submitted invoice or fee carries an outstanding amount for your scope."),
+            section("placement-fees", "Placement fees to bill", "queue",
+                    items=_placement_fee_items(),
+                    empty_title="No placement case awaits a fee",
+                    empty_body="Every open placement case in this preview already has a placement invoice."),
             section("billing", "Awaiting billing", "queue", items=billing_items,
                     empty_title="No billing action in this preview",
                     empty_body="No currently visible submitted enrollment requires billing. This bounded desk preview is not a complete audit of all records."),
@@ -914,6 +935,32 @@ def work():
             tax_section,
         ] + book_shop,
     }
+
+
+def _placement_fee_items():
+    """Open placement cases with no active placement invoice yet."""
+    cases = project_rows("finance", "TH Placement Case", ["name", "subject", "status", "creation"],
+                         filters={"status": "Open"}, order_by="creation desc", limit=LIMIT_QUEUES)
+    if not cases:
+        return []
+    billed = {row.get("th_placement_case") for row in project_rows(
+        "finance", INVOICE, ["name", "th_placement_case", "docstatus"],
+        filters={"th_placement_case": ("in", [row["name"] for row in cases]),
+                 "docstatus": ("!=", 2)},
+        order_by="name asc", limit=LIMIT_QUEUES * 2)}
+    day = today()
+    return [{
+        "id": row["name"], "person": row.get("subject") or row["name"],
+        "detail": "Placement case opened " + str(row.get("creation") or "")[:10],
+        "status": "Not billed", "stage": "Placement fee",
+        "stage_definition": "The placement fee uses the configured fee item and price list; the billing policy decides when it may be charged.",
+        "next": "Choose the payer (Customer) and issue the placement invoice. Create the Customer in ERPNext first if the person is new.",
+        "next_role": "Finance Officer", "waiting_since": row.get("creation"),
+        "action": guided_action("Finance Officer", "toefl_house.finance.issue_placement_fee",
+                                "Issue placement fee",
+                                {"case": row["name"], "customer": "", "posting_date": day,
+                                 "due_date": day, "backdate_reason": ""}),
+    } for row in cases if row["name"] not in billed]
 
 
 def _scope_companies():

@@ -678,7 +678,9 @@ def _timetable_section():
             next_step = "The full weekly pattern could not be read safely. Review the stored template before editing."
         elif active:
             next_step = ("Use Schedule session on the active class in Academic Desk. "
-                         "Generating a batch from the weekly pattern needs an approved Class Operations Policy."
+                         "Generating a batch from the weekly pattern needs an approved Class Operations Policy "
+                         "(Configuration \u2192 Course Owner Policy Controls \u2192 Class Operations; "
+                         "holidays under Holidays and Closures)."
                          if slots else "Add the approved weekly slots.")
         else:
             next_step = "Reactivate this template before editing its pattern or generating sessions."

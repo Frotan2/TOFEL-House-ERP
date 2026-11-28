@@ -792,6 +792,9 @@ class FinanceVocabularyTests(unittest.TestCase):
         self.assertEqual(items[0]["action"]["role"], "Admission Approver")
         self.assertEqual(items[0]["action"]["endpoint"],
                          "toefl_house.finance.corrections.approve_invoice_correction")
+        self.assertEqual([extra["endpoint"] for extra in items[0]["actions"]],
+                         ["toefl_house.finance.corrections.deny_invoice_correction"])
+        self.assertEqual(items[0]["actions"][0]["role"], "Admission Approver")
 
     def test_disabled_last_cash_drawer_still_shows_close_integrity_review(self):
         from unittest.mock import patch
@@ -1668,6 +1671,17 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                  "superseded_on": None},
             ],
         }
+        world["TH Academic Calendar"] = [
+            {"name": "KBL-2026", "code": "KBL-2026", "title": "Kabul 1405",
+             "status": "Active", "academic_year": "", "branch": "",
+             "description": "", "modified": "2026-09-01 10:00:00"},
+        ]
+        world["TH Academic Calendar Day"] = [
+            {"name": "DAY-1", "parent": "KBL-2026", "parenttype": "TH Academic Calendar",
+             "date": "2000-03-21", "kind": "Holiday", "description": "Past Nowruz"},
+            {"name": "DAY-2", "parent": "KBL-2026", "parenttype": "TH Academic Calendar",
+             "date": "2999-03-21", "kind": "Holiday", "description": "Nowruz"},
+        ]
         if ambiguous:
             world["TH Assessment Policy Version"].append({
                 "name": "VER-3", "parent": "ASM-EFF",
@@ -1684,8 +1698,12 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                                 list(fields or []) + list((filters or {}).keys()))
             rows = world.get(doctype, [])
             filters = filters or {}
+            def matches(row, key, value):
+                if isinstance(value, list) and value and value[0] == "in":
+                    return row.get(key) in value[1]
+                return row.get(key) == value
             return [dict(row) for row in rows
-                    if all(row.get(key) == value
+                    if all(matches(row, key, value)
                            for key, value in filters.items()
                            if key in row or value is not None)]
 
@@ -1704,14 +1722,29 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
 
     def test_ten_sections_with_computed_readiness(self):
         payload = self._run(validated=("ASM-EFF", "ALERT-POL", "GRD-POL"))
-        self.assertEqual(len(payload["sections"]), 10)
+        self.assertEqual(len(payload["sections"]), 11)
         academic = self._section(payload, "academic")
         self.assertEqual(academic["kind"], "links")
         self.assertEqual(academic["items"][0]["slug"], "th-academic-setup")
         owner_policies = self._section(payload, "owner-policies")
         self.assertEqual(owner_policies["kind"], "queue")
-        self.assertEqual(len(owner_policies["items"]), 7)
+        self.assertEqual(len(owner_policies["items"]), 8)
         self.assertTrue(all("action" in item for item in owner_policies["items"]))
+        class_ops = next(item for item in owner_policies["items"] if item["id"] == "class-operations")
+        self.assertEqual(class_ops["action"]["endpoint"],
+                         "toefl_house.teaching.class_operations.create_class_operations_policy")
+        self.assertIn("refused", class_ops["stage_definition"])
+        calendar = self._section(payload, "academic-calendar")
+        kabul, new = calendar["items"]
+        self.assertEqual(kabul["status"], "In use")
+        self.assertIn("2999-03-21 Holiday (Nowruz)", kabul["detail"])
+        self.assertNotIn("Past Nowruz", kabul["detail"])
+        self.assertEqual([action["endpoint"].rsplit(".", 1)[1] for action in kabul["actions"]],
+                         ["add_academic_calendar_day", "remove_academic_calendar_day",
+                          "set_academic_calendar_status"])
+        self.assertEqual(kabul["actions"][2]["args"], {"calendar": "KBL-2026", "active": 0})
+        self.assertEqual(new["action"]["endpoint"],
+                         "toefl_house.teaching.calendars.create_academic_calendar")
         backup_section = self._section(payload, "backup-recovery")
         self.assertEqual(backup_section["kind"], "queue")
         switch_item = backup_section["items"][0]
@@ -2110,6 +2143,129 @@ class TeacherLinkReadinessWorldTests(unittest.TestCase):
         module = _import_desk("operations", roles={"General Manager"})
         module.frappe.get_all = world_get_all
         self.assertEqual(module._teacher_link_items(), [])
+
+
+class ProgressionOverrideQueueTests(unittest.TestCase):
+    def _items(self, roles):
+        module = _import_desk("operations", roles=roles)
+        module.frappe.get_all = desk_world_get_all("progression world", {
+            "TH Academic Result": [
+                {"name": "RES-1", "student": "STU-1", "student_group": "G-1", "outcome": "Fail",
+                 "overall_percent": 45, "passed": 0, "status": "Published", "published_on": "2026-09-01"},
+                {"name": "RES-2", "student": "STU-2", "student_group": "G-1", "outcome": "Pass",
+                 "overall_percent": 80, "passed": 1, "status": "Published", "published_on": "2026-09-01"},
+                {"name": "RES-3", "student": "STU-3", "student_group": "G-1", "outcome": "Pass",
+                 "overall_percent": 80, "passed": 1, "status": "Superseded", "published_on": "2026-08-01"},
+            ],
+            "TH Progression Decision": [{"name": "DEC-1", "academic_result": "RES-2"}],
+            "User Permission": [],
+        })
+        return module._progression_items()
+
+    def test_undecided_published_results_offer_the_general_manager_override(self):
+        items = self._items({"General Manager"})
+        self.assertEqual([item["id"] for item in items], ["RES-1"])
+        self.assertEqual(items[0]["action"]["endpoint"],
+                         "toefl_house.academic.progression.override_progression")
+        self.assertEqual(items[0]["action"]["args"]["academic_result"], "RES-1")
+
+    def test_override_is_hidden_without_the_general_manager_role(self):
+        items = self._items({"Owner"})
+        self.assertIsNone(items[0]["action"])
+
+class AcademicClassChangeWorldTests(unittest.TestCase):
+    """Class changes, waiting lists and extra seats reach their deciders."""
+
+    @staticmethod
+    def _world():
+        return {
+            "Student Group": [
+                {"name": "GROUP-A", "student_group_name": "GEN-1 A", "program": "GEN-1",
+                 "academic_year": "2026", "max_strength": 2, "course": "C", "disabled": 0,
+                 "th_class_status": "Active"},
+                {"name": "GROUP-B", "student_group_name": "GEN-1 B", "program": "GEN-1",
+                 "academic_year": "2026", "max_strength": 2, "course": "C", "disabled": 0,
+                 "th_class_status": "Active"},
+            ],
+            "TH Class Transfer": [
+                {"name": "TRF-1", "student": "STU-1", "from_group": "GROUP-A",
+                 "to_group": "GROUP-B", "transfer_kind": "Time", "effective_date": "2026-10-01",
+                 "reason": "Work hours", "requested_by": "s@example.com",
+                 "requested_on": "2026-09-20", "status": "Requested"},
+                {"name": "TRF-2", "student": "STU-9", "from_group": "GROUP-A",
+                 "to_group": "GROUP-B", "transfer_kind": "Time", "effective_date": "2026-10-01",
+                 "reason": "", "requested_by": "s@example.com",
+                 "requested_on": "2026-09-20", "status": "Executed"},
+            ],
+            "TH Capacity Approval": [
+                {"name": "CAP-1", "student_group": "GROUP-B", "student": "STU-1", "seats": 1,
+                 "status": "Approved", "reason": "Full", "approved_by": "am@example.com",
+                 "expires_on": "2026-10-15"},
+            ],
+            "TH Class Waiting List": [
+                {"name": "WAIT-1", "student": "STU-2", "student_group": "GROUP-A",
+                 "status": "Waiting", "priority": 1, "requested_on": "2026-09-01",
+                 "offer_expires_on": None},
+                {"name": "WAIT-2", "student": "STU-3", "student_group": "GROUP-A",
+                 "status": "Offered", "priority": 2, "requested_on": "2026-09-02",
+                 "offer_expires_on": "2026-09-30"},
+            ],
+        }
+
+    def _items(self, roles):
+        module = _import_desk("academic", roles=roles)
+        world_get_all = desk_world_get_all("class-change world", self._world())
+        module.frappe.get_all = world_get_all
+        module.frappe.db.get_all = world_get_all
+        payload = module.work()
+        section = next(sect for sect in payload["sections"] if sect["id"] == "class-changes")
+        return {item["id"]: item for item in section["items"]}, payload
+
+    def test_decisions_are_offered_to_the_acting_roles(self):
+        items, payload = self._items({"Academic Manager", "Teaching Scheduler"})
+        self.assertEqual(set(items), {"TRF-1", "WAIT-1", "WAIT-2", "CAP-1"})
+        transfer = items["TRF-1"]
+        self.assertEqual(transfer["action"]["endpoint"],
+                         "toefl_house.teaching.transfers.approve_class_transfer")
+        # The matching approved extra seat is prefilled; the server re-verifies it.
+        self.assertEqual(transfer["action"]["args"], {"transfer": "TRF-1", "override": "CAP-1"})
+        self.assertEqual(transfer["actions"][0]["endpoint"],
+                         "toefl_house.teaching.transfers.deny_class_transfer")
+        self.assertEqual(items["WAIT-1"]["action"]["endpoint"],
+                         "toefl_house.teaching.capacity.offer_waiting_list_seat")
+        self.assertEqual(items["WAIT-2"]["action"]["endpoint"],
+                         "toefl_house.teaching.capacity.admit_from_waiting_list")
+        self.assertEqual(items["CAP-1"]["action"]["endpoint"],
+                         "toefl_house.teaching.capacity.revoke_capacity_override")
+        classes = next(sect for sect in payload["sections"] if sect["id"] == "classes")
+        group = next(item for item in classes["items"] if item["id"] == "GROUP-A")
+        self.assertEqual(group["actions"][0]["endpoint"],
+                         "toefl_house.teaching.capacity.create_capacity_override")
+
+    def test_actions_disappear_without_the_role(self):
+        items, _payload = self._items({"Academic Manager"})
+        self.assertIsNone(items["WAIT-1"]["action"])
+        self.assertEqual(items["WAIT-1"]["actions"], [])
+        self.assertIsNotNone(items["TRF-1"]["action"])
+
+
+class ReceptionWaitingListWorldTests(unittest.TestCase):
+    def test_open_entries_offer_removal_to_reception(self):
+        module = _import_desk("reception", roles={"Reception"})
+        world_get_all = desk_world_get_all("waiting world", {"TH Class Waiting List": [
+            {"name": "WAIT-1", "student": "STU-2", "student_group": "GROUP-A",
+             "status": "Waiting", "priority": 1, "requested_on": "2026-09-01",
+             "offer_expires_on": None},
+            {"name": "WAIT-3", "student": "STU-4", "student_group": "GROUP-A",
+             "status": "Admitted", "priority": 1, "requested_on": "2026-09-01",
+             "offer_expires_on": None},
+        ]})
+        module.frappe.get_all = world_get_all
+        items = module._waiting_items()
+        self.assertEqual([item["id"] for item in items], ["WAIT-1"])
+        self.assertEqual(items[0]["action"]["endpoint"],
+                         "toefl_house.teaching.capacity.leave_waiting_list")
+        self.assertEqual(items[0]["action"]["args"], {"entry": "WAIT-1"})
 
 
 class AcademicClassActionsWorldTests(unittest.TestCase):
@@ -3395,6 +3551,29 @@ class FinanceOutstandingWorldTests(unittest.TestCase):
         self.assertIn("FEE-OWING", items)
         self.assertEqual(items["FEE-OWING"]["status"], "Outstanding")
         self.assertNotIn("INV-SETTLED", items)
+        # A bill issued in error can be sent for correction from its row.
+        self.assertEqual(items["FEE-OWING"]["actions"][0]["endpoint"],
+                         "toefl_house.finance.corrections.request_fees_correction")
+        self.assertEqual(set(items["FEE-OWING"]["actions"][0]["args"]), {"fees", "requested_amount"})
+        self.assertEqual(items["INV-OWING"]["actions"][0]["endpoint"],
+                         "toefl_house.finance.corrections.request_invoice_correction")
+
+    def test_unbilled_placement_cases_offer_the_placement_fee(self):
+        module = _import_desk("finance", roles={"Finance Manager", "Finance Officer"})
+        getter = desk_world_get_all("placement fee world", {
+            "TH Placement Case": [
+                {"name": "CASE-1", "subject": "Visitor A", "status": "Open", "creation": "2026-09-01 10:00:00"},
+                {"name": "CASE-2", "subject": "Visitor B", "status": "Open", "creation": "2026-09-02 10:00:00"},
+            ],
+            "Sales Invoice": [
+                {"name": "INV-9", "th_placement_case": "CASE-2", "docstatus": 1},
+            ],
+        })
+        module.frappe.get_all = getter
+        items = module._placement_fee_items()
+        self.assertEqual([item["id"] for item in items], ["CASE-1"])
+        self.assertEqual(items[0]["action"]["endpoint"], "toefl_house.finance.issue_placement_fee")
+        self.assertEqual(items[0]["action"]["args"]["case"], "CASE-1")
 
     def test_money_facts_count_the_native_queues(self):
         payload = self._payload(count=1)
