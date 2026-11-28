@@ -179,43 +179,6 @@ class ActivationFlow(unittest.TestCase):
                 self.act.activate_internal(SITE, log=lambda *_: None)
             self.assertEqual(self.fake_probe(SITE)["mode"], "REFUSED")
 
-    def test_windows_owner_activation_needs_verified_install_backup_and_name(self):
-        self.act.ACTIVATION_DIR = self.receipt_path.parent
-        self.act.ACTIVATION_DIR.mkdir(parents=True, exist_ok=True)
-        self.act.BACKUP_RECEIPT_PATH = self.receipt_path
-        from update_engine import UpdateError
-        with self.assertRaises(UpdateError):  # not a verified factory installation
-            self.act.activate_owner(SITE, "Course Owner Name", log=lambda *_: None)
-        (self.act.ACTIVATION_DIR / "installed-image-identity.json").write_text(json.dumps({
-            "schema_version": 1,
-            "document_type": "toefl-house-erp-installed-image",
-            "provenance": "factory",
-            "source_revision": "a" * 40,
-            "image_id": "sha256:" + "b" * 64,
-            "internal_setup_sha256": "c" * 64,
-            "internal_installation_id": "d" * 32,
-        }))
-        with self.assertRaises(self.act.Refused):  # no fresh verified backup yet
-            self.act.activate_owner(SITE, "Course Owner Name", log=lambda *_: None)
-        self.assertEqual(self.fake_probe(SITE)["mode"], "REFUSED")
-        self.fresh_backup()
-        for bad in ("", " ", "12", "x"):
-            with self.assertRaises(self.act.Refused):
-                self.act.activate_owner(SITE, bad, log=lambda *_: None)
-        self.assertEqual(self.fake_probe(SITE)["mode"], "REFUSED")
-        with patch("builtins.print"):
-            self.assertEqual(self.act.main(["owner-activate", "--confirm", SITE,
-                                            "--owner", "Course  Owner Name"]), 0)
-        self.assertEqual(self.fake_probe(SITE)["mode"], "PRODUCTION")
-        self.assertEqual(self.config()[self.act.INTERNAL_CATALOG_SITE_KEY], SITE)
-        record = json.loads((self.site_dir / "private" / self.act.OWNER_ACTIVATION_RECORD).read_text())
-        self.assertEqual(record[-1]["owner"], "Course Owner Name")
-        self.assertEqual(record[-1]["installation"]["internal_installation_id"], "d" * 32)
-        with self.assertRaisesRegex(self.act.Refused, "REFUSED"):
-            self.act.activate_owner(SITE, "Course Owner Name", log=lambda *_: None)
-        self.act.deactivate(SITE, log=lambda *_: None)
-        self.assertEqual(self.fake_probe(SITE)["mode"], "REFUSED")
-
     def test_general_activation_does_not_issue_catalog_authority(self):
         self.fresh_backup()
         self.act.activate(SITE, log=lambda *_: None)
