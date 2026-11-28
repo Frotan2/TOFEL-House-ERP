@@ -1,13 +1,16 @@
 /*
- * The TOEFL House brand on the native desk and sign-in page: red on white.
- * Only Frappe's own theme variables are set (light theme), so native
- * components keep their structure and a Frappe upgrade cannot break them.
- * The colour matches --th-accent in th_design_system.css.
+ * The TOEFL House brand on the native desk and sign-in page.
+ * Colours come from the official logo (docs/brand/README.md): red #e40613,
+ * grey #878787, black #000000 on white. Only Frappe's own theme variables are
+ * set (light theme), so native components keep their structure and a Frappe
+ * upgrade cannot break them. The red matches --th-accent in
+ * th_design_system.css. White on this red is 4.9:1 (WCAG AA) and on the
+ * hover red 6.9:1.
  */
 :root,
 :root[data-theme="light"] {
-	--th-brand: #c8102e;
-	--th-brand-hover: #a00d25;
+	--th-brand: #e40613;
+	--th-brand-hover: #b80510;
 	--btn-primary: var(--th-brand);
 	--primary: var(--th-brand);
 	--primary-color: var(--th-brand);
@@ -31,4 +34,26 @@
 
 .page-card {
 	border-top: 4px solid var(--th-brand);
+}
+
+/*
+ * Sign-in page: show the full logo at a readable size. The desk's small
+ * square slots use the square file from hooks.py; here the wide original is
+ * shown with its own proportions (height-limited, never stretched).
+ */
+.page-card-head img.app-logo {
+	content: url("/assets/toefl_house/images/toefl_house_logo.png");
+	max-height: 96px;
+	max-width: 100%;
+	width: auto;
+	height: auto;
+	object-fit: contain;
+}
+
+/* The logo has black lettering on a transparent background; keep it on
+ * white in any theme so it stays readable. */
+.sidebar-header .header-logo img,
+img.app-logo {
+	background: #ffffff;
+	object-fit: contain;
 }

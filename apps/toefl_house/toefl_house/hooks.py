@@ -28,9 +28,15 @@ setup_wizard_success = "toefl_house.academic.native_setup.setup_wizard_success"
 # `app_home` routes the TOEFL House app tile to the role-filtered command centre;
 # every individual page remains independently Page-role-gated server-side.
 app_home = "/app/th-command-centre"
-# Red-and-white identity on the desk and the sign-in page (theme variables
-# only). The Owner can replace the logo in the native Navbar Settings.
-app_logo_url = "/assets/toefl_house/images/th_logo.svg"
+# The official TOEFL House logo and its red (docs/brand/README.md), stored
+# locally so the desk works offline. Desk app slots are square, so the square
+# file is the same logo on a white square (padding only, never resized out of
+# proportion). The Owner can still override it in the native Navbar Settings.
+app_logo_url = "/assets/toefl_house/images/toefl_house_logo_square.png"
+website_context = {
+    "favicon": "/assets/toefl_house/images/toefl_house_favicon.png",
+    "splash_image": "/assets/toefl_house/images/toefl_house_logo.png",
+}
 app_include_css = ["/assets/toefl_house/css/th_brand.css"]
 web_include_css = ["/assets/toefl_house/css/th_brand.css"]
 # The app tile is not the native login destination. Route staff at login and

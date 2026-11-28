@@ -49,6 +49,9 @@ ALLOWED_FILES = (
     "product/windows/Test Local Docker.ps1",
     "product/windows/Create ERP Desktop Shortcut.ps1",
     "product/windows/Test Existing Installation.ps1",
+    # The official logo for the launcher window and the desktop shortcut.
+    "product/windows/toefl-house.ico",
+    "product/windows/toefl-house-logo.png",
     # Provider-reviewed signed update workflow (channel remains disabled).
     "product/windows/Update TOEFL House ERP.ps1",
     "product/windows/updater-strings.json",

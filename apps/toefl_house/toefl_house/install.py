@@ -130,6 +130,7 @@ def after_migrate():
     frappe.db.add_index("TH Cashier Day", ["company", "date"], "th_cashier_day_company_date")
     frappe.db.add_index("TH Cashier Day", ["date"], "th_cashier_day_date")
     _seed_skills()
+    upgrade_institute_letter_head()
 
 
 def after_install():
@@ -140,9 +141,45 @@ def after_install():
     ensure_institute_letter_head()
 
 
+LETTER_HEAD_NAME = "The TOEFL House"
+# The text-only header seeded by earlier releases. Only this exact, unedited
+# value is upgraded to the logo header; an Owner's own header is never changed.
+SEEDED_TEXT_LETTER_HEAD = (
+    '<div style="text-align:center"><strong>The TOEFL House</strong>'
+    '<div dir="rtl" lang="fa-AF">خانه موفقیت</div></div>'
+)
+
+
+def institute_letter_head_html():
+    """The official logo, embedded so print and PDF work fully offline."""
+    import base64
+
+    path = frappe.get_app_path("toefl_house", "public", "images", "toefl_house_logo_print.jpg")
+    with open(path, "rb") as handle:
+        logo = base64.b64encode(handle.read()).decode("ascii")
+    # Height-limited only: the logo keeps its own proportions. The logo
+    # already carries the English and Dari names of the institute.
+    return (
+        '<div style="text-align:center;border-bottom:2px solid #e40613;padding-bottom:6px">'
+        '<img src="data:image/jpeg;base64,' + logo + '" alt="The TOEFL House"'
+        ' style="height:72px;width:auto;max-width:100%"></div>'
+    )
+
+
+def upgrade_institute_letter_head():
+    """Give an existing, unedited seeded header the official logo."""
+    if not frappe.db.exists("Letter Head", LETTER_HEAD_NAME):
+        return
+    letter_head = frappe.get_doc("Letter Head", LETTER_HEAD_NAME)
+    if letter_head.source != "HTML" or (letter_head.content or "") != SEEDED_TEXT_LETTER_HEAD:
+        return
+    letter_head.content = institute_letter_head_html()
+    letter_head.save(ignore_permissions=True)
+
+
 def ensure_institute_letter_head():
-    """Provide the institute's text identity on a fresh installation."""
-    name = "The TOEFL House"
+    """Provide the institute's logo header on a fresh installation."""
+    name = LETTER_HEAD_NAME
     if frappe.db.exists("Letter Head", name):
         return
     is_default = not frappe.db.exists("Letter Head", {"is_default": 1})
@@ -151,10 +188,7 @@ def ensure_institute_letter_head():
         "letter_head_name": name,
         "source": "HTML",
         "footer_source": "HTML",
-        "content": (
-            '<div style="text-align:center"><strong>The TOEFL House</strong>'
-            '<div dir="rtl" lang="fa-AF">خانه موفقیت</div></div>'
-        ),
+        "content": institute_letter_head_html(),
         "is_default": int(is_default),
     }).insert(ignore_permissions=True)
     if is_default:

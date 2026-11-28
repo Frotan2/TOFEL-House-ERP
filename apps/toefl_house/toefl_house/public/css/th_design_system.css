@@ -70,16 +70,17 @@
 	--th-line-strong: #cdd5e0;
 	--th-line-faint: #eef2f7;
 
-	/* Brand accent - The TOEFL House red on white. Used for emphasis only,
-	 * never as large fill, so the eye is drawn to the next action rather
-	 * than to decoration. White on this red is 5.9:1 (WCAG AA). The same
-	 * value is used by th_brand.css for the rest of the desk. */
-	--th-accent: #c8102e;
-	--th-accent-hover: #a00d25;
+	/* Brand accent - the red of the official TOEFL House logo
+	 * (docs/brand/README.md). Used for emphasis only, never as large fill,
+	 * so the eye is drawn to the next action rather than to decoration.
+	 * White on this red is 4.9:1 (WCAG AA); the hover red is 6.9:1.
+	 * th_brand.css uses the same values for the rest of the desk. */
+	--th-accent: #e40613;
+	--th-accent-hover: #b80510;
 	--th-accent-ink: #ffffff;
-	--th-accent-soft: #fcebee;
-	--th-accent-border: #f2b8c2;
-	--th-accent-muted: #d9475f;
+	--th-accent-soft: #fdeaeb;
+	--th-accent-border: #f5b3b7;
+	--th-accent-muted: #ea4a53;
 
 	/* Status vocabulary - exactly five tones. The same tone always means the
 	 * same thing on every page, which is what makes a glance trustworthy. */

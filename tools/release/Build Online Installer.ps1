@@ -61,7 +61,11 @@ try {
     }
     $temporaryExe = Join-Path $staging 'TOEFL-House-ERP-Online-Setup.exe'
     $resourceArg = '/resource:' + $plan + ',TOEFLHouse.OnlinePlan'
-    & $csc /nologo /target:winexe /platform:x64 ("/out:" + $temporaryExe) /reference:System.Windows.Forms.dll /reference:System.Drawing.dll $resourceArg $source
+    # The official TOEFL House logo as the setup icon (appearance only).
+    $iconArg = @()
+    $setupIcon = Join-Path $PSScriptRoot '..\..\product\windows\toefl-house.ico'
+    if (Test-Path -LiteralPath $setupIcon -PathType Leaf) { $iconArg = @('/win32icon:' + $setupIcon) }
+    & $csc /nologo /target:winexe /platform:x64 ("/out:" + $temporaryExe) /reference:System.Windows.Forms.dll /reference:System.Drawing.dll @iconArg $resourceArg $source
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $temporaryExe -PathType Leaf)) {
         throw 'The small Windows online setup failed to compile.'
     }

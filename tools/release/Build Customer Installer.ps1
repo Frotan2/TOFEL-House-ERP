@@ -434,6 +434,9 @@ TEST PACKAGE - NO REAL DATA. Production authorization remains REJECT.
     $stub = Join-Path $staging 'stub.exe'
     $variant = @()
     if ($InternalDelivery) { $variant += '/define:INTERNAL_UNSIGNED_SETUP' }
+    # The official TOEFL House logo as the Setup EXE icon (appearance only).
+    $setupIcon = Join-Path $PSScriptRoot '..\..\product\windows\toefl-house.ico'
+    if (Test-Path -LiteralPath $setupIcon -PathType Leaf) { $variant += ('/win32icon:' + $setupIcon) }
     & $compiler @variant /nologo /target:winexe /platform:x64 "/out:$stub" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll (Join-Path $PSScriptRoot 'windows\CustomerSetup.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Windows setup compilation failed.' }
     $partial = $output + '.part-' + [guid]::NewGuid().ToString('N') + '.exe'

@@ -101,6 +101,8 @@ try {
         "product/windows/Repair TOEFL House ERP.cmd",
         "product/windows/Test Fresh Installation.ps1",
         "product/windows/Test Existing Installation.ps1",
+        "product/windows/toefl-house.ico",
+        "product/windows/toefl-house-logo.png",
         "product/windows/Update TOEFL House ERP.ps1",
         "product/windows/updater-strings.json",
         "product/updates/channel.json"
