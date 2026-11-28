@@ -1,12 +1,7 @@
 """Refinement of U-09: duplicate-payment protection at the HRMS submission
-boundary, not only in worked-month reporting.
+boundary.
 
 Reproduction (before the fix):
-- ``worked_month_payroll`` (teaching/payroll_periods.py) is the ONLY owned
-  code that refuses a second submitted Salary Slip for the same employee in
-  the same worked period, and no production code calls it: it takes
-  caller-supplied rows and is exercised only by
-  tests/teaching/test_shamsi_payroll_periods.py.
 - Native HRMS owns Salary Slip creation/submission. The app registers no
   doc_event for "Salary Slip" or "Additional Salary" in hooks.py, so a
   second slip for the same employee and the same exact period can be
@@ -26,8 +21,7 @@ serialised on the Employee row lock. ``before_cancel`` is pinned to the
 same function per the A13 three-seam rule but is a no-op inside it:
 cancelling can only remove a duplicate. Exact-period duplicates only:
 overlapping-but-different periods stay legitimate native cases (partial
-months, corrections) and remain flagged at reconciliation by
-``worked_month_payroll``.
+months, corrections).
 """
 import ast
 import importlib.util

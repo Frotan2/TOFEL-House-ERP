@@ -194,8 +194,13 @@ class EmergencyRestoreTests(unittest.TestCase):
     def _authorization(self, *, request_id="a" * 32, approvals=None,
                        hashes=None, site=None, backup_set=None,
                        pre_restore_backup_set=None, schema_version=2,
-                       issued="2026-10-28T00:00:00Z",
-                       expires="2026-11-28T00:00:00Z", signers=None):
+                       issued=None, expires=None, signers=None):
+        # The validity window is relative to the real clock. A fixed calendar
+        # window silently expired on 2026-11-28 and made unrelated refusal
+        # tests pass for the wrong reason ("expired") instead of their own.
+        now = datetime.now(timezone.utc)
+        issued = issued or (now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        expires = expires or (now + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
         pre_restore_paths = self.restore._verified_backup_paths(
             self.site, self.current_set)
         receipt = self.restore._backup_receipt_path(pre_restore_paths, self.current_set)

@@ -69,6 +69,8 @@ public class CustomerSetup {
                 string payload = Path.Combine(staging, "payload.zip");
                 progress = new Form();
                 progress.Text = "TOEFL House ERP setup";
+                // The logo icon compiled into this EXE; appearance only.
+                try { progress.Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
                 progress.Width = 470; progress.Height = 125;
                 progress.StartPosition = FormStartPosition.CenterScreen;
                 progress.ControlBox = false;

@@ -34,19 +34,49 @@ $form.MaximizeBox = $false
 $form.FormBorderStyle = "FixedDialog"
 $form.BackColor = [System.Drawing.Color]::FromArgb(247, 249, 252)
 
+# The official TOEFL House logo and its red (#e40613). The logo is decoration
+# only: a missing or unreadable file never stops the launcher.
+$brandRed = [System.Drawing.Color]::FromArgb(228, 6, 19)
+$brandIconFile = Join-Path $PSScriptRoot "toefl-house.ico"
+$brandLogoFile = Join-Path $PSScriptRoot "toefl-house-logo.png"
+$script:brandIconLoaded = $false
+$script:brandLogoLoaded = $false
+try {
+    if (Test-Path -LiteralPath $brandIconFile -PathType Leaf) {
+        $form.Icon = New-Object System.Drawing.Icon($brandIconFile)
+        $script:brandIconLoaded = $true
+    }
+} catch { $script:brandIconLoaded = $false }
+
 $heading = New-Object System.Windows.Forms.Label
 $heading.Text = "TOEFL House ERP"
 $heading.Font = New-Object System.Drawing.Font("Segoe UI", 20, [System.Drawing.FontStyle]::Bold)
-$heading.ForeColor = [System.Drawing.Color]::FromArgb(24, 45, 76)
+$heading.ForeColor = $brandRed
 $heading.Location = New-Object System.Drawing.Point(28, 22)
-$heading.Size = New-Object System.Drawing.Size(630, 44)
+$heading.Size = New-Object System.Drawing.Size(500, 44)
 $form.Controls.Add($heading)
+
+try {
+    if (Test-Path -LiteralPath $brandLogoFile -PathType Leaf) {
+        # Read the bytes first so the file is never locked while the window is open.
+        $logoStream = New-Object System.IO.MemoryStream(,[System.IO.File]::ReadAllBytes($brandLogoFile))
+        $logoBox = New-Object System.Windows.Forms.PictureBox
+        $logoBox.Image = [System.Drawing.Image]::FromStream($logoStream)
+        # Zoom keeps the logo's own proportions inside the box.
+        $logoBox.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
+        $logoBox.BackColor = [System.Drawing.Color]::White
+        $logoBox.Location = New-Object System.Drawing.Point(540, 14)
+        $logoBox.Size = New-Object System.Drawing.Size(150, 78)
+        $form.Controls.Add($logoBox)
+        $script:brandLogoLoaded = $true
+    }
+} catch { $script:brandLogoLoaded = $false }
 
 $subheading = New-Object System.Windows.Forms.Label
 $subheading.Text = "Install and manage your course system without a command window."
 $subheading.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $subheading.Location = New-Object System.Drawing.Point(30, 73)
-$subheading.Size = New-Object System.Drawing.Size(655, 25)
+$subheading.Size = New-Object System.Drawing.Size(500, 25)
 $form.Controls.Add($subheading)
 
 $status = New-Object System.Windows.Forms.Label
@@ -623,6 +653,9 @@ if ($SmokeTest) {
         -not (Test-Path -LiteralPath $handbookFile -PathType Leaf) -or
         -not (Test-Path -LiteralPath $dailyGuideFile -PathType Leaf)) {
         throw "Graphical lifecycle actions were not initialized."
+    }
+    if (-not $script:brandIconLoaded -or -not $script:brandLogoLoaded) {
+        throw "The TOEFL House logo did not load in the launcher."
     }
     # Simulate the exact Owner case: check writes a full report while the
     # wrapper still exists, then the GUI must allow safe copying. No real

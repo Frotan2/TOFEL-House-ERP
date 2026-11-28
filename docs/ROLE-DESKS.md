@@ -183,6 +183,23 @@ Sections:
   credit notes surface through the native statuses only.
 - **Awaiting billing** — submitted `Program Enrollment` records with no
   `Fees` row yet (definition: enrollment submitted, zero Fees referencing it).
+- **Expenses (this Solar Hijri month)** — operating expenses (rent,
+  utilities, supplies, maintenance…) recorded by `finance.expenses`. Each is
+  ONE submitted native `Journal Entry` (Cash Entry or Bank Entry): the chosen
+  Expense account is debited and main Cash or a Bank account is credited, so
+  the general ledger stays the only financial record. A Finance Officer
+  records ("Record an expense"); a *different* Finance Manager voids a
+  mistaken one with a reason (native cancel, original and reversal stay in
+  history). Reception counter drawers cannot pay expenses, cash may not go
+  negative, cash expenses on or before a closed cashier day are refused, the
+  posting date follows the billing policy backdate window (today only when no
+  policy is active), and bank payments need a reference. Native Desk/REST
+  create, cancel, amend and delete of an expense journal are refused.
+- **This month at a glance** — Income, Expenses and Net result for the
+  current Solar Hijri month, per company and in the company currency, read
+  from native `GL Entry` by Account root type (cancelled and opening rows
+  excluded). A failed read shows "—", never zero. The Owner cockpit shows the
+  same facts.
 - **Correction queue** — `TH Correction Request` by status (pending /
   approved / denied), each with its invoice, requested amount and state.
 - **Teaching assignments** — `TH Teaching Assignment` identity and window
@@ -263,6 +280,9 @@ classes. Sections follow the daily path:
 
 Everything the GM desk shows, plus:
 
+- **This month at a glance** — Income, Expenses and Net result for the
+  current Solar Hijri month from the native general ledger (same facts as
+  the Finance desk).
 - **Governance attention** — the fail-closed release facts (production REJECT,
   SEC-DEPS-01 upstream-blocked) from the same static, reviewed constants the
   administration control centre uses. Not new policy — the same recorded state.
@@ -332,6 +352,25 @@ Reception (find person) → record_applicant → create_admission
   Workspace for each Officer role would widen native read scopes beyond the
   guarded commands and violate the A13 containment boundary. The declared
   navigation is: desks first, command Pages second, no per-role Workspace.
+- **Reports.** The Finance, Academic, General Manager and Owner desks show a
+  *Reports* section with shortcuts to the standard native reports
+  (Accounts Receivable, Program wise Fee Collection, Profit and Loss
+  Statement, General Ledger, Salary Register; Student Monthly Attendance
+  Sheet, Absent Student Report, Final Assessment Grades, Student Fee
+  Collection). A shortcut is shown only when that login could open the
+  report: the reference DocType "report" right **and** the report's own
+  role list, exactly the check native `query_report` performs. No report
+  rights are granted by the desk; give a user the native role (e.g.
+  Accounts User, Academics User) if a report should appear.
+- **Teacher login readiness.** For an unscoped (HQ) viewer, *Role coverage*
+  on the General Manager desk and Owner cockpit lists every enabled
+  Instructor login the Teacher desk cannot resolve (no active Employee with
+  that User ID, several, or no single active Instructor on it), with the
+  native fix. Branch-scoped viewers do not get these rows, because they
+  cannot see other branches' Employees.
+- **Attendance and placement authoring never ask for JSON.** The Attendance
+  Recorder marks students from the class list; Placement Authors fill
+  question, blueprint, policy and course-map forms.
 
 ## What is deliberately NOT here
 

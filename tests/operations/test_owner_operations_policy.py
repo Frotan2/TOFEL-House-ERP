@@ -62,7 +62,7 @@ class OwnerOperationsDoctypeTests(unittest.TestCase):
         self.assertIn('fieldname: "backup_retention_behavior"', client)
         self.assertIn("Leaving this unset keeps backup and activation fail-closed", client)
         self.assertIn('fieldname: "backup_recovery_public_key"', client)
-        self.assertIn('fieldname: "tax_rate", label: "Tax rate (decision input only; %)"', client)
+        self.assertIn('fieldname: "tax_rate", label: "Tax rate (for reference, not enforced; %)"', client)
         for field in ("tax_enabled", "tax_inclusive", "transfer_allowed", "withdrawal_allowed"):
             self.assertIn(f'fieldname: "{field}"', client)
             self.assertIn('fieldtype: "Select", options: "\\nYes\\nNo", reqd: 1', client)

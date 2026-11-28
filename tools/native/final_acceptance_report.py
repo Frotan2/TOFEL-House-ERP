@@ -69,6 +69,8 @@ REQUIRED_JOURNEYS = {
         "finance-cashier-close-wrong-role-denied",
         "finance-cashier-close-future-day-denied",
         "finance-cashier-receipt-company-scope",
+        "finance-native-http-operating-expense-record-void",
+        "desk-native-report-shortcuts-permission-mirror",
         "book-native-stock-catalog-and-receipt",
         "book-native-unauthorized-role-denied",
         "book-native-mixed-service-invoice-denied",

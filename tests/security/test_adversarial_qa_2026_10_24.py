@@ -318,6 +318,20 @@ class CrossBoundaryPermissionsAdversarialTests(unittest.TestCase):
         self.assertTrue(fperm.has_permission(contract_doc, ptype="read", user="finance@example.com"))
         self.assertEqual(fperm.query_contract(user="finance@example.com"), "1=1")
 
+    def test_transfer_with_a_branchless_class_is_hidden_from_branch_staff(self):
+        perm = self._load_permissions(user="ts-kabul@example.com", roles=("Teaching Scheduler",),
+                                      branch_perms=["Branch-Kabul-Main"])
+        branch_of = {"SG-KABUL": "Branch-Kabul-Main", "SG-KABUL-2": "Branch-Kabul-Main"}
+        perm.frappe.db.get_value = lambda dt, name, field, **kw: branch_of.get(name)
+
+        def transfer(to_group):
+            values = {"from_group": "SG-KABUL", "to_group": to_group, "status": "Requested"}
+            return Obj(doctype="TH Class Transfer", name="TR-1", owner="x@example.com",
+                       get=lambda k, default=None: values.get(k, default))
+
+        self.assertTrue(perm.has_permission(transfer("SG-KABUL-2"), ptype="read", user="ts-kabul@example.com"))
+        self.assertFalse(perm.has_permission(transfer("SG-UNASSIGNED"), ptype="read", user="ts-kabul@example.com"))
+
     def test_cross_branch_isolation_and_refused_site_fail_closed(self):
         # Enrollment Officer scoped to Branch-Kabul-Main cannot read Branch-Herat Student Group or branchless Student Group
         bperm = self._load_permissions(

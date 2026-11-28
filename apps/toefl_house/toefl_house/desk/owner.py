@@ -17,15 +17,19 @@ program/level/instructor/period breakdowns where the underlying data permits.
 import frappe
 from frappe.utils import today
 from toefl_house.desk.collections import owner_sections
+from toefl_house.desk.expenses import position_facts
 
 from toefl_house.desk import (
+    ACADEMIC_REPORTS,
     BOUNCE_WINDOW,
     DESKS,
+    FINANCE_REPORTS,
     LIMIT_QUEUES,
     active_cohort_rows,
     count_or_unknown,
     project_count,
     project_rows,
+    report_section,
     require_desk_audience,
     section,
     viewer_roles,
@@ -39,7 +43,7 @@ except Exception:  # pragma: no cover
 from toefl_house.desk import lifecycle
 from toefl_house.desk.operations import (
     _staff_counts, _role_items, _age_label, _recorded_action_items,
-    _funnel_and_exceptions, _system_health,
+    _funnel_and_exceptions, _system_health, _teacher_link_items,
 )
 
 SLUG = "th-owner-cockpit"
@@ -458,7 +462,7 @@ def _executive_analytics_sections():
          "drill_path": "placement decision list", "owner": "Placement Releaser"},
     ]
     exc_section = section("ops-exceptions", "Operational exceptions", "facts", facts=exc_facts,
-                          empty_title="No exceptions", empty_body="No items in this preview; verify all underlying sources before concluding none are pending.")
+                          empty_title="No exceptions", empty_body="Nothing is shown here. This list shows the most recent records only.")
     exc_section["provenance"] = [
         {"label": "Source records", "value": exc["source"]},
         {"label": "Permission scope", "value": exc["scope"]},
@@ -589,21 +593,24 @@ def cockpit():
         "title": DESKS[SLUG]["title"],
         "sections": [
             _first_run_readiness(mode),
+            section("month-position", "This month at a glance", "facts", facts=position_facts(),
+                    empty_title="No postings yet",
+                    empty_body="Income, expenses and the net result appear once money is posted."),
             *owner_sections(),
             *analytics_sections,
             section("business", "Business state", "facts", facts=business_facts,
                     empty_title="No business records yet",
                     empty_body="Counts appear as soon as the placement, admission and enrollment workflows create their first records."),
             section("funnel", "Operation funnel", "facts", facts=funnel_facts,
-                    empty_title="No operational preview items",
+                    empty_title="Nothing needs attention",
                     empty_body="Verify complete pipeline sources before concluding no work is in progress."),
             section("exceptions", "Exceptions and oldest waiting work", "queue",
                     items=exception_items,
                     empty_title="No exceptions",
                     empty_body="Nothing is overdue, stuck or waiting on an approver right now."),
             section("attention", "Attention — oldest waiting", "queue", items=attention_items,
-                    empty_title="No items in attention preview",
-                    empty_body="A blank preview does not prove all admissions or exception sources are complete."),
+                    empty_title="Nothing needs your attention",
+                    empty_body="This list shows the most recent records only."),
             section("activity", "Recent recorded actions", "queue",
                     items=_recorded_action_items(),
                     empty_title="No recorded actions yet",
@@ -615,12 +622,13 @@ def cockpit():
                     empty_body="These facts come from the reviewed acceptance ledger, not from a live computation."),
             section("health", "System health counts", "facts", facts=health_facts,
                     empty_title="No health facts yet",
-                    empty_body="Health counts appear once the native scheduler tables exist. Failed-job detail lives on the General Manager desk; tracebacks stay on the native forms."),
-            section("staffing", "Role coverage", "queue", items=_role_items(_staff_counts()),
+                    empty_body="System health counts appear once the system has run its scheduled tasks. Failed tasks are listed on the General Manager screen."),
+            section("staffing", "Role coverage", "queue", items=_role_items(_staff_counts()) + _teacher_link_items(),
                     empty_title="No operational roles",
                     empty_body="No shipped operational role is assigned to an enabled user."),
             section("desks", "Your desks", "links", items=desks_for_viewer,
                     empty_title="No other desks for your account",
                     empty_body="This account holds only the Owner Cockpit."),
+            *report_section(FINANCE_REPORTS + ACADEMIC_REPORTS),
         ],
     }

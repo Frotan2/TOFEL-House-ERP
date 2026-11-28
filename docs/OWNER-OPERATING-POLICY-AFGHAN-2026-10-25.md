@@ -105,7 +105,7 @@ supported contractual payroll and financial recognition method.
 | Friday scheduling closure | `teaching/calendars.py` | Scheduler refusal except audited explicit Working Day; live rollout pending |
 | Versioned Shamsi tuition due day + grace, and authorized unequal installments | `finance/policies.py`, `finance/installments.py`, `finance/shamsi.py`, TH Billing Policy Version | Policy fields (`installment_due_day`, `allow_unequal_installments`, `payment_grace_days`) plus generation and owned tests for exact unequal shares and the contracted due day; Frappe native posting/revenue deferrals and browser GUI acceptance not yet proved |
 | Student arrears and oldest-first payment suggestion | `finance/period_reporting.py` | Read-only reconciliation/proposal, **not integrated** with secure finance desk or automatic native Payment Entry |
-| Teacher earned-month versus paid-next-month | `teaching/payroll_periods.py` | Read-only native voucher reconciliation, **not integrated** with HRMS payroll desk or live payment |
+| Teacher earned-month versus paid-next-month | Native HRMS payroll | The unintegrated reconciliation helper was removed (2026-11-28); duplicate slips are refused by `teaching/salary_slip_guards.py` |
 | Opening balances/advance transfers | Native ERPNext accounting | **NOT migrated; Owner cutoff/reconciliation outstanding** |
 | Customer release/upgrade | Product release gates and PR #87 | **NO-GO** until all required checks and Windows acceptance |
 

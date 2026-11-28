@@ -73,6 +73,11 @@ NATIVE_OWNER_POLICIES = (
      "toefl_house.teaching.attendance_corrections.set_attendance_correction_policy_version",
      "toefl_house.teaching.attendance_corrections.set_attendance_correction_policy_status",
      "The Course Owner controls the correction approver and correction window."),
+    ("class-operations", "Class Operations", "TH Class Operations Policy",
+     "toefl_house.teaching.class_operations.create_class_operations_policy",
+     "toefl_house.teaching.class_operations.set_class_operations_policy_version",
+     "toefl_house.teaching.class_operations.set_class_operations_policy_status",
+     "Teaching days, session lengths, postponement, cancellation, make-up sessions, waiting lists, capacity overrides and class transfers. Until a version is in effect, generating sessions, postponing, cancelling, transfers, waiting lists and capacity overrides are refused."),
     ("adjustment-posting", "Adjustment Posting", "TH Adjustment Posting Policy",
      "toefl_house.teaching.adjustment_posting.create_adjustment_posting_policy",
      "toefl_house.teaching.adjustment_posting.set_adjustment_posting_version",
@@ -195,6 +200,11 @@ def work():
                 empty_title="No native policy controls",
                 empty_body="Native Course Owner policies are indexed here; mutations still use their guarded domain commands."))
     sections.append(
+        section("academic-calendar", "Holidays and Closures", "queue",
+                items=_calendar_items(),
+                empty_title="No academic calendar",
+                empty_body="Without a calendar only the class-operations teaching days apply."))
+    sections.append(
         section("student-guardian", "Student & Guardian", "facts",
                 facts=_guardian_facts(guardian, guardian_readiness,
                                       guardian_by_policy, today),
@@ -235,6 +245,7 @@ def _native_owner_policy_item(sid, title, doctype, create_endpoint,
         "TH Roster Change Policy": lambda: project_rows("configuration", "TH Roster Change Policy", fields, limit=1),
         "TH Attendance Correction Policy": lambda: project_rows("configuration", "TH Attendance Correction Policy", fields, limit=1),
         "TH Adjustment Posting Policy": lambda: project_rows("configuration", "TH Adjustment Posting Policy", fields, limit=1),
+        "TH Class Operations Policy": lambda: project_rows("configuration", "TH Class Operations Policy", fields, limit=1),
     }
     rows = projectors[doctype]()
     if not rows:
@@ -284,6 +295,67 @@ def _native_owner_policy_item(sid, title, doctype, create_endpoint,
              "args": {"policy": row["code"]}},
         ],
     }
+
+
+CALENDAR_FIELDS = ["name", "code", "title", "status", "academic_year", "branch",
+                   "description", "modified"]
+CALENDAR_DAY_FIELDS = ["name", "parent", "parenttype", "date", "kind", "description"]
+
+
+def _calendar_items():
+    """Owner calendars (holidays, closures, reopened days) with guarded actions."""
+    calendars = project_rows("configuration", "TH Academic Calendar", CALENDAR_FIELDS,
+                             order_by="code asc", limit=LIMIT_QUEUES)
+    names = [row["name"] for row in calendars]
+    days = project_rows("configuration", "TH Academic Calendar Day", CALENDAR_DAY_FIELDS,
+                        filters={"parenttype": "TH Academic Calendar",
+                                 "parent": ["in", names]},
+                        order_by="date asc", limit=LIMIT_QUEUES * 4) if names else []
+    today = frappe.utils.today()
+    upcoming = {}
+    for row in days:
+        if str(row.get("date") or "") >= today:
+            upcoming.setdefault(row["parent"], []).append(row)
+    items = []
+    for row in calendars:
+        coming = upcoming.get(row["name"], [])
+        scope = ", ".join(value for value in (row.get("branch"), row.get("academic_year")) if value)
+        listed = "; ".join(f"{day['date']} {day['kind']}" + (f" ({day['description']})" if day.get("description") else "")
+                           for day in coming[:8])
+        active = row.get("status") == "Active"
+        item = {
+            "id": row["code"], "person": row["title"],
+            "status": "In use" if active else "Retired",
+            "stage": "Academic calendar",
+            "stage_definition": "Holiday and Closed days block teaching; a Working Day reopens a date. A branch calendar overrides the institute-wide one for that branch. Sessions already scheduled are not changed.",
+            "detail": ("Applies to " + scope + ". " if scope else "Applies to the whole institute. ")
+                      + ("Upcoming: " + listed if listed else "No upcoming days recorded."),
+            "next": "Add each holiday or closure before generating sessions for that period.",
+            "next_role": "Course Owner", "waiting_since": None,
+            "actions": ([
+                {"endpoint": "toefl_house.teaching.calendars.add_academic_calendar_day",
+                 "label": "Add holiday or closure", "args": {"calendar": row["code"]}},
+                {"endpoint": "toefl_house.teaching.calendars.remove_academic_calendar_day",
+                 "label": "Remove a day", "args": {"calendar": row["code"]}},
+            ] if active else []) + [
+                {"endpoint": "toefl_house.teaching.calendars.set_academic_calendar_status",
+                 "label": "Retire calendar" if active else "Reactivate calendar",
+                 "args": {"calendar": row["code"], "active": 0 if active else 1}},
+            ],
+        }
+        items.append(item)
+    items.append({
+        "id": "new-academic-calendar", "person": "New academic calendar",
+        "status": "Optional", "stage": "Academic calendar",
+        "stage_definition": "Create one institute-wide calendar, or one per branch when branches close on different days.",
+        "detail": "Record public holidays and closures such as Nowruz and Eid so sessions are not generated on those dates.",
+        "next": "Create the calendar, then add its days.",
+        "next_role": "Course Owner", "waiting_since": None,
+        "action": {"endpoint": "toefl_house.teaching.calendars.create_academic_calendar",
+                   "label": "Create calendar",
+                   "args": {"code": "", "title": "", "academic_year": "", "branch": "", "description": ""}},
+    })
+    return items
 
 
 def _backup_switch_item():

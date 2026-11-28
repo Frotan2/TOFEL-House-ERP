@@ -8,13 +8,18 @@ import frappe
 from frappe.utils import now_datetime
 
 from toefl_house.desk import (
+    ACADEMIC_REPORTS,
     BOUNCE_WINDOW,
     DESKS,
+    FINANCE_REPORTS,
     LIMIT_QUEUES,
     _assert_projection,
+    guided_action,
     project_count,
     project_rows,
+    report_section,
     require_desk_audience,
+    scope_filters,
     section,
     viewer_roles,
 )
@@ -116,6 +121,49 @@ def _staff_counts():
     return counts
 
 
+def _progression_items():
+    """Published results without a progression decision.
+
+    The Academic Manager records the normal decision on the course assessment
+    page. When the configured evidence is not met but the institute still
+    promotes or completes a learner, only the General Manager may record a
+    reasoned override; the evidence itself is never edited.
+    """
+    results = project_rows("management", "TH Academic Result",
+                           ["name", "student", "student_group", "outcome",
+                            "overall_percent", "passed", "status", "published_on"],
+                           filters={"status": "Published"},
+                           order_by="published_on asc", limit=LIMIT_QUEUES)
+    if not results:
+        return []
+    decided = {row.get("academic_result") for row in project_rows(
+        "management", "TH Progression Decision", ["name", "academic_result"],
+        filters={"academic_result": ("in", [row["name"] for row in results])},
+        order_by="name asc", limit=LIMIT_QUEUES)}
+    items = []
+    for row in results:
+        if row["name"] in decided:
+            continue
+        items.append({
+            "id": row["name"], "person": row.get("student") or "",
+            "detail": "{0} \u00b7 {1} \u00b7 {2}%".format(
+                row.get("student_group") or "", row.get("outcome") or "",
+                row.get("overall_percent") or 0),
+            "status": "Awaiting decision", "stage": "Progression",
+            "stage_definition": "A published result with no Promote, Repeat, Retake or Complete decision.",
+            "next": ("The Academic Manager decides on the course assessment page. Use an override "
+                     "only when the evidence is not met and the institute still promotes or "
+                     "completes this learner; the unmet evidence stays on record."),
+            "next_role": "Academic Manager", "waiting_since": row.get("published_on"),
+            "action": guided_action("General Manager",
+                                    "toefl_house.academic.progression.override_progression",
+                                    "Record override",
+                                    {"academic_result": row["name"], "decision": "Promote",
+                                     "reason": ""}),
+        })
+    return items
+
+
 def _role_items(counts):
     return [{
         "id": role,
@@ -129,6 +177,76 @@ def _role_items(counts):
         "next_role": "Course Owner" if count == 0 else None,
         "waiting_since": None,
     } for role, count in counts.items()]
+
+
+def _teacher_link_items():
+    """Instructor logins the Teacher desk cannot resolve, before they log in.
+
+    Mirrors desk.teacher._resolve_instructor: an enabled login holding the
+    Instructor role needs exactly one Active Employee whose User ID is that
+    login, and exactly one non-Left Instructor on that Employee. Anything
+    else leaves the teacher with an empty desk and no attendance access.
+
+    Only an unscoped (HQ) viewer gets these rows: a Company/Branch-scoped
+    viewer cannot see other branches' Employees, so every teacher there
+    would be falsely reported as unlinked.
+    """
+    if scope_filters("management"):
+        return []
+    holders = sorted({row["parent"]
+                      for row in project_rows("management", "Has Role",
+                                              ["name", "parent", "role", "parenttype"],
+                                              filters={"role": "Instructor", "parenttype": "User"},
+                                              order_by="parent asc", limit=BOUNCE_WINDOW)
+                      if row.get("parent") not in (None, "Administrator", "Guest", "")})
+    if not holders:
+        return []
+    enabled = [row["name"] for row in project_rows(
+        "management", "User", ["name"], filters={"name": ("in", holders), "enabled": 1},
+        order_by="name asc", limit=BOUNCE_WINDOW)]
+    if not enabled:
+        return []
+    employees = {}
+    for row in project_rows("management", "Employee", ["name", "employee_name", "status", "user_id"],
+                            filters={"user_id": ("in", enabled), "status": "Active"},
+                            order_by="name asc", limit=BOUNCE_WINDOW):
+        employees.setdefault(row.get("user_id"), []).append(row)
+    single = sorted(rows[0]["name"] for rows in employees.values() if len(rows) == 1)
+    instructors = {}
+    if single:
+        for row in project_rows("management", "Instructor", ["name", "instructor_name", "employee", "status"],
+                                filters={"employee": ("in", single)}, order_by="name asc",
+                                limit=BOUNCE_WINDOW):
+            if row.get("status") != "Left":
+                instructors.setdefault(row.get("employee"), []).append(row)
+    items = []
+    for user in enabled:
+        rows = employees.get(user, [])
+        if not rows:
+            problem = "No active Employee record has this login as its User ID."
+        elif len(rows) > 1:
+            problem = "More than one active Employee record uses this login."
+        else:
+            employee = rows[0]["name"]
+            linked = len(instructors.get(employee, []))
+            if linked == 1:
+                continue
+            problem = (f"Employee {employee} has no active Instructor record." if not linked
+                       else f"Employee {employee} has more than one active Instructor record.")
+        items.append({
+            "id": "teacher-link-" + user,
+            "person": user,
+            "detail": problem,
+            "status": "Not linked",
+            "stage": "Teacher login",
+            "stage_definition": ("A teacher sees classes and records attendance only when the "
+                                 "login, one active Employee and one active Instructor are linked."),
+            "next": ("On the Employee record set User ID to this login, then select that "
+                     "Employee on exactly one active Instructor record."),
+            "next_role": "Course Owner",
+            "waiting_since": None,
+        })
+    return items
 
 
 def _age_label(value):
@@ -544,8 +662,8 @@ def _system_health():
             "detail": f"queue {row.get('queue') or '—'}",
             "status": "failed",
             "stage": "Failed background job",
-            "stage_definition": "A native background job ended in failed status. The traceback stays on the native job form; this desk does not project it.",
-            "next": "Open the native background-job list, read the traceback, and re-queue or escalate.",
+            "stage_definition": "A background task failed. The technical details are on the task record.",
+            "next": "Open the background task list, retry the task, or ask for technical support.",
             "next_role": "General Manager",
             "waiting_since": row.get("ended_at") or row.get("started_at"),
         })
@@ -556,8 +674,8 @@ def _system_health():
             "detail": "unseen error row",
             "status": "unseen",
             "stage": "Unseen error row",
-            "stage_definition": "A native error row nobody has marked seen. The error text stays on the native form.",
-            "next": "Open the native error list and mark the row seen once it is understood.",
+            "stage_definition": "A system error nobody has reviewed yet. The details are on the error record.",
+            "next": "Open the error log and mark the entry as seen once it is understood.",
             "next_role": "General Manager",
             "waiting_since": row.get("creation"),
         })
@@ -568,8 +686,8 @@ def _system_health():
             "detail": f"every {row.get('frequency') or '—'}",
             "status": "stopped",
             "stage": "Stopped scheduled job",
-            "stage_definition": "A scheduled job type carries the native stopped flag, so the scheduler skips it.",
-            "next": "Restart the job type from the native scheduler, or leave it stopped deliberately.",
+            "stage_definition": "A scheduled task is switched off, so it does not run.",
+            "next": "Switch the scheduled task back on, or leave it off on purpose.",
             "next_role": "General Manager",
             "waiting_since": row.get("last_execution"),
         })
@@ -582,7 +700,7 @@ def _system_health():
             "stage": "Alert condition",
             "stage_definition": ("A generated condition over the native facts above. Conditions are "
                                "generated, never delivered: no alert receiver exists in this product."),
-            "next": "Work the underlying native rows; there is no receiver to notify.",
+            "next": "Resolve the records behind this warning.",
             "next_role": "General Manager",
             "waiting_since": None,
         })
@@ -655,17 +773,21 @@ def work():
             *ops_analytics,
             *refund_sections("management"),
             section("funnel", "Operation funnel — today\u2019s state", "facts", facts=funnel_facts,
-                    empty_title="No operational preview items",
-                    empty_body="The preview alone cannot prove all operational queues are empty; check scoped counts and source records."),
+                    empty_title="Nothing needs attention",
+                    empty_body="This list shows the most recent records only. Check the counts above before concluding all work is done."),
             section("exceptions", "Exceptions and oldest waiting work — action queue", "queue",
                     items=exception_items,
-                    empty_title="No exception preview items",
-                    empty_body="Check the scoped source counts and deadline evidence before concluding there are no exceptions."),
+                    empty_title="No exceptions",
+                    empty_body="This list shows the most recent records only. Check the counts above before concluding there are none."),
+            section("progression", "Progression decisions not yet recorded", "queue",
+                    items=_progression_items(),
+                    empty_title="Every published result has a progression decision",
+                    empty_body="Published results appear here until the Academic Manager records Promote, Repeat, Retake or Complete."),
             section("activity", "Recent recorded actions", "queue",
                     items=_recorded_action_items(),
                     empty_title="No recorded actions yet",
                     empty_body="When staff complete an important action, the record appears here. The full trail stays with auditor roles."),
-            section("staffing", "Role coverage", "queue", items=_role_items(staff_counts),
+            section("staffing", "Role coverage", "queue", items=_role_items(staff_counts) + _teacher_link_items(),
                     empty_title="No operational roles",
                     empty_body="No shipped operational role is assigned to an enabled user."),
             section("health", "System health (native facts)", "queue", items=health_items,
@@ -673,9 +795,10 @@ def work():
                     empty_body="The application answers, and no failed job, unseen error row or stopped schedule is recorded. Full counts sit beside the funnel facts."),
             section("health-facts", "System health counts", "facts", facts=health_facts,
                     empty_title="No health facts yet",
-                    empty_body="Health counts appear once the native scheduler tables exist."),
+                    empty_body="System health counts appear once the system has run its scheduled tasks."),
             section("desks", "Your desks", "links", items=desks_for_viewer,
                     empty_title="No other desks for your account",
                     empty_body="This account holds only the General Manager desk."),
+            *report_section(FINANCE_REPORTS + ACADEMIC_REPORTS),
         ],
     }

@@ -8,6 +8,7 @@ import frappe
 from frappe.utils import now_datetime, today
 
 from toefl_house.desk import (
+    ACADEMIC_REPORTS,
     BOUNCE_WINDOW,
     DESKS,
     LIMIT_QUEUES,
@@ -17,7 +18,9 @@ from toefl_house.desk import (
     guided_action,
     project_count,
     project_rows,
+    report_section,
     require_desk_audience,
+    scope_filters,
     section,
 )
 try:
@@ -36,6 +39,15 @@ SCHEDULE = "Course Schedule"
 ASSIGNMENT = "TH Teaching Assignment"
 ATTENDANCE = "Student Attendance"
 ENROLLMENT = "Program Enrollment"
+TRANSFER = "TH Class Transfer"
+CAPACITY = "TH Capacity Approval"
+WAITING = "TH Class Waiting List"
+TRANSFER_FIELDS = ["name", "student", "from_group", "to_group", "transfer_kind",
+                   "effective_date", "reason", "requested_by", "requested_on", "status"]
+CAPACITY_FIELDS = ["name", "student_group", "student", "seats", "status", "reason",
+                   "approved_by", "expires_on"]
+WAITING_FIELDS = ["name", "student", "student_group", "status", "priority",
+                  "requested_on", "offer_expires_on"]
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -338,6 +350,12 @@ def work():
             "next_role": "Teaching Scheduler",
             "waiting_since": None,
             "action": action,
+            "actions": [extra for extra in (
+                guided_action("Academic Manager",
+                              "toefl_house.teaching.capacity.create_capacity_override",
+                              "Approve extra seat",
+                              {"student_group": row["name"]}),
+            ) if extra] if state in ("Planned", "Active") else [],
         })
 
     # A class existing for the intake is NOT evidence that a particular late
@@ -469,6 +487,7 @@ def work():
             section("course-assessment", "Course assessment", "links",
                     items=[{"title": "Class marks, review and results",
                             "slug": "th-course-assessment"}]),
+            *report_section(ACADEMIC_REPORTS),
             section("funnel", "Academic funnel — today\u2019s operations", "facts", facts=funnel_facts,
                     empty_title="Nothing in the academic pipeline",
                     empty_body="No attempts, admissions or cohorts exist yet. Records appear here as the placement and admission workflows advance."),
@@ -487,6 +506,10 @@ def work():
             section("classes", "Classes — lifecycle and next action", "queue", items=cohort_items,
                     empty_title="No classes yet",
                     empty_body="Nothing is planned or running. A class can be created for any level and year that has submitted enrollments."),
+            section("class-changes", "Class changes, waiting lists and extra seats", "queue",
+                    items=_class_change_items(coverage_groups),
+                    empty_title="Nothing waiting",
+                    empty_body="No class-change request, waiting student or open extra-seat approval."),
             section("assignments", "Teaching assignments", "queue", items=assignment_items,
                     empty_title="No teaching assignments",
                     empty_body="No skill assignment exists yet. Instructors are assigned to classes from the Teaching Scheduling page."),
@@ -496,6 +519,95 @@ def work():
         ],
     }
 
+
+
+def _class_change_items(visible_groups):
+    """Requests that need an academic decision, each with its guarded commands.
+
+    These records carry no Branch column. A Branch-scoped viewer sees only
+    rows whose classes are in the scoped class read; every command also
+    rechecks scope on the server.
+    """
+    scoped = bool(scope_filters("academic"))
+    visible = {row["name"] for row in visible_groups}
+
+    def shown(*group_names):
+        return not scoped or any(name in visible for name in group_names if name)
+
+    seats = [row for row in project_rows("academic", CAPACITY, CAPACITY_FIELDS,
+                                         filters={"status": "Approved"},
+                                         order_by="expires_on asc", limit=LIMIT_QUEUES)
+             if shown(row.get("student_group"))]
+    # Prefill a matching approved extra seat; the command still verifies it.
+    seat_for = {(row.get("student_group"), row.get("student")): row["name"] for row in seats}
+    items = []
+    for row in project_rows("academic", TRANSFER, TRANSFER_FIELDS,
+                            filters={"status": "Requested"},
+                            order_by="requested_on asc", limit=LIMIT_QUEUES):
+        if not shown(row.get("from_group"), row.get("to_group")):
+            continue
+        items.append({
+            "id": row["name"], "person": row.get("student") or "",
+            "detail": f"{row.get('from_group')} \u2192 {row.get('to_group')} · "
+                      f"{row.get('transfer_kind') or 'Class'} change from {row.get('effective_date')} · "
+                      f"{row.get('reason') or ''}",
+            "status": "Class change requested", "stage": "Class change",
+            "stage_definition": "Approving moves the student under the class-operations policy; attendance, marks and fees stay with the student.",
+            "next": "Approve or deny. A full target class needs an approved extra seat first.",
+            "next_role": "Academic Manager", "waiting_since": row.get("requested_on"),
+            "action": guided_action("Academic Manager",
+                                    "toefl_house.teaching.transfers.approve_class_transfer",
+                                    "Approve class change",
+                                    {"transfer": row["name"],
+                                     "override": seat_for.get((row.get("to_group"), row.get("student")), "")}),
+            "actions": [extra for extra in (
+                guided_action("Academic Manager",
+                              "toefl_house.teaching.transfers.deny_class_transfer",
+                              "Deny class change", {"transfer": row["name"]}),
+            ) if extra],
+        })
+    for row in project_rows("academic", WAITING, WAITING_FIELDS,
+                            filters={"status": ("in", ["Waiting", "Offered"])},
+                            order_by="priority asc, requested_on asc", limit=LIMIT_QUEUES):
+        if not shown(row.get("student_group")):
+            continue
+        offered = row.get("status") == "Offered"
+        offer = None if offered else guided_action(
+            "Teaching Scheduler", "toefl_house.teaching.capacity.offer_waiting_list_seat",
+            "Offer a seat", {"entry": row["name"], "expires_on": ""})
+        actions = [offer, guided_action("Teaching Scheduler",
+                                 "toefl_house.teaching.capacity.admit_from_waiting_list",
+                                 "Admit to class",
+                                 {"entry": row["name"],
+                                  "override": seat_for.get((row.get("student_group"), row.get("student")), ""),
+                                  "queue_jump_reason": ""})]
+        actions = [action for action in actions if action]
+        items.append({
+            "id": row["name"], "person": row.get("student") or "",
+            "detail": f"Waiting for {row.get('student_group')}"
+                      + (f" · seat held until {row.get('offer_expires_on')}" if offered else ""),
+            "status": "Seat offered" if offered else "Waiting",
+            "stage": "Waiting list",
+            "stage_definition": "Students join in order; a freed seat is offered for the policy's holding period.",
+            "next": "Admit the student once they confirm." if offered else "Offer a seat when one frees up.",
+            "next_role": "Teaching Scheduler", "waiting_since": row.get("requested_on"),
+            "action": actions[0] if actions else None,
+            "actions": actions[1:],
+        })
+    for row in seats:
+        items.append({
+            "id": row["name"], "person": row.get("student") or "",
+            "detail": f"{row.get('seats')} extra seat(s) in {row.get('student_group')} "
+                      f"until {row.get('expires_on')} · {row.get('reason') or ''}",
+            "status": "Extra seat approved", "stage": "Extra seat",
+            "stage_definition": "An approved extra seat is used when the student is added, moved or admitted into the full class.",
+            "next": "Use it when adding the student, or revoke it if no longer needed.",
+            "next_role": "Teaching Scheduler", "waiting_since": None,
+            "action": guided_action("Academic Manager",
+                                    "toefl_house.teaching.capacity.revoke_capacity_override",
+                                    "Revoke extra seat", {"override": row["name"]}),
+        })
+    return items
 
 
 def _attendance_window(groups):

@@ -7,6 +7,10 @@ from toefl_house.security import require_operational
 
 def guard_student_journal(doc, method=None):
     require_operational()
+    # The single Journal Entry seam also contains the command-only operating
+    # expense journals (finance.expenses); other journals pass through it.
+    from toefl_house.finance.expenses import guard_expense_journal
+    guard_expense_journal(doc, method)
     from toefl_house.finance.tuition_refund_native import protect_bound_artifact, exact_native_write_allowed, lock_cash_accounts
 
     if exact_native_write_allowed(doc, method):

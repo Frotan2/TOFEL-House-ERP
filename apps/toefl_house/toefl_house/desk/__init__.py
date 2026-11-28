@@ -147,6 +147,10 @@ PROJECTION_FIELDS = {
         "name", "student", "from_group", "to_group", "transfer_kind",
         "status", "effective_date",
     ],
+    ("reception", "TH Class Waiting List"): [
+        "name", "student", "student_group", "status", "priority",
+        "requested_on", "offer_expires_on",
+    ],
     ("reception", "Instructor"): [
         "name", "instructor_name", "status",
     ],
@@ -181,6 +185,12 @@ PROJECTION_FIELDS = {
     # The class lifecycle fact is the governed th_class_status custom field;
     # the pinned native Student Group (education 93bc70757533) has no
     # `active` column — `disabled` is its native archive flag.
+    ("academic", "TH Class Transfer"): ["name", "student", "from_group", "to_group", "transfer_kind",
+                                        "effective_date", "reason", "requested_by", "requested_on", "status"],
+    ("academic", "TH Capacity Approval"): ["name", "student_group", "student", "seats", "status", "reason",
+                                           "approved_by", "expires_on"],
+    ("academic", "TH Class Waiting List"): ["name", "student", "student_group", "status", "priority",
+                                            "requested_on", "offer_expires_on"],
     ("academic", "Student Group"): [
         "name", "student_group_name", "program", "academic_year", "academic_term",
         "max_strength", "course", "disabled", "th_class_status",
@@ -222,6 +232,12 @@ PROJECTION_FIELDS = {
         "posting_date", "docstatus", "paid_to", "paid_to_account_currency",
         "th_reception_collector", "th_collection_fees", "th_collection_handover",
     ],
+    # Operating expenses (finance.expenses): payee, description, amount and
+    # recorder of the command-written native expense journals only.
+    ("finance", "Journal Entry"): [
+        "name", "company", "posting_date", "pay_to_recd_from", "user_remark",
+        "total_debit", "docstatus", "th_expense_recorder", "voucher_type", "cheque_no",
+    ],
     ("finance", "TH Correction Request"): [
         "name", "sales_invoice", "fees", "correction_policy", "reason",
         "requested_amount", "status",
@@ -234,6 +250,7 @@ PROJECTION_FIELDS = {
     # Validation evidence is matched by count, never projected: the hash
     # stays in the filter (read-boundary discipline, same as the
     # configuration desk).
+    ("finance", "TH Placement Case"): ["name", "subject", "status", "creation"],
     ("finance", "TH Placement Audit Event"): [
         "name",
     ],
@@ -278,6 +295,9 @@ PROJECTION_FIELDS = {
     ("management", "Student"): [
         "name",
     ],
+    ("management", "TH Academic Result"): ["name", "student", "student_group", "outcome",
+                                           "overall_percent", "passed", "status", "published_on"],
+    ("management", "TH Progression Decision"): ["name", "academic_result"],
     ("management", "TH Correction Request"): [
         "name", "sales_invoice", "fees", "reason", "requested_amount", "status",
         "modified",
@@ -304,6 +324,13 @@ PROJECTION_FIELDS = {
     # flag of the native User; nothing else about a user is projected.
     ("management", "Has Role"): [
         "name", "parent", "role", "parenttype",
+    ],
+    # Teacher identity readiness (same native chain the Teacher desk uses).
+    ("management", "Employee"): [
+        "name", "employee_name", "status", "user_id",
+    ],
+    ("management", "Instructor"): [
+        "name", "instructor_name", "employee", "status",
     ],
     ("management", "User"): [
         "name",
@@ -474,6 +501,10 @@ PROJECTION_FIELDS = {
     ("configuration", "TH Roster Change Policy"): ["name", "code", "title", "status", "description", "modified"],
     ("configuration", "TH Attendance Correction Policy"): ["name", "code", "title", "status", "description", "modified"],
     ("configuration", "TH Adjustment Posting Policy"): ["name", "code", "title", "status", "description", "modified"],
+    ("configuration", "TH Class Operations Policy"): ["name", "code", "title", "status", "description", "modified"],
+    ("configuration", "TH Academic Calendar"): ["name", "code", "title", "status", "academic_year", "branch",
+                                                "description", "modified"],
+    ("configuration", "TH Academic Calendar Day"): ["name", "parent", "parenttype", "date", "kind", "description"],
     ("configuration", "TH Assessment Policy"): [
         "name", "family", "code", "title", "status", "description",
         "modified",
@@ -661,6 +692,8 @@ BRANCH_CHAIN_FILTERS = ("TH Reception Inquiry", "Student", "Student Group Studen
                         "Course Schedule", "Program Enrollment", "Fees",
                         "TH Enrollment Exit", "TH Teaching Assignment",
                         "TH Class Suspension", "TH Class Transfer",
+                        "TH Class Waiting List", "TH Capacity Approval",
+                        "TH Academic Result", "TH Progression Decision",
                         "TH Correction Request", "TH Admission Decision")
 _CHAIN_LIMIT = 10000  # bounded scope resolution; truncation is fail-closed
 
@@ -709,7 +742,8 @@ def _branch_allowed_names(doctype, branches, *, require_complete=False):
                 "Branch transfer scope exceeds the safe read limit; ask an administrator")
         return [row["name"] for row in rows]
     if doctype in ("Student Attendance", "Course Schedule", "TH Teaching Assignment",
-                   "TH Class Suspension"):
+                   "TH Class Suspension", "TH Class Waiting List", "TH Capacity Approval",
+                   "TH Academic Result", "TH Progression Decision"):
         if not groups:
             return []
         return [row["name"] for row in frappe.get_all(
@@ -1063,6 +1097,56 @@ def section(sid, title, kind, *, items=None, facts=None, empty_title="", empty_b
     if actions:
         payload["actions"] = actions
     return payload
+
+
+# Pinned native reports staff use daily (names, reference DocTypes and role
+# lists verified against ERPNext v16.34.2, Education v16.1.0, HRMS v16.18.1).
+FINANCE_REPORTS = (
+    ("Who owes money (receivables)", "Accounts Receivable", "Sales Invoice"),
+    ("Fee collection by program", "Program wise Fee Collection", "Fees"),
+    ("Profit and loss", "Profit and Loss Statement", "GL Entry"),
+    ("General ledger", "General Ledger", "GL Entry"),
+    ("Salary register", "Salary Register", "Salary Slip"),
+)
+ACADEMIC_REPORTS = (
+    ("Monthly attendance sheet", "Student Monthly Attendance Sheet", "Student Attendance"),
+    ("Absent students", "Absent Student Report", "Student Attendance"),
+    ("Final assessment grades", "Final Assessment Grades", "Assessment Result"),
+    ("Student fee collection", "Student Fee Collection", "Fees"),
+)
+
+
+def native_report_links(reports):
+    """Shortcuts to native reports this login can actually open.
+
+    Mirrors frappe.desk.query_report.get_report_doc: the reference DocType's
+    native "report" right AND Report.is_permitted() (Has Role / custom
+    roles). Navigation only — the native report enforces the same checks
+    and its own row permissions when opened. A missing or disabled report
+    is simply not offered.
+    """
+    links = []
+    for title, report, ref_doctype in reports:
+        if not frappe.has_permission(ref_doctype, "report"):
+            continue
+        try:
+            doc = frappe.get_cached_doc("Report", report)
+        except frappe.DoesNotExistError:
+            continue
+        if doc.get("disabled") or not doc.is_permitted():
+            continue
+        links.append({"title": title, "slug": "query-report/" + report})
+    return links
+
+
+def report_section(reports):
+    """A "Reports" links section, or nothing when no report is available."""
+    links = native_report_links(reports)
+    if not links:
+        return []
+    return [section("reports", "Reports", "links", items=links,
+                    notes="Opens the standard ERPNext / Education report with "
+                          "your own permissions; filters and export are native.")]
 
 
 def guided_action(role, endpoint, label, args):

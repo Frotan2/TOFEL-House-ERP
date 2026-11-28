@@ -18,6 +18,8 @@ Reads are pure/decision-only: :func:`governing_operations` resolves the
 version governing a date and returns its validated terms, or ``{}`` when
 nothing governs. That empty result is the off-switch — never a default.
 """
+import json
+
 import frappe
 
 from toefl_house.academic import rules
@@ -109,9 +111,9 @@ def _as_bool(value, what):
         return value
     if value in (0, 1):
         return bool(value)
-    if isinstance(value, str) and value.strip().lower() in ("true", "yes"):
+    if isinstance(value, str) and value.strip().lower() in ("1", "true", "yes"):
         return True
-    if isinstance(value, str) and value.strip().lower() in ("false", "no"):
+    if isinstance(value, str) and value.strip().lower() in ("0", "false", "no"):
         return False
     raise ValueError(f"{what} must be true or false")
 
@@ -384,7 +386,8 @@ def set_class_operations_policy_version(request_key, policy, effective_from,
             clean_code = rules.validate_code(policy)
             clean_from = rules.parse_date(effective_from)
             clean_reason = configuration_rules.validate_change_reason(reason)
-            clean_terms = validate_terms(terms)
+            clean_terms = validate_terms(
+                json.loads(terms) if isinstance(terms, str) else terms)
             for key in ROLE_TERMS:
                 role = clean_terms[key]
                 if role and not frappe.db.exists("Role", role):

@@ -44,7 +44,7 @@ frappe.provide("toefl_house.role_desks");
 		"th-finance-desk": {
 			endpoint: "toefl_house.desk.finance.work",
 			title: "TOEFL House Finance Desk",
-			description: "Today's collections, outstanding receivables, enrollments awaiting billing, teaching assignments for native payroll, and the correction queue.",
+			description: "Today's collections, money still owing, students waiting for a bill, teacher assignments for payroll, and bill corrections.",
 		},
 		"th-operations-desk": {
 			endpoint: "toefl_house.desk.operations.work",
@@ -64,7 +64,7 @@ frappe.provide("toefl_house.role_desks");
 		"th-teacher-desk": {
 			endpoint: "toefl_house.desk.teacher.work",
 			title: "TOEFL House Teacher Desk",
-			description: "My classes, today's sessions, attendance, students, academic work and compensation facts — assigned classes only, resolved through the native identity chain.",
+			description: "My classes, today's sessions, attendance, students, marks and pay details — only the classes assigned to me.",
 		},
 		"th-configuration": {
 			endpoint: "toefl_house.desk.configuration.work",
@@ -104,6 +104,12 @@ frappe.provide("toefl_house.role_desks");
 		}
 		if (route.length === 1 && /^th-[a-z0-9-]+$/.test(route[0])) {
 			frappe.set_route(route[0]);
+			return;
+		}
+		// Native report shortcuts are offered only when the server found the
+		// report permitted for this login; the report re-checks on open.
+		if (route.length === 2 && route[0] === "query-report" && route[1]) {
+			frappe.set_route(route);
 			return;
 		}
 		frappe.msgprint({ title: text("Source reference"),
@@ -713,14 +719,14 @@ frappe.provide("toefl_house.role_desks");
 	const OWNER_POLICY_VERSION_FIELDS = [
 		{ fieldname: "policy", label: "Owner policy", fieldtype: "Data", reqd: 1, read_only: 1 },
 		{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
-		{ fieldname: "reporting_review_days", label: "Reporting review interval (decision input only; days)", description: "No current report runner consumes this value.", fieldtype: "Int", reqd: 1 },
-		{ fieldname: "capacity_target", label: "Class capacity target (decision input only)", description: "Planning target only. Class membership enforcement uses native Student Group max_strength, not this value.", fieldtype: "Int", reqd: 1 },
-		{ fieldname: "tax_enabled", label: "Tax enabled (decision input only)", description: "No current tax runtime reads these fields. Native ERPNext tax configuration remains authoritative.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
-		{ fieldname: "tax_rate", label: "Tax rate (decision input only; %)", description: "No current tax runtime reads this value. Native ERPNext tax configuration remains authoritative.", fieldtype: "Percent", reqd: 1 },
-		{ fieldname: "tax_inclusive", label: "Tax inclusive (decision input only)", description: "No current tax runtime reads this value. Native ERPNext tax configuration remains authoritative.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
-		{ fieldname: "transfer_allowed", label: "Transfers allowed (decision input only)", description: "No current transfer command reads this value; it does not enable transfer behavior.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
-		{ fieldname: "withdrawal_allowed", label: "Withdrawals allowed (decision input only)", description: "Withdrawals and dismissals are governed by TH Enrollment Exit Policy; this field is not consumed by that resolver.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
-		{ fieldname: "calendar_notice_days", label: "Calendar notice (decision input only; days)", description: "No current calendar or lifecycle scheduler enforces this value.", fieldtype: "Int", reqd: 1 },
+		{ fieldname: "reporting_review_days", label: "Reporting review interval (for reference, not enforced; days)", description: "No current report runner consumes this value.", fieldtype: "Int", reqd: 1 },
+		{ fieldname: "capacity_target", label: "Class capacity target (for reference, not enforced)", description: "Planning target only. The real limit is each class's maximum size.", fieldtype: "Int", reqd: 1 },
+		{ fieldname: "tax_enabled", label: "Tax enabled (for reference, not enforced)", description: "Not used for billing. Tax is set up in ERPNext accounting.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
+		{ fieldname: "tax_rate", label: "Tax rate (for reference, not enforced; %)", description: "Not used for billing. Tax is set up in ERPNext accounting.", fieldtype: "Percent", reqd: 1 },
+		{ fieldname: "tax_inclusive", label: "Tax inclusive (for reference, not enforced)", description: "Not used for billing. Tax is set up in ERPNext accounting.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
+		{ fieldname: "transfer_allowed", label: "Transfers allowed (for reference, not enforced)", description: "No current transfer command reads this value; it does not enable transfer behavior.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
+		{ fieldname: "withdrawal_allowed", label: "Withdrawals allowed (for reference, not enforced)", description: "Withdrawals and dismissals are governed by TH Enrollment Exit Policy; this field is not consumed by that resolver.", fieldtype: "Select", options: "\nYes\nNo", reqd: 1 },
+		{ fieldname: "calendar_notice_days", label: "Calendar notice (for reference, not enforced; days)", description: "No current calendar or lifecycle scheduler enforces this value.", fieldtype: "Int", reqd: 1 },
 		...BACKUP_POLICY_FIELDS,
 	];
 	// Same reviewed numeric weights for first setup and later revisions.
@@ -768,6 +774,42 @@ frappe.provide("toefl_house.role_desks");
 			(field) => [field, (row[field] || "").trim()])));
 	}
 
+	// Class-operations policy terms as ordinary form fields. The server
+	// requires every term explicitly; these are suggested starting values the
+	// Course Owner reviews before saving, never server-side defaults.
+	const CLASS_OPERATION_DAYS = ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"];
+	const CLASS_OPERATION_TERMS = Object.freeze([
+		...CLASS_OPERATION_DAYS.map((day) => [
+			"day_" + day, "Teaching day: " + day, "Check", day === "Fri" ? 0 : 1]),
+		["default_session_minutes", "Normal session length (minutes)", "Int", 90],
+		["min_session_minutes", "Shortest allowed session (minutes)", "Int", 30],
+		["max_session_minutes", "Longest allowed session (minutes)", "Int", 180],
+		["max_sessions_per_day", "Most sessions per class per day", "Int", 2],
+		["timetable_horizon_days", "Generate sessions up to this many days ahead", "Int", 120],
+		["allow_postponement", "Sessions may be postponed", "Check", 1],
+		["postpone_max_days", "Postpone at most this many days", "Int", 14],
+		["allow_session_cancellation", "Sessions may be cancelled", "Check", 1],
+		["allow_replacement_sessions", "Make-up sessions allowed", "Check", 1],
+		["replacement_approver_role", "Make-up sessions approved by", "Link", "Academic Manager", { options: "Role" }],
+		["replacement_window_days", "Make-up within this many days", "Int", 30],
+		["allow_class_suspension", "Whole classes may be suspended", "Check", 0],
+		["class_suspension_max_days", "Class suspension limit (days)", "Int", 0],
+		["allow_student_suspension", "Students may be suspended", "Check", 0],
+		["student_suspension_max_days", "Student suspension limit (days)", "Int", 0],
+		["waiting_list_enabled", "Use waiting lists for full classes", "Check", 1],
+		["waiting_offer_valid_days", "A freed seat is held for this many days", "Int", 3],
+		["remove_member_allowed", "Students may be removed from a class", "Check", 1],
+		["capacity_override_role", "Extra seats approved by (empty = never)", "Link", "Academic Manager", { options: "Role" }],
+		["capacity_override_max_seats", "Most extra seats per class", "Int", 2],
+		["capacity_override_expiry_days", "Extra-seat approval expires after (days)", "Int", 14],
+		["allow_transfers", "Students may change class", "Check", 1],
+		["allow_program_transfers", "Students may change program", "Check", 0],
+		["allow_branch_transfers", "Students may change branch", "Check", 0],
+		["transfer_approver_role", "Class changes approved by", "Link", "Academic Manager", { options: "Role" }],
+		["transfer_window_days", "Class changes allowed up to this many days after the new class starts", "Int", 30],
+		["direct_moves_allowed", "Direct class moves allowed without a transfer request", "Check", 0],
+	]);
+
 	const ACTION_FIELDS = Object.freeze({
 		"toefl_house.finance.cashier.reconcile_cashier_day": [
 			{ fieldname: "company", label: "Company", fieldtype: "Data", read_only: 1, reqd: 1 },
@@ -782,6 +824,28 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "grade_d", label: "D grade / pass — minimum score (%)", fieldtype: "Percent", default: 60, reqd: 1,
 				description: "F is automatically assigned to scores below this minimum, down to zero." },
 			{ fieldname: "reason", label: "Reason for this grading scale", fieldtype: "Small Text", reqd: 1 },
+		],
+		// Operating expenses: the three choice lists are filled from the
+		// guarded expense_options read (account names only) when the form
+		// opens; the server re-validates every choice and the cash cover.
+		"toefl_house.finance.expenses.record_expense": [
+			{ fieldname: "company", label: "Company", fieldtype: "Select", options: "__expense_choice:companies__", reqd: 1 },
+			{ fieldname: "posting_date", label: "Payment date", fieldtype: "Date", reqd: 1,
+				description: "The day the money left the institute. Future dates are refused." },
+			{ fieldname: "expense_account", label: "Expense category", fieldtype: "Select", options: "__expense_choice:categories__", reqd: 1,
+				description: "Rent, utilities, supplies… Categories are the Expense accounts in the chart of accounts." },
+			{ fieldname: "paid_from", label: "Paid from", fieldtype: "Select", options: "__expense_choice:paying_accounts__", reqd: 1,
+				description: "Main cash or a bank account. Reception counter drawers cannot pay expenses." },
+			{ fieldname: "amount", label: "Amount paid", fieldtype: "Currency", reqd: 1 },
+			{ fieldname: "payee", label: "Paid to (person or business)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "What was paid for", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "reference", label: "Bank transfer / cheque / bill number", fieldtype: "Data",
+				description: "Required for bank payments; optional for cash." },
+		],
+		"toefl_house.finance.expenses.void_expense": [
+			{ fieldname: "journal_entry", label: "Expense entry", fieldtype: "Data", read_only: 1, reqd: 1 },
+			{ fieldname: "reason", label: "Why this expense is void", fieldtype: "Small Text", reqd: 1,
+				description: "The original stays in the ledger with its reversal. Record the correct expense separately." },
 		],
 		"toefl_house.finance.collections.record_reception_collection": [
 			{ fieldname: "fees", label: "Tuition bill", fieldtype: "Data", read_only: 1, reqd: 1 },
@@ -811,10 +875,6 @@ frappe.provide("toefl_house.role_desks");
 			// Exact native command signature; value is generated from
 			// per-student selects below, never manually typed.
 			{ fieldname: "statuses", label: "Submitted marks", fieldtype: "Small Text", hidden: 1, read_only: 1 },
-		],
-		"toefl_house.teaching.record_attendance": [
-			{ fieldname: "course_schedule", label: "Scheduled session", fieldtype: "Data", read_only: 1, reqd: 1 },
-			{ fieldname: "statuses", label: "Student attendance (JSON)", fieldtype: "Small Text", reqd: 1, description: "Enter a JSON object of Student IDs and Present, Absent or Leave (example: {\"EDU-STU-00001\":\"Present\"}). Only on-roster students are accepted." },
 		],
 		"toefl_house.operations.owner_configuration.create_owner_operations_policy": [
 			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
@@ -946,6 +1006,85 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
 			{ fieldname: "active", label: "Active", fieldtype: "Check" },
 		],
+		"toefl_house.teaching.class_operations.create_class_operations_policy": [
+			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.class_operations.set_class_operations_policy_version": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "effective_from", label: "Effective from (tomorrow or later)", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason for these rules", fieldtype: "Small Text", reqd: 1 },
+			...CLASS_OPERATION_TERMS.map(([key, label, fieldtype, value, extra]) =>
+				Object.assign({ fieldname: "term_" + key, label, fieldtype, default: value },
+					fieldtype === "Int" ? { reqd: 1 } : {}, extra || {})),
+		],
+		"toefl_house.teaching.class_operations.set_class_operations_policy_status": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Check" },
+		],
+		"toefl_house.teaching.transfers.approve_class_transfer": [
+			{ fieldname: "transfer", label: "Class change request", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "override", label: "Extra-seat approval (only if the new class is full)", fieldtype: "Data",
+				description: "Filled in automatically when an approved extra seat exists for this student and class." },
+		],
+		"toefl_house.teaching.transfers.deny_class_transfer": [
+			{ fieldname: "transfer", label: "Class change request", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.capacity.join_waiting_list": [
+			{ fieldname: "student", label: "Student ID", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "student_group", label: "Class ID", fieldtype: "Data", reqd: 1,
+				description: "The full class the student wants to join, as shown on the class list." },
+			{ fieldname: "note", label: "Note (e.g. preferred time)", fieldtype: "Small Text" },
+		],
+		"toefl_house.teaching.capacity.leave_waiting_list": [
+			{ fieldname: "entry", label: "Waiting-list entry", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.capacity.offer_waiting_list_seat": [
+			{ fieldname: "entry", label: "Waiting-list entry", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "expires_on", label: "Hold the seat until (empty = policy limit)", fieldtype: "Date" },
+		],
+		"toefl_house.teaching.capacity.admit_from_waiting_list": [
+			{ fieldname: "entry", label: "Waiting-list entry", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "override", label: "Extra-seat approval (only if the class is full)", fieldtype: "Data" },
+			{ fieldname: "queue_jump_reason", label: "Reason for admitting before a seat offer (if any)", fieldtype: "Small Text" },
+		],
+		"toefl_house.teaching.capacity.create_capacity_override": [
+			{ fieldname: "student_group", label: "Class", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "student", label: "Student ID", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "seats", label: "Extra seats", fieldtype: "Int", default: 1, reqd: 1, read_only: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "expires_on", label: "Approval expires on (empty = policy limit)", fieldtype: "Date" },
+		],
+		"toefl_house.teaching.capacity.revoke_capacity_override": [
+			{ fieldname: "override", label: "Extra-seat approval", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.calendars.create_academic_calendar": [
+			{ fieldname: "code", label: "Calendar code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Calendar name", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "academic_year", label: "Academic year (empty = every year)", fieldtype: "Link", options: "Academic Year" },
+			{ fieldname: "branch", label: "Branch (empty = whole institute)", fieldtype: "Link", options: "Branch" },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
+		],
+		"toefl_house.teaching.calendars.add_academic_calendar_day": [
+			{ fieldname: "calendar", label: "Calendar", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "day", label: "Date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "kind", label: "Kind", fieldtype: "Select", options: "Holiday\nClosed\nWorking Day", default: "Holiday", reqd: 1,
+				description: "Holiday and Closed block teaching. Working Day reopens a date another calendar closed." },
+			{ fieldname: "description", label: "Name of the day (e.g. Nowruz)", fieldtype: "Data" },
+		],
+		"toefl_house.teaching.calendars.remove_academic_calendar_day": [
+			{ fieldname: "calendar", label: "Calendar", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "day", label: "Date to remove", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.calendars.set_academic_calendar_status": [
+			{ fieldname: "calendar", label: "Calendar", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "active", label: "Keep calendar in use", fieldtype: "Check" },
+		],
 		"toefl_house.teaching.adjustment_posting.create_adjustment_posting_policy": [
 			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
@@ -1070,13 +1209,34 @@ frappe.provide("toefl_house.role_desks");
 		],
 		"toefl_house.finance.corrections.validate_correction_policy": [],
 		"toefl_house.finance.corrections.approve_invoice_correction": [
-			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1, read_only: 1 },
 		],
 		"toefl_house.finance.corrections.approve_fees_correction": [
-			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1, read_only: 1 },
 		],
 		"toefl_house.finance.corrections.deny_fees_correction": [
-			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1, read_only: 1 },
+		],
+		"toefl_house.finance.corrections.deny_invoice_correction": [
+			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1, read_only: 1 },
+		],
+		"toefl_house.academic.progression.override_progression": [
+			{ fieldname: "academic_result", label: "Published result", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "decision", label: "Decision", fieldtype: "Select", options: "Promote\nComplete", reqd: 1 },
+			{ fieldname: "reason", label: "Why the institute overrides the unmet evidence", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.finance.issue_placement_fee": [
+			{ fieldname: "case", label: "Placement case", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "customer", label: "Payer (Customer)", fieldtype: "Link", options: "Customer", reqd: 1 },
+			{ fieldname: "posting_date", label: "Invoice date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "due_date", label: "Due date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "backdate_reason", label: "Reason for an earlier invoice date", fieldtype: "Small Text",
+				description: "Only needed when the invoice date is before today." },
+		],
+		"toefl_house.finance.corrections.request_invoice_correction": [
+			{ fieldname: "sales_invoice", label: "Invoice", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "requested_amount", label: "Amount to reverse (full invoice)", fieldtype: "Float", reqd: 1, read_only: 1 },
+			{ fieldname: "reason", label: "Why this invoice was wrong", fieldtype: "Small Text", reqd: 1 },
 		],
 		"toefl_house.finance.tuition_refund_commands.request_tuition_refund": [
 			{ fieldname: "student", label: "Student ID on the original tuition bill", fieldtype: "Data", reqd: 1 },
@@ -1101,9 +1261,9 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "reason", label: "Reason for withdrawing this approval", fieldtype: "Small Text", reqd: 1 },
 		],
 		"toefl_house.finance.corrections.request_fees_correction": [
-			{ fieldname: "fees", label: "Fees", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "reason", label: "Reason", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "requested_amount", label: "Requested amount", fieldtype: "Float", reqd: 1 },
+			{ fieldname: "fees", label: "Tuition bill", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "requested_amount", label: "Amount to reverse (full bill)", fieldtype: "Float", reqd: 1, read_only: 1 },
+			{ fieldname: "reason", label: "Why this bill was wrong", fieldtype: "Small Text", reqd: 1 },
 		],
 		"toefl_house.academic.create_program": [
 			{ fieldname: "code", label: "Program code (stable, e.g. GEN-ENG)", fieldtype: "Data", reqd: 1 },
@@ -1193,48 +1353,6 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "reason", label: "Why the grading rule is changing", fieldtype: "Small Text", reqd: 1 },
 			{ fieldname: "grading_scale", label: "New grade scale (optional; blank keeps the old one)", fieldtype: "Select", options: "__owner_choice:grading_scale__" },
 		],
-		"toefl_house.academic.set_assessment_components": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "components", label: "Components (JSON list of code, title, maximum score, optional native criteria; empty list withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
-		"toefl_house.academic.set_assessment_weights": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "weights", label: "Weights (JSON list of component code with a non-negative number; empty list withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
-		"toefl_house.academic.set_assessment_pass_rules": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "pass_rules", label: "Pass rules (JSON object with per-component and overall minima, each a percent or a grade code; empty object withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
-		"toefl_house.academic.set_assessment_rubrics": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "rubrics", label: "Rubrics (JSON list of code, title, optional component, required evidence list, optional rating levels; empty list withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
-		"toefl_house.academic.set_assessment_progression": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "progression", label: "Progression (JSON object with required evidence list and target level; empty object withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
-		"toefl_house.academic.set_assessment_retakes": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "retakes", label: "Retakes (JSON object with attempt limit, wait, scope and governing attempt, all explicit; empty object withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
-		"toefl_house.academic.set_assessment_mapping": [
-			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
-			{ fieldname: "mapping", label: "Level mapping (JSON object with the governed level codes; empty object withdraws)", fieldtype: "Small Text", reqd: 1 },
-		],
 		"toefl_house.academic.set_assessment_policy_status": [
 			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "active", label: "Active", fieldtype: "Select", options: "1\n0", reqd: 1, description: "0 retires the policy; it governs nothing while retired." },
@@ -1314,9 +1432,10 @@ frappe.provide("toefl_house.role_desks");
 		 * desk's Teaching compensation section prefills these dialogs from
 		 * the native contract/instructor facts. The dialogs mirror the
 		 * reviewed command signatures; the server validates everything.
-		 * Skill terms and adjustments are structured owner-entered JSON
-		 * (max 10 rows each); the default empty list is what a Fixed Salary
-		 * contract records. */
+		 * Skill terms and adjustments are entered as ordinary rows (see
+		 * teachingContractForm) and serialized by the client; these
+		 * placeholders only mirror the command signature. An empty list
+		 * is what a Fixed Salary contract records. */
 		"toefl_house.teaching.compensation.create_teaching_contract": [
 			{ fieldname: "instructor", label: "Instructor", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "employee", label: "Employee (payroll record)", fieldtype: "Data", reqd: 1 },
@@ -1326,8 +1445,8 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "effective_start", label: "Effective start", fieldtype: "Date", reqd: 1 },
 			{ fieldname: "effective_end", label: "Effective end (blank = open)", fieldtype: "Date" },
 			{ fieldname: "conditions", label: "Conditions", fieldtype: "Small Text" },
-			{ fieldname: "skill_terms", label: "Skill terms (JSON list: skill, unit_of_payment, rate, payable_quantity, optional minimum_amount/maximum_amount; required for Skill-Based and Hybrid, empty list for Fixed Salary)", fieldtype: "Small Text", default: "[]" },
-			{ fieldname: "adjustments", label: "Adjustments (JSON list: adjustment_type Bonus or Deduction, amount, effective_date, approver, reason)", fieldtype: "Small Text", default: "[]" },
+			{ fieldname: "skill_terms", label: "Skill terms (built from the pay-skill rows; never shown)", fieldtype: "Small Text", default: "[]" },
+			{ fieldname: "adjustments", label: "Adjustments (built from the adjustment rows; never shown)", fieldtype: "Small Text", default: "[]" },
 			{ fieldname: "earning_basis", label: "Skill earning basis", fieldtype: "Select", options: "One-off\nSolar Hijri Monthly", default: "One-off", reqd: 1 },
 		],
 		"toefl_house.teaching.compensation.revise_teaching_contract": [
@@ -1338,8 +1457,8 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "effective_start", label: "Effective start (must start after the replaced contract)", fieldtype: "Date", reqd: 1 },
 			{ fieldname: "effective_end", label: "Effective end (blank = open)", fieldtype: "Date" },
 			{ fieldname: "conditions", label: "Conditions", fieldtype: "Small Text" },
-			{ fieldname: "skill_terms", label: "Skill terms (JSON list: skill, unit_of_payment, rate, payable_quantity, optional minimum_amount/maximum_amount; required for Skill-Based and Hybrid, empty list for Fixed Salary)", fieldtype: "Small Text", default: "[]" },
-			{ fieldname: "adjustments", label: "Adjustments (JSON list: adjustment_type Bonus or Deduction, amount, effective_date, approver, reason)", fieldtype: "Small Text", default: "[]" },
+			{ fieldname: "skill_terms", label: "Skill terms (built from the pay-skill rows; never shown)", fieldtype: "Small Text", default: "[]" },
+			{ fieldname: "adjustments", label: "Adjustments (built from the adjustment rows; never shown)", fieldtype: "Small Text", default: "[]" },
 			{ fieldname: "earning_basis", label: "Skill earning basis (blank keeps the existing basis)", fieldtype: "Select", options: "\nOne-off\nSolar Hijri Monthly" },
 		],
 		"toefl_house.teaching.compensation.calculate_teaching_compensation": [
@@ -1554,7 +1673,7 @@ frappe.provide("toefl_house.role_desks");
 			fields = [...fields, ...drawers.flatMap((drawer, index) => [
 				{ fieldname: "drawer_name_" + index, label: "Count drawer " + (index + 1),
 					fieldtype: "Data", read_only: 1, default: drawer.account },
-				{ fieldname: "drawer_expected_" + index, label: "Native ledger balance (AFN, view only)",
+				{ fieldname: "drawer_expected_" + index, label: "Ledger balance (AFN, view only)",
 					fieldtype: "Currency", read_only: 1, default: drawer.expected },
 				{ fieldname: "drawer_counted_" + index, label: "Actual counted amount (AFN) — use 0 if empty",
 					fieldtype: "Currency", description: "Enter your own physical count, never an assumed ledger amount. No payment or cash movement is created." },
@@ -1722,7 +1841,56 @@ frappe.provide("toefl_house.role_desks");
 				});
 			});
 		}
-		const contextKeys = ["outstanding", "expected_amount", "currency", "receipt_list",
+		// Operating expenses: load the permitted companies, categories and
+		// paying accounts (names only) through the guarded read first.
+		const expenseFields = fields.filter((field) => typeof field.options === "string" &&
+			/^__expense_choice:[a-z_]+__$/.test(field.options));
+		if (expenseFields.length) {
+			if (!action._expense_choices) {
+				frappe.call({
+					method: "toefl_house.finance.expenses.expense_options",
+					type: "GET",
+					callback(response) {
+						const options = response.message;
+						const companies = options && Array.isArray(options.companies) ? options.companies : null;
+						if (!companies || !companies.length || companies.length > 50) {
+							frappe.msgprint(text("No company is available for expense recording with your Finance permissions. Nothing was recorded."));
+							return;
+						}
+						const clean = (names) => Array.isArray(names) && names.length <= 200 &&
+							names.every((name) => typeof name === "string" && name && name.length <= 140 && !/[\r\n]/.test(name));
+						const choices = { companies: [], categories: [], paying_accounts: [] };
+						for (const row of companies) {
+							const paying = Array.isArray(row && row.paying_accounts) ? row.paying_accounts.map((item) => item && item.name) : null;
+							if (!row || !clean([row.company]) || !clean(row.categories) || !clean(paying)) {
+								frappe.msgprint(text("The expense choices are invalid. Nothing was recorded."));
+								return;
+							}
+							choices.companies.push(row.company);
+							choices.categories.push(...row.categories);
+							choices.paying_accounts.push(...paying);
+						}
+						if (!choices.categories.length || !choices.paying_accounts.length) {
+							frappe.msgprint(text("Ask the Course Owner to set up Expense accounts and a main Cash or Bank account first."));
+							return;
+						}
+						openGuidedAction(Object.assign({}, action, { _expense_choices: choices,
+							args: Object.assign({}, action.args || {},
+								choices.companies.length === 1 ? { company: choices.companies[0] } : {}) }));
+					},
+					error() {
+						frappe.msgprint(text("Expense choices could not be loaded with your Finance permissions. Nothing was recorded."));
+					},
+				});
+				return;
+			}
+			fields = fields.map((field) => {
+				if (typeof field.options !== "string" || !/^__expense_choice:[a-z_]+__$/.test(field.options)) return field;
+				const kind = field.options.slice("__expense_choice:".length, -2);
+				return Object.assign({}, field, { options: ["", ...(action._expense_choices[kind] || [])].join("\n") });
+			});
+		}
+		const contextKeys = ["outstanding", "expected_amount", "currency", "receipt_list", "summary",
 			"recipient", "tuition_bill", "refund_amount", "refund_reason", "supporting_evidence", "approved_by", "approval_evidence",
 			"placement_course_code", "placement_level"];
 		const contextFacts = contextKeys.filter((key) => action.args && action.args[key] !== undefined)
@@ -1770,6 +1938,22 @@ frappe.provide("toefl_house.role_desks");
 					args.slots = JSON.stringify(pattern);
 				}
 				if (timetableStatus) args.active = action.args.active;
+				if (action.endpoint === "toefl_house.teaching.class_operations.set_class_operations_policy_version") {
+					const terms = {};
+					CLASS_OPERATION_TERMS.forEach(([key, , fieldtype]) => {
+						const value = args["term_" + key];
+						delete args["term_" + key];
+						if (key.startsWith("day_")) return;
+						terms[key] = fieldtype === "Check" ? (value ? 1 : 0)
+							: fieldtype === "Int" ? Number(value) : String(value || "").trim();
+					});
+					terms.teaching_days = CLASS_OPERATION_DAYS.filter((day) => values["term_day_" + day]).join(",");
+					if (!terms.teaching_days) {
+						frappe.msgprint(text("Choose at least one teaching day."));
+						return;
+					}
+					args.terms = JSON.stringify(terms);
+				}
 				if (action.endpoint.startsWith("toefl_house.reception_intake.")) {
 					// Native Frappe Data/Small Text inputs may return null or
 					// undefined when cleared. An explicitly blank optional field
@@ -2018,7 +2202,11 @@ frappe.provide("toefl_house.role_desks");
 					},
 				});
 				};
-				if (cashClose) {
+				if (action.endpoint === "toefl_house.finance.expenses.record_expense") {
+					frappe.confirm(text("Post this expense to the general ledger now? A posted expense can only be voided by a different Finance Manager."), submitAction);
+				} else if (action.endpoint === "toefl_house.finance.expenses.void_expense") {
+					frappe.confirm(text("Void this expense? The payment is reversed in the ledger and the original stays visible in the history."), submitAction);
+				} else if (cashClose) {
 					frappe.confirm(text(
 						"Submit the actual counts and close this company's entire business day? This close cannot be edited; no payment or cash movement is created."
 					), submitAction);
@@ -2307,7 +2495,7 @@ frappe.provide("toefl_house.role_desks");
 		const steps = [
 			["1. Courses and tuition", "Check the four programs, eleven levels and approved full-semester AFN prices.", "th-academic-setup"],
 			["2. Academic and billing rules", "Choose percentages, waiting days, billing options and approval roles using forms.", "th-configuration"],
-			["3. Rooms and weekly patterns", "Enter verified room capacity and approved weekly slots. Schedule individual sessions in Academic Desk. Generate a range of sessions only after an approved Class Operations Policy is in effect.", "th-academic-setup"],
+			["3. Rooms and weekly patterns", "Enter verified room capacity and approved weekly slots. Schedule individual sessions in Academic Desk. Generate a range of sessions only after an approved Class Operations Policy is in effect (Configuration → Course Owner Policy Controls → Class Operations; holidays under Holidays and Closures).", "th-academic-setup"],
 			["4. Finance and daily work", "Use guided receivables, collections and approved instructor contracts, never source files.", "th-finance-desk"],
 			["5. Review before opening", "Check each staff role, backup recovery and operational readiness with the Owner.", "th-owner-cockpit"],
 		];

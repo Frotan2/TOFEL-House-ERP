@@ -14,6 +14,7 @@ from toefl_house.configuration import rules as foundation
 from toefl_house.desk import (
     BOUNCE_WINDOW,
     DESKS,
+    FINANCE_REPORTS,
     LIMIT_QUEUES,
     LIMIT_TODAY,
     count_or_unknown,
@@ -22,6 +23,7 @@ from toefl_house.desk import (
     plan_with_components,
     project_count,
     project_rows,
+    report_section,
     require_desk_audience,
     scope_filters,
     section,
@@ -31,6 +33,7 @@ from toefl_house.finance import cashier as cashier_money
 from toefl_house.finance import taxes as tax_configuration
 from toefl_house.finance import shamsi as solar_calendar
 from toefl_house.desk.collections import finance_sections
+from toefl_house.desk.expenses import finance_sections as expense_sections
 from toefl_house.desk.tuition_refunds import refund_sections
 
 SLUG = "th-finance-desk"
@@ -137,6 +140,11 @@ def _correction_items(rows, policies=()):
                         if is_fees else "toefl_house.finance.corrections.approve_invoice_correction")
             item["action"] = guided_action(approver_role, endpoint,
                                            "Approve correction", {"request": row["name"]})
+            deny = guided_action(approver_role,
+                                 "toefl_house.finance.corrections.deny_fees_correction" if is_fees
+                                 else "toefl_house.finance.corrections.deny_invoice_correction",
+                                 "Deny correction", {"request": row["name"]})
+            item["actions"] = [deny] if deny else []
         elif pending:
             # No active policy: the command would deny every approval. Say so
             # instead of showing a button that can only fail.
@@ -668,6 +676,18 @@ def work():
             "waiting_since": row.get("due_date") or row.get("posting_date"),
             "amount": row.get("grand_total") or 0,
             "currency": row.get("currency") or "",
+            # A bill issued in error is reversed through the correction
+            # framework (full amount, inside the policy window, approved by
+            # a different person). The command enforces every rule.
+            "actions": [extra for extra in (
+                guided_action("Finance Officer",
+                              "toefl_house.finance.corrections.request_fees_correction"
+                              if kind == "Fees" else
+                              "toefl_house.finance.corrections.request_invoice_correction",
+                              "Request correction",
+                              {("fees" if kind == "Fees" else "sales_invoice"): row["name"],
+                               "requested_amount": row.get("grand_total") or 0}),
+            ) if extra] if state in ("Outstanding", "Overdue", "Unpaid") else [],
         }
 
     payment_items = [{
@@ -827,7 +847,7 @@ def work():
         "stage": "Teaching assignment",
         "stage_definition": ("An instructor skill assignment. The contract determines "
                              "one-off or Solar Hijri monthly earnings through native payroll."),
-        "next": "Run native payroll for the covering period. This desk does not calculate pay.",
+        "next": "Run payroll for this period in HR Payroll. This screen does not calculate pay.",
         "next_role": "Finance Officer",
         "waiting_since": row.get("effective_start"),
     } for row in assignments]
@@ -861,7 +881,7 @@ def work():
             book_shop = [section(
                 "book-shop", "Book sales and stock", "links", items=links,
                 empty_title="No book-shop shortcuts",
-                empty_body="Book sales require the native Books item group and stock.",
+                empty_body="Book sales start once the Books item group and its stock are set up.",
             )]
 
     cash_section, tax_section, history_section = _cash_close_sections(day)
@@ -871,27 +891,33 @@ def work():
         "title": DESKS[SLUG]["title"],
         "sections": [
             *finance_sections(),
+            *expense_sections(day),
             *refund_sections("finance"),
+            *report_section(FINANCE_REPORTS),
             section("today", "Today", "queue", items=payment_items,
                     empty_title="No payments recorded today",
                     empty_body="No payment has been received for today. Payments appear here the moment they are posted."),
             section("facts", "Money facts", "facts", facts=money_facts,
                     empty_title="No money facts yet",
-                    empty_body="Facts appear once the native billing and payment records exist."),
+                    empty_body="Totals appear once bills and payments are recorded."),
             section("outstanding", "Outstanding receivables", "queue",
                     items=[money_item(row, "Sales Invoice") for row in outstanding_invoices]
                           + [money_item(row, "Fees") for row in outstanding_fees],
                     empty_title="Nothing is outstanding",
-                    empty_body="No submitted invoice or fee carries an outstanding amount for your scope."),
+                    empty_body="No invoice or tuition bill you can see has money still owing."),
+            section("placement-fees", "Placement fees to bill", "queue",
+                    items=_placement_fee_items(),
+                    empty_title="No placement case awaits a fee",
+                    empty_body="Every open placement case shown here already has a placement invoice."),
             section("billing", "Awaiting billing", "queue", items=billing_items,
-                    empty_title="No billing action in this preview",
-                    empty_body="No currently visible submitted enrollment requires billing. This bounded desk preview is not a complete audit of all records."),
+                    empty_title="Nothing waiting to be billed",
+                    empty_body="No enrolled student shown here is waiting for a tuition bill. This list shows the most recent records only."),
             section("policy", "Correction policy", "facts", facts=policy_facts,
                     empty_title="No correction policy yet",
-                    empty_body="No correction policy version is recorded; new correction requests fail closed until a Finance Officer records the first version."),
+                    empty_body="No correction rules are set yet. Bill corrections are refused until a Finance Officer records the first rules."),
             section("policy-versions", "Policy versions", "queue", items=version_items,
                     empty_title="No policy versions",
-                    empty_body="No correction policy version is recorded; new correction requests fail closed until a Finance Officer records the first version."),
+                    empty_body="No correction rules are set yet. Bill corrections are refused until a Finance Officer records the first rules."),
             section("corrections", "Correction queue", "queue",
                     items=_correction_items(corrections, policies),
                     empty_title="No correction requests",
@@ -899,7 +925,7 @@ def work():
             section("assignments", "Teaching assignments (native payroll)", "queue",
                     items=assignment_items,
                     empty_title="No teaching assignments",
-                    empty_body="No instructor skill assignment is on file. Assignments appear here from teaching scheduling; pay stays on native payroll."),
+                    empty_body="No teacher is assigned to a class yet. Assignments appear here from class scheduling; pay is calculated in HR Payroll."),
             section("compensation", "Teaching compensation", "queue",
                     items=_compensation_items(contracts, instructors),
                     empty_title="No teaching compensation work yet",
@@ -909,6 +935,32 @@ def work():
             tax_section,
         ] + book_shop,
     }
+
+
+def _placement_fee_items():
+    """Open placement cases with no active placement invoice yet."""
+    cases = project_rows("finance", "TH Placement Case", ["name", "subject", "status", "creation"],
+                         filters={"status": "Open"}, order_by="creation desc", limit=LIMIT_QUEUES)
+    if not cases:
+        return []
+    billed = {row.get("th_placement_case") for row in project_rows(
+        "finance", INVOICE, ["name", "th_placement_case", "docstatus"],
+        filters={"th_placement_case": ("in", [row["name"] for row in cases]),
+                 "docstatus": ("!=", 2)},
+        order_by="name asc", limit=LIMIT_QUEUES * 2)}
+    day = today()
+    return [{
+        "id": row["name"], "person": row.get("subject") or row["name"],
+        "detail": "Placement case opened " + str(row.get("creation") or "")[:10],
+        "status": "Not billed", "stage": "Placement fee",
+        "stage_definition": "The placement fee uses the configured fee item and price list; the billing policy decides when it may be charged.",
+        "next": "Choose the payer (Customer) and issue the placement invoice. Create the Customer in ERPNext first if the person is new.",
+        "next_role": "Finance Officer", "waiting_since": row.get("creation"),
+        "action": guided_action("Finance Officer", "toefl_house.finance.issue_placement_fee",
+                                "Issue placement fee",
+                                {"case": row["name"], "customer": "", "posting_date": day,
+                                 "due_date": day, "backdate_reason": ""}),
+    } for row in cases if row["name"] not in billed]
 
 
 def _scope_companies():
@@ -1107,8 +1159,8 @@ def _cash_close_sections(day):
 
     cash = section("cash-close", "Cash close", "queue", items=items,
                    facts=facts,
-                   empty_title="No cash drawer in scope",
-                   empty_body="This company has no native physical Cash account yet. Bank balances require a separate bank-statement reconciliation.")
+                   empty_title="No cash drawer set up",
+                   empty_body="This company has no Cash account yet. Bank balances are checked separately against the bank statement.")
 
     history_items = [{
         "id": row["name"],
@@ -1174,7 +1226,7 @@ def _cash_close_sections(day):
     tax_section = section(
         "tax", "Tax configuration", "facts", facts=tax_facts,
         empty_title="No company tax state",
-        empty_body="No company is visible in your scope, so no native tax configuration can be reported.")
+        empty_body="No company is assigned to you, so there is no tax setting to show.")
 
     return cash, tax_section, history_section
 

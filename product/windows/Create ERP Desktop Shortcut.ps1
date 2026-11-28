@@ -5,6 +5,8 @@ $entry = Join-Path $customer 'TOEFL House ERP.vbs'
 $gui = Join-Path $customer 'product\windows\TOEFL House ERP.ps1'
 $identity = Join-Path $customer 'product\data\activation\installed-image-identity.json'
 $scriptHost = Join-Path $env:WINDIR 'System32\wscript.exe'
+# The official TOEFL House logo icon; optional, never required to start the ERP.
+$brandIcon = Join-Path $customer 'product\windows\toefl-house.ico'
 $desktop = [Environment]::GetFolderPath('Desktop')
 if (-not $desktop -or -not (Test-Path -LiteralPath $desktop -PathType Container)) {
     throw 'The current Windows desktop folder is unavailable.'
@@ -28,12 +30,19 @@ if (Test-Path -LiteralPath $destination) {
         $link.WorkingDirectory -ine $customer) {
         throw 'A different TOEFL House ERP shortcut already exists. Review it before replacing it.'
     }
+    # The verified shortcut keeps its target; only the logo icon is added.
+    if ((Test-Path -LiteralPath $brandIcon -PathType Leaf) -and
+        $link.IconLocation -inotlike ($brandIcon + '*')) {
+        $link.IconLocation = $brandIcon + ',0'
+        $link.Save()
+    }
 } else {
     $link = $shell.CreateShortcut($destination)
     $link.TargetPath = $scriptHost
     $link.Arguments = $arguments
     $link.WorkingDirectory = $customer
     $link.Description = 'Open the installed TOEFL House ERP graphical launcher'
+    if (Test-Path -LiteralPath $brandIcon -PathType Leaf) { $link.IconLocation = $brandIcon + ',0' }
     $link.Save()
 
     $saved = $shell.CreateShortcut($destination)

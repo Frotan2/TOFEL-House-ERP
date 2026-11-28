@@ -171,12 +171,12 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn('"product/windows/OWNER ACCEPTANCE GUIDE.txt"', PACKAGER)
         self.assertIn('$guideButton.Add_Click', GUI)
         self.assertIn('$guideFile = Join-Path $PSScriptRoot "OWNER ACCEPTANCE GUIDE.txt"', GUI)
-        for phrase in ("ENGINEERING CANDIDATE ONLY", "FRESH DISPOSABLE WINDOWS TEST PC",
-                       "PRESERVATION", "DO NOT", "NO-GO", "REJECTED", "real student",
-                       "Check This PC", "synthetic records",
-                       "BOOK SHOP PRACTICE", "Item Group", "Update Stock",
-                       "Payment Entry", "Credit Note", "converted synthetic",
-                       "not a cash refund"):
+        for phrase in ("ENGINEERING CANDIDATE ONLY", "ALREADY PROVEN - DO NOT REPEAT",
+                       "PRESERVATION", "DO NOT", "NO-GO", "real student",
+                       "Check This PC", "synthetic records", "Install Update",
+                       "DO NOT restore over the existing site", "two-person recovery approval",
+                       "Owner and the General Manager each sign",
+                       "RELEASE DECISION: NO-GO"):
             self.assertIn(phrase.lower(), OWNER_GUIDE.lower(), phrase)
         self.assertNotIn("MARIADB_ROOT_PASSWORD=", OWNER_GUIDE)
         self.assertIn('"Check"', WORKER)

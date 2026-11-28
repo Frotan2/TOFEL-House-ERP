@@ -148,10 +148,30 @@ assert(teacherSource.includes("toefl_house.teaching.record_instructor_attendance
 const teacherSecurity = fs.readFileSync(path.join(APP, "security.py"), "utf8");
 assert(teacherSecurity.includes('"record_instructor_attendance": "Instructor"'),
     "Instructor command must have a distinct role gate");
-const recorderFields = client.toefl_house.role_desks.actionFields["toefl_house.teaching.record_attendance"];
-assert(recorderFields && recorderFields.some((field) => field.fieldname === "course_schedule")
-	&& recorderFields.some((field) => field.fieldname === "statuses"),
-	"authorized Attendance Recorder needs a session and bounded roster marks");
+// The Attendance Recorder records on its command page from the guarded
+// class-list read (per-student choices); no desk offers a raw-JSON form.
+assert(!client.toefl_house.role_desks.actionFields["toefl_house.teaching.record_attendance"],
+	"no desk may offer a typed-JSON attendance form");
+const commandPages = fs.readFileSync(path.join(APP, "public/js/th_command_pages.js"), "utf8");
+assert(commandPages.includes('roster: "toefl_house.teaching.attendance_roster"'),
+	"the Attendance Recorder must mark students from the class list");
+assert(!/json\("statuses"/.test(commandPages), "attendance marks must never be typed as JSON");
+// Native report shortcuts route only to query-report/<name>; the server
+// offers them only when the native report would open for this login.
+assert(/route\[0\] === "query-report" && route\[1\]/.test(fs.readFileSync(path.join(APP, "public/js/th_role_desks.js"), "utf8")),
+	"report links must route to the native query report");
+// Assessment facets are configured through the Owner's numeric forms
+// (configure_initial_assessment / revise_grading_weights); raw JSON facet
+// editors stay server-only and are never offered on a desk.
+for (const facet of ["components", "weights", "pass_rules", "rubrics", "progression", "retakes", "mapping"]) {
+	assert(!client.toefl_house.role_desks.actionFields[`toefl_house.academic.set_assessment_${facet}`],
+		`no desk may offer a raw-JSON ${facet} editor`);
+}
+for (const [endpoint, fields] of Object.entries(client.toefl_house.role_desks.actionFields)) {
+	for (const field of fields) {
+		assert(!/\bJSON\b/.test(field.label || ""), `${endpoint}.${field.fieldname} asks staff to type JSON`);
+	}
+}
 
 assert.deepStrictEqual(Object.keys(surfaces).sort(), Object.keys(EXPECTED).sort(),
 	"the desk surface set changed");
@@ -235,6 +255,7 @@ const endpointFiles = {
 	"toefl_house.finance.tuition_refund_commands": ["finance/tuition_refund_commands.py"],
 	"toefl_house.academic": ["academic/__init__.py"],
 	"toefl_house.academic.catalog_linkage": ["academic/catalog_linkage.py"],
+	"toefl_house.academic.progression": ["academic/progression.py"],
 	"toefl_house.admission.policies": ["admission/policies.py"],
 	"toefl_house.enrollment.exits": ["enrollment/exits.py"],
 	"toefl_house.finance": ["finance/__init__.py"],
@@ -242,12 +263,17 @@ const endpointFiles = {
 	"toefl_house.finance.installments": ["finance/installments.py"],
 	"toefl_house.finance.cashier": ["finance/cashier.py"],
 	"toefl_house.finance.collections": ["finance/collections.py"],
+	"toefl_house.finance.expenses": ["finance/expenses.py"],
 	"toefl_house.teaching": ["teaching/__init__.py"],
 	"toefl_house.teaching.policies": ["teaching/policies.py"],
 	"toefl_house.teaching.timetables": ["teaching/timetables.py"],
 	"toefl_house.teaching.attendance_corrections": ["teaching/attendance_corrections.py"],
 	"toefl_house.teaching.adjustment_posting": ["teaching/adjustment_posting.py"],
 	"toefl_house.teaching.compensation": ["teaching/compensation.py"],
+	"toefl_house.teaching.class_operations": ["teaching/class_operations.py"],
+	"toefl_house.teaching.calendars": ["teaching/calendars.py"],
+	"toefl_house.teaching.transfers": ["teaching/transfers.py"],
+	"toefl_house.teaching.capacity": ["teaching/capacity.py"],
 };
 function signatureOf(method) {
 	const parts = method.split(".");
@@ -289,6 +315,24 @@ for (const [method, fields] of Object.entries(actionFields)) {
 		assert.deepStrictEqual(signature.slice(1), ["grading_scale_name", "intervals", "reason", "scope"]);
 		continue;
 	}
+	if (method === "toefl_house.teaching.class_operations.set_class_operations_policy_version") {
+		// Term inputs are ordinary fields assembled into the one terms object.
+		const names = Array.from(fields, (field) => field.fieldname);
+		assert.deepStrictEqual(names.slice(0, 3), ["policy", "effective_from", "reason"]);
+		assert.deepStrictEqual(signature.slice(1), ["policy", "effective_from", "reason", "terms"]);
+		const serverSource = fs.readFileSync(path.join(APP, "teaching/class_operations.py"), "utf8");
+		const serverTerms = /^TERM_KEYS = \(([^)]*)\)/m.exec(serverSource)[1]
+			.match(/"([a-z_]+)"/g).map((name) => name.slice(1, -1));
+		const formTerms = names.slice(3).map((name) => {
+			assert(name.startsWith("term_"), `unexpected class-operations field ${name}`);
+			return name.slice(5);
+		});
+		const dayTerms = formTerms.filter((name) => name.startsWith("day_"));
+		assert.strictEqual(dayTerms.length, 7, "every weekday must be selectable");
+		assert.deepStrictEqual(["teaching_days", ...formTerms.filter((name) => !name.startsWith("day_"))].sort(),
+			serverTerms.slice().sort(), "class-operations form must carry exactly the server term set");
+		continue;
+	}
 	// Calls use named arguments; related UI fields may have a different display order.
 	assert.deepStrictEqual(Array.from(fields, (field) => field.fieldname).sort(), signature.slice(1).sort(),
 		`${method} dialog fields drift from the reviewed signature`);
@@ -326,6 +370,7 @@ const allowedCalls = new Set([...Object.values(EXPECTED).map((shape) => shape.en
 	"toefl_house.desk.academic.attendance_records",
 	"toefl_house.desk.academic.enrollment_records",
 	"toefl_house.finance.collections.get_collection_receipt",
+	"toefl_house.finance.expenses.expense_options",
 	"toefl_house.teaching.compensation.get_contract_revision_form",
 	"toefl_house.setup_presets.api.preview_owner_initial_setup",
 	"toefl_house.setup_presets.owner_policy_forms.owner_form_options",

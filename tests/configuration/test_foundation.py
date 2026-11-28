@@ -675,20 +675,6 @@ class ConfigurationNavigationTests(unittest.TestCase):
             "toefl_house.academic.set_assessment_policy_status":
                 ["policy", "active"],
             "toefl_house.academic.validate_assessment_policy": ["policy"],
-            "toefl_house.academic.set_assessment_components":
-                ["policy", "effective_from", "reason", "components"],
-            "toefl_house.academic.set_assessment_weights":
-                ["policy", "effective_from", "reason", "weights"],
-            "toefl_house.academic.set_assessment_pass_rules":
-                ["policy", "effective_from", "reason", "pass_rules"],
-            "toefl_house.academic.set_assessment_rubrics":
-                ["policy", "effective_from", "reason", "rubrics"],
-            "toefl_house.academic.set_assessment_progression":
-                ["policy", "effective_from", "reason", "progression"],
-            "toefl_house.academic.set_assessment_retakes":
-                ["policy", "effective_from", "reason", "retakes"],
-            "toefl_house.academic.set_assessment_mapping":
-                ["policy", "effective_from", "reason", "mapping"],
         }
         import re
         for endpoint, fields in expected.items():
@@ -698,6 +684,13 @@ class ConfigurationNavigationTests(unittest.TestCase):
             found = re.findall(r"fieldname: \"(\w+)\"", match.group(1))
             self.assertEqual(found, fields,
                              f"{endpoint} dialog drift from the signature")
+        # The JSON facet commands stay guarded server APIs, but the Owner
+        # configures facets through the numeric forms; no desk dialog may
+        # offer a raw-JSON facet editor.
+        for facet in ("components", "weights", "pass_rules", "rubrics",
+                      "progression", "retakes", "mapping"):
+            self.assertNotIn(f'"toefl_house.academic.set_assessment_{facet}"',
+                             client)
 
     def test_setup_grading_consumes_the_foundation(self):
         source = (APP / "desk/setup.py").read_text(encoding="utf-8")

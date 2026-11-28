@@ -314,13 +314,14 @@ def _doc_branches_guarded(doc, kind):
         branch = frappe.db.get_value("Student Group", group, "th_branch")
         return {branch} if branch else set()
     if kind == "class_transfer":
+        # Both classes must resolve to a Branch, matching the list rule; a
+        # class without a Branch makes the whole transfer unresolvable.
         branches = set()
         for group in (doc.get("from_group"), doc.get("to_group")):
-            if not group:
-                continue
-            branch = frappe.db.get_value("Student Group", group, "th_branch")
-            if branch:
-                branches.add(branch)
+            branch = frappe.db.get_value("Student Group", group, "th_branch") if group else None
+            if not branch:
+                return set()
+            branches.add(branch)
         return branches
     if kind == "attendance_correction":
         branches = set()

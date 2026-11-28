@@ -8511,6 +8511,128 @@ def main():
                 main_cash_increase=100,idempotent=True,temporary_shares_removed=True,
                 unauthorized_read_denied=True,second_handover_denied=True)
         reception_proof=check('reception-native-http-cash-receipt-correction-handover',traced(reception_cash_cycle))
+        def operating_expense_cycle():
+            # Operating expenses (finance.expenses): one submitted native
+            # Journal Entry per payment, through authenticated HTTP. Today's
+            # cash day was closed by the cash-close fixture above, so a cash
+            # expense today must be refused; a bank expense posts, a
+            # different Finance Manager voids it, self-void is refused and
+            # native routes cannot cancel the journal.
+            frappe.set_user('Administrator')
+            company=fin['company']
+            day=frappe.utils.today()
+            currency=frappe.db.get_value('Company',company,'default_currency')
+            category=frappe.db.get_value('Account',{'company':company,'root_type':'Expense','is_group':0,
+                'disabled':0,'account_currency':currency},'name',order_by='name asc')
+            assert category,('synthetic company has no postable Expense account',company)
+            main_cash=frappe.db.get_value('Account',{'company':company,'account_type':'Cash','is_group':0,
+                'disabled':0,'account_name':('not like','SYN%')},'name',order_by='name asc')
+            assert main_cash,('synthetic company has no main Cash account',company)
+            bank_name='SYN Operating Bank'
+            bank=frappe.db.get_value('Account',{'company':company,'account_name':bank_name},'name')
+            if not bank:
+                parent=frappe.db.get_value('Account',{'company':company,'account_type':'Bank','is_group':1},'name') \
+                    or frappe.get_doc('Account',main_cash).parent_account
+                extra=frappe.get_doc(dict(doctype='Account',account_name=bank_name,company=company,
+                    parent_account=parent,account_type='Bank',is_group=0,root_type='Asset',
+                    report_type='Balance Sheet',account_currency=currency))
+                extra.insert()
+                bank=extra.name
+                frappe.db.commit()
+            counters=[name for name in frappe.get_all('User Permission',filters={'user':users['receptionist'],
+                'allow':'Account'},pluck='for_value')]
+            assert counters,'the reception cash cycle must have assigned a counter drawer'
+            prefix='toefl_house.finance.expenses.'
+            actors={key:login(key) for key in ('refund_officer','finance_officer','finance_manager','receptionist',
+                                               'containment_probe')}
+
+            def rpc(role,method,payload,expected=200,get=False):
+                url=base+'/api/method/'+prefix+method
+                response=(actors[role].get(url,params=payload,timeout=60) if get else
+                          actors[role].post(url,json=payload,timeout=60))
+                body=response.json()
+                assert response.status_code==expected,(method,role,response.status_code,body.get('exc_type'),
+                    body.get('exception','')[:350])
+                return body if expected!=200 else body.get('message')
+
+            options=rpc('refund_officer','expense_options',{},get=True)
+            own=[row for row in options['companies'] if row['company']==company]
+            assert own and category in own[0]['categories'],options
+            paying={row['name'] for row in own[0]['paying_accounts']}
+            assert bank in paying and not paying&set(counters),(paying,counters)
+            rpc('receptionist','expense_options',{},expected=403,get=True)
+            base_args=dict(company=company,posting_date=day,expense_account=category,amount='40.00',
+                           payee='SYN Utilities Provider',description='SYN native expense qualification')
+            closed=rpc('refund_officer','record_expense',dict(base_args,request_key='native_expense_cash_closed_01',
+                paid_from=main_cash),expected=417)
+            assert 'already closed' in closed.get('exception',''),closed.get('exception')
+            counter=rpc('refund_officer','record_expense',dict(base_args,request_key='native_expense_counter_0001',
+                paid_from=counters[0]),expected=417)
+            assert 'Reception counter' in counter.get('exception',''),counter.get('exception')
+            rpc('receptionist','record_expense',dict(base_args,request_key='native_expense_reception_001',
+                paid_from=bank,reference='SYN-TRX-0'),expected=403)
+            payload=dict(base_args,request_key='native_expense_bank_000001',paid_from=bank,reference='SYN-TRX-1')
+            posted=rpc('refund_officer','record_expense',payload)
+            assert rpc('refund_officer','record_expense',payload)==posted,'expense replay must be idempotent'
+            frappe.db.rollback()
+            name=posted['journal_entry']
+            row=frappe.db.get_value('Journal Entry',name,['docstatus','voucher_type','cheque_no','th_expense_recorder',
+                'th_expense_synthetic','total_debit','company'],as_dict=True)
+            assert int(row.docstatus)==1 and row.voucher_type=='Bank Entry' and row.cheque_no=='SYN-TRX-1',row
+            assert row.th_expense_recorder==users['refund_officer'] and int(row.th_expense_synthetic)==1,row
+            assert abs(float(row.total_debit)-40)<0.005 and row.company==company,row
+            gl={r.account:float(r.net) for r in frappe.db.sql("""select account, sum(debit-credit) as net
+                from `tabGL Entry` where voucher_type='Journal Entry' and voucher_no=%s and is_cancelled=0
+                group by account""",(name,),as_dict=True)}
+            assert gl=={category:40.0,bank:-40.0},gl
+            native_cancel=actors['containment_probe'].post(base+'/api/method/frappe.client.cancel',
+                json=dict(doctype='Journal Entry',name=name),timeout=40)
+            assert native_cancel.status_code in (403,417),native_cancel.status_code
+            frappe.db.rollback()
+            assert int(frappe.db.get_value('Journal Entry',name,'docstatus'))==1
+            mine=rpc('finance_officer','record_expense',dict(base_args,request_key='native_expense_self_000001',
+                paid_from=bank,reference='SYN-TRX-2'))
+            self_void=rpc('finance_officer','void_expense',dict(request_key='native_expense_self_void_01',
+                journal_entry=mine['journal_entry'],reason='SYN self void must be refused'),expected=403)
+            assert 'Another Finance Manager' in self_void.get('exception',''),self_void.get('exception')
+            voided=rpc('finance_manager','void_expense',dict(request_key='native_expense_void_000001',
+                journal_entry=name,reason='SYN native void qualification'))
+            frappe.db.rollback()
+            assert voided['status']=='Void' and voided['voided_by']==users['finance_manager'],voided
+            assert int(frappe.db.get_value('Journal Entry',name,'docstatus'))==2
+            net=frappe.db.sql("""select coalesce(sum(debit-credit),0) from `tabGL Entry`
+                where voucher_type='Journal Entry' and voucher_no=%s and account=%s and is_cancelled=0""",
+                (name,category))[0][0]
+            assert abs(float(net))<0.005,('a voided expense must leave no live expense balance',net)
+            from toefl_house.desk.expenses import position_facts
+            facts=as_user('finance_manager',lambda:position_facts(day))
+            assert facts and all(fact['value']!='—' for fact in facts),facts
+            frappe.set_user('Administrator')
+            for actor in actors.values():
+                actor.close()
+            return dict(expense=name,self_void_refused=True,voided_by_second_manager=True,
+                        closed_cash_day_refused=True,counter_drawer_refused=True,reception_denied=True,
+                        native_cancel_refused=True,gl=gl,idempotent=True)
+        check('finance-native-http-operating-expense-record-void',traced(operating_expense_cycle))
+        def native_report_shortcuts():
+            # The desk Reports sections name pinned native reports. Prove they
+            # exist on the real site with the expected reference DocType and
+            # that the shortcut gate mirrors native query_report permission.
+            from toefl_house import desk as desk_package
+            pinned={name:ref for _title,name,ref in desk_package.FINANCE_REPORTS+desk_package.ACADEMIC_REPORTS}
+            found={name:frappe.db.get_value('Report',name,'ref_doctype') for name in pinned}
+            assert found==pinned,('pinned native reports drifted',found)
+            try:
+                receptionist=as_user('receptionist',lambda:desk_package.native_report_links(desk_package.FINANCE_REPORTS))
+                assert receptionist==[],('Reception must not get finance report shortcuts',receptionist)
+                officer=as_user('finance_officer',lambda:desk_package.native_report_links(desk_package.FINANCE_REPORTS))
+                slugs={link['slug'] for link in officer}
+                for name in ('Accounts Receivable','General Ledger','Profit and Loss Statement'):
+                    assert 'query-report/'+name in slugs,(name,slugs)
+            finally:
+                frappe.set_user('Administrator')
+            return dict(reports=len(found),receptionist_links=0,accounts_user_links=sorted(slugs))
+        check('desk-native-report-shortcuts-permission-mirror',traced(native_report_shortcuts))
         def tuition_refund_read_list_parity():
             # A real submitted/amended collection funds this synthetic case.
             from toefl_house.finance import tuition_refund_commands as tuition_refund_cmd

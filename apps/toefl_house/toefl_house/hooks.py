@@ -28,6 +28,17 @@ setup_wizard_success = "toefl_house.academic.native_setup.setup_wizard_success"
 # `app_home` routes the TOEFL House app tile to the role-filtered command centre;
 # every individual page remains independently Page-role-gated server-side.
 app_home = "/app/th-command-centre"
+# The official TOEFL House logo and its red (docs/brand/README.md), stored
+# locally so the desk works offline. Desk app slots are square, so the square
+# file is the same logo on a white square (padding only, never resized out of
+# proportion). The Owner can still override it in the native Navbar Settings.
+app_logo_url = "/assets/toefl_house/images/toefl_house_logo_square.png"
+website_context = {
+    "favicon": "/assets/toefl_house/images/toefl_house_favicon.png",
+    "splash_image": "/assets/toefl_house/images/toefl_house_logo.png",
+}
+app_include_css = ["/assets/toefl_house/css/th_brand.css"]
+web_include_css = ["/assets/toefl_house/css/th_brand.css"]
 # The app tile is not the native login destination. Route staff at login and
 # root-page resolution too; native Page and document permissions remain intact.
 get_website_user_home_page = "toefl_house.navigation.staff_home_page"
@@ -54,7 +65,7 @@ _DESK_PAGES = (
 page_js.update({name: "public/js/th_role_desks.js" for name in _DESK_PAGES})
 page_js["th-course-assessment"] = "public/js/th_course_assessment.js"
 fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception", "Instructor"]]]},
-            {"dt": "Custom Field", "filters": [["dt", "in", ["Sales Invoice", "Fee Structure", "Fees", "Student Group", "Student Applicant", "Student", "Course Schedule", "Payment Entry"]]]},
+            {"dt": "Custom Field", "filters": [["dt", "in", ["Sales Invoice", "Fee Structure", "Fees", "Student Group", "Student Applicant", "Student", "Course Schedule", "Payment Entry", "Journal Entry"]]]},
             {"dt": "Property Setter", "filters": [["doc_type", "=", "Student"], ["field_name", "=", "student_email_id"], ["property", "=", "reqd"]]}]
 has_permission = {
     name: "toefl_house.permissions.has_permission"

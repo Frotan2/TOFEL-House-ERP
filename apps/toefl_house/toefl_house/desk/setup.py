@@ -678,7 +678,9 @@ def _timetable_section():
             next_step = "The full weekly pattern could not be read safely. Review the stored template before editing."
         elif active:
             next_step = ("Use Schedule session on the active class in Academic Desk. "
-                         "Generating a batch from the weekly pattern needs an approved Class Operations Policy."
+                         "Generating a batch from the weekly pattern needs an approved Class Operations Policy "
+                         "(Configuration \u2192 Course Owner Policy Controls \u2192 Class Operations; "
+                         "holidays under Holidays and Closures)."
                          if slots else "Add the approved weekly slots.")
         else:
             next_step = "Reactivate this template before editing its pattern or generating sessions."
@@ -857,17 +859,6 @@ def _assessment_next(policy, readiness, governing):
         since = governing.get("effective_from") if governing else ""
         return f"{code} governs since {since}."
     return f"{code} is retired; it governs nothing."
-
-
-FACET_ACTIONS = (
-    ("toefl_house.academic.set_assessment_components", "Set components"),
-    ("toefl_house.academic.set_assessment_weights", "Set weights"),
-    ("toefl_house.academic.set_assessment_pass_rules", "Set pass rules"),
-    ("toefl_house.academic.set_assessment_rubrics", "Set rubrics"),
-    ("toefl_house.academic.set_assessment_progression", "Set progression"),
-    ("toefl_house.academic.set_assessment_retakes", "Set retakes"),
-    ("toefl_house.academic.set_assessment_mapping", "Set level mapping"),
-)
 
 
 def _assessment_actions(policy, readiness, *, graded):

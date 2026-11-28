@@ -706,5 +706,37 @@
     "translatable": 0,
     "unique": 1,
     "width": null
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Journal Entry-th_expense_recorder",
+    "dt": "Journal Entry",
+    "fieldname": "th_expense_recorder",
+    "label": "Expense recorded by",
+    "fieldtype": "Link",
+    "options": "User",
+    "insert_after": "pay_to_recd_from",
+    "read_only": 1,
+    "allow_on_submit": 0,
+    "hidden": 0,
+    "no_copy": 1,
+    "default": null,
+    "description": "Set only by the Finance Desk expense command. Expense journals are voided only through the Finance Desk."
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Journal Entry-th_expense_synthetic",
+    "dt": "Journal Entry",
+    "fieldname": "th_expense_synthetic",
+    "label": "Practice expense",
+    "fieldtype": "Check",
+    "options": null,
+    "insert_after": "th_expense_recorder",
+    "read_only": 1,
+    "allow_on_submit": 0,
+    "hidden": 0,
+    "no_copy": 1,
+    "default": "0",
+    "description": "Set only by the Finance Desk expense command."
   }
 ]

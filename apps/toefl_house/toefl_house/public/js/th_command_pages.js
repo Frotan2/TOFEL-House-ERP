@@ -17,13 +17,9 @@ frappe.provide("toefl_house.command_pages");
 	const integer = (fieldname, label, options = {}) => ({ fieldname, label, fieldtype: "Int", ...options });
 	const date = (fieldname, label, options = {}) => ({ fieldname, label, fieldtype: "Date", ...options });
 	const time = (fieldname, label, options = {}) => ({ fieldname, label, fieldtype: "Time", ...options });
-	const json = (fieldname, label, options = {}) => ({
-		fieldname,
-		label,
-		fieldtype: "Code",
-		options: "JSON",
-		...options,
-	});
+	// Structured commands still send one JSON argument to the reviewed
+	// endpoint; staff never see it. A builder fills it from ordinary fields.
+	const carrier = (fieldname, label) => ({ fieldname, label, fieldtype: "Small Text", hidden: 1, read_only: 1 });
 	const note = (fieldname, label, options = {}) => ({ fieldname, label, fieldtype: "Small Text", ...options });
 	const select = (fieldname, label, values, options = {}) => ({
 		fieldname,
@@ -34,6 +30,13 @@ frappe.provide("toefl_house.command_pages");
 	});
 
 	const CONFIG_TYPES = ["blueprint", "policy", "course_map"];
+	// Mirrors toefl_house.policy (the server re-validates everything).
+	const ITEM_SKILLS = ["Vocabulary", "Grammar", "Reading", "Listening"];
+	const PLACEMENT_SKILLS = ["Vocabulary", "Grammar", "Reading", "Listening", "Speaking", "Writing"];
+	const ITEM_DIFFICULTIES = ["Entry", "Core", "Stretch"];
+	const ITEM_KINDS = ["Single Choice", "True False"];
+	const EXAM_DELIVERY_MODES = ["Digital", "Physical", "Hybrid"];
+	const OPTION_LETTERS = ["A", "B", "C", "D", "E", "F"];
 	const ADMISSION_OUTCOMES = ["Approved", "Conditional", "Deferred", "Rejected"];
 	const DELIVERY_MODES = ["On-site", "Online", "Hybrid"];
 	const CLASS_TRANSITIONS = ["Active", "Completed", "Cancelled"];
@@ -58,7 +61,7 @@ frappe.provide("toefl_house.command_pages");
 			admin: true,
 			roles: ["Course Owner", "General Manager"],
 			title: "TOEFL House Administration Control Centre",
-			description: "Review fail-closed release attention and navigate to native identity, role, branch and permission authorities. This surface grants no permission and creates no parallel ledger.",
+			description: "Review items that need attention and open user, role, branch and permission settings. This page does not change anyone's access by itself.",
 		},
 		"th-command-centre": {
 			title: "TOEFL House Command Centre",
@@ -74,31 +77,35 @@ frappe.provide("toefl_house.command_pages");
 		"th-placement-author": {
 			role: "Placement Author",
 			title: "TOEFL House Placement Authoring",
-			description: "Create and revise question-bank and exam-configuration drafts. A different authorized employee must approve publication.",
+			description: "Create and revise question-bank and exam-configuration drafts with ordinary form fields. A different authorized employee must approve publication.",
 			commands: [
 				{
 					label: "Create item draft",
 					method: "toefl_house.api.create_draft",
 					dispatches: ["create_draft"],
-					fields: [data("family", "Question family", { reqd: 1 }), integer("revision", "Revision", { reqd: 1 }), json("content", "Content JSON", { reqd: 1 })],
+					fields: [data("family", "Question family", { reqd: 1 }), integer("revision", "Revision", { reqd: 1 }), carrier("content", "Question")],
+					builder: "item",
 				},
 				{
 					label: "Revise item draft",
 					method: "toefl_house.api.revise_draft",
 					dispatches: ["revise_draft"],
-					fields: [data("item_name", "Item revision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 }), json("content", "Content JSON", { reqd: 1 })],
+					fields: [data("item_name", "Item revision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 }), carrier("content", "Question")],
+					builder: "item",
 				},
 				{
 					label: "Create configuration draft",
 					method: "toefl_house.api.create_draft_config",
 					dispatches: ["create_blueprint", "create_policy", "create_course_map"],
-					fields: [select("config", "Configuration type", CONFIG_TYPES, { reqd: 1 }), data("code", "Configuration code", { reqd: 1 }), integer("revision", "Revision", { reqd: 1 }), json("definition", "Definition JSON", { reqd: 1 })],
+					fields: [select("config", "Configuration type", CONFIG_TYPES, { reqd: 1 }), data("code", "Configuration code", { reqd: 1 }), integer("revision", "Revision", { reqd: 1 }), carrier("definition", "Configuration")],
+					builder: "config",
 				},
 				{
 					label: "Revise configuration draft",
 					method: "toefl_house.api.revise_draft_config",
 					dispatches: ["revise_blueprint", "revise_policy", "revise_course_map"],
-					fields: [select("config", "Configuration type", CONFIG_TYPES, { reqd: 1 }), data("name", "Configuration revision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 }), json("definition", "Definition JSON", { reqd: 1 })],
+					fields: [select("config", "Configuration type", CONFIG_TYPES, { reqd: 1 }), data("name", "Configuration revision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 }), carrier("definition", "Configuration")],
+					builder: "config",
 				},
 			],
 		},
@@ -186,7 +193,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-admission-officer": {
 			role: "Admission Officer",
 			title: "TOEFL House Admission Intake",
-			description: "Run the thin admission intake and officer transitions over native Student Applicant and Student authorities. The page does not create an enrollment or a billing record.",
+			description: "Record new applicants and move them through admission. This page does not enroll or bill anyone.",
 			commands: [
 				{ label: "Record applicant", method: "toefl_house.admission.record_applicant", dispatches: ["record_applicant"], fields: [data("placement_decision", "Released placement decision", { reqd: 1 }), data("first_name", "First name", { reqd: 1 }), data("program", "Program", { reqd: 1 }), data("academic_year", "Academic year", { reqd: 1 }), data("branch", "Branch", { description: "Blank: the recording officer's own branch." }), data("last_name", "Family name (optional)"), data("email", "Email (optional)", { description: "Leave blank if the learner has no email. Never invent an address." })] },
 				{ label: "Create admission decision", method: "toefl_house.admission.create_admission", dispatches: ["create_admission"], fields: [data("student_applicant", "Student applicant", { reqd: 1 }), data("placement_decision", "Released placement decision", { reqd: 1 }), data("existing_student", "Existing student"), data("program", "Program", { description: "Returning journeys only; blank inherits the applicant record." }), data("academic_year", "Academic year", { description: "Returning journeys only; blank inherits the applicant record." }), data("academic_term", "Academic term", { description: "Returning journeys only; blank inherits the applicant record." })] },
@@ -206,7 +213,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-admission-approval": {
 			role: "Admission Approver",
 			title: "TOEFL House Admission Approval",
-			description: "Run the existing admission decision, condition satisfaction, revocation and native Student conversion commands. Eligibility and transition controls remain server-side.",
+			description: "Decide admissions, mark conditions as met, revoke a decision, or turn an admitted applicant into a student. The system checks eligibility.",
 			commands: [
 				{ label: "Decide admission", method: "toefl_house.admission.decide_admission", dispatches: ["decide_admission"], fields: [data("name", "Admission decision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 }), select("outcome", "Outcome", ADMISSION_OUTCOMES, { reqd: 1 }), note("reason", "Reason", { reqd: 1 }), note("conditions", "Conditions")] },
 				{ label: "Satisfy conditions", method: "toefl_house.admission.satisfy_conditions", dispatches: ["satisfy_conditions"], fields: [data("name", "Admission decision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 }), note("evidence", "Verification evidence", { reqd: 1 })] },
@@ -217,7 +224,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-enrollment": {
 			role: "Enrollment Officer",
 			title: "TOEFL House Enrollment",
-				description: "Submit one eligible native Program Enrollment through the guarded enrollment command. The server enforces actor separation from the admission decision. Withdrawals and dismissal decisions end a registration through the guarded exit commands.",
+				description: "Enroll an admitted student in a program. The person who enrolls must be different from the person who admitted. Withdrawals and dismissals end an enrollment here too.",
 			commands: [
 				{ label: "Enroll in program", method: "toefl_house.enrollment.enroll_in_program", dispatches: ["enroll_in_program"], fields: [data("admission_decision", "Admission decision", { reqd: 1 })] },
 				{ label: "Withdraw enrollment", method: "toefl_house.enrollment.exits.withdraw_enrollment", dispatches: ["withdraw_enrollment"], fields: [data("program_enrollment", "Program enrollment", { reqd: 1 }), date("exit_date", "Exit date", { reqd: 1 }), note("reason", "Reason", { reqd: 1 })] },
@@ -229,7 +236,7 @@ frappe.provide("toefl_house.command_pages");
 		"th-teaching-scheduling": {
 			role: "Teaching Scheduler",
 			title: "TOEFL House Teaching Scheduling",
-			description: "Create native class, session, roster and skill-assignment facts through guarded commands. The page performs no native list or link lookup.",
+			description: "Create classes and sessions, add students to a class, and assign teachers.",
 			commands: [
 				{ label: "Create student group", method: "toefl_house.teaching.create_student_group", dispatches: ["create_student_group"], fields: [data("group_name", "Synthetic group name", { reqd: 1 }), data("program", "Program", { reqd: 1 }), data("academic_year", "Academic year", { reqd: 1 }), data("academic_term", "Academic term"), integer("max_strength", "Maximum strength", { reqd: 1 }), date("class_start_date", "Class start date"), date("class_end_date", "Class end date (blank = use level duration policy)"), select("delivery_mode", "Delivery mode", DELIVERY_MODES, { default: "On-site" }), data("branch", "Branch"), data("students", "Student IDs (optional)", { description: "Comma-separated Student IDs with submitted enrollments; leave blank for the full intake." })] },
 				{ label: "Add class member", method: "toefl_house.teaching.add_class_member", dispatches: ["add_class_member"], fields: [data("student_group", "Student group", { reqd: 1 }), data("student", "Student", { reqd: 1 }), data("override", "Capacity override (only when full)")] },
@@ -255,9 +262,11 @@ frappe.provide("toefl_house.command_pages");
 		"th-attendance-recording": {
 			role: "Attendance Recorder",
 			title: "TOEFL House Attendance Recording",
-			description: "Record submitted native Student Attendance facts for a scheduled session through the guarded command. Supply the complete status JSON required by the server. Corrections run as request/approve/deny inside the owner policy window.",
+			description: "Take attendance for a scheduled session: enter the session, then choose Present, Absent or Leave for each student. Corrections are requested and approved within the allowed time window.",
 			commands: [
-				{ label: "Record attendance", method: "toefl_house.teaching.record_attendance", dispatches: ["record_attendance"], fields: [data("course_schedule", "Course schedule", { reqd: 1 }), json("statuses", "Statuses JSON", { reqd: 1 })] },
+				// statuses is generated from the per-student choices of the
+				// roster step (rosterAttendance), never typed by hand.
+				{ label: "Record attendance", method: "toefl_house.teaching.record_attendance", dispatches: ["record_attendance"], roster: "toefl_house.teaching.attendance_roster", fields: [data("course_schedule", "Course schedule", { reqd: 1 }), { fieldname: "statuses", label: "Marks", fieldtype: "Small Text", hidden: 1, read_only: 1 }] },
 				{ label: "Request attendance correction", method: "toefl_house.teaching.attendance_corrections.request_attendance_correction", dispatches: ["request_attendance_correction"], fields: [data("attendance", "Student attendance", { reqd: 1 }), select("requested_status", "Requested mark", ATTENDANCE_MARKS, { reqd: 1 }), note("reason", "Reason", { reqd: 1 })] },
 				{ label: "Approve attendance correction", method: "toefl_house.teaching.attendance_corrections.approve_attendance_correction", dispatches: ["approve_attendance_correction"], fields: [data("request", "Correction request", { reqd: 1 })] },
 				{ label: "Deny attendance correction", method: "toefl_house.teaching.attendance_corrections.deny_attendance_correction", dispatches: ["deny_attendance_correction"], fields: [data("request", "Correction request", { reqd: 1 })] },
@@ -285,7 +294,7 @@ frappe.provide("toefl_house.command_pages");
 			title: text("Manage TOEFL role assignment"),
 			fields: [
 				requestKeyField(),
-				data("user", "User", { reqd: 1, description: "Native User name or email; no user search is performed." }),
+				data("user", "User", { reqd: 1, description: "The person's login email." }),
 				select("role", "Managed role", ADMIN_MANAGED_ROLES, { reqd: 1 }),
 				{ fieldname: "enabled", label: "Assign role", fieldtype: "Check", default: 1 },
 			],
@@ -469,7 +478,227 @@ frappe.provide("toefl_house.command_pages");
 		});
 	}
 
+	// Attendance Recorder: load the session's class list through the guarded
+	// roster read, then show one Present/Absent/Leave choice per student. No
+	// mark is defaulted; every listed student must be chosen.
+	function rosterAttendance(command) {
+		const lookup = new frappe.ui.Dialog({
+			title: text(command.label),
+			fields: [data("course_schedule", "Course schedule", { reqd: 1, description: "The session ID shown on the class timetable." })],
+			primary_action_label: text("Load class list"),
+			primary_action(values) {
+				frappe.call({
+					method: command.roster,
+					type: "GET",
+					args: { course_schedule: values.course_schedule },
+					callback(response) {
+						const session = response.message || {};
+						const roster = Array.isArray(session.roster) ? session.roster : null;
+						if (!roster || roster.length > 200 || roster.some((row) => !row || typeof row.student !== "string" ||
+							!row.student || row.student.length > 140)) {
+							frappe.msgprint(text("The class list could not be loaded safely. Nothing was recorded."));
+							return;
+						}
+						if (!roster.length) {
+							frappe.msgprint(text("Every student on this class list already has attendance for this session."));
+							return;
+						}
+						lookup.hide();
+						const marks = roster.map((row, index) => select("mark_" + index, String(row.name || row.student) + " (" + row.student + ")",
+							["", ...ATTENDANCE_MARKS], { reqd: 1 }));
+						const summary = [session.class, session.date, session.time, session.course].filter(Boolean).join(" · ");
+						const dialog = new frappe.ui.Dialog({
+							title: text(command.label),
+							fields: [requestKeyField(), { fieldname: "session_summary", fieldtype: "HTML",
+								options: `<p class='th-card-hint'>${escapeText(summary)}</p>` }, ...marks],
+							primary_action_label: text("Record attendance"),
+							primary_action(chosen) {
+								const statuses = {};
+								roster.forEach((row, index) => { statuses[row.student] = chosen["mark_" + index]; });
+								frappe.call({
+									method: command.method,
+									args: { request_key: chosen.request_key, course_schedule: session.course_schedule,
+										statuses: JSON.stringify(statuses) },
+									freeze: true,
+									freeze_message: text("Submitting guarded command"),
+									callback(result) {
+										dialog.hide();
+										resultMessage(command.label, result.message);
+									},
+								});
+							},
+						});
+						dialog.show();
+					},
+				});
+			},
+		});
+		lookup.show();
+	}
+
+	/*
+	 * Placement authoring builders. A question or exam configuration used to
+	 * be typed as raw JSON; authors now fill ordinary fields and the page
+	 * assembles exactly the structure toefl_house.policy accepts. Client
+	 * checks only catch obvious mistakes early — the server stays the
+	 * authority and its message is shown unchanged on refusal.
+	 */
+	const visibleWhen = (expression) => ({ depends_on: `eval:${expression}` });
+	const DRAFT_BUILDERS = Object.freeze({
+		item: {
+			target: "content",
+			fields() {
+				const singleChoice = visibleWhen("doc.q_type !== 'True False'");
+				return [
+					{ fieldtype: "Section Break", label: text("Question") },
+					select("q_skill", "Skill", ITEM_SKILLS, { reqd: 1 }),
+					select("q_difficulty", "Difficulty", ITEM_DIFFICULTIES, { reqd: 1 }),
+					select("q_type", "Question type", ITEM_KINDS, { reqd: 1, default: "Single Choice" }),
+					note("q_prompt", "Question text", { reqd: 1,
+						description: "12 to 4000 characters. On a training site the text must start with \"SYNTHETIC: \"." }),
+					{ fieldtype: "Section Break", label: text("Answer options"), ...singleChoice },
+					...OPTION_LETTERS.map((letter, index) => data(`q_option_${letter.toLowerCase()}`, `Option ${letter}`, {
+						...singleChoice,
+						description: index === 0 ? "Fill options in order (at least A and B); leave the unused ones blank." : undefined,
+					})),
+					{ fieldtype: "Section Break" },
+					select("q_answer", "Correct answer", ["", ...OPTION_LETTERS, "True", "False"], { reqd: 1,
+						description: "A letter for single choice; True or False for a true/false question." }),
+				];
+			},
+			build(values) {
+				const prompt = String(values.q_prompt || "").trim();
+				const base = { skill: values.q_skill, difficulty: values.q_difficulty,
+					question_type: values.q_type, prompt };
+				if (values.q_type === "True False") {
+					if (!["True", "False"].includes(values.q_answer)) throw new Error("Choose True or False as the correct answer.");
+					return { ...base, options: [{ id: "true", text: "True" }, { id: "false", text: "False" }],
+						answer: values.q_answer.toLowerCase() };
+				}
+				const texts = OPTION_LETTERS.map((letter) => String(values[`q_option_${letter.toLowerCase()}`] || "").trim());
+				const last = texts.reduce((found, value, index) => value ? index : found, -1);
+				if (last < 1) throw new Error("Enter at least options A and B.");
+				if (texts.slice(0, last + 1).some((value) => !value)) throw new Error("Fill the options in order without gaps.");
+				if (texts.some((value) => value.length > 1000)) throw new Error("Each option can be at most 1000 characters.");
+				const index = OPTION_LETTERS.indexOf(values.q_answer);
+				if (index < 0 || index > last) throw new Error("The correct answer must be one of the filled options.");
+				return { ...base,
+					options: texts.slice(0, last + 1).map((value, position) => ({ id: OPTION_LETTERS[position].toLowerCase(), text: value })),
+					answer: OPTION_LETTERS[index].toLowerCase() };
+			},
+		},
+		config: {
+			target: "definition",
+			fields() {
+				const when = (type) => visibleWhen(`doc.config === '${type}'`);
+				const days = (fieldname, label, low, high) => integer(fieldname, label, { ...when("policy"), description: `${low} to ${high}` });
+				return [
+					{ fieldtype: "Section Break", label: text("Exam blueprint"), ...when("blueprint") },
+					select("bp_mode", "Delivery mode", ["", ...EXAM_DELIVERY_MODES], when("blueprint")),
+					{ fieldname: "bp_sections", label: text("Sections (in exam order)"), fieldtype: "Table", ...when("blueprint"),
+						in_place_edit: true, data: [], description: text("1 to 12 sections. The total exam time is the sum of the section minutes (at most 240)."),
+						fields: [
+							data("id", "Section ID (lowercase, e.g. reading)", { in_list_view: 1, reqd: 1 }),
+							select("skill", "Skill", PLACEMENT_SKILLS, { in_list_view: 1, reqd: 1 }),
+							integer("minutes", "Minutes", { in_list_view: 1, reqd: 1 }),
+							integer("item_count", "Questions", { in_list_view: 1, reqd: 1 }),
+						] },
+					{ fieldtype: "Section Break", label: text("Result policy"), ...when("policy") },
+					days("pol_result_validity_days", "Result valid for (days)", 1, 730),
+					days("pol_retest_wait_days", "Wait before a retest (days)", 0, 90),
+					days("pol_release_working_days", "Release results within (working days)", 1, 30),
+					days("pol_appeal_working_days", "Appeal window (working days)", 1, 30),
+					days("pol_retention_years", "Keep records for (years)", 1, 10),
+					{ fieldtype: "Section Break", label: text("Course map"), ...when("course_map") },
+					{ fieldname: "cm_entries", label: text("Level to course"), fieldtype: "Table", ...when("course_map"),
+						in_place_edit: true, data: [], description: text("1 to 32 rows. Each placement level maps to the course a learner is recommended."),
+						fields: [
+							data("internal_level", "Placement level code", { in_list_view: 1, reqd: 1 }),
+							data("course_code", "Course code", { in_list_view: 1, reqd: 1 }),
+						] },
+				];
+			},
+			build(values) {
+				const rows = (value) => (Array.isArray(value) ? value : []).filter((row) => row && Object.keys(row).some(
+					(key) => !["idx", "name", "__islocal", "doctype"].includes(key) && row[key] !== "" && row[key] != null));
+				const whole = (value, label) => {
+					const number = Number(value);
+					if (value === "" || value == null || !Number.isInteger(number)) throw new Error(`${label} must be a whole number.`);
+					return number;
+				};
+				if (values.config === "policy") {
+					return Object.fromEntries(["result_validity_days", "retest_wait_days", "release_working_days",
+						"appeal_working_days", "retention_years"].map((key) => [key, whole(values[`pol_${key}`], key.replaceAll("_", " "))]));
+				}
+				if (values.config === "course_map") {
+					const entries = rows(values.cm_entries).map((row) => ({
+						internal_level: String(row.internal_level || "").trim(),
+						course_code: String(row.course_code || "").trim(), match: "any_correct" }));
+					if (!entries.length || entries.length > 32) throw new Error("Enter 1 to 32 course map rows.");
+					if (entries.some((row) => !row.internal_level || !row.course_code)) throw new Error("Every course map row needs a level and a course.");
+					return { algorithm: "course-map-v1", entries };
+				}
+				if (values.config === "blueprint") {
+					if (!EXAM_DELIVERY_MODES.includes(values.bp_mode)) throw new Error("Choose the delivery mode.");
+					const sections = rows(values.bp_sections).map((row) => ({
+						id: String(row.id || "").trim(), skill: row.skill,
+						minutes: whole(row.minutes, "Section minutes"), item_count: whole(row.item_count, "Questions") }));
+					if (!sections.length || sections.length > 12) throw new Error("Enter 1 to 12 sections.");
+					if (sections.some((row) => !/^[a-z][a-z0-9_]{0,15}$/.test(row.id))) {
+						throw new Error("Section IDs use lowercase letters, digits or _ and start with a letter (max 16).");
+					}
+					if (new Set(sections.map((row) => row.id)).size !== sections.length) throw new Error("Section IDs must be unique.");
+					return { mode: values.bp_mode, sections,
+						total_minutes: sections.reduce((sum, row) => sum + row.minutes, 0) };
+				}
+				throw new Error("Choose the configuration type.");
+			},
+		},
+	});
+
+	function runBuiltCommand(command) {
+		const builder = DRAFT_BUILDERS[command.builder];
+		const visible = command.fields.filter((field) => field.fieldname !== builder.target);
+		const dialog = new frappe.ui.Dialog({
+			title: text(command.label),
+			size: "large",
+			fields: [requestKeyField(), ...resolveFields(visible), ...builder.fields()],
+			primary_action_label: text("Run command"),
+			primary_action(values) {
+				let structured;
+				try {
+					structured = builder.build(values);
+				} catch (error) {
+					frappe.msgprint(text(error.message));
+					return;
+				}
+				const args = { request_key: values.request_key };
+				visible.forEach((field) => { args[field.fieldname] = values[field.fieldname]; });
+				args[builder.target] = JSON.stringify(structured);
+				frappe.call({
+					method: command.method,
+					args,
+					freeze: true,
+					freeze_message: text("Submitting guarded command"),
+					callback(response) {
+						dialog.hide();
+						resultMessage(command.label, response.message);
+					},
+				});
+			},
+		});
+		dialog.show();
+	}
+
 	function runCommand(command) {
+		if (command.builder) {
+			runBuiltCommand(command);
+			return;
+		}
+		if (command.roster) {
+			rosterAttendance(command);
+			return;
+		}
 		const dialog = new frappe.ui.Dialog({
 			title: text(command.label),
 			fields: [requestKeyField(), ...resolveFields(command.fields)],

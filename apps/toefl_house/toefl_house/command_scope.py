@@ -33,6 +33,7 @@ COMPANY_REFERENCES = {
     "employee": "Employee", "salary_slip": "Salary Slip", "payroll_entry": "Payroll Entry",
     "contract": "TH Instructor Contract", "supersedes": "TH Instructor Contract",
     "assignment": "TH Teaching Assignment", "credit_note": "Sales Invoice",
+    "journal_entry": "Journal Entry", "expense_account": "Account", "paid_from": "Account",
 }
 
 

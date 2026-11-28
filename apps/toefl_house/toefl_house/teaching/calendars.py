@@ -368,9 +368,9 @@ def _as_active(value):
         return value
     if value in (0, 1):
         return bool(value)
-    if isinstance(value, str) and value.strip().lower() in ("true", "yes"):
+    if isinstance(value, str) and value.strip().lower() in ("1", "true", "yes"):
         return True
-    if isinstance(value, str) and value.strip().lower() in ("false", "no"):
+    if isinstance(value, str) and value.strip().lower() in ("0", "false", "no"):
         return False
     raise ValueError("active must be true or false")
 

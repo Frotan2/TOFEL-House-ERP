@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "apps/toefl_house/toefl_house"
 DESK = APP / "desk"
 
-DESK_MODULES = ("__init__", "lifecycle", "collections", "tuition_refunds", "reception", "academic", "finance",
+DESK_MODULES = ("__init__", "lifecycle", "collections", "expenses", "tuition_refunds", "reception", "academic", "finance",
                 "operations", "owner", "setup", "teacher", "configuration")
 
 SENSITIVE_FIELDS = {
@@ -387,7 +387,7 @@ class DeskReadBoundaryTests(unittest.TestCase):
         forbidden_calls = ("frappe.get_all", "frappe.get_list", "frappe.db.get_list",
                            "frappe.db.get_all", "frappe.db.sql", "frappe.get_doc",
                            "frappe.db.insert", "frappe.db.delete", "frappe.db.count")
-        for name in ("collections", "reception", "academic", "finance", "operations", "owner",
+        for name in ("collections", "expenses", "reception", "academic", "finance", "operations", "owner",
                      "setup", "teacher", "configuration"):
             for node in ast.walk(self.trees[name]):
                 if isinstance(node, ast.Call):
@@ -408,7 +408,7 @@ class DeskReadBoundaryTests(unittest.TestCase):
                                      f"{name} looks like it mutates a document: {line.strip()}")
 
     def test_every_projection_call_names_explicit_fields_and_a_limit(self):
-        for name in ("collections", "reception", "academic", "finance", "operations", "owner",
+        for name in ("collections", "expenses", "reception", "academic", "finance", "operations", "owner",
                      "setup", "teacher", "configuration"):
             for node in ast.walk(self.trees[name]):
                 if not (isinstance(node, ast.Call) and ast.unparse(node.func) in (
@@ -596,7 +596,7 @@ class DeskSchemaFidelityTests(unittest.TestCase):
             assert_columns_real(f"PROJECTION_FIELDS[{desk},{doctype}]", doctype, fields)
 
     def test_every_desk_query_site_uses_real_columns(self):
-        for name in ("collections", "reception", "academic", "finance", "operations", "owner",
+        for name in ("collections", "expenses", "reception", "academic", "finance", "operations", "owner",
                      "setup", "teacher", "configuration"):
             tree = self.trees[name]
             strings, lists = {}, {}
@@ -792,6 +792,9 @@ class FinanceVocabularyTests(unittest.TestCase):
         self.assertEqual(items[0]["action"]["role"], "Admission Approver")
         self.assertEqual(items[0]["action"]["endpoint"],
                          "toefl_house.finance.corrections.approve_invoice_correction")
+        self.assertEqual([extra["endpoint"] for extra in items[0]["actions"]],
+                         ["toefl_house.finance.corrections.deny_invoice_correction"])
+        self.assertEqual(items[0]["actions"][0]["role"], "Admission Approver")
 
     def test_disabled_last_cash_drawer_still_shows_close_integrity_review(self):
         from unittest.mock import patch
@@ -1285,34 +1288,6 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                               "active"]),
         "toefl_house.academic.validate_assessment_policy": ("academic/__init__.py",
                                                            ["request_key", "policy"]),
-        "toefl_house.academic.set_assessment_components": ("academic/__init__.py",
-                                                          ["request_key", "policy",
-                                                           "effective_from", "reason",
-                                                           "components"]),
-        "toefl_house.academic.set_assessment_weights": ("academic/__init__.py",
-                                                       ["request_key", "policy",
-                                                        "effective_from", "reason",
-                                                        "weights"]),
-        "toefl_house.academic.set_assessment_pass_rules": ("academic/__init__.py",
-                                                          ["request_key", "policy",
-                                                           "effective_from", "reason",
-                                                           "pass_rules"]),
-        "toefl_house.academic.set_assessment_rubrics": ("academic/__init__.py",
-                                                       ["request_key", "policy",
-                                                        "effective_from", "reason",
-                                                        "rubrics"]),
-        "toefl_house.academic.set_assessment_progression": ("academic/__init__.py",
-                                                           ["request_key", "policy",
-                                                            "effective_from", "reason",
-                                                            "progression"]),
-        "toefl_house.academic.set_assessment_retakes": ("academic/__init__.py",
-                                                       ["request_key", "policy",
-                                                        "effective_from", "reason",
-                                                        "retakes"]),
-        "toefl_house.academic.set_assessment_mapping": ("academic/__init__.py",
-                                                       ["request_key", "policy",
-                                                        "effective_from", "reason",
-                                                        "mapping"]),
     }
 
     def test_every_guided_endpoint_is_whitelisted_with_the_expected_signature(self):
@@ -1696,6 +1671,17 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                  "superseded_on": None},
             ],
         }
+        world["TH Academic Calendar"] = [
+            {"name": "KBL-2026", "code": "KBL-2026", "title": "Kabul 1405",
+             "status": "Active", "academic_year": "", "branch": "",
+             "description": "", "modified": "2026-09-01 10:00:00"},
+        ]
+        world["TH Academic Calendar Day"] = [
+            {"name": "DAY-1", "parent": "KBL-2026", "parenttype": "TH Academic Calendar",
+             "date": "2000-03-21", "kind": "Holiday", "description": "Past Nowruz"},
+            {"name": "DAY-2", "parent": "KBL-2026", "parenttype": "TH Academic Calendar",
+             "date": "2999-03-21", "kind": "Holiday", "description": "Nowruz"},
+        ]
         if ambiguous:
             world["TH Assessment Policy Version"].append({
                 "name": "VER-3", "parent": "ASM-EFF",
@@ -1712,8 +1698,12 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                                 list(fields or []) + list((filters or {}).keys()))
             rows = world.get(doctype, [])
             filters = filters or {}
+            def matches(row, key, value):
+                if isinstance(value, list) and value and value[0] == "in":
+                    return row.get(key) in value[1]
+                return row.get(key) == value
             return [dict(row) for row in rows
-                    if all(row.get(key) == value
+                    if all(matches(row, key, value)
                            for key, value in filters.items()
                            if key in row or value is not None)]
 
@@ -1732,14 +1722,29 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
 
     def test_ten_sections_with_computed_readiness(self):
         payload = self._run(validated=("ASM-EFF", "ALERT-POL", "GRD-POL"))
-        self.assertEqual(len(payload["sections"]), 10)
+        self.assertEqual(len(payload["sections"]), 11)
         academic = self._section(payload, "academic")
         self.assertEqual(academic["kind"], "links")
         self.assertEqual(academic["items"][0]["slug"], "th-academic-setup")
         owner_policies = self._section(payload, "owner-policies")
         self.assertEqual(owner_policies["kind"], "queue")
-        self.assertEqual(len(owner_policies["items"]), 7)
+        self.assertEqual(len(owner_policies["items"]), 8)
         self.assertTrue(all("action" in item for item in owner_policies["items"]))
+        class_ops = next(item for item in owner_policies["items"] if item["id"] == "class-operations")
+        self.assertEqual(class_ops["action"]["endpoint"],
+                         "toefl_house.teaching.class_operations.create_class_operations_policy")
+        self.assertIn("refused", class_ops["stage_definition"])
+        calendar = self._section(payload, "academic-calendar")
+        kabul, new = calendar["items"]
+        self.assertEqual(kabul["status"], "In use")
+        self.assertIn("2999-03-21 Holiday (Nowruz)", kabul["detail"])
+        self.assertNotIn("Past Nowruz", kabul["detail"])
+        self.assertEqual([action["endpoint"].rsplit(".", 1)[1] for action in kabul["actions"]],
+                         ["add_academic_calendar_day", "remove_academic_calendar_day",
+                          "set_academic_calendar_status"])
+        self.assertEqual(kabul["actions"][2]["args"], {"calendar": "KBL-2026", "active": 0})
+        self.assertEqual(new["action"]["endpoint"],
+                         "toefl_house.teaching.calendars.create_academic_calendar")
         backup_section = self._section(payload, "backup-recovery")
         self.assertEqual(backup_section["kind"], "queue")
         switch_item = backup_section["items"][0]
@@ -2089,6 +2094,180 @@ class ManagementCorrectionsWorldTests(unittest.TestCase):
         self.assertNotIn("COR-3", items, "only pending requests are exceptions")
 
 
+class TeacherLinkReadinessWorldTests(unittest.TestCase):
+    """Role coverage flags Instructor logins the Teacher desk cannot resolve."""
+
+    def _items(self):
+        def role(user):
+            return {"name": "HR-" + user, "parent": user, "role": "Instructor", "parenttype": "User"}
+        world = {
+            "Has Role": [role(u) for u in ("ok@x.test", "noemp@x.test", "twoemp@x.test",
+                                           "noinst@x.test", "left@x.test", "off@x.test")],
+            "User": [{"name": u, "enabled": 0 if u == "off@x.test" else 1}
+                     for u in ("ok@x.test", "noemp@x.test", "twoemp@x.test", "noinst@x.test",
+                               "left@x.test", "off@x.test")],
+            "Employee": [
+                {"name": "EMP-OK", "employee_name": "Ok", "status": "Active", "user_id": "ok@x.test"},
+                {"name": "EMP-A", "employee_name": "A", "status": "Active", "user_id": "twoemp@x.test"},
+                {"name": "EMP-B", "employee_name": "B", "status": "Active", "user_id": "twoemp@x.test"},
+                {"name": "EMP-NI", "employee_name": "Ni", "status": "Active", "user_id": "noinst@x.test"},
+                {"name": "EMP-L", "employee_name": "L", "status": "Active", "user_id": "left@x.test"},
+                {"name": "EMP-GONE", "employee_name": "Gone", "status": "Left", "user_id": "noemp@x.test"},
+            ],
+            "Instructor": [
+                {"name": "INS-OK", "instructor_name": "Ok", "employee": "EMP-OK", "status": "Active"},
+                {"name": "INS-L", "instructor_name": "L", "employee": "EMP-L", "status": "Left"},
+            ],
+        }
+        world_get_all = desk_world_get_all("teacher link world", world)
+        module = _import_desk("operations", roles={"General Manager"})
+        module.frappe.get_all = world_get_all
+        module.frappe.db.get_all = world_get_all
+        staffing = next(sect for sect in module.work()["sections"] if sect["id"] == "staffing")
+        return {item["person"]: item for item in staffing["items"] if item["stage"] == "Teacher login"}
+
+    def test_only_unresolvable_enabled_teacher_logins_are_flagged(self):
+        items = self._items()
+        self.assertEqual(set(items), {"noemp@x.test", "twoemp@x.test", "noinst@x.test", "left@x.test"})
+        self.assertIn("No active Employee", items["noemp@x.test"]["detail"])
+        self.assertIn("More than one active Employee", items["twoemp@x.test"]["detail"])
+        self.assertIn("EMP-NI has no active Instructor", items["noinst@x.test"]["detail"])
+        self.assertIn("EMP-L has no active Instructor", items["left@x.test"]["detail"])
+        self.assertTrue(all(item["next_role"] == "Course Owner" for item in items.values()))
+
+    def test_branch_scoped_viewer_gets_no_false_unlinked_rows(self):
+        def world_get_all(doctype, filters=None, fields=None, **kwargs):
+            if doctype == "User Permission":
+                return ["Kabul Branch"] if (filters or {}).get("allow") == "Branch" else []
+            raise AssertionError(f"a scoped viewer must not read {doctype} for teacher links")
+        module = _import_desk("operations", roles={"General Manager"})
+        module.frappe.get_all = world_get_all
+        self.assertEqual(module._teacher_link_items(), [])
+
+
+class ProgressionOverrideQueueTests(unittest.TestCase):
+    def _items(self, roles):
+        module = _import_desk("operations", roles=roles)
+        module.frappe.get_all = desk_world_get_all("progression world", {
+            "TH Academic Result": [
+                {"name": "RES-1", "student": "STU-1", "student_group": "G-1", "outcome": "Fail",
+                 "overall_percent": 45, "passed": 0, "status": "Published", "published_on": "2026-09-01"},
+                {"name": "RES-2", "student": "STU-2", "student_group": "G-1", "outcome": "Pass",
+                 "overall_percent": 80, "passed": 1, "status": "Published", "published_on": "2026-09-01"},
+                {"name": "RES-3", "student": "STU-3", "student_group": "G-1", "outcome": "Pass",
+                 "overall_percent": 80, "passed": 1, "status": "Superseded", "published_on": "2026-08-01"},
+            ],
+            "TH Progression Decision": [{"name": "DEC-1", "academic_result": "RES-2"}],
+            "User Permission": [],
+        })
+        return module._progression_items()
+
+    def test_undecided_published_results_offer_the_general_manager_override(self):
+        items = self._items({"General Manager"})
+        self.assertEqual([item["id"] for item in items], ["RES-1"])
+        self.assertEqual(items[0]["action"]["endpoint"],
+                         "toefl_house.academic.progression.override_progression")
+        self.assertEqual(items[0]["action"]["args"]["academic_result"], "RES-1")
+
+    def test_override_is_hidden_without_the_general_manager_role(self):
+        items = self._items({"Owner"})
+        self.assertIsNone(items[0]["action"])
+
+class AcademicClassChangeWorldTests(unittest.TestCase):
+    """Class changes, waiting lists and extra seats reach their deciders."""
+
+    @staticmethod
+    def _world():
+        return {
+            "Student Group": [
+                {"name": "GROUP-A", "student_group_name": "GEN-1 A", "program": "GEN-1",
+                 "academic_year": "2026", "max_strength": 2, "course": "C", "disabled": 0,
+                 "th_class_status": "Active"},
+                {"name": "GROUP-B", "student_group_name": "GEN-1 B", "program": "GEN-1",
+                 "academic_year": "2026", "max_strength": 2, "course": "C", "disabled": 0,
+                 "th_class_status": "Active"},
+            ],
+            "TH Class Transfer": [
+                {"name": "TRF-1", "student": "STU-1", "from_group": "GROUP-A",
+                 "to_group": "GROUP-B", "transfer_kind": "Time", "effective_date": "2026-10-01",
+                 "reason": "Work hours", "requested_by": "s@example.com",
+                 "requested_on": "2026-09-20", "status": "Requested"},
+                {"name": "TRF-2", "student": "STU-9", "from_group": "GROUP-A",
+                 "to_group": "GROUP-B", "transfer_kind": "Time", "effective_date": "2026-10-01",
+                 "reason": "", "requested_by": "s@example.com",
+                 "requested_on": "2026-09-20", "status": "Executed"},
+            ],
+            "TH Capacity Approval": [
+                {"name": "CAP-1", "student_group": "GROUP-B", "student": "STU-1", "seats": 1,
+                 "status": "Approved", "reason": "Full", "approved_by": "am@example.com",
+                 "expires_on": "2026-10-15"},
+            ],
+            "TH Class Waiting List": [
+                {"name": "WAIT-1", "student": "STU-2", "student_group": "GROUP-A",
+                 "status": "Waiting", "priority": 1, "requested_on": "2026-09-01",
+                 "offer_expires_on": None},
+                {"name": "WAIT-2", "student": "STU-3", "student_group": "GROUP-A",
+                 "status": "Offered", "priority": 2, "requested_on": "2026-09-02",
+                 "offer_expires_on": "2026-09-30"},
+            ],
+        }
+
+    def _items(self, roles):
+        module = _import_desk("academic", roles=roles)
+        world_get_all = desk_world_get_all("class-change world", self._world())
+        module.frappe.get_all = world_get_all
+        module.frappe.db.get_all = world_get_all
+        payload = module.work()
+        section = next(sect for sect in payload["sections"] if sect["id"] == "class-changes")
+        return {item["id"]: item for item in section["items"]}, payload
+
+    def test_decisions_are_offered_to_the_acting_roles(self):
+        items, payload = self._items({"Academic Manager", "Teaching Scheduler"})
+        self.assertEqual(set(items), {"TRF-1", "WAIT-1", "WAIT-2", "CAP-1"})
+        transfer = items["TRF-1"]
+        self.assertEqual(transfer["action"]["endpoint"],
+                         "toefl_house.teaching.transfers.approve_class_transfer")
+        # The matching approved extra seat is prefilled; the server re-verifies it.
+        self.assertEqual(transfer["action"]["args"], {"transfer": "TRF-1", "override": "CAP-1"})
+        self.assertEqual(transfer["actions"][0]["endpoint"],
+                         "toefl_house.teaching.transfers.deny_class_transfer")
+        self.assertEqual(items["WAIT-1"]["action"]["endpoint"],
+                         "toefl_house.teaching.capacity.offer_waiting_list_seat")
+        self.assertEqual(items["WAIT-2"]["action"]["endpoint"],
+                         "toefl_house.teaching.capacity.admit_from_waiting_list")
+        self.assertEqual(items["CAP-1"]["action"]["endpoint"],
+                         "toefl_house.teaching.capacity.revoke_capacity_override")
+        classes = next(sect for sect in payload["sections"] if sect["id"] == "classes")
+        group = next(item for item in classes["items"] if item["id"] == "GROUP-A")
+        self.assertEqual(group["actions"][0]["endpoint"],
+                         "toefl_house.teaching.capacity.create_capacity_override")
+
+    def test_actions_disappear_without_the_role(self):
+        items, _payload = self._items({"Academic Manager"})
+        self.assertIsNone(items["WAIT-1"]["action"])
+        self.assertEqual(items["WAIT-1"]["actions"], [])
+        self.assertIsNotNone(items["TRF-1"]["action"])
+
+
+class ReceptionWaitingListWorldTests(unittest.TestCase):
+    def test_open_entries_offer_removal_to_reception(self):
+        module = _import_desk("reception", roles={"Reception"})
+        world_get_all = desk_world_get_all("waiting world", {"TH Class Waiting List": [
+            {"name": "WAIT-1", "student": "STU-2", "student_group": "GROUP-A",
+             "status": "Waiting", "priority": 1, "requested_on": "2026-09-01",
+             "offer_expires_on": None},
+            {"name": "WAIT-3", "student": "STU-4", "student_group": "GROUP-A",
+             "status": "Admitted", "priority": 1, "requested_on": "2026-09-01",
+             "offer_expires_on": None},
+        ]})
+        module.frappe.get_all = world_get_all
+        items = module._waiting_items()
+        self.assertEqual([item["id"] for item in items], ["WAIT-1"])
+        self.assertEqual(items[0]["action"]["endpoint"],
+                         "toefl_house.teaching.capacity.leave_waiting_list")
+        self.assertEqual(items[0]["action"]["args"], {"entry": "WAIT-1"})
+
+
 class AcademicClassActionsWorldTests(unittest.TestCase):
     """U1: the classes section drives the real teaching commands.
 
@@ -2384,6 +2563,70 @@ class FinanceBookShopNavigationTests(unittest.TestCase):
             {"List/Item", "List/Item Price", "List/Bin",
              "List/Stock Entry", "List/Sales Invoice", "List/Payment Entry"},
         )
+
+
+class NativeReportLinkTests(unittest.TestCase):
+    """Report shortcuts appear only when the native report would open.
+
+    Mirrors frappe.desk.query_report.get_report_doc at the pinned Frappe:
+    the reference DocType "report" right and Report.is_permitted().
+    """
+
+    class _Report(dict):
+        def __init__(self, permitted=True, disabled=0):
+            super().__init__(disabled=disabled)
+            self.permitted = permitted
+
+        def is_permitted(self):
+            return self.permitted
+
+    def _desk(self, rights, reports):
+        module = _import_desk("finance", roles={"Finance Manager"})
+        frappe = module.frappe
+
+        class DoesNotExistError(Exception):
+            pass
+
+        frappe.DoesNotExistError = DoesNotExistError
+        frappe.has_permission = lambda doctype, ptype="read", user=None: (doctype, ptype) in rights
+
+        def get_cached_doc(doctype, name):
+            self.assertEqual(doctype, "Report")
+            if name not in reports:
+                raise DoesNotExistError(name)
+            return reports[name]
+
+        frappe.get_cached_doc = get_cached_doc
+        return module
+
+    def _slugs(self, payload):
+        sections = [item for item in payload["sections"] if item["id"] == "reports"]
+        return [link["slug"] for link in sections[0]["items"]] if sections else []
+
+    def test_only_permitted_existing_enabled_reports_are_linked(self):
+        reports = {
+            "Accounts Receivable": self._Report(),
+            "Profit and Loss Statement": self._Report(permitted=False),
+            "General Ledger": self._Report(disabled=1),
+            # Program wise Fee Collection is missing on this site.
+            "Salary Register": self._Report(),
+        }
+        rights = {("Sales Invoice", "report"), ("GL Entry", "report"),
+                  ("Fees", "report"), ("Salary Slip", "read")}
+        module = self._desk(rights, reports)
+        self.assertEqual(self._slugs(module.work()), ["query-report/Accounts Receivable"])
+
+    def test_no_report_right_means_no_section(self):
+        module = self._desk(set(), {"Accounts Receivable": self._Report()})
+        self.assertFalse([item for item in module.work()["sections"] if item["id"] == "reports"])
+
+    def test_report_sets_name_pinned_native_reports(self):
+        package = _import_desk("__init__")
+        names = {name for _title, name, _ref in package.FINANCE_REPORTS + package.ACADEMIC_REPORTS}
+        self.assertEqual(names, {
+            "Accounts Receivable", "Program wise Fee Collection", "Profit and Loss Statement",
+            "General Ledger", "Salary Register", "Student Monthly Attendance Sheet",
+            "Absent Student Report", "Final Assessment Grades", "Student Fee Collection"})
 
 
 class FinanceAssignmentFactsTests(unittest.TestCase):
@@ -3094,6 +3337,27 @@ class AdmissionMultiBranchProjectionTests(unittest.TestCase):
         self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["A"]), ["PE-A"])
         self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["B"]), ["PE-MOVED"])
 
+    def test_class_keyed_queue_records_follow_their_class_branch(self):
+        """Waiting lists, extra seats and results carry only a class link;
+        a branch-scoped desk viewer sees only rows of classes in their branch."""
+        world = {
+            "Student Group": [{"name": "GA", "th_branch": "A"}, {"name": "GB", "th_branch": "B"}],
+            "TH Class Waiting List": [{"name": "W-A", "student_group": "GA"},
+                                      {"name": "W-B", "student_group": "GB"}],
+            "TH Capacity Approval": [{"name": "C-B", "student_group": "GB"}],
+            "TH Academic Result": [{"name": "R-A", "student_group": "GA"}],
+            "TH Progression Decision": [{"name": "D-B", "student_group": "GB"}],
+        }
+        desk = _import_desk("__init__", roles={"Academic Manager"})
+        desk.frappe.get_all = desk_world_get_all("class-keyed isolation", world)
+        self.assertEqual(desk._branch_allowed_names("TH Class Waiting List", ["A"]), ["W-A"])
+        self.assertEqual(desk._branch_allowed_names("TH Capacity Approval", ["A"]), [])
+        self.assertEqual(desk._branch_allowed_names("TH Academic Result", ["A"]), ["R-A"])
+        self.assertEqual(desk._branch_allowed_names("TH Progression Decision", ["B"]), ["D-B"])
+        for doctype in ("TH Class Waiting List", "TH Capacity Approval",
+                        "TH Academic Result", "TH Progression Decision"):
+            self.assertIn(doctype, desk.BRANCH_CHAIN_FILTERS)
+
     def test_student_without_roster_is_visible_at_its_verified_admission_branch(self):
         world = {
             "Student Group": [
@@ -3308,6 +3572,29 @@ class FinanceOutstandingWorldTests(unittest.TestCase):
         self.assertIn("FEE-OWING", items)
         self.assertEqual(items["FEE-OWING"]["status"], "Outstanding")
         self.assertNotIn("INV-SETTLED", items)
+        # A bill issued in error can be sent for correction from its row.
+        self.assertEqual(items["FEE-OWING"]["actions"][0]["endpoint"],
+                         "toefl_house.finance.corrections.request_fees_correction")
+        self.assertEqual(set(items["FEE-OWING"]["actions"][0]["args"]), {"fees", "requested_amount"})
+        self.assertEqual(items["INV-OWING"]["actions"][0]["endpoint"],
+                         "toefl_house.finance.corrections.request_invoice_correction")
+
+    def test_unbilled_placement_cases_offer_the_placement_fee(self):
+        module = _import_desk("finance", roles={"Finance Manager", "Finance Officer"})
+        getter = desk_world_get_all("placement fee world", {
+            "TH Placement Case": [
+                {"name": "CASE-1", "subject": "Visitor A", "status": "Open", "creation": "2026-09-01 10:00:00"},
+                {"name": "CASE-2", "subject": "Visitor B", "status": "Open", "creation": "2026-09-02 10:00:00"},
+            ],
+            "Sales Invoice": [
+                {"name": "INV-9", "th_placement_case": "CASE-2", "docstatus": 1},
+            ],
+        })
+        module.frappe.get_all = getter
+        items = module._placement_fee_items()
+        self.assertEqual([item["id"] for item in items], ["CASE-1"])
+        self.assertEqual(items[0]["action"]["endpoint"], "toefl_house.finance.issue_placement_fee")
+        self.assertEqual(items[0]["action"]["args"]["case"], "CASE-1")
 
     def test_money_facts_count_the_native_queues(self):
         payload = self._payload(count=1)

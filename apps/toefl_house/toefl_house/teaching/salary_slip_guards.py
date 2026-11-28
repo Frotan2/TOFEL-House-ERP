@@ -1,14 +1,8 @@
 """Refuse a second submitted Salary Slip for one employee, one worked period.
 
-U-09 (2026-11-05) was fixed only in worked-month reporting
-(``teaching/payroll_periods.py``: ``worked_month_payroll`` raises on a
-second submitted slip for the same employee in the same worked period),
-and no production code calls that function: it takes caller-supplied rows
-and is exercised only by tests/teaching/test_shamsi_payroll_periods.py.
-Native HRMS owns Salary Slip creation and submission, and this app
-registered no doc_event for "Salary Slip" (hooks.py), so a duplicate slip
-could be submitted natively and the reporting function would only notice
-afterwards, if anyone ran it.
+U-09 (2026-11-05): native HRMS owns Salary Slip creation and submission,
+and a duplicate slip for the same employee and worked period could be
+submitted natively with nothing owned refusing it.
 
 This module is the owned boundary that closes that gap: a doc_event guard
 (hooks.py: "Salary Slip", ``validate`` + ``before_submit`` +
@@ -21,12 +15,11 @@ same function (A13 three-seam rule) but is a no-op inside it: cancelling
 can only remove a duplicate, and refusing a cancel would strand
 pre-existing legacy duplicates (see the function docstring).
 
-Scope, deliberately narrow (mirrors the U-09 reporting rule):
+Scope, deliberately narrow:
 - Refuses only an exact duplicate: same employee, same ``start_date``,
   same ``end_date``, the other slip submitted (``docstatus=1``).
 - Overlapping-but-different periods stay legitimate native cases
-  (partial-month slips, corrections) and remain flagged at reconciliation
-  by ``worked_month_payroll``.
+  (partial-month slips, corrections).
 - A cancelled slip (``docstatus=2``) does not block its replacement.
 
 Concurrency: concurrent submissions for the same employee serialize on

@@ -494,7 +494,10 @@ class PublicationTests(AcademicCase):
 
     def test_results_read_back_through_the_state_projection(self):
         published = self.published_book()
+        self.h.store.docs["Student Group Student"]["SYN-GRP-1-SYN-STU-1"]["student_name"] = "Ahmad Karimi"
         state = self.h.assessment.assessment_state(published["name"])
+        # Names come from this class's roster; a nameless row shows by ID.
+        self.assertEqual(state["student_names"], {"SYN-STU-1": "Ahmad Karimi"})
         self.assertEqual(state["status"], "Published")
         self.assertEqual(len(state["results"]), 3)
         self.assertEqual(len(state["marks"]), 6)

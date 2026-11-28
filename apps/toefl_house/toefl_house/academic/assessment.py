@@ -1215,11 +1215,21 @@ def assessment_state(book):
                              fields=["name", "student", "status", "outcome",
                                      "overall_percent", "grade_code", "revision"],
                              order_by="student asc")
+    students = (_book_students(doc) if doc.status in ("Open", "Returned")
+                else sorted({row.get("student") for row in doc.get("marks") or []
+                             if row.get("student")}))
+    # Display names from this class's own roster rows, so a teacher marks
+    # people rather than bare IDs. A student without a roster row shows
+    # by ID only; nothing outside this class is read.
+    named = frappe.get_all("Student Group Student",
+                           filters={"parent": doc.student_group},
+                           fields=["student", "student_name"], limit_page_length=500)
+    wanted = set(students)
     return {
         **_book_result(doc),
-        "students": (_book_students(doc) if doc.status in ("Open", "Returned")
-                     else sorted({row.get("student") for row in doc.get("marks") or []
-                                  if row.get("student")})),
+        "students": students,
+        "student_names": {row.get("student"): row.get("student_name") for row in named
+                          if row.get("student") in wanted and row.get("student_name")},
         "components": [
             {"code": row["code"], "maximum_score": row["maximum_score"]}
             for row in components
