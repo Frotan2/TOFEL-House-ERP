@@ -3337,6 +3337,27 @@ class AdmissionMultiBranchProjectionTests(unittest.TestCase):
         self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["A"]), ["PE-A"])
         self.assertEqual(desk._branch_allowed_names("Program Enrollment", ["B"]), ["PE-MOVED"])
 
+    def test_class_keyed_queue_records_follow_their_class_branch(self):
+        """Waiting lists, extra seats and results carry only a class link;
+        a branch-scoped desk viewer sees only rows of classes in their branch."""
+        world = {
+            "Student Group": [{"name": "GA", "th_branch": "A"}, {"name": "GB", "th_branch": "B"}],
+            "TH Class Waiting List": [{"name": "W-A", "student_group": "GA"},
+                                      {"name": "W-B", "student_group": "GB"}],
+            "TH Capacity Approval": [{"name": "C-B", "student_group": "GB"}],
+            "TH Academic Result": [{"name": "R-A", "student_group": "GA"}],
+            "TH Progression Decision": [{"name": "D-B", "student_group": "GB"}],
+        }
+        desk = _import_desk("__init__", roles={"Academic Manager"})
+        desk.frappe.get_all = desk_world_get_all("class-keyed isolation", world)
+        self.assertEqual(desk._branch_allowed_names("TH Class Waiting List", ["A"]), ["W-A"])
+        self.assertEqual(desk._branch_allowed_names("TH Capacity Approval", ["A"]), [])
+        self.assertEqual(desk._branch_allowed_names("TH Academic Result", ["A"]), ["R-A"])
+        self.assertEqual(desk._branch_allowed_names("TH Progression Decision", ["B"]), ["D-B"])
+        for doctype in ("TH Class Waiting List", "TH Capacity Approval",
+                        "TH Academic Result", "TH Progression Decision"):
+            self.assertIn(doctype, desk.BRANCH_CHAIN_FILTERS)
+
     def test_student_without_roster_is_visible_at_its_verified_admission_branch(self):
         world = {
             "Student Group": [

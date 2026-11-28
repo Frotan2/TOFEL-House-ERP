@@ -692,6 +692,8 @@ BRANCH_CHAIN_FILTERS = ("TH Reception Inquiry", "Student", "Student Group Studen
                         "Course Schedule", "Program Enrollment", "Fees",
                         "TH Enrollment Exit", "TH Teaching Assignment",
                         "TH Class Suspension", "TH Class Transfer",
+                        "TH Class Waiting List", "TH Capacity Approval",
+                        "TH Academic Result", "TH Progression Decision",
                         "TH Correction Request", "TH Admission Decision")
 _CHAIN_LIMIT = 10000  # bounded scope resolution; truncation is fail-closed
 
@@ -740,7 +742,8 @@ def _branch_allowed_names(doctype, branches, *, require_complete=False):
                 "Branch transfer scope exceeds the safe read limit; ask an administrator")
         return [row["name"] for row in rows]
     if doctype in ("Student Attendance", "Course Schedule", "TH Teaching Assignment",
-                   "TH Class Suspension"):
+                   "TH Class Suspension", "TH Class Waiting List", "TH Capacity Approval",
+                   "TH Academic Result", "TH Progression Decision"):
         if not groups:
             return []
         return [row["name"] for row in frappe.get_all(
