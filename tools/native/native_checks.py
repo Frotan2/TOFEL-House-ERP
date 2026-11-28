@@ -8618,14 +8618,14 @@ def main():
             # The desk Reports sections name pinned native reports. Prove they
             # exist on the real site with the expected reference DocType and
             # that the shortcut gate mirrors native query_report permission.
-            from toefl_house.desk import ACADEMIC_REPORTS, FINANCE_REPORTS, native_report_links
-            pinned={name:ref for _title,name,ref in FINANCE_REPORTS+ACADEMIC_REPORTS}
+            from toefl_house import desk as desk_package
+            pinned={name:ref for _title,name,ref in desk_package.FINANCE_REPORTS+desk_package.ACADEMIC_REPORTS}
             found={name:frappe.db.get_value('Report',name,'ref_doctype') for name in pinned}
             assert found==pinned,('pinned native reports drifted',found)
             try:
-                receptionist=as_user('receptionist',lambda:native_report_links(FINANCE_REPORTS))
+                receptionist=as_user('receptionist',lambda:desk_package.native_report_links(desk_package.FINANCE_REPORTS))
                 assert receptionist==[],('Reception must not get finance report shortcuts',receptionist)
-                officer=as_user('finance_officer',lambda:native_report_links(FINANCE_REPORTS))
+                officer=as_user('finance_officer',lambda:desk_package.native_report_links(desk_package.FINANCE_REPORTS))
                 slugs={link['slug'] for link in officer}
                 for name in ('Accounts Receivable','General Ledger','Profit and Loss Statement'):
                     assert 'query-report/'+name in slugs,(name,slugs)
