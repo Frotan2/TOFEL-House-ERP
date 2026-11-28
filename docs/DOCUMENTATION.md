@@ -29,7 +29,8 @@ students, money, backups, or institute production.
 
 ## Maintained reading path
 
-**Customer/operator:** [Owner Handbook](../product/windows/OWNER%20HANDBOOK.txt),
+**Customer/operator:** [New institute computer installation](INSTALL-NEW-INSTITUTE-PC.md),
+[Owner Handbook](../product/windows/OWNER%20HANDBOOK.txt),
 [Daily Use Guide](../product/windows/DAILY%20USE%20GUIDE.txt),
 [Customer delivery](CUSTOMER-DELIVERY.md), and
 [Customer updates](CUSTOMER-UPDATES.md).
