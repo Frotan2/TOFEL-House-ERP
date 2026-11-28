@@ -109,13 +109,19 @@ frappe.pages["th-course-assessment"].on_page_load = function (wrapper) {
         $("<p></p>").text([state.name, state.status, state.policy, state.policy_effective_from].join(" · ")).appendTo(content);
         const table = $("<table class='table table-bordered'></table>").appendTo(content);
         const header = $("<tr></tr>").appendTo($("<thead></thead>").appendTo(table));
-        ["Student", "Component", "Maximum", "Mark", "Missing reason"].forEach(label => $("<th scope='col'></th>").text(__(label)).appendTo(header));
-        const body = $("<tbody></tbody>").appendTo(table), entries = [];
         const editable = instructor && ["Open", "Returned"].includes(state.status);
+        // Academic staff correct one recorded mark between submission and
+        // approval; the server keeps the previous value in the correction log.
+        const correctable = academic && ["Submitted", "Reviewed"].includes(state.status);
+        const names = state.student_names || {};
+        ["Student", "Component", "Maximum", "Mark", "Missing reason", ...(correctable ? ["Correct"] : [])]
+            .forEach(label => $("<th scope='col'></th>").text(__(label)).appendTo(header));
+        const body = $("<tbody></tbody>").appendTo(table), entries = [];
         for (const student of state.students || []) for (const component of state.components || []) {
             const saved = (state.marks || []).find(row => row.student === student && row.component === component.code);
             const row = $("<tr></tr>").appendTo(body);
-            [student, component.code, component.maximum_score].forEach(value => $("<td></td>").text(String(value)).appendTo(row));
+            const who = names[student] ? names[student] + " (" + student + ")" : student;
+            [who, component.code, component.maximum_score].forEach(value => $("<td></td>").text(String(value)).appendTo(row));
             const locked = !editable || Boolean(saved && state.status === "Open");
             const mark = $("<input type='number' class='form-control' min='0' step='any'>")
                 .attr("max", component.maximum_score).attr("aria-label", student + " " + component.code + " mark")
@@ -123,6 +129,25 @@ frappe.pages["th-course-assessment"].on_page_load = function (wrapper) {
             const missing = $("<input type='text' class='form-control' maxlength='300'>")
                 .attr("aria-label", student + " " + component.code + " missing reason")
                 .val(saved ? saved.missing_reason : "").prop("disabled", locked).appendTo($("<td></td>").appendTo(row));
+            if (correctable) {
+                const cell = $("<td></td>").appendTo(row);
+                if (saved) button(cell, "Correct", () => frappe.prompt([
+                    {fieldname: "mark", label: __("Corrected mark (0 to {0})", [component.maximum_score]), fieldtype: "Float"},
+                    {fieldname: "missing_reason", label: __("Or: reason the mark is missing"), fieldtype: "Data"},
+                    {fieldname: "reason", label: __("Why this mark is corrected"), fieldtype: "Small Text", reqd: 1},
+                ], values => {
+                    const hasMark = values.mark !== undefined && values.mark !== null && String(values.mark) !== "";
+                    const reason = String(values.missing_reason || "").trim();
+                    if (hasMark === Boolean(reason)) { notice.text(__("Enter either a corrected mark or a missing reason.")); return; }
+                    const value = hasMark ? Number(values.mark) : null;
+                    if (value != null && (!Number.isFinite(value) || value < 0 || value > component.maximum_score)) {
+                        notice.text(__("Marks must be within the displayed maximum."));
+                        return;
+                    }
+                    transition("correct_assessment_mark", {student, component: component.code, mark: value,
+                        missing_reason: reason, reason: values.reason});
+                }, __("Correct {0} — {1}", [who, component.code]), __("Save correction")));
+            }
             entries.push({student, component: component.code, maximum: component.maximum_score, saved, mark, missing});
         }
         const actions = $("<div class='d-flex flex-wrap mb-4' style='gap:8px'></div>").appendTo(content);

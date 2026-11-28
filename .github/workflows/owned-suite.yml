@@ -64,6 +64,8 @@ jobs:
           node tests/foundation/test_command_pages.cjs
           node tests/foundation/test_design_system.cjs
           node tests/foundation/test_role_desks.cjs
+          node tests/foundation/test_course_assessment.cjs
+          node tests/foundation/test_portal_views.cjs
 
       - name: Prove update observer privilege boundary (synthetic Docker HTTP)
         run: sudo python3 tests/foundation/update_host_privilege_probe.py
