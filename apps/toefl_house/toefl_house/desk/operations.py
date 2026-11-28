@@ -8,12 +8,15 @@ import frappe
 from frappe.utils import now_datetime
 
 from toefl_house.desk import (
+    ACADEMIC_REPORTS,
     BOUNCE_WINDOW,
     DESKS,
+    FINANCE_REPORTS,
     LIMIT_QUEUES,
     _assert_projection,
     project_count,
     project_rows,
+    report_section,
     require_desk_audience,
     section,
     viewer_roles,
@@ -677,5 +680,6 @@ def work():
             section("desks", "Your desks", "links", items=desks_for_viewer,
                     empty_title="No other desks for your account",
                     empty_body="This account holds only the General Manager desk."),
+            *report_section(FINANCE_REPORTS + ACADEMIC_REPORTS),
         ],
     }

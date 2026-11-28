@@ -2358,6 +2358,70 @@ class FinanceBookShopNavigationTests(unittest.TestCase):
         )
 
 
+class NativeReportLinkTests(unittest.TestCase):
+    """Report shortcuts appear only when the native report would open.
+
+    Mirrors frappe.desk.query_report.get_report_doc at the pinned Frappe:
+    the reference DocType "report" right and Report.is_permitted().
+    """
+
+    class _Report(dict):
+        def __init__(self, permitted=True, disabled=0):
+            super().__init__(disabled=disabled)
+            self.permitted = permitted
+
+        def is_permitted(self):
+            return self.permitted
+
+    def _desk(self, rights, reports):
+        module = _import_desk("finance", roles={"Finance Manager"})
+        frappe = module.frappe
+
+        class DoesNotExistError(Exception):
+            pass
+
+        frappe.DoesNotExistError = DoesNotExistError
+        frappe.has_permission = lambda doctype, ptype="read", user=None: (doctype, ptype) in rights
+
+        def get_cached_doc(doctype, name):
+            self.assertEqual(doctype, "Report")
+            if name not in reports:
+                raise DoesNotExistError(name)
+            return reports[name]
+
+        frappe.get_cached_doc = get_cached_doc
+        return module
+
+    def _slugs(self, payload):
+        sections = [item for item in payload["sections"] if item["id"] == "reports"]
+        return [link["slug"] for link in sections[0]["items"]] if sections else []
+
+    def test_only_permitted_existing_enabled_reports_are_linked(self):
+        reports = {
+            "Accounts Receivable": self._Report(),
+            "Profit and Loss Statement": self._Report(permitted=False),
+            "General Ledger": self._Report(disabled=1),
+            # Program wise Fee Collection is missing on this site.
+            "Salary Register": self._Report(),
+        }
+        rights = {("Sales Invoice", "report"), ("GL Entry", "report"),
+                  ("Fees", "report"), ("Salary Slip", "read")}
+        module = self._desk(rights, reports)
+        self.assertEqual(self._slugs(module.work()), ["query-report/Accounts Receivable"])
+
+    def test_no_report_right_means_no_section(self):
+        module = self._desk(set(), {"Accounts Receivable": self._Report()})
+        self.assertFalse([item for item in module.work()["sections"] if item["id"] == "reports"])
+
+    def test_report_sets_name_pinned_native_reports(self):
+        package = _import_desk("__init__")
+        names = {name for _title, name, _ref in package.FINANCE_REPORTS + package.ACADEMIC_REPORTS}
+        self.assertEqual(names, {
+            "Accounts Receivable", "Program wise Fee Collection", "Profit and Loss Statement",
+            "General Ledger", "Salary Register", "Student Monthly Attendance Sheet",
+            "Absent Student Report", "Final Assessment Grades", "Student Fee Collection"})
+
+
 class FinanceAssignmentFactsTests(unittest.TestCase):
     """D12 visibility: assignments as facts, never as a second payroll."""
 

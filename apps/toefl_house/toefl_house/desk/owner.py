@@ -20,13 +20,16 @@ from toefl_house.desk.collections import owner_sections
 from toefl_house.desk.expenses import position_facts
 
 from toefl_house.desk import (
+    ACADEMIC_REPORTS,
     BOUNCE_WINDOW,
     DESKS,
+    FINANCE_REPORTS,
     LIMIT_QUEUES,
     active_cohort_rows,
     count_or_unknown,
     project_count,
     project_rows,
+    report_section,
     require_desk_audience,
     section,
     viewer_roles,
@@ -626,5 +629,6 @@ def cockpit():
             section("desks", "Your desks", "links", items=desks_for_viewer,
                     empty_title="No other desks for your account",
                     empty_body="This account holds only the Owner Cockpit."),
+            *report_section(FINANCE_REPORTS + ACADEMIC_REPORTS),
         ],
     }

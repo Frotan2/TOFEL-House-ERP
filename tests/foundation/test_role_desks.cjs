@@ -156,6 +156,10 @@ const commandPages = fs.readFileSync(path.join(APP, "public/js/th_command_pages.
 assert(commandPages.includes('roster: "toefl_house.teaching.attendance_roster"'),
 	"the Attendance Recorder must mark students from the class list");
 assert(!/json\("statuses"/.test(commandPages), "attendance marks must never be typed as JSON");
+// Native report shortcuts route only to query-report/<name>; the server
+// offers them only when the native report would open for this login.
+assert(/route\[0\] === "query-report" && route\[1\]/.test(fs.readFileSync(path.join(APP, "public/js/th_role_desks.js"), "utf8")),
+	"report links must route to the native query report");
 // Assessment facets are configured through the Owner's numeric forms
 // (configure_initial_assessment / revise_grading_weights); raw JSON facet
 // editors stay server-only and are never offered on a desk.

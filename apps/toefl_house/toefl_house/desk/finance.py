@@ -14,6 +14,7 @@ from toefl_house.configuration import rules as foundation
 from toefl_house.desk import (
     BOUNCE_WINDOW,
     DESKS,
+    FINANCE_REPORTS,
     LIMIT_QUEUES,
     LIMIT_TODAY,
     count_or_unknown,
@@ -22,6 +23,7 @@ from toefl_house.desk import (
     plan_with_components,
     project_count,
     project_rows,
+    report_section,
     require_desk_audience,
     scope_filters,
     section,
@@ -874,6 +876,7 @@ def work():
             *finance_sections(),
             *expense_sections(day),
             *refund_sections("finance"),
+            *report_section(FINANCE_REPORTS),
             section("today", "Today", "queue", items=payment_items,
                     empty_title="No payments recorded today",
                     empty_body="No payment has been received for today. Payments appear here the moment they are posted."),

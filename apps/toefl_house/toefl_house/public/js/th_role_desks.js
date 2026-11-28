@@ -106,6 +106,12 @@ frappe.provide("toefl_house.role_desks");
 			frappe.set_route(route[0]);
 			return;
 		}
+		// Native report shortcuts are offered only when the server found the
+		// report permitted for this login; the report re-checks on open.
+		if (route.length === 2 && route[0] === "query-report" && route[1]) {
+			frappe.set_route(route);
+			return;
+		}
 		frappe.msgprint({ title: text("Source reference"),
 			message: text("This metric names its source, but no record preview is available from this desk. Open the relevant work desk with an authorized staff account."),
 			indicator: "blue" });

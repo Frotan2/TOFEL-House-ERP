@@ -352,6 +352,19 @@ Reception (find person) → record_applicant → create_admission
   Workspace for each Officer role would widen native read scopes beyond the
   guarded commands and violate the A13 containment boundary. The declared
   navigation is: desks first, command Pages second, no per-role Workspace.
+- **Reports.** The Finance, Academic, General Manager and Owner desks show a
+  *Reports* section with shortcuts to the standard native reports
+  (Accounts Receivable, Program wise Fee Collection, Profit and Loss
+  Statement, General Ledger, Salary Register; Student Monthly Attendance
+  Sheet, Absent Student Report, Final Assessment Grades, Student Fee
+  Collection). A shortcut is shown only when that login could open the
+  report: the reference DocType "report" right **and** the report's own
+  role list, exactly the check native `query_report` performs. No report
+  rights are granted by the desk; give a user the native role (e.g.
+  Accounts User, Academics User) if a report should appear.
+- **Attendance and placement authoring never ask for JSON.** The Attendance
+  Recorder marks students from the class list; Placement Authors fill
+  question, blueprint, policy and course-map forms.
 
 ## What is deliberately NOT here
 

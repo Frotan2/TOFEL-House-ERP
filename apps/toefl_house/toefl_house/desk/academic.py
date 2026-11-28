@@ -8,6 +8,7 @@ import frappe
 from frappe.utils import now_datetime, today
 
 from toefl_house.desk import (
+    ACADEMIC_REPORTS,
     BOUNCE_WINDOW,
     DESKS,
     LIMIT_QUEUES,
@@ -17,6 +18,7 @@ from toefl_house.desk import (
     guided_action,
     project_count,
     project_rows,
+    report_section,
     require_desk_audience,
     section,
 )
@@ -469,6 +471,7 @@ def work():
             section("course-assessment", "Course assessment", "links",
                     items=[{"title": "Class marks, review and results",
                             "slug": "th-course-assessment"}]),
+            *report_section(ACADEMIC_REPORTS),
             section("funnel", "Academic funnel — today\u2019s operations", "facts", facts=funnel_facts,
                     empty_title="Nothing in the academic pipeline",
                     empty_body="No attempts, admissions or cohorts exist yet. Records appear here as the placement and admission workflows advance."),

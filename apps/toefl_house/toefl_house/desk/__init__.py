@@ -1071,6 +1071,56 @@ def section(sid, title, kind, *, items=None, facts=None, empty_title="", empty_b
     return payload
 
 
+# Pinned native reports staff use daily (names, reference DocTypes and role
+# lists verified against ERPNext v16.34.2, Education v16.1.0, HRMS v16.18.1).
+FINANCE_REPORTS = (
+    ("Who owes money (receivables)", "Accounts Receivable", "Sales Invoice"),
+    ("Fee collection by program", "Program wise Fee Collection", "Fees"),
+    ("Profit and loss", "Profit and Loss Statement", "GL Entry"),
+    ("General ledger", "General Ledger", "GL Entry"),
+    ("Salary register", "Salary Register", "Salary Slip"),
+)
+ACADEMIC_REPORTS = (
+    ("Monthly attendance sheet", "Student Monthly Attendance Sheet", "Student Attendance"),
+    ("Absent students", "Absent Student Report", "Student Attendance"),
+    ("Final assessment grades", "Final Assessment Grades", "Assessment Result"),
+    ("Student fee collection", "Student Fee Collection", "Fees"),
+)
+
+
+def native_report_links(reports):
+    """Shortcuts to native reports this login can actually open.
+
+    Mirrors frappe.desk.query_report.get_report_doc: the reference DocType's
+    native "report" right AND Report.is_permitted() (Has Role / custom
+    roles). Navigation only — the native report enforces the same checks
+    and its own row permissions when opened. A missing or disabled report
+    is simply not offered.
+    """
+    links = []
+    for title, report, ref_doctype in reports:
+        if not frappe.has_permission(ref_doctype, "report"):
+            continue
+        try:
+            doc = frappe.get_cached_doc("Report", report)
+        except frappe.DoesNotExistError:
+            continue
+        if doc.get("disabled") or not doc.is_permitted():
+            continue
+        links.append({"title": title, "slug": "query-report/" + report})
+    return links
+
+
+def report_section(reports):
+    """A "Reports" links section, or nothing when no report is available."""
+    links = native_report_links(reports)
+    if not links:
+        return []
+    return [section("reports", "Reports", "links", items=links,
+                    notes="Opens the standard ERPNext / Education report with "
+                          "your own permissions; filters and export are native.")]
+
+
 def guided_action(role, endpoint, label, args):
     """Prefill for an existing guarded command, included only when the viewer
     holds the acting role. The server decides; the client only renders."""

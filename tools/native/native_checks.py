@@ -8614,6 +8614,25 @@ def main():
                         closed_cash_day_refused=True,counter_drawer_refused=True,reception_denied=True,
                         native_cancel_refused=True,gl=gl,idempotent=True)
         check('finance-native-http-operating-expense-record-void',traced(operating_expense_cycle))
+        def native_report_shortcuts():
+            # The desk Reports sections name pinned native reports. Prove they
+            # exist on the real site with the expected reference DocType and
+            # that the shortcut gate mirrors native query_report permission.
+            from toefl_house.desk import ACADEMIC_REPORTS, FINANCE_REPORTS, native_report_links
+            pinned={name:ref for _title,name,ref in FINANCE_REPORTS+ACADEMIC_REPORTS}
+            found={name:frappe.db.get_value('Report',name,'ref_doctype') for name in pinned}
+            assert found==pinned,('pinned native reports drifted',found)
+            try:
+                receptionist=as_user('receptionist',lambda:native_report_links(FINANCE_REPORTS))
+                assert receptionist==[],('Reception must not get finance report shortcuts',receptionist)
+                officer=as_user('finance_officer',lambda:native_report_links(FINANCE_REPORTS))
+                slugs={link['slug'] for link in officer}
+                for name in ('Accounts Receivable','General Ledger','Profit and Loss Statement'):
+                    assert 'query-report/'+name in slugs,(name,slugs)
+            finally:
+                frappe.set_user('Administrator')
+            return dict(reports=len(found),receptionist_links=0,accounts_user_links=sorted(slugs))
+        check('desk-native-report-shortcuts-permission-mirror',traced(native_report_shortcuts))
         def tuition_refund_read_list_parity():
             # A real submitted/amended collection funds this synthetic case.
             from toefl_house.finance import tuition_refund_commands as tuition_refund_cmd
