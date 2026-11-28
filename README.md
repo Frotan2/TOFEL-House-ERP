@@ -21,6 +21,10 @@ Do not infer future release approval from this historical snapshot.
 > engineering must retain the authorization and evidence for each operation.
 > Do not reinstall, reset, delete volumes or activate production on that computer.
 
+> **New institute computer (fresh installation):** follow the single guide
+> [Install TOEFL House ERP on the institute computer](docs/INSTALL-NEW-INSTITUTE-PC.md).
+> It needs only the one Setup EXE and contains no update or migration steps.
+
 ## Product scope
 
 The product coordinates applicant intake, placement, admission, enrollment,
