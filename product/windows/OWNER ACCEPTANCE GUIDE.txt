@@ -51,6 +51,9 @@ STEP 2 - INSTALL THIS VERSION (about 20 minutes)
 STEP 3 - NEW SCREENS, ONE PASS PER ROLE (about 30 minutes)
 ----------------------------------------------------------
 Sign in as each practice user in turn. Each line should take a minute or two.
+[ ] Logo. The sign-in page, the desk and one printed practice receipt show
+        the TOEFL House logo and its red. The launcher window shows it too
+        after a fresh install.
 [ ] 6. Course Owner - Configuration, "Course Owner Policy Controls", Class
         Operations: record the class rules. "Holidays and Closures": add a
         practice holiday. Generating sessions over that date skips it.
