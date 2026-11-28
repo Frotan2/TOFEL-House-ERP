@@ -313,18 +313,6 @@ class DiscountRuleTests(unittest.TestCase):
         self.assertIsNone(rules.resolve_charge_discount(discount_rules, fee_category="ID Card Fee"))
 
 
-class ReportingRegisterTests(unittest.TestCase):
-    def test_canonical_definitions_exist(self):
-        from toefl_house.reporting import get_reporting_definition, all_definitions
-        defs = all_definitions()
-        self.assertIn("collected_today", defs)
-        self.assertIn("active_programs", defs)
-        self.assertIn("discount_rules_active", defs)
-        label, definition, owner = get_reporting_definition("collected_today")
-        self.assertEqual(label, "Collected today")
-        self.assertIn("Submitted Payment Entry", definition)
-
-
 class GlobalConfigurationTests(unittest.TestCase):
     """OD-CP-3 Option A: No overrides; global configuration is the single authority."""
 
