@@ -2933,6 +2933,11 @@ class BenchRunner:
             value = json.loads((result.stdout or "").strip())
         except json.JSONDecodeError:
             raise refuse("apply.counts_unavailable", "the installed application list is unreadable") from None
+        # Pinned Frappe 16 groups JSON list-apps output by the requested site.
+        # Accept only that exact single-site envelope, then apply the same
+        # strict app-name list validation used by the legacy bare-list format.
+        if isinstance(value, dict) and set(value) == {site}:
+            value = value[site]
         if not isinstance(value, list) or not all(
                 isinstance(item, str) and re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_-]{0,63}", item)
                 for item in value):
